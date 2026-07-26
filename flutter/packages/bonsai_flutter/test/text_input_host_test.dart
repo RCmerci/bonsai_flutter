@@ -180,6 +180,70 @@ void main() {
     expect(unchangedBinding.handlerId, 201);
   });
 
+  testWidgets(
+    'text input normalizes controller selections to protocol UTF-16 ranges',
+    (tester) async {
+      final store = NodeStore()..apply(textInputSnapshot());
+      final events = <RendererEvent>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BonsaiFlutterView(store: store, onEvent: events.add),
+          ),
+        ),
+      );
+      final controller = tester
+          .widget<EditableText>(find.byType(EditableText))
+          .controller;
+
+      controller.value = const TextEditingValue(
+        text: 'A😀B',
+        selection: TextSelection.collapsed(offset: 2),
+      );
+      controller.value = const TextEditingValue(
+        text: 'A😀B',
+        selection: TextSelection(baseOffset: 4, extentOffset: 1),
+      );
+      controller.value = const TextEditingValue(
+        text: 'A😀B',
+        selection: TextSelection(baseOffset: -1, extentOffset: -1),
+      );
+      await tester.pump();
+
+      final edits = events
+          .where((event) => event.eventTag == EventTagId.textEdit)
+          .map((event) => event.payload as TextEditEventPayload)
+          .toList();
+      expect(
+        edits
+            .map((edit) => (edit.selectionStartUtf16, edit.selectionEndUtf16))
+            .toList(),
+        [(3, 3), (1, 4), (4, 4)],
+      );
+      for (final edit in edits) {
+        expect(
+          () => EventBatchCodec.encode(
+            EventBatch(
+              runtimeEpoch: 91,
+              events: [
+                UiEvent(
+                  sequence: edit.localRevision,
+                  displayedRevision: store.revision,
+                  nodeId: 1,
+                  handlerId: 101,
+                  eventTag: EventTagId.textEdit,
+                  payload: edit,
+                ),
+              ],
+            ),
+          ),
+          returnsNormally,
+        );
+      }
+    },
+  );
+
   testWidgets('focus, submit, force replace, and disposal are typed', (
     tester,
   ) async {

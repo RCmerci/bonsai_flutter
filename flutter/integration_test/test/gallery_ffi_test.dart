@@ -160,6 +160,152 @@ void main() {
     expect(updatePresented, isNotNull);
     expect(updatePresented!.status, RuntimeStatus.ok);
 
+    Future<void> tapListTileAndExpect(bool expectedValue) async {
+      await tester.tap(find.text('Typed ListTile'));
+      await tester.pump();
+      final listTileBatch = queue.takeBatch();
+      expect(listTileBatch, isNotNull);
+      final listTileResponse = await tester.runAsync(
+        () => _bounded(
+          runtime.sendEventBatch(listTileBatch!),
+          'gallery list tile event',
+        ),
+      );
+      expect(listTileResponse, isNotNull);
+      expect(
+        listTileResponse!.status,
+        RuntimeStatus.ok,
+        reason: listTileResponse.errorMessage,
+      );
+      expect(
+        listTileResponse.bytes,
+        isNotEmpty,
+        reason: 'ListTile press must update the OCaml selection state',
+      );
+      final listTileFrame = FrameCodec.decode(listTileResponse.bytes);
+      store.apply(listTileFrame);
+      await tester.pump();
+      expect(
+        tester.widget<Checkbox>(find.byType(Checkbox)).value,
+        expectedValue,
+      );
+      final listTilePresented = await tester.runAsync(
+        () => _bounded(
+          runtime.framePresented(listTileFrame.targetRevision),
+          'gallery list tile presentation',
+        ),
+      );
+      expect(listTilePresented, isNotNull);
+      expect(listTilePresented!.status, RuntimeStatus.ok);
+    }
+
+    await tester.ensureVisible(find.text('Typed ListTile'));
+    await tester.pumpAndSettle();
+    await tapListTileAndExpect(false);
+    await tapListTileAndExpect(true);
+
+    final longPressTarget = find.byWidgetPredicate(
+      (widget) => widget is GestureDetector && widget.onLongPress != null,
+    );
+    expect(longPressTarget, findsOneWidget);
+    await tester.ensureVisible(longPressTarget);
+    await tester.pumpAndSettle();
+    await tester.longPress(longPressTarget);
+    await tester.pump();
+    final longPressBatch = queue.takeBatch();
+    expect(longPressBatch, isNotNull);
+    expect(
+      longPressBatch!.events.map((event) => event.eventTag),
+      contains(EventTagId.longPress),
+    );
+    final longPressResponse = await tester.runAsync(
+      () => _bounded(
+        runtime.sendEventBatch(longPressBatch),
+        'gallery long press event',
+      ),
+    );
+    expect(longPressResponse, isNotNull);
+    expect(
+      longPressResponse!.status,
+      RuntimeStatus.ok,
+      reason: longPressResponse.errorMessage,
+    );
+    final longPressFrame = FrameCodec.decode(longPressResponse.bytes);
+    store.apply(longPressFrame);
+    await tester.pump();
+    expect(find.text('Pointer event received in OCaml'), findsOneWidget);
+    final longPressPresented = await tester.runAsync(
+      () => _bounded(
+        runtime.framePresented(longPressFrame.targetRevision),
+        'gallery long press presentation',
+      ),
+    );
+    expect(longPressPresented, isNotNull);
+    expect(longPressPresented!.status, RuntimeStatus.ok);
+
+    const editedUnicodeText = 'Type 中文 or 😀 edited';
+    await tester.ensureVisible(find.byType(TextField));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    final textFocusBatch = queue.takeBatch();
+    expect(textFocusBatch, isNotNull);
+    final textFocusResponse = await tester.runAsync(
+      () => _bounded(
+        runtime.sendEventBatch(textFocusBatch!),
+        'gallery Unicode text focus event',
+      ),
+    );
+    expect(textFocusResponse, isNotNull);
+    expect(
+      textFocusResponse!.status,
+      RuntimeStatus.ok,
+      reason: textFocusResponse.errorMessage,
+    );
+    final textFocusFrame = FrameCodec.decode(textFocusResponse.bytes);
+    store.apply(textFocusFrame);
+    await tester.pump();
+    final textFocusPresented = await tester.runAsync(
+      () => _bounded(
+        runtime.framePresented(textFocusFrame.targetRevision),
+        'gallery Unicode text focus presentation',
+      ),
+    );
+    expect(textFocusPresented, isNotNull);
+    expect(textFocusPresented!.status, RuntimeStatus.ok);
+
+    await tester.enterText(find.byType(TextField), editedUnicodeText);
+    await tester.pump();
+    final textEditBatch = queue.takeBatch();
+    expect(textEditBatch, isNotNull);
+    final textEditResponse = await tester.runAsync(
+      () => _bounded(
+        runtime.sendEventBatch(textEditBatch!),
+        'gallery Unicode text edit event',
+      ),
+    );
+    expect(textEditResponse, isNotNull);
+    expect(
+      textEditResponse!.status,
+      RuntimeStatus.ok,
+      reason: textEditResponse.errorMessage,
+    );
+    final textEditFrame = FrameCodec.decode(textEditResponse.bytes);
+    store.apply(textEditFrame);
+    await tester.pump();
+    expect(
+      find.text('Canonical OCaml value: $editedUnicodeText'),
+      findsOneWidget,
+    );
+    final textEditPresented = await tester.runAsync(
+      () => _bounded(
+        runtime.framePresented(textEditFrame.targetRevision),
+        'gallery Unicode text edit presentation',
+      ),
+    );
+    expect(textEditPresented, isNotNull);
+    expect(textEditPresented!.status, RuntimeStatus.ok);
+
     await tester.ensureVisible(find.text('Native card: 0'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Native card: 0'));

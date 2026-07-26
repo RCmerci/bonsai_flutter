@@ -78,6 +78,7 @@ let make_handlers registry set_model =
       update "gallery-toggle" (fun model payload ->
         match payload with
         | Ui.Event.Payload.Bool checked -> { model with checked }
+        | Unit -> { model with checked = not model.checked }
         | _ -> model)
   ; text_edit =
       update "gallery-text-edit" (fun model payload ->

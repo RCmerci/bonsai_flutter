@@ -161,3 +161,8 @@
   OCaml handler frame. Recoverable stale events no longer replace the
   application UI, and regression tests cover edits emitted between
   `NodeStore` commit and `TextInputHost` rebuild.
+- Fixed the Gallery ListTile press handler so it toggles the OCaml-owned
+  selection state, with real FFI coverage in both directions.
+- Normalized transient Flutter text selections before protocol encoding so
+  invalid, reversed, or surrogate-splitting ranges cannot crash Unicode text
+  input on focus.

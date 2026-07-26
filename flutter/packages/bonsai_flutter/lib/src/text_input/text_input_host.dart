@@ -74,9 +74,8 @@ final class _TextInputHostState extends State<TextInputHost> {
     if (_applyingRemote || _resource.disposed) return;
     _resource.localRevision += 1;
     final value = _resource.controller.value;
-    final composing = value.composing.isValid && !value.composing.isCollapsed
-        ? value.composing
-        : null;
+    final selection = _normalizeSelection(value.text, value.selection);
+    final composing = _normalizeComposing(value.text, value.composing);
     _emit(
       EventTagId.textEdit,
       TextEditEventPayload(
@@ -84,10 +83,10 @@ final class _TextInputHostState extends State<TextInputHost> {
         localRevision: _resource.localRevision,
         baseDocumentRevision: _resource.documentRevision,
         text: value.text,
-        selectionStartUtf16: value.selection.baseOffset,
-        selectionEndUtf16: value.selection.extentOffset,
-        composingStartUtf16: composing?.start,
-        composingEndUtf16: composing?.end,
+        selectionStartUtf16: selection.$1,
+        selectionEndUtf16: selection.$2,
+        composingStartUtf16: composing?.$1,
+        composingEndUtf16: composing?.$2,
       ),
     );
   }
@@ -131,6 +130,34 @@ final class _TextInputHostState extends State<TextInputHost> {
     onSubmitted: (value) =>
         _emit(EventTagId.textSubmit, TextEventPayload(value)),
   );
+}
+
+(int, int) _normalizeSelection(String text, TextSelection selection) {
+  if (!selection.isValid) return (text.length, text.length);
+  final base = _normalizeUtf16Boundary(text, selection.baseOffset);
+  final extent = _normalizeUtf16Boundary(text, selection.extentOffset);
+  return base <= extent ? (base, extent) : (extent, base);
+}
+
+(int, int)? _normalizeComposing(String text, TextRange composing) {
+  if (!composing.isValid || composing.isCollapsed) return null;
+  final start = _normalizeUtf16Boundary(text, composing.start);
+  final end = _normalizeUtf16Boundary(text, composing.end);
+  if (start == end) return null;
+  return start <= end ? (start, end) : (end, start);
+}
+
+int _normalizeUtf16Boundary(String text, int offset) {
+  if (offset < 0 || offset > text.length) return text.length;
+  if (offset == 0 || offset == text.length) return offset;
+  final previous = text.codeUnitAt(offset - 1);
+  final next = text.codeUnitAt(offset);
+  final splitsSurrogatePair =
+      previous >= 0xd800 &&
+      previous <= 0xdbff &&
+      next >= 0xdc00 &&
+      next <= 0xdfff;
+  return splitsSurrogatePair ? offset + 1 : offset;
 }
 
 EventBinding? _binding(UiNode node, int eventTag) {
