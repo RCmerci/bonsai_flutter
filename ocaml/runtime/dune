@@ -1,0 +1,33 @@
+(library
+ (name bonsai_flutter_runtime)
+ (public_name bonsai_flutter.runtime)
+ (libraries bonsai_flutter.ui bonsai_flutter.protocol)
+ (modules
+  node_id
+  handler_id
+  runtime_error
+  mounted_tree
+  frame_patch
+  handler_registry
+  event_dispatcher
+  reconciler))
+
+(library
+ (name bonsai_flutter_runtime_adapter)
+ (public_name bonsai_flutter.runtime_adapter)
+ (wrapped false)
+ (modules bonsai_runtime_adapter)
+ (libraries bonsai bonsai.driver bonsai_concrete.ui_incr core))
+
+(library
+ (name bonsai_flutter_driver)
+ (public_name bonsai_flutter.driver)
+ (wrapped false)
+ (modules host_effect environment driver app entrypoint)
+ (libraries
+  bonsai
+  bonsai_flutter.ui
+  bonsai_flutter.protocol
+  bonsai_flutter.runtime
+  bonsai_flutter.runtime_adapter
+  unix))

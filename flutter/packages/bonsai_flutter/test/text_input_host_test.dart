@@ -1,0 +1,506 @@
+import 'package:bonsai_flutter/bonsai_flutter.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  testWidgets(
+    'text input preserves local echo and rejects a stale correction',
+    (tester) async {
+      final store = NodeStore()..apply(textInputSnapshot());
+      final resources = RendererResourceStore();
+      final events = <RendererEvent>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BonsaiFlutterView(
+              store: store,
+              resourceStore: resources,
+              onEvent: events.add,
+            ),
+          ),
+        ),
+      );
+      final controller = tester
+          .widget<EditableText>(find.byType(EditableText))
+          .controller;
+      expect(controller.text, '拼');
+
+      controller.value = const TextEditingValue(
+        text: '拼😀音',
+        selection: TextSelection.collapsed(offset: 4),
+        composing: TextRange(start: 0, end: 4),
+      );
+      await tester.pump();
+
+      final editEvent = events.singleWhere(
+        (event) => event.eventTag == EventTagId.textEdit,
+      );
+      expect(
+        editEvent.payload,
+        const TextEditEventPayload(
+          sessionId: 10,
+          localRevision: 1,
+          baseDocumentRevision: 4,
+          text: '拼😀音',
+          selectionStartUtf16: 4,
+          selectionEndUtf16: 4,
+          composingStartUtf16: 0,
+          composingEndUtf16: 4,
+        ),
+      );
+
+      store.apply(
+        textInputUpdate(
+          targetRevision: 2,
+          props: textInputProps(
+            documentRevision: 4,
+            acceptedLocalRevision: 0,
+            updateMode: TextUpdateMode.correction,
+            text: 'stale server value',
+            selectionOffset: 18,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(controller.text, '拼😀音');
+      expect(
+        identical(
+          tester.widget<EditableText>(find.byType(EditableText)).controller,
+          controller,
+        ),
+        isTrue,
+      );
+
+      store.apply(
+        textInputUpdate(
+          baseRevision: 2,
+          targetRevision: 3,
+          props: textInputProps(
+            documentRevision: 5,
+            acceptedLocalRevision: 1,
+            updateMode: TextUpdateMode.correction,
+            text: '拼😀音!',
+            selectionOffset: 5,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(controller.text, '拼😀音!');
+      expect(
+        events.where((event) => event.eventTag == EventTagId.textEdit),
+        hasLength(1),
+      );
+      expect(resources.liveResourceCount, 1);
+    },
+  );
+
+  testWidgets('text edit keeps the callback revision until the host rebuilds', (
+    tester,
+  ) async {
+    final store = NodeStore()..apply(textInputSnapshot());
+    final queue = EventBatchQueue(
+      runtimeEpoch: 91,
+      displayedRevision: () => store.revision,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BonsaiFlutterView(store: store, onEvent: queue.enqueue),
+        ),
+      ),
+    );
+    final controller = tester
+        .widget<EditableText>(find.byType(EditableText))
+        .controller;
+
+    store.apply(
+      const Frame(
+        runtimeEpoch: 91,
+        baseRevision: 1,
+        targetRevision: 2,
+        kind: FrameKind.incremental,
+        operations: [
+          UpdateEventBindings(
+            nodeId: 1,
+            eventBindings: [
+              EventBinding(eventTag: EventTagId.textEdit, handlerId: 201),
+              EventBinding(eventTag: EventTagId.textSubmit, handlerId: 202),
+              EventBinding(eventTag: EventTagId.focusChanged, handlerId: 203),
+            ],
+          ),
+        ],
+      ),
+    );
+    controller.text = 'before rebuild';
+
+    final beforeRebuild = queue.takeBatch()!.events.single;
+    expect(beforeRebuild.displayedRevision, 1);
+    expect(beforeRebuild.handlerId, 101);
+
+    await tester.pump();
+    expect(
+      identical(
+        tester.widget<EditableText>(find.byType(EditableText)).controller,
+        controller,
+      ),
+      isTrue,
+    );
+    controller.text = 'after rebuild';
+
+    final afterRebuild = queue.takeBatch()!.events.single;
+    expect(afterRebuild.displayedRevision, 2);
+    expect(afterRebuild.handlerId, 201);
+
+    store.apply(
+      const Frame(
+        runtimeEpoch: 91,
+        baseRevision: 2,
+        targetRevision: 3,
+        kind: FrameKind.incremental,
+        operations: [
+          UpdateEventBindings(
+            nodeId: 1,
+            eventBindings: [
+              EventBinding(eventTag: EventTagId.textEdit, handlerId: 201),
+              EventBinding(eventTag: EventTagId.textSubmit, handlerId: 202),
+              EventBinding(eventTag: EventTagId.focusChanged, handlerId: 203),
+            ],
+          ),
+        ],
+      ),
+    );
+    controller.text = 'same handler in the next frame';
+
+    final unchangedBinding = queue.takeBatch()!.events.single;
+    expect(unchangedBinding.displayedRevision, 3);
+    expect(unchangedBinding.handlerId, 201);
+  });
+
+  testWidgets('focus, submit, force replace, and disposal are typed', (
+    tester,
+  ) async {
+    final store = NodeStore()..apply(textInputSnapshot());
+    final resources = RendererResourceStore();
+    final events = <RendererEvent>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BonsaiFlutterView(
+            store: store,
+            resourceStore: resources,
+            onEvent: events.add,
+          ),
+        ),
+      ),
+    );
+    final controller = tester
+        .widget<EditableText>(find.byType(EditableText))
+        .controller;
+
+    final focusRequest = resources.requestFocus(1);
+    await tester.pump();
+    await focusRequest;
+    await tester.pump();
+    expect(
+      tester.widget<EditableText>(find.byType(EditableText)).focusNode.hasFocus,
+      isTrue,
+    );
+    expect(
+      events
+          .where((event) => event.eventTag == EventTagId.focusChanged)
+          .last
+          .payload,
+      const BoolEventPayload(true),
+    );
+
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(
+      events
+          .where((event) => event.eventTag == EventTagId.textSubmit)
+          .single
+          .payload,
+      const TextEventPayload('拼'),
+    );
+
+    store.apply(
+      textInputUpdate(
+        targetRevision: 2,
+        props: textInputProps(
+          sessionId: 11,
+          documentRevision: 5,
+          acceptedLocalRevision: 0,
+          updateMode: TextUpdateMode.forceReplace,
+          text: 'reset',
+          selectionOffset: 5,
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(controller.text, 'reset');
+    expect(resources.liveResourceCount, 1);
+
+    store.apply(
+      const Frame(
+        runtimeEpoch: 91,
+        baseRevision: 0,
+        targetRevision: 3,
+        kind: FrameKind.fullSnapshot,
+        operations: [
+          CreateNode(
+            nodeId: 2,
+            kind: NodeKind.text,
+            props: TextProps('removed'),
+            eventBindings: [],
+          ),
+          SetRoot(2),
+        ],
+      ),
+    );
+    await tester.pump();
+    expect(resources.liveResourceCount, 0);
+    expect(resources.disposedResourceCount, 1);
+  });
+
+  testWidgets('keyed reorder retains controller and node drop disposes it', (
+    tester,
+  ) async {
+    final store = NodeStore()
+      ..apply(
+        Frame(
+          runtimeEpoch: 92,
+          baseRevision: 0,
+          targetRevision: 1,
+          kind: FrameKind.fullSnapshot,
+          operations: [
+            const CreateNode(
+              nodeId: 1,
+              kind: NodeKind.column,
+              props: LinearProps(),
+              eventBindings: [],
+            ),
+            CreateNode(
+              nodeId: 2,
+              kind: NodeKind.textInput,
+              props: textInputProps(),
+              eventBindings: const [
+                EventBinding(eventTag: EventTagId.textEdit, handlerId: 101),
+                EventBinding(eventTag: EventTagId.textSubmit, handlerId: 102),
+                EventBinding(eventTag: EventTagId.focusChanged, handlerId: 103),
+              ],
+            ),
+            const CreateNode(
+              nodeId: 3,
+              kind: NodeKind.text,
+              props: TextProps('sibling'),
+              eventBindings: [],
+            ),
+            const SetChildren(nodeId: 1, children: [2, 3]),
+            const SetRoot(1),
+          ],
+        ),
+      );
+    final resources = RendererResourceStore();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BonsaiFlutterView(store: store, resourceStore: resources),
+        ),
+      ),
+    );
+    final controller = tester
+        .widget<EditableText>(find.byType(EditableText))
+        .controller;
+
+    store.apply(
+      const Frame(
+        runtimeEpoch: 92,
+        baseRevision: 1,
+        targetRevision: 2,
+        kind: FrameKind.incremental,
+        operations: [
+          SetChildren(nodeId: 1, children: [3, 2]),
+        ],
+      ),
+    );
+    await tester.pump();
+    expect(
+      identical(
+        tester.widget<EditableText>(find.byType(EditableText)).controller,
+        controller,
+      ),
+      isTrue,
+    );
+    expect(resources.createdResourceCount, 1);
+
+    store.apply(
+      const Frame(
+        runtimeEpoch: 92,
+        baseRevision: 2,
+        targetRevision: 3,
+        kind: FrameKind.incremental,
+        operations: [
+          SetChildren(nodeId: 1, children: [3]),
+          DropNode(2),
+        ],
+      ),
+    );
+    await tester.pump();
+    expect(find.byType(EditableText), findsNothing);
+    expect(resources.liveResourceCount, 0);
+    expect(resources.disposedResourceCount, 1);
+  });
+
+  testWidgets('paste, delete, and focus switch emit ordered typed events', (
+    tester,
+  ) async {
+    final store = NodeStore()
+      ..apply(
+        Frame(
+          runtimeEpoch: 93,
+          baseRevision: 0,
+          targetRevision: 1,
+          kind: FrameKind.fullSnapshot,
+          operations: [
+            const CreateNode(
+              nodeId: 1,
+              kind: NodeKind.column,
+              props: LinearProps(),
+              eventBindings: [],
+            ),
+            for (final nodeId in [2, 3])
+              CreateNode(
+                nodeId: nodeId,
+                kind: NodeKind.textInput,
+                props: textInputProps(sessionId: nodeId),
+                eventBindings: [
+                  EventBinding(
+                    eventTag: EventTagId.textEdit,
+                    handlerId: 100 + nodeId,
+                  ),
+                  EventBinding(
+                    eventTag: EventTagId.textSubmit,
+                    handlerId: 200 + nodeId,
+                  ),
+                  EventBinding(
+                    eventTag: EventTagId.focusChanged,
+                    handlerId: 300 + nodeId,
+                  ),
+                ],
+              ),
+            const SetChildren(nodeId: 1, children: [2, 3]),
+            const SetRoot(1),
+          ],
+        ),
+      );
+    final events = <RendererEvent>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BonsaiFlutterView(store: store, onEvent: events.add),
+        ),
+      ),
+    );
+    final editors = tester
+        .widgetList<EditableText>(find.byType(EditableText))
+        .toList();
+    editors.first.controller.value = const TextEditingValue(
+      text: '拼 paste',
+      selection: TextSelection.collapsed(offset: 7),
+    );
+    editors.first.controller.value = const TextEditingValue(
+      text: '拼',
+      selection: TextSelection.collapsed(offset: 1),
+    );
+    await tester.pump();
+    final edits = events
+        .where((event) => event.eventTag == EventTagId.textEdit)
+        .map((event) => event.payload as TextEditEventPayload)
+        .toList();
+    expect(edits.map((edit) => edit.localRevision), [1, 2]);
+    expect(edits.map((edit) => edit.text), ['拼 paste', '拼']);
+
+    await tester.tap(find.byType(TextField).at(0));
+    await tester.pump();
+    await tester.tap(find.byType(TextField).at(1));
+    await tester.pump();
+    final focusEvents = events
+        .where((event) => event.eventTag == EventTagId.focusChanged)
+        .toList();
+    expect(
+      focusEvents.map((event) => (event.nodeId, event.payload)),
+      containsAllInOrder([
+        (2, const BoolEventPayload(true)),
+        (2, const BoolEventPayload(false)),
+        (3, const BoolEventPayload(true)),
+      ]),
+    );
+  });
+}
+
+Frame textInputSnapshot() => Frame(
+  runtimeEpoch: 91,
+  baseRevision: 0,
+  targetRevision: 1,
+  kind: FrameKind.fullSnapshot,
+  operations: [
+    CreateNode(
+      nodeId: 1,
+      kind: NodeKind.textInput,
+      props: textInputProps(),
+      eventBindings: const [
+        EventBinding(eventTag: EventTagId.textEdit, handlerId: 101),
+        EventBinding(eventTag: EventTagId.textSubmit, handlerId: 102),
+        EventBinding(eventTag: EventTagId.focusChanged, handlerId: 103),
+      ],
+    ),
+    const SetRoot(1),
+  ],
+);
+
+Frame textInputUpdate({
+  int baseRevision = 1,
+  required int targetRevision,
+  required TextInputProps props,
+}) => Frame(
+  runtimeEpoch: 91,
+  baseRevision: baseRevision,
+  targetRevision: targetRevision,
+  kind: FrameKind.incremental,
+  operations: [UpdateProps(nodeId: 1, props: props)],
+);
+
+TextInputProps textInputProps({
+  int sessionId = 10,
+  int documentRevision = 4,
+  int acceptedLocalRevision = 0,
+  TextUpdateMode updateMode = TextUpdateMode.forceReplace,
+  String text = '拼',
+  int selectionOffset = 1,
+}) => TextInputProps(
+  sessionId: sessionId,
+  documentRevision: documentRevision,
+  acceptedLocalRevision: acceptedLocalRevision,
+  updateMode: updateMode,
+  value: TextEditingStateValue(
+    text: text,
+    selection: TextRangeValue(
+      startUtf16: selectionOffset,
+      endUtf16: selectionOffset,
+    ),
+    composing: null,
+  ),
+  enabled: true,
+  readOnly: false,
+  obscureText: false,
+  keyboardType: TextKeyboardType.text,
+  inputAction: TextInputActionKind.done,
+  autofocus: false,
+);

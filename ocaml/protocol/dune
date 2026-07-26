@@ -1,0 +1,4 @@
+(library
+ (name bonsai_flutter_protocol)
+ (public_name bonsai_flutter.protocol)
+ (modules :standard))

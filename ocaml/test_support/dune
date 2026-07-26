@@ -1,0 +1,11 @@
+(library
+ (name bonsai_flutter_test)
+ (public_name bonsai_flutter_test)
+ (wrapped false)
+ (modules query handle bonsai_flutter_test)
+ (libraries
+  bonsai
+  bonsai_flutter.ui
+  bonsai_flutter.protocol
+  bonsai_flutter.runtime
+  bonsai_flutter.driver))

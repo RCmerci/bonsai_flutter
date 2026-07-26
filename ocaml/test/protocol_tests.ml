@@ -1,0 +1,495 @@
+open Bonsai_flutter_protocol
+
+let fail format = Printf.ksprintf failwith format
+
+let expect condition format =
+  Printf.ksprintf (fun message -> if not condition then failwith message) format
+;;
+
+let bytes_of_hex text =
+  let digit = function
+    | '0' .. '9' as value -> Char.code value - Char.code '0'
+    | 'a' .. 'f' as value -> 10 + Char.code value - Char.code 'a'
+    | 'A' .. 'F' as value -> 10 + Char.code value - Char.code 'A'
+    | value -> fail "invalid hex digit %C" value
+  in
+  let compact =
+    text
+    |> String.to_seq
+    |> Seq.filter (fun value -> not (Char.equal value ' ' || Char.equal value '\n'))
+    |> String.of_seq
+  in
+  expect (String.length compact mod 2 = 0) "hex fixture has an odd number of digits";
+  Bytes.init
+    (String.length compact / 2)
+    (fun index ->
+       let offset = index * 2 in
+       Char.chr ((digit compact.[offset] lsl 4) lor digit compact.[offset + 1]))
+;;
+
+let fixture () =
+  let path =
+    let from_root = "protocol/generated/fixtures/counter_full.hex" in
+    if Sys.file_exists from_root
+    then from_root
+    else "../../protocol/generated/fixtures/counter_full.hex"
+  in
+  let channel = open_in_bin path in
+  Fun.protect
+    ~finally:(fun () -> close_in channel)
+    (fun () -> really_input_string channel (in_channel_length channel) |> bytes_of_hex)
+;;
+
+let counter_frame =
+  Wire_frame.
+    { runtime_epoch = 7L
+    ; base_revision = 0L
+    ; target_revision = 1L
+    ; kind = Full_snapshot
+    ; operations =
+        [ Create_node
+            { node_id = 1L
+            ; kind = Column
+            ; props = Linear_props
+            ; event_bindings = []
+            ; parent_data = No_parent_data
+            }
+        ; Create_node
+            { node_id = 2L
+            ; kind = Text
+            ; props = Text_props { value = "Count: 0" }
+            ; event_bindings = []
+            ; parent_data = No_parent_data
+            }
+        ; Set_children { node_id = 1L; children = [ 2L ] }
+        ; Set_root 1L
+        ]
+    }
+;;
+
+let test_golden_fixture () =
+  match Binary_codec.encode counter_frame with
+  | Error error -> fail "encode failed: %s" error.message
+  | Ok encoded -> expect (Bytes.equal encoded (fixture ())) "golden frame differs"
+;;
+
+let test_round_trip () =
+  let frame =
+    Wire_frame.
+      { runtime_epoch = 7L
+      ; base_revision = 1L
+      ; target_revision = 2L
+      ; kind = Incremental_frame
+      ; operations =
+          [ Update_props { node_id = 2L; props = Text_props { value = "计数: 1" } } ]
+      }
+  in
+  match Binary_codec.encode frame with
+  | Error error -> fail "encode failed: %s" error.message
+  | Ok encoded ->
+    (match Binary_codec.decode encoded with
+     | Error error -> fail "decode failed: %s" error.message
+     | Ok decoded -> expect (decoded = frame) "round trip changed the incremental frame")
+;;
+
+let test_animation_props_round_trip () =
+  let frame =
+    Wire_frame.
+      { runtime_epoch = 7L
+      ; base_revision = 1L
+      ; target_revision = 2L
+      ; kind = Incremental_frame
+      ; operations =
+          [ Update_props
+              { node_id = 9L
+              ; props =
+                  Animated_opacity_props
+                    { opacity = 0.75
+                    ; animation = { id = 7001L; duration_ms = 250; curve = Ease_in_out }
+                    }
+              }
+          ]
+      }
+  in
+  match Binary_codec.encode frame with
+  | Error error -> fail "animation encode failed: %s" error.message
+  | Ok encoded ->
+    (match Binary_codec.decode encoded with
+     | Error error -> fail "animation decode failed: %s" error.message
+     | Ok decoded -> expect (decoded = frame) "animation props changed during round trip")
+;;
+
+let test_legacy_opacity_layout () =
+  let frame =
+    Wire_frame.
+      { runtime_epoch = 8L
+      ; base_revision = 0L
+      ; target_revision = 1L
+      ; kind = Full_snapshot
+      ; operations =
+          [ Create_node
+              { node_id = 4L
+              ; kind = Opacity
+              ; props = Opacity_props { opacity = 0.5 }
+              ; event_bindings = []
+              ; parent_data = No_parent_data
+              }
+          ; Set_root 4L
+          ]
+      }
+  in
+  match Binary_codec.encode frame with
+  | Error error -> fail "legacy opacity encode failed: %s" error.message
+  | Ok encoded ->
+    Bytes.set encoded 6 '\x0b';
+    Bytes.set encoded 7 '\x00';
+    (match Binary_codec.decode encoded with
+     | Error error -> fail "legacy opacity decode failed: %s" error.message
+     | Ok decoded -> expect (decoded = frame) "legacy opacity layout changed")
+;;
+
+let test_phase_four_props_round_trip () =
+  let frame =
+    Wire_frame.
+      { runtime_epoch = 9L
+      ; base_revision = 0L
+      ; target_revision = 1L
+      ; kind = Full_snapshot
+      ; operations =
+          [ Create_node
+              { node_id = 1L
+              ; kind = Padding
+              ; props = Padding_props { left = 12.; top = 8.; right = 12.; bottom = 8. }
+              ; event_bindings = []
+              ; parent_data = No_parent_data
+              }
+          ; Create_node
+              { node_id = 2L
+              ; kind = Center
+              ; props = Center_props { width_factor = None; height_factor = Some 1.5 }
+              ; event_bindings = []
+              ; parent_data = No_parent_data
+              }
+          ; Create_node
+              { node_id = 3L
+              ; kind = Scroll_view
+              ; props = Scroll_view_props { axis = Vertical; reverse = false }
+              ; event_bindings =
+                  [ { event_tag = Generated_protocol.Event_tag.scroll_notification
+                    ; handler_id = 80L
+                    }
+                  ]
+              ; parent_data = No_parent_data
+              }
+          ; Create_node
+              { node_id = 4L
+              ; kind = Semantics
+              ; props =
+                  Semantics_props
+                    { label = Some "Accept terms"
+                    ; hint = None
+                    ; value = None
+                    ; role = Checkbox
+                    ; enabled = Some true
+                    ; selected = None
+                    ; checked = Some false
+                    ; focusable = None
+                    ; obscured = false
+                    ; live_region = false
+                    ; heading_level = None
+                    ; sort_key = None
+                    ; actions = 0
+                    }
+              ; event_bindings = []
+              ; parent_data = No_parent_data
+              }
+          ; Create_node
+              { node_id = 5L
+              ; kind = Theme
+              ; props =
+                  Theme_props
+                    { brightness = Dark; color_seed = Int32.of_string "0xff2060a0" }
+              ; event_bindings = []
+              ; parent_data = No_parent_data
+              }
+          ; Create_node
+              { node_id = 6L
+              ; kind = Material_checkbox
+              ; props = Material_checkbox_props { value = false; enabled = true }
+              ; event_bindings =
+                  [ { event_tag = Generated_protocol.Event_tag.value_changed
+                    ; handler_id = 81L
+                    }
+                  ]
+              ; parent_data = No_parent_data
+              }
+          ]
+      }
+  in
+  match Binary_codec.encode frame with
+  | Error error -> fail "Phase 4 encode failed: %s" error.message
+  | Ok encoded ->
+    (match Binary_codec.decode encoded with
+     | Error error -> fail "Phase 4 decode failed: %s" error.message
+     | Ok decoded -> expect (decoded = frame) "Phase 4 props changed during round trip")
+;;
+
+let test_text_input_props_round_trip () =
+  let frame =
+    Wire_frame.
+      { runtime_epoch = 10L
+      ; base_revision = 4L
+      ; target_revision = 5L
+      ; kind = Incremental_frame
+      ; operations =
+          [ Update_props
+              { node_id = 12L
+              ; props =
+                  Text_input_props
+                    { session_id = 7L
+                    ; document_revision = 9L
+                    ; value =
+                        { text = "拼😀音"
+                        ; selection = { start_utf16 = 4; end_utf16 = 4 }
+                        ; composing = Some { start_utf16 = 0; end_utf16 = 4 }
+                        }
+                    ; enabled = true
+                    ; read_only = false
+                    ; obscure_text = false
+                    ; keyboard_type = Keyboard_text
+                    ; input_action = Done
+                    ; accepted_local_revision = 11L
+                    ; update_mode = Correction
+                    ; autofocus = true
+                    }
+              }
+          ]
+      }
+  in
+  match Binary_codec.encode frame with
+  | Error error -> fail "text input encode failed: %s" error.message
+  | Ok encoded ->
+    (match Binary_codec.decode encoded with
+     | Error error -> fail "text input decode failed: %s" error.message
+     | Ok decoded -> expect (decoded = frame) "text input props changed during round trip")
+;;
+
+let test_text_input_rejects_split_surrogate_range () =
+  let frame =
+    Wire_frame.
+      { runtime_epoch = 10L
+      ; base_revision = 1L
+      ; target_revision = 2L
+      ; kind = Incremental_frame
+      ; operations =
+          [ Update_props
+              { node_id = 12L
+              ; props =
+                  Text_input_props
+                    { session_id = 1L
+                    ; document_revision = 1L
+                    ; value =
+                        { text = "😀"
+                        ; selection = { start_utf16 = 1; end_utf16 = 1 }
+                        ; composing = None
+                        }
+                    ; enabled = true
+                    ; read_only = false
+                    ; obscure_text = false
+                    ; keyboard_type = Keyboard_text
+                    ; input_action = Done
+                    ; accepted_local_revision = 0L
+                    ; update_mode = Ack
+                    ; autofocus = false
+                    }
+              }
+          ]
+      }
+  in
+  match Binary_codec.encode frame with
+  | Error { code = Invalid_props; _ } -> ()
+  | Error error -> fail "unexpected split-surrogate error: %s" error.message
+  | Ok _ -> fail "split surrogate range unexpectedly encoded"
+;;
+
+let expect_decode_error code bytes =
+  match Binary_codec.decode bytes with
+  | Ok _ -> fail "malformed input unexpectedly decoded"
+  | Error error -> expect (error.code = code) "unexpected decoder error"
+;;
+
+let test_malformed_frames () =
+  let valid = fixture () in
+  let bad_magic = Bytes.copy valid in
+  Bytes.set bad_magic 0 '\x00';
+  expect_decode_error Invalid_magic bad_magic;
+  expect_decode_error Truncated_input (Bytes.sub valid 0 47);
+  let trailing = Bytes.extend valid 0 1 in
+  expect_decode_error Invalid_payload_length trailing
+;;
+
+let test_event_batch_fixture () =
+  let path =
+    let from_root = "protocol/generated/fixtures/counter_press.hex" in
+    if Sys.file_exists from_root
+    then from_root
+    else "../../protocol/generated/fixtures/counter_press.hex"
+  in
+  let channel = open_in_bin path in
+  let encoded =
+    Fun.protect
+      ~finally:(fun () -> close_in channel)
+      (fun () -> really_input_string channel (in_channel_length channel) |> bytes_of_hex)
+  in
+  match Event_batch_codec.decode encoded with
+  | Error error -> fail "event batch decode failed: %s" error.message
+  | Ok { Inbound_event.runtime_epoch; events = [ event ] } ->
+    expect (runtime_epoch = 21L) "unexpected event epoch";
+    expect (event.sequence = 1L) "unexpected event sequence";
+    expect (event.displayed_revision = 1L) "unexpected displayed revision";
+    expect (event.node_id = 3L) "unexpected event node";
+    expect (event.handler_id = 9001L) "unexpected handler";
+    expect (event.event_tag = Generated_protocol.Event_tag.press) "unexpected tag";
+    expect (event.payload = Unit) "unexpected payload"
+  | Ok _ -> fail "unexpected event batch shape"
+;;
+
+let test_unknown_event_tag () =
+  let encoded =
+    let path =
+      let from_root = "protocol/generated/fixtures/counter_press.hex" in
+      if Sys.file_exists from_root
+      then from_root
+      else "../../protocol/generated/fixtures/counter_press.hex"
+    in
+    let channel = open_in_bin path in
+    Fun.protect
+      ~finally:(fun () -> close_in channel)
+      (fun () -> really_input_string channel (in_channel_length channel) |> bytes_of_hex)
+  in
+  Bytes.set encoded 88 '\xff';
+  match Event_batch_codec.decode encoded with
+  | Error { code = Unknown_event_tag; _ } -> ()
+  | Error error -> fail "unexpected event decoder error: %s" error.message
+  | Ok _ -> fail "unknown event tag unexpectedly decoded"
+;;
+
+let test_interaction_props_round_trip () =
+  let frame =
+    Wire_frame.
+      { runtime_epoch = 12L
+      ; base_revision = 0L
+      ; target_revision = 1L
+      ; kind = Full_snapshot
+      ; operations =
+          [ Create_node
+              { node_id = 1L
+              ; kind = Gesture
+              ; props = Gesture_props
+              ; event_bindings = []
+              ; parent_data = No_parent_data
+              }
+          ; Create_node
+              { node_id = 2L
+              ; kind = Focus_scope
+              ; props = Focus_scope_props { autofocus = true }
+              ; event_bindings = []
+              ; parent_data = No_parent_data
+              }
+          ; Create_node
+              { node_id = 3L
+              ; kind = Mouse_region
+              ; props = Mouse_region_props { opaque = false }
+              ; event_bindings = []
+              ; parent_data = No_parent_data
+              }
+          ; Create_node
+              { node_id = 4L
+              ; kind = Keyboard_listener
+              ; props = Keyboard_listener_props { autofocus = true; key_policy = Handled }
+              ; event_bindings = []
+              ; parent_data = No_parent_data
+              }
+          ]
+      }
+  in
+  match Binary_codec.encode frame with
+  | Error error -> fail "interaction encode failed: %s" error.message
+  | Ok bytes ->
+    (match Binary_codec.decode bytes with
+     | Error error -> fail "interaction decode failed: %s" error.message
+     | Ok decoded -> expect (decoded = frame) "interaction props changed")
+;;
+
+let test_interaction_event_round_trip () =
+  let events =
+    Inbound_event.
+      [ { sequence = 1L
+        ; displayed_revision = 1L
+        ; node_id = 1L
+        ; handler_id = 10L
+        ; event_tag = Generated_protocol.Event_tag.tap
+        ; payload =
+            Tap
+              { local_x = 1.
+              ; local_y = 2.
+              ; global_x = 3.
+              ; global_y = 4.
+              ; pointer_kind = Touch
+              }
+        }
+      ; { sequence = 2L
+        ; displayed_revision = 1L
+        ; node_id = 1L
+        ; handler_id = 11L
+        ; event_tag = Generated_protocol.Event_tag.pointer_down
+        ; payload =
+            Pointer
+              { pointer_id = 7L
+              ; local_x = 5.
+              ; local_y = 6.
+              ; global_x = 7.
+              ; global_y = 8.
+              ; pointer_kind = Mouse
+              ; buttons = 1
+              }
+        }
+      ; { sequence = 3L
+        ; displayed_revision = 1L
+        ; node_id = 2L
+        ; handler_id = 12L
+        ; event_tag = Generated_protocol.Event_tag.key
+        ; payload =
+            Key
+              { logical_key = 97L
+              ; physical_key = 0x70004L
+              ; action = Key_down
+              ; modifiers = 3
+              }
+        }
+      ]
+  in
+  let batch = Inbound_event.{ runtime_epoch = 12L; events } in
+  match Event_batch_codec.encode batch with
+  | Error error -> fail "interaction event encode failed: %s" error.message
+  | Ok bytes ->
+    (match Event_batch_codec.decode bytes with
+     | Error error -> fail "interaction event decode failed: %s" error.message
+     | Ok decoded -> expect (decoded = batch) "interaction event payload changed")
+;;
+
+let () =
+  test_golden_fixture ();
+  test_round_trip ();
+  test_animation_props_round_trip ();
+  test_legacy_opacity_layout ();
+  test_phase_four_props_round_trip ();
+  test_text_input_props_round_trip ();
+  test_text_input_rejects_split_surrogate_range ();
+  test_malformed_frames ();
+  test_event_batch_fixture ();
+  test_unknown_event_tag ();
+  test_interaction_props_round_trip ();
+  test_interaction_event_round_trip ();
+  print_endline "protocol tests passed"
+;;

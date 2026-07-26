@@ -1,0 +1,184 @@
+module Ui = Bonsai_flutter_ui
+
+module Frame = struct
+  type entry =
+    { node_id : Node_id.t
+    ; event_tag : Ui.Event.Tag.t
+    ; handler_id : Handler_id.t
+    ; handler : Ui.Event.Handler.t
+    }
+
+  type t =
+    { revision : int64
+    ; entries : (Handler_id.t, entry) Hashtbl.t
+    }
+
+  let revision t = t.revision
+
+  module Private = struct
+    let create ~revision entries =
+      let table = Hashtbl.create (List.length entries) in
+      List.iter
+        (fun entry ->
+           if Hashtbl.mem table entry.handler_id
+           then invalid_arg "Handler_registry.Frame: duplicate handler ID";
+           Hashtbl.add table entry.handler_id entry)
+        entries;
+      { revision; entries = table }
+    ;;
+  end
+end
+
+type event =
+  { runtime_epoch : int64
+  ; displayed_revision : int64
+  ; node_id : Node_id.t
+  ; event_tag : Ui.Event.Tag.t
+  ; handler_id : Handler_id.t
+  ; event_sequence : int64
+  ; payload : Ui.Event.Payload.t
+  }
+
+type t =
+  { runtime_epoch : int64
+  ; frames : (int64, Frame.t) Hashtbl.t
+  ; mutable displayed_revision : int64 option
+  ; mutable last_event_sequence : int64 option
+  }
+
+let create ~runtime_epoch =
+  { runtime_epoch
+  ; frames = Hashtbl.create 4
+  ; displayed_revision = None
+  ; last_event_sequence = None
+  }
+;;
+
+let install t frame =
+  let revision = Frame.revision frame in
+  if Hashtbl.mem t.frames revision
+  then
+    Error
+      (Runtime_error.Invalid_patch
+         (Printf.sprintf "handler frame %Ld is already installed" revision))
+  else (
+    Hashtbl.add t.frames revision frame;
+    Ok ())
+;;
+
+let mark_frame_presented t ~revision =
+  match Hashtbl.find_opt t.frames revision with
+  | None -> Error (Runtime_error.Stale_event { revision })
+  | Some _ ->
+    (match t.displayed_revision with
+     | Some current when Int64.compare revision current < 0 ->
+       Error (Runtime_error.Revision_mismatch { expected = current; actual = revision })
+     | None | Some _ ->
+       t.displayed_revision <- Some revision;
+       Ok ())
+;;
+
+let retire_before t ~revision =
+  let retired =
+    Hashtbl.to_seq_keys t.frames
+    |> Seq.filter (fun candidate -> Int64.compare candidate revision < 0)
+    |> List.of_seq
+  in
+  List.iter (Hashtbl.remove t.frames) retired
+;;
+
+let retire_superseded t ~displayed_revision =
+  retire_before t ~revision:(Int64.pred displayed_revision)
+;;
+
+let frame_presented t ~revision =
+  match mark_frame_presented t ~revision with
+  | Error _ as error -> error
+  | Ok () ->
+    retire_superseded t ~displayed_revision:revision;
+    Ok ()
+;;
+
+let exception_message = function
+  | Failure message | Invalid_argument message -> message
+  | exception_ -> Printexc.to_string exception_
+;;
+
+let validate_event t ~last_event_sequence (event : event) =
+  if not (Int64.equal event.runtime_epoch t.runtime_epoch)
+  then
+    Error
+      (Runtime_error.Wrong_runtime_epoch
+         { expected = t.runtime_epoch; actual = event.runtime_epoch })
+  else (
+    match last_event_sequence with
+    | Some last when Int64.compare event.event_sequence last <= 0 ->
+      Error
+        (Runtime_error.Duplicate_or_out_of_order_event { sequence = event.event_sequence })
+    | None | Some _ ->
+      (match t.displayed_revision with
+       | None -> Error (Runtime_error.Stale_event { revision = event.displayed_revision })
+       | Some displayed when Int64.compare event.displayed_revision displayed > 0 ->
+         Error (Runtime_error.Stale_event { revision = event.displayed_revision })
+       | Some _ ->
+         (match Hashtbl.find_opt t.frames event.displayed_revision with
+          | None ->
+            Error (Runtime_error.Stale_event { revision = event.displayed_revision })
+          | Some frame ->
+            (match Hashtbl.find_opt frame.Frame.entries event.handler_id with
+             | None ->
+               Error (Runtime_error.Handler_missing { handler_id = event.handler_id })
+             | Some entry ->
+               if
+                 (not (Node_id.equal entry.node_id event.node_id))
+                 || not (Ui.Event.Tag.equal entry.event_tag event.event_tag)
+               then
+                 Error
+                   (Runtime_error.Handler_mismatch
+                      { handler_id = event.handler_id
+                      ; node_id = event.node_id
+                      ; event_tag = event.event_tag
+                      })
+               else Ok (event, entry)))))
+;;
+
+let dispatch_batch t events =
+  let rec validate reversed last_event_sequence = function
+    | [] -> Ok (List.rev reversed, last_event_sequence)
+    | event :: rest ->
+      (match validate_event t ~last_event_sequence event with
+       | Error _ as error -> error
+       | Ok validated -> validate (validated :: reversed) (Some event.event_sequence) rest)
+  in
+  match validate [] t.last_event_sequence events with
+  | Error _ as error -> error
+  | Ok (validated, last_event_sequence) ->
+    let rec invoke = function
+      | [] ->
+        t.last_event_sequence <- last_event_sequence;
+        Ok ()
+      | (event, entry) :: rest ->
+        (try
+           Ui.Event.Handler.Private.invoke entry.Frame.handler event.payload;
+           invoke rest
+         with
+         | exception_ ->
+           let backtrace = Printexc.get_raw_backtrace () in
+           Error
+             (Runtime_error.Handler_exception
+                { handler_id = event.handler_id
+                ; message = exception_message exception_
+                ; backtrace = Printexc.raw_backtrace_to_string backtrace
+                }))
+    in
+    invoke validated
+;;
+
+let dispatch t event = dispatch_batch t [ event ]
+let retained_frame_count t = Hashtbl.length t.frames
+
+let clear t =
+  Hashtbl.clear t.frames;
+  t.displayed_revision <- None;
+  t.last_event_sequence <- None
+;;

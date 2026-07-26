@@ -1,0 +1,17 @@
+(library
+ (name bonsai_flutter_host_navigation_example)
+ (wrapped false)
+ (modules host_navigation)
+ (libraries bonsai bonsai_flutter.ui bonsai_flutter.driver))
+
+(executable
+ (name native_embed)
+ (modules native_embed)
+ (enabled_if
+  (= %{env:BONSAI_FLUTTER_EMBED_OCAML=disabled} enabled))
+ (libraries
+  bonsai_flutter_host_navigation_example
+  bonsai_flutter.driver
+  bonsai_flutter.native_backend)
+ (modes
+  (native object)))

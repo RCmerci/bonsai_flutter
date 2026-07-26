@@ -1,0 +1,14 @@
+_build/
+_opam/
+*.install
+*.merlin
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+coverage/
+pubspec.lock
+.DS_Store
+.idea/
+*.iml

@@ -1,0 +1,26 @@
+opam-version: "2.0"
+name: "bonsai_flutter"
+version: "0.1.0~dev"
+synopsis: "A native Flutter backend for Jane Street Bonsai"
+description: """
+bonsai_flutter is an OCaml-first UI framework. Bonsai owns application state,
+view construction, reconciliation, and incremental patches; Flutter owns
+native widget construction, layout, paint, input-method integration, and
+platform services.
+"""
+maintainer: "bonsai_flutter contributors"
+authors: ["bonsai_flutter contributors"]
+license: "MIT"
+homepage: "https://github.com/rcmerci/bonsai_flutter"
+bug-reports: "https://github.com/rcmerci/bonsai_flutter/issues"
+dev-repo: "git+https://github.com/rcmerci/bonsai_flutter.git"
+depends: [
+  "ocaml" {= "5.3.0"}
+  "dune" {>= "3.17"}
+  "bonsai" {= "v0.18~preview.130.106+341"}
+  "core" {= "v0.18~preview.130.106+341"}
+]
+build: [
+  ["dune" "build" "-p" name "-j" jobs]
+]
+available: arch != "x86_32"

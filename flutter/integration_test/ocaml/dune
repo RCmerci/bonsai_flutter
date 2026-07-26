@@ -1,0 +1,15 @@
+(executable
+ (name native_integration_embed)
+ (modules native_integration_embed)
+ (enabled_if
+  (= %{env:BONSAI_FLUTTER_EMBED_OCAML=disabled} enabled))
+ (libraries
+  bonsai_flutter.native_backend
+  bonsai_flutter.driver
+  bonsai_flutter_counter_example
+  bonsai_flutter_gallery
+  bonsai_flutter_host_navigation_example
+  bonsai_flutter_text_input_example
+  bonsai_flutter_todo_example)
+ (modes
+  (native object)))

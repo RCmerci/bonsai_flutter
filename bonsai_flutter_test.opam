@@ -1,0 +1,26 @@
+opam-version: "2.0"
+name: "bonsai_flutter_test"
+version: "0.1.0~dev"
+synopsis: "Headless test handles for bonsai_flutter applications"
+description: """
+bonsai_flutter_test provides renderer-independent logical-tree queries,
+interactions, lifecycle control, host-effect responses, and stable snapshots
+for Bonsai Flutter applications.
+"""
+maintainer: "bonsai_flutter contributors"
+authors: ["bonsai_flutter contributors"]
+license: "MIT"
+homepage: "https://github.com/rcmerci/bonsai_flutter"
+bug-reports: "https://github.com/rcmerci/bonsai_flutter/issues"
+dev-repo: "git+https://github.com/rcmerci/bonsai_flutter.git"
+depends: [
+  "ocaml" {= "5.3.0"}
+  "dune" {>= "3.17"}
+  "bonsai_flutter" {= version}
+  "bonsai" {= "v0.18~preview.130.106+341"}
+  "core" {= "v0.18~preview.130.106+341"}
+]
+build: [
+  ["dune" "build" "-p" name "-j" jobs]
+]
+available: arch != "x86_32"

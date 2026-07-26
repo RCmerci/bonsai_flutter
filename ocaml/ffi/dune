@@ -1,0 +1,18 @@
+(library
+ (name bonsai_flutter_native_backend)
+ (public_name bonsai_flutter.native_backend)
+ (wrapped false)
+ (modules native_backend)
+ (libraries
+  bonsai
+  core
+  bonsai_flutter.ui
+  bonsai_flutter.protocol
+  bonsai_flutter.runtime
+  bonsai_flutter.driver
+  threads)
+ (foreign_stubs
+  (language c)
+  (names bonsai_flutter_native_embed)
+  (include_dirs ../../flutter/packages/bonsai_flutter_native/src)
+  (flags :standard -std=c11 -Wall -Wextra -Werror)))

@@ -1,0 +1,27 @@
+name: bonsai_flutter_integration_test
+description: End-to-end native integration tests for bonsai_flutter.
+publish_to: none
+version: 0.0.0
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=3.44.0"
+
+hooks:
+  user_defines:
+    bonsai_flutter_native:
+      ocaml_complete_object: ../../_build/default/flutter/integration_test/ocaml/native_integration_embed.exe.o
+
+dependencies:
+  bonsai_flutter:
+    path: ../packages/bonsai_flutter
+  bonsai_flutter_native:
+    path: ../packages/bonsai_flutter_native
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+  test: ^1.31.0

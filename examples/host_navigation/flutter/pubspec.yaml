@@ -1,0 +1,27 @@
+name: bonsai_flutter_host_navigation_example
+description: Typed host effects and OCaml-owned declarative navigation.
+publish_to: none
+version: 0.0.0
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=3.44.0"
+
+hooks:
+  user_defines:
+    bonsai_flutter_native:
+      ocaml_complete_object: ../../../_build/default/examples/host_navigation/ocaml/native_embed.exe.o
+
+dependencies:
+  bonsai_flutter:
+    path: ../../../flutter/packages/bonsai_flutter
+  bonsai_flutter_native:
+    path: ../../../flutter/packages/bonsai_flutter_native
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

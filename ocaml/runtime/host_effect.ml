@@ -1,0 +1,429 @@
+module Protocol = Bonsai_flutter_protocol
+module Effect = Bonsai.Effect
+
+type error =
+  | Failed of string
+  | Cancelled
+  | Shutdown
+  | Invalid_response of string
+
+type file =
+  { path : string option
+  ; data : bytes option
+  }
+
+type platform_information =
+  { operating_system : string
+  ; operating_system_version : string
+  ; locale_name : string
+  }
+
+type layout =
+  { left : float
+  ; top : float
+  ; width : float
+  ; height : float
+  }
+
+type native_menu_item =
+  { item_id : string
+  ; label : string
+  ; enabled : bool
+  }
+
+type haptic_kind =
+  | Haptic_light
+  | Haptic_medium
+  | Haptic_heavy
+  | Haptic_selection
+
+module Cancellation = struct
+  type t =
+    { mutable cancelled : bool
+    ; mutable cancel_active : (unit -> unit) option
+    }
+
+  let create () = { cancelled = false; cancel_active = None }
+
+  let cancel t =
+    if not t.cancelled
+    then (
+      t.cancelled <- true;
+      Option.iter (fun cancel -> cancel ()) t.cancel_active;
+      t.cancel_active <- None)
+  ;;
+
+  let is_cancelled t = t.cancelled
+end
+
+type pending =
+  | Pending :
+      { decode : bytes -> ('a, error) result
+      ; callback : (unit, ('a, error) result) Effect.Private.Callback.t
+      ; cancellation : Cancellation.t option
+      }
+      -> pending
+
+type t =
+  { schedule : unit Effect.t -> unit
+  ; pending : (int64, pending) Hashtbl.t
+  ; cancelled : (int64, unit) Hashtbl.t
+  ; operations : Protocol.Wire_frame.operation Queue.t
+  ; mutable next_request_id : int64
+  ; mutable shutdown : bool
+  }
+
+let invalid_response message = Error (Invalid_response message)
+
+let valid_utf8 value =
+  let length = String.length value in
+  let rec loop offset =
+    if offset = length
+    then true
+    else (
+      let decoded = String.get_utf_8_uchar value offset in
+      Uchar.utf_decode_is_valid decoded && loop (offset + Uchar.utf_decode_length decoded))
+  in
+  loop 0
+;;
+
+let decode_string bytes =
+  let value = Bytes.to_string bytes in
+  if valid_utf8 value then Ok value else invalid_response "response is not valid UTF-8"
+;;
+
+let decode_unit bytes =
+  if Bytes.length bytes = 0 then Ok () else invalid_response "unit response must be empty"
+;;
+
+module Bytes_reader = struct
+  type t =
+    { bytes : bytes
+    ; mutable offset : int
+    }
+
+  let create bytes = { bytes; offset = 0 }
+  let remaining t = Bytes.length t.bytes - t.offset
+
+  let require t count =
+    if count < 0 || count > remaining t then raise (Invalid_argument "truncated response")
+  ;;
+
+  let u8 t =
+    require t 1;
+    let value = Char.code (Bytes.get t.bytes t.offset) in
+    t.offset <- t.offset + 1;
+    value
+  ;;
+
+  let u32 t =
+    let b0 = u8 t in
+    let b1 = u8 t in
+    let b2 = u8 t in
+    let b3 = u8 t in
+    b0 lor (b1 lsl 8) lor (b2 lsl 16) lor (b3 lsl 24)
+  ;;
+
+  let f64 t =
+    let bits = ref 0L in
+    for shift = 0 to 7 do
+      bits := Int64.logor !bits (Int64.shift_left (Int64.of_int (u8 t)) (shift * 8))
+    done;
+    Int64.float_of_bits !bits
+  ;;
+
+  let bytes t length =
+    require t length;
+    let value = Bytes.sub t.bytes t.offset length in
+    t.offset <- t.offset + length;
+    value
+  ;;
+
+  let string t =
+    let value = bytes t (u32 t) |> Bytes.to_string in
+    if not (valid_utf8 value) then raise (Invalid_argument "invalid UTF-8");
+    value
+  ;;
+
+  let optional read t =
+    match u8 t with
+    | 0 -> None
+    | 1 -> Some (read t)
+    | _ -> raise (Invalid_argument "invalid optional tag")
+  ;;
+
+  let require_empty t =
+    if remaining t <> 0 then raise (Invalid_argument "trailing response bytes")
+  ;;
+end
+
+let protect_decode decode bytes =
+  try decode bytes with
+  | Invalid_argument message -> invalid_response message
+;;
+
+let decode_optional_file bytes =
+  protect_decode
+    (fun bytes ->
+       let reader = Bytes_reader.create bytes in
+       let value =
+         match Bytes_reader.u8 reader with
+         | 0 -> None
+         | 1 ->
+           let path = Bytes_reader.optional Bytes_reader.string reader in
+           let data =
+             Bytes_reader.optional
+               (fun reader -> Bytes_reader.bytes reader (Bytes_reader.u32 reader))
+               reader
+           in
+           Some { path; data }
+         | _ -> raise (Invalid_argument "invalid optional file tag")
+       in
+       Bytes_reader.require_empty reader;
+       Ok value)
+    bytes
+;;
+
+let decode_optional_string bytes =
+  protect_decode
+    (fun bytes ->
+       let reader = Bytes_reader.create bytes in
+       let value = Bytes_reader.optional Bytes_reader.string reader in
+       Bytes_reader.require_empty reader;
+       Ok value)
+    bytes
+;;
+
+let decode_platform_information bytes =
+  protect_decode
+    (fun bytes ->
+       let reader = Bytes_reader.create bytes in
+       let operating_system = Bytes_reader.string reader in
+       let operating_system_version = Bytes_reader.string reader in
+       let locale_name = Bytes_reader.string reader in
+       Bytes_reader.require_empty reader;
+       Ok { operating_system; operating_system_version; locale_name })
+    bytes
+;;
+
+let decode_layout bytes =
+  protect_decode
+    (fun bytes ->
+       let reader = Bytes_reader.create bytes in
+       let left = Bytes_reader.f64 reader in
+       let top = Bytes_reader.f64 reader in
+       let width = Bytes_reader.f64 reader in
+       let height = Bytes_reader.f64 reader in
+       Bytes_reader.require_empty reader;
+       if
+         not
+           (Float.is_finite left
+            && Float.is_finite top
+            && Float.is_finite width
+            && Float.is_finite height)
+       then invalid_response "layout response contains a non-finite value"
+       else Ok { left; top; width; height })
+    bytes
+;;
+
+let respond t callback response =
+  t.schedule (Effect.Private.Callback.respond_to callback response)
+;;
+
+let cancel_request t request_id =
+  match Hashtbl.find_opt t.pending request_id with
+  | None -> ()
+  | Some (Pending pending) ->
+    Hashtbl.remove t.pending request_id;
+    Hashtbl.replace t.cancelled request_id ();
+    Queue.add (Protocol.Wire_frame.Cancel_host_request { request_id }) t.operations;
+    Option.iter
+      (fun (cancellation : Cancellation.t) -> cancellation.cancel_active <- None)
+      pending.cancellation;
+    respond t pending.callback (Error Cancelled)
+;;
+
+let request ?cancellation t payload decode =
+  Effect.Private.make ~request:() ~evaluator:(fun callback ->
+    if t.shutdown
+    then respond t callback (Error Shutdown)
+    else (
+      match cancellation with
+      | Some (cancellation : Cancellation.t) when cancellation.cancelled ->
+        respond t callback (Error Cancelled)
+      | _ ->
+        if Int64.equal t.next_request_id Int64.max_int
+        then respond t callback (Error (Failed "host request ID space exhausted"))
+        else (
+          let request_id = t.next_request_id in
+          t.next_request_id <- Int64.succ request_id;
+          Hashtbl.add t.pending request_id (Pending { decode; callback; cancellation });
+          Option.iter
+            (fun (cancellation : Cancellation.t) ->
+               cancellation.cancel_active <- Some (fun () -> cancel_request t request_id))
+            cancellation;
+          Queue.add
+            (Protocol.Wire_frame.Host_request { request_id; payload })
+            t.operations)))
+;;
+
+module Clipboard = struct
+  let read ?cancellation t () =
+    request ?cancellation t Protocol.Wire_frame.Clipboard_read decode_string
+  ;;
+
+  let write ?cancellation t text =
+    request ?cancellation t (Protocol.Wire_frame.Clipboard_write { text }) decode_unit
+  ;;
+end
+
+let open_url ?cancellation t uri =
+  request ?cancellation t (Protocol.Wire_frame.Open_url { uri }) decode_unit
+;;
+
+let pick_file ?cancellation ?(allowed_extensions = []) ?(allow_multiple = false) t () =
+  request
+    ?cancellation
+    t
+    (Protocol.Wire_frame.Pick_file { allowed_extensions; allow_multiple })
+    decode_optional_file
+;;
+
+let save_file ?cancellation ?suggested_name ~data t () =
+  request
+    ?cancellation
+    t
+    (Protocol.Wire_frame.Save_file { suggested_name; data })
+    decode_optional_file
+;;
+
+let request_focus ?cancellation t ~node_id =
+  request ?cancellation t (Protocol.Wire_frame.Request_focus { node_id }) decode_unit
+;;
+
+let clear_focus ?cancellation t () =
+  request ?cancellation t Protocol.Wire_frame.Clear_focus decode_unit
+;;
+
+let scroll_to ?cancellation ?(alignment = 0.) ?(animated = true) t ~node_id =
+  request
+    ?cancellation
+    t
+    (Protocol.Wire_frame.Scroll_to { node_id; alignment; animated })
+    decode_unit
+;;
+
+let set_window_title ?cancellation t title =
+  request ?cancellation t (Protocol.Wire_frame.Set_window_title { title }) decode_unit
+;;
+
+let set_window_size ?cancellation t ~width ~height =
+  request
+    ?cancellation
+    t
+    (Protocol.Wire_frame.Set_window_size { width; height })
+    decode_unit
+;;
+
+let show_native_menu ?cancellation t items =
+  let items =
+    List.map
+      (fun (item : native_menu_item) ->
+         Protocol.Wire_frame.
+           { item_id = item.item_id; label = item.label; enabled = item.enabled })
+      items
+  in
+  request
+    ?cancellation
+    t
+    (Protocol.Wire_frame.Show_native_menu { items })
+    decode_optional_string
+;;
+
+let haptic_feedback ?cancellation t kind =
+  let kind =
+    match kind with
+    | Haptic_light -> Protocol.Wire_frame.Haptic_light
+    | Haptic_medium -> Protocol.Wire_frame.Haptic_medium
+    | Haptic_heavy -> Protocol.Wire_frame.Haptic_heavy
+    | Haptic_selection -> Protocol.Wire_frame.Haptic_selection
+  in
+  request ?cancellation t (Protocol.Wire_frame.Haptic_feedback kind) decode_unit
+;;
+
+let platform_information ?cancellation t () =
+  request
+    ?cancellation
+    t
+    Protocol.Wire_frame.Platform_information
+    decode_platform_information
+;;
+
+let measure_layout ?cancellation t ~node_id =
+  request ?cancellation t (Protocol.Wire_frame.Measure_layout { node_id }) decode_layout
+;;
+
+module Private = struct
+  let create ~schedule =
+    { schedule
+    ; pending = Hashtbl.create 16
+    ; cancelled = Hashtbl.create 16
+    ; operations = Queue.create ()
+    ; next_request_id = 1L
+    ; shutdown = false
+    }
+  ;;
+
+  let take_operations t =
+    let rec drain reversed =
+      if Queue.is_empty t.operations
+      then List.rev reversed
+      else drain (Queue.take t.operations :: reversed)
+    in
+    drain []
+  ;;
+
+  let resolve t (response : Protocol.Inbound_event.host_response) =
+    match Hashtbl.find_opt t.pending response.request_id with
+    | None ->
+      if Hashtbl.mem t.cancelled response.request_id
+      then (
+        Hashtbl.remove t.cancelled response.request_id;
+        Ok ())
+      else Error (Printf.sprintf "unknown host request ID %Ld" response.request_id)
+    | Some (Pending pending) ->
+      Hashtbl.remove t.pending response.request_id;
+      Option.iter
+        (fun (cancellation : Cancellation.t) -> cancellation.cancel_active <- None)
+        pending.cancellation;
+      let result =
+        match response.status with
+        | Protocol.Inbound_event.Host_ok -> pending.decode response.value
+        | Host_error ->
+          (match decode_string response.value with
+           | Ok message -> Error (Failed message)
+           | Error error -> Error error)
+        | Host_cancelled -> Error Cancelled
+      in
+      respond t pending.callback result;
+      Ok ()
+  ;;
+
+  let shutdown t =
+    if not t.shutdown
+    then (
+      t.shutdown <- true;
+      Hashtbl.iter
+        (fun _ (Pending pending) ->
+           Option.iter
+             (fun (cancellation : Cancellation.t) -> cancellation.cancel_active <- None)
+             pending.cancellation;
+           respond t pending.callback (Error Shutdown))
+        t.pending;
+      Hashtbl.clear t.pending;
+      Hashtbl.clear t.cancelled;
+      Queue.clear t.operations)
+  ;;
+
+  let pending_count t = Hashtbl.length t.pending
+end

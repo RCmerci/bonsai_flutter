@@ -1,0 +1,200 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:bonsai_flutter/bonsai_flutter.dart';
+import 'package:flutter/cupertino.dart' show CupertinoSwitch;
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+const _operationTimeout = Duration(seconds: 10);
+
+Future<T> _bounded<T>(Future<T> future, String operation) => future.timeout(
+  _operationTimeout,
+  onTimeout: () => throw TimeoutException('$operation timed out'),
+);
+
+void main() {
+  testWidgets('gallery state and interaction are owned by OCaml', (
+    tester,
+  ) async {
+    final client = await tester.runAsync(
+      () => _bounded(
+        RuntimeClient.start(config: Uint8List.fromList(utf8.encode('gallery'))),
+        'RuntimeClient.start',
+      ),
+    );
+    expect(client, isNotNull);
+    final runtime = client!;
+    addTearDown(() => _bounded(runtime.dispose(), 'RuntimeClient.dispose'));
+
+    final initialResponse = await tester.runAsync(
+      () => _bounded(runtime.step(Uint8List(0)), 'initial gallery step'),
+    );
+    expect(initialResponse, isNotNull);
+    expect(initialResponse!.status, RuntimeStatus.ok);
+    final initialFrame = FrameCodec.decode(initialResponse.bytes);
+    final store = NodeStore()..apply(initialFrame);
+    final queue = EventBatchQueue(
+      runtimeEpoch: initialFrame.runtimeEpoch,
+      displayedRevision: () => store.revision,
+    );
+    final resources = RendererResourceStore();
+    final nativeWidgets =
+        NativeWidgetRegistry(
+          capabilityBits:
+              NativeCapability.stateful |
+              NativeCapability.resource |
+              NativeCapability.semantics,
+        )..register<String>(
+          NativeWidgetRegistration(
+            kindId: 1001,
+            minVersion: 1,
+            maxVersion: 1,
+            capabilityBits:
+                NativeCapability.stateful |
+                NativeCapability.resource |
+                NativeCapability.semantics,
+            decodeProps: (payload) => utf8.decode(payload),
+            factory: (context) {
+              final focusNode = context.resource<FocusNode>(
+                create: FocusNode.new,
+                dispose: (focusNode) => focusNode.dispose(),
+              );
+              return ElevatedButton(
+                focusNode: focusNode,
+                onPressed: () => context.emit?.call(1, Uint8List(0)),
+                child: Text(context.props),
+              );
+            },
+          ),
+        );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BonsaiFlutterView(
+            store: store,
+            registry: WidgetRegistry.standard(nativeWidgets: nativeWidgets),
+            resourceStore: resources,
+            onEvent: queue.enqueue,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Bonsai Flutter Gallery'), findsOneWidget);
+    expect(
+      find.text('OCaml owns every value and handler on this page'),
+      findsOneWidget,
+    );
+    expect(find.byType(Padding), findsWidgets);
+    expect(find.byType(SingleChildScrollView), findsOneWidget);
+    expect(find.byType(ElevatedButton), findsWidgets);
+    expect(find.byType(Checkbox), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.byType(CupertinoSwitch), findsOneWidget);
+    expect(find.text('Native card: 0'), findsOneWidget);
+    expect(resources.liveResourceCount, 3);
+    expect(
+      tester
+          .widgetList<Theme>(find.byType(Theme))
+          .any((theme) => theme.data.brightness == Brightness.dark),
+      isTrue,
+    );
+    expect(
+      tester
+          .widgetList<Semantics>(find.byType(Semantics))
+          .any(
+            (semantics) =>
+                semantics.properties.label == 'Bonsai Flutter gallery',
+          ),
+      isTrue,
+    );
+
+    final initialPresented = await tester.runAsync(
+      () => _bounded(
+        runtime.framePresented(initialFrame.targetRevision),
+        'initial gallery presentation',
+      ),
+    );
+    expect(initialPresented, isNotNull);
+    expect(initialPresented!.status, RuntimeStatus.ok);
+
+    await tester.tap(find.byType(Checkbox));
+    await tester.pump();
+    final batch = queue.takeBatch();
+    expect(batch, isNotNull);
+    final updateResponse = await tester.runAsync(
+      () => _bounded(runtime.sendEventBatch(batch!), 'gallery checkbox event'),
+    );
+    expect(updateResponse, isNotNull);
+    expect(updateResponse!.status, RuntimeStatus.ok);
+    final incremental = FrameCodec.decode(updateResponse.bytes);
+    expect(incremental.kind, FrameKind.incremental);
+    expect(incremental.operations.whereType<CreateNode>(), isEmpty);
+    expect(incremental.operations.whereType<DropNode>(), isEmpty);
+    expect(
+      incremental.operations.whereType<UpdateProps>().map(
+        (operation) => operation.props,
+      ),
+      containsAll([
+        const MaterialCheckboxProps(value: true, enabled: true),
+        const SemanticsProps(
+          label: 'Bonsai Flutter gallery',
+          enabled: true,
+          checked: true,
+        ),
+      ]),
+    );
+
+    store.apply(incremental);
+    await tester.pump();
+    expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isTrue);
+    final updatePresented = await tester.runAsync(
+      () => _bounded(
+        runtime.framePresented(incremental.targetRevision),
+        'gallery update presentation',
+      ),
+    );
+    expect(updatePresented, isNotNull);
+    expect(updatePresented!.status, RuntimeStatus.ok);
+
+    await tester.ensureVisible(find.text('Native card: 0'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Native card: 0'));
+    await tester.pump();
+    final nativeBatch = queue.takeBatch();
+    expect(nativeBatch, isNotNull);
+    final nativeResponse = await tester.runAsync(
+      () => _bounded(
+        runtime.sendEventBatch(nativeBatch!),
+        'gallery native event',
+      ),
+    );
+    expect(nativeResponse, isNotNull);
+    expect(
+      nativeResponse!.status,
+      RuntimeStatus.ok,
+      reason: nativeResponse.errorMessage,
+    );
+    final nativeFrame = FrameCodec.decode(nativeResponse.bytes);
+    expect(nativeFrame.kind, FrameKind.incremental);
+    expect(nativeFrame.operations.whereType<CreateNode>(), isEmpty);
+    expect(nativeFrame.operations.whereType<DropNode>(), isEmpty);
+    final nativeUpdate = nativeFrame.operations
+        .whereType<UpdateProps>()
+        .map((operation) => operation.props)
+        .whereType<NativeWidgetProps>()
+        .single;
+    expect(utf8.decode(nativeUpdate.payload), 'Native card: 1');
+    store.apply(nativeFrame);
+    await tester.pump();
+    expect(find.text('Native card: 1'), findsOneWidget);
+    expect(resources.liveResourceCount, 3);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    resources.dispose();
+    expect(resources.liveResourceCount, 0);
+  });
+}

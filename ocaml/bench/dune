@@ -1,0 +1,8 @@
+(executable
+ (name runtime_bench)
+ (modules runtime_bench)
+ (libraries
+  unix
+  bonsai_flutter.ui
+  bonsai_flutter.protocol
+  bonsai_flutter.runtime))

@@ -1,0 +1,49 @@
+name: macOS arm64
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package-and-integrate:
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      OCAMLPARAM: "_,keywords=4.14"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: 5.3.0
+          opam-repositories: |
+            janestreet-bleeding-external: git+https://github.com/janestreet/opam-repository.git#a577fc24cba311814e5088a0f6851c65b5cf8dc1
+            janestreet-bleeding: git+https://github.com/janestreet/opam-repository.git#6789b91abef324f0f9dc2a07332afc4843c7dbe5
+            default: https://opam.ocaml.org
+      - name: Apply the selected basement macOS patch
+        run: |
+          basement_source="$RUNNER_TEMP/basement"
+          git clone https://github.com/janestreet/basement.git "$basement_source"
+          git -C "$basement_source" checkout 5c640c230a3989f8e505cda7aa6aca9925a23a5b
+          git -C "$basement_source" apply "$GITHUB_WORKSPACE/vendor/patches/basement-macos.patch"
+          opam pin add basement "file://$basement_source" \
+            --with-version=v0.18~preview.130.106+341 --yes
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.8
+          architecture: arm64
+          cache: true
+      - name: Build packages and run integration tests
+        run: make ci-macos

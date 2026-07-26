@@ -1,0 +1,67 @@
+type 'result t =
+  { driver : 'result Bonsai_driver.t
+  ; mutable is_shutdown : bool
+  }
+
+let instrumentation () =
+  { Bonsai.Private.Instrumentation.Config.instrument_for_computation_watcher =
+      Ui_incr.Incr.return Bonsai.Private.Instrumentation.Watching.Not_watching
+  ; instrument_for_profiling =
+      Ui_incr.Incr.return Bonsai.Private.Instrumentation.Profiling.Not_profiling
+  ; set_latest_graph_info = (fun _ -> ())
+  ; computation_watcher_queue = Core.Queue.create ()
+  ; start_timer = (fun _ -> ())
+  ; stop_timer = (fun () -> ())
+  }
+;;
+
+let create ~time_source component =
+  let driver =
+    Bonsai_driver.create ~instrumentation:(instrumentation ()) ~time_source component
+  in
+  { driver; is_shutdown = false }
+;;
+
+let require_active operation t =
+  if t.is_shutdown
+  then invalid_arg ("Bonsai_runtime_adapter." ^ operation ^ ": adapter is shut down")
+;;
+
+let flush t =
+  require_active "flush" t;
+  Bonsai_driver.flush t.driver
+;;
+
+let result t =
+  require_active "result" t;
+  Bonsai_driver.result t.driver
+;;
+
+let schedule_event t scheduled_effect =
+  require_active "schedule_event" t;
+  Bonsai_driver.schedule_event t.driver scheduled_effect
+;;
+
+let has_before_display_events t =
+  require_active "has_before_display_events" t;
+  Bonsai_driver.has_before_display_events t.driver
+;;
+
+let has_after_display_events t =
+  require_active "has_after_display_events" t;
+  Bonsai_driver.has_after_display_events t.driver
+;;
+
+let frame_presented t =
+  require_active "frame_presented" t;
+  Bonsai_driver.trigger_lifecycles t.driver
+;;
+
+let shutdown t =
+  if not t.is_shutdown
+  then (
+    t.is_shutdown <- true;
+    Bonsai_driver.Expert.invalidate_observers t.driver)
+;;
+
+let is_shutdown t = t.is_shutdown

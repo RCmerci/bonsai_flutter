@@ -1,0 +1,46 @@
+module Test = Bonsai_flutter_test
+module Ui = Bonsai_flutter_ui
+
+let fail format = Printf.ksprintf failwith format
+let require condition message = if not condition then fail "%s" message
+
+let component handlers graph =
+  let count, increment = Bonsai.state' ~equal:Int.equal 0 graph in
+  let increment =
+    Bonsai.map increment ~f:(fun set_count ->
+      Test.Driver.Handler.create handlers ~name:"increment" (fun _ ->
+        set_count (fun count -> count + 1)))
+  in
+  Bonsai.map2 count increment ~f:(fun count increment ->
+    Ui.Widget.column
+      ~key:(Ui.Key.string "main")
+      [ Ui.Widget.text (Printf.sprintf "Count: %d" count)
+      ; Ui.Widget.button ~on_press:increment ~child:(Ui.Widget.text "Increment") ()
+        |> Ui.Widget.with_test_id (Ui.Test_id.string "increment")
+      ])
+;;
+
+let () =
+  let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
+  let handle = Test.Handle.create ~runtime_epoch:701L ~time_source component in
+  require
+    (String.equal
+       (Test.Handle.show handle)
+       "Column key=main\n\
+       \  Text \"Count: 0\"\n\
+       \  Button test_id=increment events=[press]\n\
+       \    Text \"Increment\"")
+    "initial pretty-printed tree changed";
+  Test.Handle.trigger_frame_presented handle;
+  Test.Handle.click handle (Test.Query.test_id "increment");
+  require
+    (Option.is_some (Test.Handle.find handle (Test.Query.visible_text "Count: 1")))
+    "click did not update Bonsai state";
+  require
+    (String.equal
+       (Test.Handle.show_diff handle)
+       "-   Text \"Count: 0\"\n+   Text \"Count: 1\"")
+    "show_diff was not stable";
+  Test.Handle.trigger_frame_presented handle;
+  Test.Handle.shutdown handle
+;;

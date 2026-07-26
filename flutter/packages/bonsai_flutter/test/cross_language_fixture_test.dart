@@ -1,0 +1,235 @@
+import 'package:bonsai_flutter/bonsai_flutter.dart';
+import 'package:test/test.dart';
+
+import 'fixture.dart';
+
+void main() {
+  group('OCaml frame fixtures', () {
+    test('decodes the empty incremental frame', () {
+      final frame = decodeOcamlFixture('ocaml_empty_incremental.hex');
+
+      expect(frame.runtimeEpoch, 7);
+      expect(frame.baseRevision, 1);
+      expect(frame.targetRevision, 2);
+      expect(frame.kind, FrameKind.incremental);
+      expect(frame.operations, isEmpty);
+      expectFixtureMatchesDartEncoding(
+        'ocaml_empty_incremental.hex',
+        const Frame(
+          runtimeEpoch: 7,
+          baseRevision: 1,
+          targetRevision: 2,
+          kind: FrameKind.incremental,
+          operations: [],
+        ),
+      );
+    });
+
+    test('decodes the Counter full snapshot', () {
+      final frame = decodeOcamlFixture('ocaml_counter_full.hex');
+
+      expect(frame.runtimeEpoch, 7);
+      expect(frame.baseRevision, 0);
+      expect(frame.targetRevision, 1);
+      expect(frame.kind, FrameKind.fullSnapshot);
+      expect(frame.operations, hasLength(4));
+      final column = frame.operations[0] as CreateNode;
+      expect(column.nodeId, 1);
+      expect(column.kind, NodeKind.column);
+      expect(column.props, const LinearProps());
+      final text = frame.operations[1] as CreateNode;
+      expect(text.nodeId, 2);
+      expect(text.kind, NodeKind.text);
+      expect(text.props, const TextProps('Count: 0'));
+      final children = frame.operations[2] as SetChildren;
+      expect(children.nodeId, 1);
+      expect(children.children, [2]);
+      expect((frame.operations[3] as SetRoot).nodeId, 1);
+      expectFixtureMatchesDartEncoding(
+        'ocaml_counter_full.hex',
+        counterSnapshot(text: 'Count: 0'),
+      );
+    });
+
+    test('decodes a Unicode props update', () {
+      final frame = decodeOcamlFixture('ocaml_unicode_update.hex');
+
+      expect(frame.runtimeEpoch, 7);
+      expect(frame.baseRevision, 1);
+      expect(frame.targetRevision, 2);
+      expect(frame.kind, FrameKind.incremental);
+      expect(frame.operations, hasLength(1));
+      final update = frame.operations.single as UpdateProps;
+      expect(update.nodeId, 2);
+      expect(update.props, const TextProps('计数: 😀'));
+      expectFixtureMatchesDartEncoding(
+        'ocaml_unicode_update.hex',
+        const Frame(
+          runtimeEpoch: 7,
+          baseRevision: 1,
+          targetRevision: 2,
+          kind: FrameKind.incremental,
+          operations: [UpdateProps(nodeId: 2, props: TextProps('计数: 😀'))],
+        ),
+      );
+    });
+
+    test('decodes reordered children', () {
+      final frame = decodeOcamlFixture('ocaml_reordered_children.hex');
+
+      expect(frame.runtimeEpoch, 7);
+      expect(frame.baseRevision, 2);
+      expect(frame.targetRevision, 3);
+      expect(frame.kind, FrameKind.incremental);
+      final children = frame.operations.single as SetChildren;
+      expect(children.nodeId, 1);
+      expect(children.children, [3, 2]);
+      expectFixtureMatchesDartEncoding(
+        'ocaml_reordered_children.hex',
+        const Frame(
+          runtimeEpoch: 7,
+          baseRevision: 2,
+          targetRevision: 3,
+          kind: FrameKind.incremental,
+          operations: [
+            SetChildren(nodeId: 1, children: [3, 2]),
+          ],
+        ),
+      );
+    });
+
+    test('decodes a typed host request', () {
+      final frame = decodeOcamlFixture('ocaml_host_request.hex');
+
+      expect(frame.runtimeEpoch, 31);
+      expect(frame.baseRevision, 2);
+      expect(frame.targetRevision, 3);
+      final operation = frame.operations.single as HostRequestOperation;
+      expect(operation.requestId, 41);
+      expect((operation.request as ClipboardWriteRequest).text, '剪贴板😀');
+      expectFixtureMatchesDartEncoding(
+        'ocaml_host_request.hex',
+        const Frame(
+          runtimeEpoch: 31,
+          baseRevision: 2,
+          targetRevision: 3,
+          kind: FrameKind.incremental,
+          operations: [
+            HostRequestOperation(
+              requestId: 41,
+              request: ClipboardWriteRequest('剪贴板😀'),
+            ),
+          ],
+        ),
+      );
+    });
+
+    test('decodes animated opacity introduced in protocol 1.12', () {
+      final frame = decodeOcamlFixture('ocaml_animated_opacity.hex');
+
+      expect(frame.runtimeEpoch, 7);
+      expect(frame.baseRevision, 3);
+      expect(frame.targetRevision, 4);
+      final update = frame.operations.single as UpdateProps;
+      expect(update.nodeId, 9);
+      expect(
+        update.props,
+        const AnimatedOpacityProps(
+          opacity: 0.25,
+          animation: AnimationIntent(
+            id: 7001,
+            durationMilliseconds: 250,
+            curve: AnimationCurveValue.easeInOut,
+          ),
+        ),
+      );
+      expectFixtureMatchesDartEncoding(
+        'ocaml_animated_opacity.hex',
+        const Frame(
+          runtimeEpoch: 7,
+          baseRevision: 3,
+          targetRevision: 4,
+          kind: FrameKind.incremental,
+          operations: [
+            UpdateProps(
+              nodeId: 9,
+              props: AnimatedOpacityProps(
+                opacity: 0.25,
+                animation: AnimationIntent(
+                  id: 7001,
+                  durationMilliseconds: 250,
+                  curve: AnimationCurveValue.easeInOut,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+
+    test('shared incremental fixture enforces epoch and revision', () {
+      final fixture = decodeOcamlFixture('ocaml_unicode_update.hex');
+      final wrongEpochStore = NodeStore()
+        ..apply(
+          Frame(
+            runtimeEpoch: 8,
+            baseRevision: 0,
+            targetRevision: 1,
+            kind: FrameKind.fullSnapshot,
+            operations: counterSnapshot(text: 'Count: 0').operations,
+          ),
+        );
+
+      expect(
+        () => wrongEpochStore.apply(fixture),
+        throwsA(
+          isA<FrameApplyException>().having(
+            (error) => error.code,
+            'code',
+            FrameErrorCode.epochMismatch,
+          ),
+        ),
+      );
+
+      final wrongRevisionStore = NodeStore()
+        ..apply(counterSnapshot(text: 'Count: 0'))
+        ..apply(
+          const Frame(
+            runtimeEpoch: 7,
+            baseRevision: 1,
+            targetRevision: 2,
+            kind: FrameKind.incremental,
+            operations: [],
+          ),
+        );
+      expect(
+        () => wrongRevisionStore.apply(fixture),
+        throwsA(
+          isA<FrameApplyException>().having(
+            (error) => error.code,
+            'code',
+            FrameErrorCode.revisionMismatch,
+          ),
+        ),
+      );
+    });
+  });
+}
+
+Frame decodeOcamlFixture(String name) {
+  final file = hexFixtureFile(name);
+  expect(
+    file.existsSync(),
+    isTrue,
+    reason: 'Missing OCaml-generated cross-language fixture: $name',
+  );
+  return FrameCodec.decode(readHexFixture(name));
+}
+
+void expectFixtureMatchesDartEncoding(String name, Frame frame) {
+  expect(
+    FrameCodec.encode(frame),
+    orderedEquals(readHexFixture(name)),
+    reason: 'Dart and OCaml encoded different bytes for $name',
+  );
+}

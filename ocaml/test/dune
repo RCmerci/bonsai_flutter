@@ -1,0 +1,89 @@
+(test
+ (name core_tests)
+ (libraries bonsai_flutter.ui bonsai_flutter.runtime))
+
+(test
+ (name protocol_tests)
+ (deps
+  ../../protocol/generated/fixtures/counter_full.hex
+  ../../protocol/generated/fixtures/counter_press.hex)
+ (libraries bonsai_flutter.protocol))
+
+(test
+ (name cross_language_fixture_tests)
+ (deps
+  ../../protocol/generated/fixtures/dart_counter_press.hex
+  ../../protocol/generated/fixtures/dart_host_response.hex
+  ../../protocol/generated/fixtures/dart_text_edit_unicode.hex
+  ../../protocol/generated/fixtures/dart_environment_changed.hex)
+ (libraries bonsai_flutter.protocol))
+
+(test
+ (name event_dispatch_tests)
+ (deps ../../protocol/generated/fixtures/counter_press.hex)
+ (libraries bonsai_flutter.ui bonsai_flutter.protocol bonsai_flutter.runtime))
+
+(test
+ (name text_editing_tests)
+ (libraries bonsai_flutter.ui))
+
+(test
+ (name phase_six_tests)
+ (libraries bonsai_flutter.ui bonsai_flutter.protocol))
+
+(test
+ (name phase_seven_tests)
+ (libraries bonsai_flutter.ui bonsai_flutter.protocol))
+
+(test
+ (name phase_eight_tests)
+ (libraries bonsai_flutter.ui bonsai_flutter.protocol))
+
+(test
+ (name material_surface_tests)
+ (libraries bonsai_flutter.ui))
+
+(test
+ (name core_surface_tests)
+ (libraries bonsai_flutter.ui))
+
+(test
+ (name public_api_tests)
+ (libraries core bonsai bonsai_flutter bonsai_flutter.driver))
+
+(test
+ (name layout_driver_tests)
+ (libraries
+  core
+  bonsai
+  bonsai_flutter.ui
+  bonsai_flutter.protocol
+  bonsai_flutter.driver))
+
+(test
+ (name bonsai_runtime_adapter_tests)
+ (libraries core bonsai bonsai_flutter.runtime_adapter))
+
+(test
+ (name driver_counter_tests)
+ (libraries
+  core
+  bonsai
+  bonsai_flutter.ui
+  bonsai_flutter.protocol
+  bonsai_flutter.runtime
+  bonsai_flutter.driver))
+
+(test
+ (name test_handle_tests)
+ (libraries core bonsai bonsai_flutter.ui bonsai_flutter_test))
+
+(test
+ (name native_backend_tests)
+ (libraries
+  core
+  bonsai
+  bonsai_flutter.ui
+  bonsai_flutter.protocol
+  bonsai_flutter.driver
+  bonsai_flutter.native_backend))

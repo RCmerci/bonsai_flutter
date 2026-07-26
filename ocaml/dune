@@ -1,0 +1,5 @@
+(library
+ (name bonsai_flutter)
+ (public_name bonsai_flutter)
+ (modules bonsai_flutter)
+ (libraries bonsai bonsai_flutter.ui bonsai_flutter.driver))

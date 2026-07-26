@@ -1,0 +1,16 @@
+# Run with `dart run ffigen --config ffigen.yaml`.
+name: BonsaiFlutterNativeBindings
+description: |
+  Bindings for `src/bonsai_flutter_native.h`.
+
+  Regenerate bindings with `dart run ffigen --config ffigen.yaml`.
+output: 'lib/bonsai_flutter_native_bindings_generated.dart'
+headers:
+  entry-points:
+    - 'src/bonsai_flutter_native.h'
+  include-directives:
+    - 'src/bonsai_flutter_native.h'
+ffi-native:
+comments:
+  style: any
+  length: full

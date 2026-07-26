@@ -1,0 +1,19 @@
+(library
+ (name bonsai_flutter_ui)
+ (public_name bonsai_flutter.ui)
+ (modules
+  key
+  test_id
+  event
+  layout
+  style
+  semantics
+  theme
+  text_editing
+  navigation
+  animation
+  widget
+  native_widget
+  debug
+  material
+  cupertino))

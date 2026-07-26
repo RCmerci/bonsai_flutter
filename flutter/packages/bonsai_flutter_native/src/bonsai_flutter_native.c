@@ -1,0 +1,332 @@
+#include "bonsai_flutter_native.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#if defined(BF_WITH_OCAML)
+#include "bonsai_flutter_ocaml_bridge.h"
+#endif
+
+#define BF_PROTOCOL_MAJOR 1
+#define BF_PROTOCOL_MINOR 12
+#define BF_NO_WAKEUP ((int64_t)-1)
+
+typedef struct bf_allocation {
+  uint8_t *data;
+  struct bf_allocation *next;
+} bf_allocation;
+
+struct bf_runtime {
+  bf_allocation *allocations;
+  size_t allocation_count;
+  char last_error[256];
+  bf_error_code last_error_code;
+#if defined(BF_WITH_OCAML)
+  uint64_t backend_handle;
+#endif
+};
+
+static void bf_store_error(bf_runtime *runtime,
+                           bf_error_code error_code,
+                           const char *message) {
+  if (runtime == NULL) {
+    return;
+  }
+#if defined(NDEBUG)
+  (void)message;
+  (void)snprintf(runtime->last_error,
+                 sizeof(runtime->last_error),
+                 "bonsai_flutter runtime error %d",
+                 (int)error_code);
+#else
+  size_t length;
+  if (message == NULL) {
+    message = "bonsai_flutter runtime error";
+  }
+  length = strlen(message);
+  if (length >= sizeof(runtime->last_error)) {
+    length = sizeof(runtime->last_error) - 1;
+  }
+  memcpy(runtime->last_error, message, length);
+  runtime->last_error[length] = '\0';
+#endif
+  runtime->last_error_code = error_code;
+}
+
+static void bf_output_reset(bf_output_buffer *output,
+                            bf_status status,
+                            bf_error_code error_code) {
+  if (output == NULL) {
+    return;
+  }
+  output->data = NULL;
+  output->length = 0;
+  output->revision = 0;
+  output->next_wakeup_ns = BF_NO_WAKEUP;
+  output->status = status;
+  output->error_code = error_code;
+}
+
+static bf_status bf_set_error(bf_runtime *runtime,
+                              bf_output_buffer *output,
+                              bf_status status,
+  bf_error_code error_code,
+  const char *message) {
+  bf_store_error(runtime, error_code, message);
+  bf_output_reset(output, status, error_code);
+  return status;
+}
+
+static uint8_t *bf_allocate_output(bf_runtime *runtime, size_t length) {
+  bf_allocation *allocation;
+  uint8_t *data;
+
+  if (runtime == NULL || length == 0) {
+    return NULL;
+  }
+  data = (uint8_t *)malloc(length);
+  if (data == NULL) {
+    return NULL;
+  }
+  allocation = (bf_allocation *)malloc(sizeof(bf_allocation));
+  if (allocation == NULL) {
+    free(data);
+    return NULL;
+  }
+  allocation->data = data;
+  allocation->next = runtime->allocations;
+  runtime->allocations = allocation;
+  runtime->allocation_count += 1;
+  return data;
+}
+
+#if defined(BF_WITH_OCAML)
+static bf_status bf_apply_ocaml_response(bf_runtime *runtime,
+                                         bf_output_buffer *output,
+                                         bf_status returned_status,
+                                         bf_ocaml_response *response) {
+  uint8_t *data = NULL;
+
+  if (returned_status != response->status) {
+    bf_ocaml_bridge_response_release(response);
+    return bf_set_error(runtime,
+                        output,
+                        BF_STATUS_FATAL_ERROR,
+                        BF_ERROR_OCAML_EXCEPTION,
+                        "OCaml bridge returned inconsistent status values");
+  }
+  if (response->error != NULL && response->error[0] != '\0') {
+    bf_store_error(runtime, response->error_code, response->error);
+  }
+  if (returned_status != BF_STATUS_OK) {
+    if (response->error == NULL || response->error[0] == '\0') {
+      bf_store_error(runtime,
+                     response->error_code,
+                     "OCaml runtime call failed without a diagnostic");
+    }
+    bf_output_reset(output, returned_status, response->error_code);
+    bf_ocaml_bridge_response_release(response);
+    return returned_status;
+  }
+  if (response->length != 0 && response->data == NULL) {
+    bf_ocaml_bridge_response_release(response);
+    return bf_set_error(runtime,
+                        output,
+                        BF_STATUS_FATAL_ERROR,
+                        BF_ERROR_OCAML_EXCEPTION,
+                        "OCaml bridge returned a null nonempty buffer");
+  }
+  if (response->length != 0) {
+    data = bf_allocate_output(runtime, response->length);
+    if (data == NULL) {
+      bf_ocaml_bridge_response_release(response);
+      return bf_set_error(runtime,
+                          output,
+                          BF_STATUS_FATAL_ERROR,
+                          BF_ERROR_NATIVE_LIBRARY_LOADING_ERROR,
+                          "Failed to allocate the runtime output buffer");
+    }
+    memcpy(data, response->data, response->length);
+  }
+  bf_output_reset(output, BF_STATUS_OK, BF_ERROR_NONE);
+  output->data = data;
+  output->length = response->length;
+  output->revision = response->revision;
+  output->next_wakeup_ns = response->next_wakeup_ns;
+  bf_ocaml_bridge_response_release(response);
+  return BF_STATUS_OK;
+}
+#endif
+
+uint16_t bf_protocol_version_major(void) { return BF_PROTOCOL_MAJOR; }
+
+uint16_t bf_protocol_version_minor(void) { return BF_PROTOCOL_MINOR; }
+
+bf_runtime *bf_runtime_create(const uint8_t *config, size_t config_length) {
+  bf_runtime *runtime;
+
+  if (config == NULL && config_length != 0) {
+    return NULL;
+  }
+  runtime = (bf_runtime *)calloc(1, sizeof(bf_runtime));
+  if (runtime == NULL) {
+    return NULL;
+  }
+#if defined(BF_WITH_OCAML)
+  {
+    uint64_t handle = 0;
+    char error[256] = {0};
+    bf_status status;
+
+    if (!bf_ocaml_bridge_initialize(error, sizeof(error))) {
+      free(runtime);
+      return NULL;
+    }
+    status = bf_ocaml_bridge_create(config,
+                                    config_length,
+                                    &handle,
+                                    error,
+                                    sizeof(error));
+    if (status != BF_STATUS_OK || handle == 0) {
+      free(runtime);
+      return NULL;
+    }
+    runtime->backend_handle = handle;
+  }
+#else
+  (void)config;
+#endif
+  memcpy(runtime->last_error, "No error", sizeof("No error"));
+  runtime->last_error_code = BF_ERROR_NONE;
+  return runtime;
+}
+
+bf_status bf_runtime_step(bf_runtime *runtime,
+                          const uint8_t *input,
+                          size_t input_length,
+                          bf_output_buffer *output) {
+  if (runtime == NULL || output == NULL) {
+    return BF_STATUS_FATAL_ERROR;
+  }
+  if (input == NULL && input_length != 0) {
+    return bf_set_error(runtime,
+                        output,
+                        BF_STATUS_RECOVERABLE_ERROR,
+                        BF_ERROR_PROTOCOL,
+                        "Input pointer is null for a nonempty batch");
+  }
+#if defined(BF_WITH_OCAML)
+  {
+    bf_ocaml_response response = {0};
+    bf_status status =
+        bf_ocaml_bridge_step(runtime->backend_handle,
+                             input,
+                             input_length,
+                             &response);
+    return bf_apply_ocaml_response(runtime, output, status, &response);
+  }
+#else
+  (void)input;
+  return bf_set_error(runtime,
+                      output,
+                      BF_STATUS_FATAL_ERROR,
+                      BF_ERROR_NATIVE_LIBRARY_LOADING_ERROR,
+                      "OCaml runtime backend is not linked");
+#endif
+}
+
+bf_status bf_runtime_frame_presented(bf_runtime *runtime,
+                                     uint64_t revision,
+                                     bf_output_buffer *output) {
+  if (runtime == NULL || output == NULL) {
+    return BF_STATUS_FATAL_ERROR;
+  }
+#if defined(BF_WITH_OCAML)
+  {
+    bf_ocaml_response response = {0};
+    bf_status status =
+        bf_ocaml_bridge_frame_presented(runtime->backend_handle,
+                                        revision,
+                                        &response);
+    return bf_apply_ocaml_response(runtime, output, status, &response);
+  }
+#else
+  (void)revision;
+  return bf_set_error(runtime,
+                      output,
+                      BF_STATUS_FATAL_ERROR,
+                      BF_ERROR_NATIVE_LIBRARY_LOADING_ERROR,
+                      "OCaml runtime backend is not linked");
+#endif
+}
+
+bf_status bf_runtime_get_last_error(bf_runtime *runtime,
+                                    bf_output_buffer *output) {
+  size_t length;
+  uint8_t *data;
+
+  if (runtime == NULL || output == NULL) {
+    return BF_STATUS_FATAL_ERROR;
+  }
+  length = strlen(runtime->last_error);
+  data = bf_allocate_output(runtime, length);
+  if (length != 0 && data == NULL) {
+    return bf_set_error(runtime,
+                        output,
+                        BF_STATUS_FATAL_ERROR,
+                        BF_ERROR_NATIVE_LIBRARY_LOADING_ERROR,
+                        "Failed to allocate the error buffer");
+  }
+  if (length != 0) {
+    memcpy(data, runtime->last_error, length);
+  }
+  bf_output_reset(output, BF_STATUS_OK, runtime->last_error_code);
+  output->data = data;
+  output->length = length;
+  return BF_STATUS_OK;
+}
+
+void bf_buffer_free(bf_runtime *runtime, const uint8_t *data) {
+  bf_allocation **cursor;
+
+  if (runtime == NULL || data == NULL) {
+    return;
+  }
+  cursor = &runtime->allocations;
+  while (*cursor != NULL) {
+    bf_allocation *allocation = *cursor;
+    if (allocation->data == data) {
+      *cursor = allocation->next;
+      free(allocation->data);
+      free(allocation);
+      runtime->allocation_count -= 1;
+      return;
+    }
+    cursor = &allocation->next;
+  }
+}
+
+size_t bf_runtime_outstanding_buffers(const bf_runtime *runtime) {
+  return runtime == NULL ? 0 : runtime->allocation_count;
+}
+
+void bf_runtime_destroy(bf_runtime *runtime) {
+  bf_allocation *allocation;
+
+  if (runtime == NULL) {
+    return;
+  }
+#if defined(BF_WITH_OCAML)
+  bf_ocaml_bridge_destroy(runtime->backend_handle);
+#endif
+  allocation = runtime->allocations;
+  while (allocation != NULL) {
+    bf_allocation *next = allocation->next;
+    free(allocation->data);
+    free(allocation);
+    allocation = next;
+  }
+  memset(runtime, 0, sizeof(bf_runtime));
+  free(runtime);
+}
