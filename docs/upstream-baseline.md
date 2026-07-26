@@ -13,11 +13,12 @@ Asia/Shanghai. Versions and revisions are recorded inputs to the build.
 | opam | 2.3.0 | Default and Jane Street bleeding repositories |
 | Dune | 3.24.0 | Project minimum is 3.17 |
 | ocamlformat | 0.29.0 | Jane Street profile |
-| Xcode | `/Applications/Xcode.app` | Selected by `xcode-select` |
+| Xcode | 26.1.1 at `/Applications/Xcode.app` | Selected by `xcode-select` |
 | Apple clang | 17.0.0 (clang-1700.4.4.1) | Target `arm64-apple-darwin25.5.0` |
 | Flutter SDK | 3.44.8 | Stable revision `058e0af2c2b57e369d905a03ac9748b0ebf543c6` |
 | Dart SDK | 3.12.2 | Bundled by Flutter 3.44.8 |
 | DevTools | 2.57.0 | Bundled by Flutter 3.44.8 |
+| iPhoneOS object | arm64, iOS 13.0 | Unsigned build and audit passed |
 
 ## Selected upstream revisions
 
@@ -132,6 +133,31 @@ The native build hook has produced an arm64 Mach-O artifact exporting the
 symbol checks, code signing checks, and real FFI integration tests passed on
 the recorded host.
 
+## iOS cross-build baseline
+
+The isolated cross environments pin opam-cross-ios commit
+`8380b52b0154752c26c6e221c04fbced3320aa48`, OCaml 5.3.0, and the existing
+Jane Street preview revisions. The recorded runtime closure contains 55
+packages, 102 target runtime components, and one target-build package. Host
+PPX executables remain macOS processes.
+
+The iPhoneOS arm64 object and linked host are platform `IOS` with minimum
+13.0. All seven example applications and the aggregate integration
+application build unsigned; Counter Debug, Profile, and Release pass the
+framework audit.
+
+iOS Simulator is intentionally outside the repository support boundary.
+
+One attached physical iPhone passed the hardware preflight for connection,
+pairing, trust, boot, Developer Mode, and unlock state. No matching
+development/distribution signing configuration was available, so no signed
+application ran. No physical device model or iOS version is included in the
+support matrix, and iOS remains unclaimed.
+
+The final iOS application imports file-timestamp and system-boot-time
+required-reason APIs. Every Runner includes the minimal privacy categories
+and reasons selected for those linked symbols.
+
 ## Known upstream and host risks
 
 - The selected Bonsai preview exposes `Bonsai.Effect` through the
@@ -144,4 +170,5 @@ the recorded host.
 - Host proxy variables may need `NO_PROXY=127.0.0.1,localhost` for Flutter's
   local test harness.
 - Linux, Windows, Android, and iOS remain architectural targets only until
-  their platform builds and integration suites pass.
+  their platform builds and integration suites pass. The unsigned iPhoneOS
+  evidence above does not change that support boundary.

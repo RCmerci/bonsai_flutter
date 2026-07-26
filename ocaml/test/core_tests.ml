@@ -767,7 +767,7 @@ let test_randomized_patch_invariant () =
   done
 ;;
 
-let test_typed_phase_four_widgets_are_incremental () =
+let test_layout_material_and_semantics_widgets_are_incremental () =
   let reconciler = Reconciler.create ~runtime_epoch:59L in
   let changed_to = ref None in
   let on_changed =
@@ -947,8 +947,8 @@ let tests =
   ; ( "10,000 keyed children reverse in linear shape"
     , test_ten_thousand_keyed_children_reverse_in_linear_shape )
   ; "randomized patch invariant", test_randomized_patch_invariant
-  ; ( "typed Phase 4 widgets update incrementally"
-    , test_typed_phase_four_widgets_are_incremental )
+  ; ( "layout, Material, and semantics widgets update incrementally"
+    , test_layout_material_and_semantics_widgets_are_incremental )
   ; ( "text input props and typed edit are incremental"
     , test_text_input_props_and_typed_edit_are_incremental )
   ]

@@ -105,7 +105,7 @@ void main() {
       );
     });
 
-    test('round trips typed Phase 4 widget properties', () {
+    test('round trips layout, semantics, theme, and checkbox properties', () {
       const frame = Frame(
         runtimeEpoch: 9,
         baseRevision: 0,

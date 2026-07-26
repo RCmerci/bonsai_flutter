@@ -4,7 +4,7 @@ Testing is split by boundary.
 
 ## Continuous integration
 
-The repository has three required GitHub Actions workflows:
+The repository has five required GitHub Actions workflows:
 
 - `ocaml.yml` runs the complete OCaml 5.3.0 build, test, formatting, generated
   protocol and OCaml-frame fixture checks, release benchmark compilation, and
@@ -14,6 +14,11 @@ The repository has three required GitHub Actions workflows:
 - `macos.yml` applies the pinned upstream `basement` portability patch, links
   the real OCaml object, builds the Counter application in Debug, Profile, and
   Release modes, and runs the cross-language integration suite on macOS arm64.
+- `ios.yml` reproduces the pinned cross toolchain and builds and audits
+  unsigned iPhoneOS applications on a hosted macOS runner.
+- `ios-device.yml` is a serialized, protected-environment lane for one
+  explicitly configured physical iPhone on a dedicated self-hosted arm64 Mac.
+  It never runs pull-request code.
 
 Run the same boundaries locally from the repository root:
 
@@ -23,11 +28,23 @@ make ci-ocaml
 make ci-flutter
 make ci-sanitizers
 make ci-macos
+make ios-device-native-objects
+make ci-ios
+make ci-ios-device IOS_DEVICE_ID=<physical-device-id>
 ```
 
 The equivalent `just ci-*` recipes delegate to these canonical Make targets.
 `ci-macos` includes `ci-ocaml`; it requires the Flutter SDK, Xcode, and an
 OCaml 5.3.0 switch prepared as described in the repository README.
+
+`ci-ios` builds and audits unsigned iPhoneOS Debug, Profile, and Release
+applications. It does not install or execute them on hardware.
+
+`ci-ios-device` requires repository-external certificates, profiles, export
+options, an Apple Team, and an explicit device identifier. The command must
+not be skipped or replaced with a simulator result before the public support
+claim changes. iOS Simulator is outside the supported platform scope. See
+`docs/ios-device-testing.md`.
 
 ## OCaml
 
@@ -154,7 +171,7 @@ OCaml continuation, and applies the resulting text patch. It then opens an
 OCaml-owned Settings page containing Overlay and MaterialDialog nodes and
 returns a system pop to OCaml before the route is removed.
 
-The integration command is:
+The macOS integration command is:
 
 ```sh
 make integration-test
@@ -164,3 +181,45 @@ This builds the linked OCaml object with the active OCaml 5.3.0 switch, resolves
 the Flutter workspace, and runs its real FFI tests. Counter Debug, Profile, and
 Release packages have also built and launched on the recorded macOS arm64
 host. Lower macOS deployment targets and other platforms remain unclaimed.
+
+## iOS unsigned packaging
+
+Create the isolated cross environments and target-qualified objects:
+
+```sh
+make ios-toolchains
+make ios-device-native-objects
+```
+
+Run the complete hosted boundary:
+
+```sh
+make ci-ios
+```
+
+The repository has verified unsigned iPhoneOS arm64 builds for all seven
+standalone examples and the aggregate integration application. Counter
+Debug, Profile, and Release frameworks pass the artifact audit. That audit
+checks the final Mach-O platform, architecture, minimum version, Bitcode,
+install name, linked libraries, exact public exports, Native Assets manifest,
+prohibited process imports, privacy manifest, and Profile/Release dSYM UUIDs.
+
+## iOS physical-device matrix
+
+With signing inputs installed outside the repository, run:
+
+```sh
+make ci-ios-device IOS_DEVICE_ID=<physical-device-id>
+```
+
+The canonical runner validates the explicit target as a physical, paired,
+trusted, booted iPhone with Developer Mode enabled and unlocked since boot.
+It then runs Debug Flutter integration tests, a Debug hot-restart assertion,
+Profile and Release XCTest, a Release archive/export audit, installation, and
+cold launch.
+
+On the measured host, hardware preflight passed but signing preflight stopped
+before the build because no matching development/distribution identities,
+profiles, and Team configuration were available. Consequently physical
+interaction, background/foreground transitions, cold relaunch, hot restart,
+signed archive export, and the physical device/OS matrix remain unverified.

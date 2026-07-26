@@ -78,6 +78,7 @@ void main() {
   test('shutdown is acknowledged and rejects later commands', () async {
     final client = await RuntimeClient.start();
 
+    expect(await client.debugOutstandingBufferCount(), 0);
     await client.dispose();
     await client.dispose();
 

@@ -246,7 +246,7 @@ void main() {
     expect(find.byKey(const ValueKey<int>(8)), findsOneWidget);
   });
 
-  testWidgets('renders typed Phase 4 layout, semantics, theme, and checkbox', (
+  testWidgets('renders layout, semantics, theme, and checkbox nodes', (
     tester,
   ) async {
     final store = NodeStore()

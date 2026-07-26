@@ -20,3 +20,15 @@ flutter run -d macos
 
 The integration workspace also verifies the event flow with
 `make integration-test`. Lower macOS deployment targets remain unclaimed.
+
+Build the target-qualified unsigned iPhoneOS application:
+
+```sh
+make ios-device-native-objects
+cd examples/gallery/flutter
+flutter build ios --debug --no-codesign
+```
+
+The signed physical-device command and prerequisites are documented in
+`docs/ios-device-testing.md`. Unsigned packaging does not establish iOS
+execution support. iOS Simulator is unsupported.

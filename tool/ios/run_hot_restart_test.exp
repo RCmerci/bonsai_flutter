@@ -1,0 +1,69 @@
+#!/usr/bin/expect -f
+
+if {$argc != 2} {
+  puts stderr "usage: tool/ios/run_hot_restart_test.exp <device-id> <target>"
+  exit 2
+}
+
+set device_id [lindex $argv 0]
+set target [lindex $argv 1]
+set timeout 300
+log_user 0
+
+spawn flutter run -d $device_id --debug --target $target
+
+expect {
+  -re {All tests passed[.!]*} {
+  }
+  -re {Flutter run key commands[.]} {
+  }
+  eof {
+    set result [wait]
+    puts stderr "hot-restart gate ended before Flutter accepted commands"
+    exit [lindex $result 3]
+  }
+  timeout {
+    puts stderr "hot-restart gate timed out waiting for the first run"
+    exit 124
+  }
+}
+
+send -- "R\r"
+expect {
+  -re {Restarted application in|Performing hot restart} {
+  }
+  eof {
+    puts stderr "Flutter exited before completing a full hot restart"
+    exit 1
+  }
+  timeout {
+    puts stderr "hot-restart gate timed out during full restart"
+    exit 124
+  }
+}
+
+expect {
+  -re {All tests passed[.!]*} {
+    send -- "q\r"
+  }
+  -re {Flutter run key commands[.]} {
+    send -- "q\r"
+  }
+  eof {
+    puts stderr "Flutter exited before the post-restart Counter gate completed"
+    exit 1
+  }
+  timeout {
+    puts stderr "hot-restart gate timed out after full restart"
+    exit 124
+  }
+}
+
+expect eof
+set result [wait]
+set exit_code [lindex $result 3]
+if {$exit_code != 0} {
+  exit $exit_code
+}
+
+puts "Debug hot-restart gate passed"

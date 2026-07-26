@@ -18,3 +18,15 @@ flutter run -d macos
 ```
 
 Run the multi-app integration suite with `make integration-test`.
+
+Build the target-qualified unsigned iPhoneOS application:
+
+```sh
+make ios-device-native-objects
+cd examples/host_navigation/flutter
+flutter build ios --debug --no-codesign
+```
+
+The signed device suite exercises the real clipboard and route-pop paths when
+the external signing inputs in `docs/ios-device-testing.md` are available.
+iOS Simulator is unsupported.

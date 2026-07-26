@@ -1,4 +1,4 @@
-.PHONY: build test fmt protocol-generate protocol-check protocol-fixtures-generate protocol-fixtures-check dart-test flutter-test dart-analyze native-test native-analyze native-object native-objects integration-native-object integration-test ci-contract ci-ocaml ci-flutter ci-macos ci-sanitizers clean
+.PHONY: build test fmt protocol-generate protocol-check protocol-fixtures-generate protocol-fixtures-check dart-test flutter-test dart-analyze native-test native-analyze native-object native-objects integration-native-object integration-test ios-toolchains ios-cross-probes ios-device-native-objects ci-contract ci-ocaml ci-flutter ci-macos ci-sanitizers ci-ios ci-ios-device clean
 
 EXAMPLE ?= counter
 NATIVE_OBJECT_TARGET = examples/$(EXAMPLE)/ocaml/native_embed.exe.o
@@ -54,13 +54,24 @@ native-object:
 
 native-objects:
 	BONSAI_FLUTTER_EMBED_OCAML=enabled dune build $(NATIVE_OBJECT_TARGETS)
+	tool/macos/stage_native_objects.sh examples
 
 integration-native-object:
 	BONSAI_FLUTTER_EMBED_OCAML=enabled dune build flutter/integration_test/ocaml/native_integration_embed.exe.o
+	tool/macos/stage_native_objects.sh integration
 
 integration-test: integration-native-object
 	cd flutter/integration_test && flutter pub get
 	cd flutter/integration_test && NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost flutter test
+
+ios-toolchains:
+	tool/ios/setup_toolchain.sh all
+
+ios-cross-probes: ios-toolchains
+	tool/ios/build_probe.sh iphoneos
+
+ios-device-native-objects:
+	tool/ios/build_native_objects.sh iphoneos
 
 ci-contract:
 	tool/test_ci_contract.sh
@@ -88,7 +99,8 @@ ci-flutter:
 	cd flutter/packages/bonsai_flutter_native && dart run ffigen --config ffigen.yaml
 	git diff --exit-code -- flutter/packages/bonsai_flutter_native/lib/bonsai_flutter_native_bindings_generated.dart
 	cd flutter/integration_test && flutter pub get
-	cd flutter/integration_test && dart format --output=none --set-exit-if-changed benchmark test
+	cd flutter/integration_test && dart format --output=none --set-exit-if-changed benchmark integration_test lib test
+	cd flutter/integration_test && flutter analyze
 	@set -e; for example in counter todo text_input host_effects navigation gallery host_navigation; do \
 	  (cd "examples/$$example/flutter" && flutter pub get && dart format --output=none --set-exit-if-changed lib && flutter analyze); \
 	done
@@ -99,8 +111,23 @@ ci-macos: ci-ocaml
 	cd examples/counter/flutter && flutter build macos --debug
 	cd examples/counter/flutter && flutter build macos --profile
 	cd examples/counter/flutter && flutter build macos --release
+	$(MAKE) integration-native-object
 	cd flutter/integration_test && flutter pub get
 	cd flutter/integration_test && NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost flutter test
+
+ci-ios:
+	$(MAKE) ios-device-native-objects
+	cd examples/counter/flutter && flutter pub get
+	cd examples/counter/flutter && flutter build ios --debug --no-codesign
+	tool/ios/verify_app_bundle.sh examples/counter/flutter/build/ios/iphoneos/Runner.app
+	cd examples/counter/flutter && flutter build ios --profile --no-codesign
+	tool/ios/verify_app_bundle.sh examples/counter/flutter/build/ios/iphoneos/Runner.app examples/counter/flutter/build/ios/Profile-iphoneos/bonsai_flutter_native.framework.dSYM
+	cd examples/counter/flutter && flutter build ios --release --no-codesign
+	tool/ios/verify_app_bundle.sh examples/counter/flutter/build/ios/iphoneos/Runner.app examples/counter/flutter/build/ios/Release-iphoneos/bonsai_flutter_native.framework.dSYM
+
+ci-ios-device:
+	@test -n "$(IOS_DEVICE_ID)" || (echo "IOS_DEVICE_ID is required" >&2; exit 1)
+	@tool/ios/run_device_tests.sh "$(IOS_DEVICE_ID)" --debug --profile --release
 
 ci-sanitizers:
 	mkdir -p _build/ci

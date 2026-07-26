@@ -10,7 +10,8 @@ environment:
 hooks:
   user_defines:
     bonsai_flutter_native:
-      ocaml_complete_object: ../../../_build/default/examples/todo/ocaml/native_embed.exe.o
+      native_artifact_root: ../../../_build/native-artifacts/todo/
+      require_ocaml_backend: true
 
 dependencies:
   bonsai_flutter:

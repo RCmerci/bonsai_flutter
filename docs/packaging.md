@@ -1,58 +1,126 @@
 # Packaging
 
 The release transport is a batched C ABI loaded through Dart FFI. The Flutter
-native package follows Flutter 3.44's `package_ffi` build-hook template.
+native package follows Flutter 3.44.8's `package_ffi` build-hook template and
+uses `DynamicLoadingBundled` code assets.
 
-## macOS
+## Target-qualified OCaml artifacts
 
-Each application produces its own arm64 complete object containing its OCaml
-component and entrypoint, the OCaml runtime, the shared C bridge, and the
-exported `bf_*` ABI:
+Every application produces a complete object containing its OCaml component
+and entrypoint, the OCaml runtime, the shared C bridge, and the exported
+`bf_*` ABI. Complete objects are never shared across Apple platforms or SDK
+kinds.
 
-```sh
-make native-object EXAMPLE=counter
-```
+The build hook resolves one of these paths below an application-specific
+`native_artifact_root`:
 
-The consuming Flutter workspace selects that object with a package build-hook
-user define:
+| Target | Relative complete-object path | Measured minimum |
+| --- | --- | --- |
+| macOS arm64 | `macos/arm64/native_embed.exe.o` | macOS 26.0 |
+| iPhoneOS arm64 | `ios/iphoneos/arm64/native_embed.exe.o` | iOS 13.0 |
+
+A consuming workspace configures the root and makes the real backend
+mandatory:
 
 ```yaml
 hooks:
   user_defines:
     bonsai_flutter_native:
-      ocaml_complete_object: path/to/examples/counter/ocaml/native_embed.exe.o
+      native_artifact_root: ../../../_build/native-artifacts/counter/
+      require_ocaml_backend: true
 ```
 
-`hook/build.dart` passes the complete object to the compiler driver, registers
-the resulting dylib as a code asset, and lets Flutter copy and ad-hoc sign the
-test artifact. No manual dylib copy is involved. Every standalone example
-selects the object under its own directory. The checked-in
-`flutter/integration_test` workspace uses a separate test-only aggregate
-object so one test process can exercise several entrypoints.
+The resolver inspects the real Mach-O load commands with Apple tools before
+linking. It rejects a missing object, wrong architecture, wrong platform,
+wrong SDK kind, inconsistent minimum version, Bitcode, and an optional
+C-only fallback when `require_ocaml_backend` is true.
 
-Without `ocaml_complete_object`, the hook builds only the stable C ABI
-fallback. That artifact reports that the OCaml backend is not linked; it does
-not fabricate frames.
+## macOS
 
-The Counter application has built, launched, and passed code-signing checks in
-Debug, Profile, and Release on the recorded macOS 26 arm64 host with the
-project OCaml 5.3.0 baseline. The package build hook links and bundles the
-native asset without a manual dylib copy.
+Build and stage all standalone macOS objects:
 
-The measured OCaml and Jane Street objects inherit the macOS 26 build host.
-Setting a lower link target on only the final object does not prove backward
-compatibility, so no lower deployment version is claimed until the complete
-dependency set is rebuilt and run there.
+```sh
+make native-objects
+```
+
+The aggregate integration object is separate:
+
+```sh
+make integration-native-object
+```
+
+The existing OCaml dependency closure is measured at macOS 26.0 and arm64
+only. Flutter 3.44.8 links native assets with a lower fixed macOS target, so
+the Apple linker reports that the object was built for a newer version. The
+repository does not relabel the input object and does not claim compatibility
+below the measured macOS 26 host.
+
+## iPhoneOS
+
+The cross environments are isolated below ignored `_build/ios` paths and do
+not mutate a developer's default opam switch:
+
+```sh
+make ios-toolchains
+make ios-device-native-objects
+```
+
+`tool/ios/toolchain.lock` pins OCaml 5.3.0, opam-cross-ios, target triples,
+deployment settings, and Jane Street repository revisions.
+`vendor/opam-ios/runtime-closure.lock` pins the exact 55-package runtime
+closure by source URL and SHA-256 digest. Host PPX executables and generators
+remain native macOS processes; only target metadata and selected target
+runtime components enter the iOS sysroot.
+
+The iPhoneOS output is a real arm64 `IOS` complete object with minimum 13.0.
+iOS Simulator is intentionally unsupported; use a registered physical iPhone
+for iOS execution.
+
+## Flutter iOS framework pipeline
+
+For a compatible iPhoneOS object, the package build hook:
+
+1. selects and verifies the target-qualified complete object;
+2. links the object with the iOS-only unavailable-process stubs;
+3. strips unreachable code;
+4. retains only the nine public `bf_*` bridge symbols;
+5. returns a bundled dynamic code asset to Flutter;
+6. lets Flutter create, embed, rewrite, and sign
+   `bonsai_flutter_native.framework`.
+
+No Podfile, manual framework reference, framework copy phase, static
+XCFramework, `DynamicLibrary.process()`, or `-undefined dynamic_lookup` is
+used.
+
+The final bundle audit verifies architecture, platform, minimum version,
+Bitcode absence, install name, linked-library paths, exact exports, Native
+Assets manifest mapping, prohibited process imports, and Profile/Release
+dSYM UUIDs. Signed lanes add code-signature, provisioning-profile, Team ID,
+App ID, and entitlement checks.
+
+The linked OCaml closure imports file-metadata APIs and a monotonic clock API.
+Each iOS Runner therefore includes a minimal privacy manifest with
+`NSPrivacyAccessedAPICategoryFileTimestamp` reason `C617.1` and
+`NSPrivacyAccessedAPICategorySystemBootTime` reason `35F9.1`. The bundle
+verifier requires the corresponding linked symbols and rejects unrelated
+blanket reasons.
+
+## Current evidence boundary
+
+All seven standalone examples and the aggregate integration application build
+as unsigned iPhoneOS arm64 applications. Counter Debug, Profile, and Release
+frameworks pass the repository bundle audit.
+
+Development-signed installation and launch have been verified on a physical
+iPhone. Release archive export and distribution signing remain outside the
+current support boundary. Unsigned results are packaging evidence, not device
+execution evidence.
 
 ## Future platforms
 
-- Linux will use an ELF shared library built for x64 or arm64.
-- Windows will use a DLL with an explicit export definition for x64 or arm64.
-- Android will package ABI-specific shared objects for arm64 and x64.
-- iOS will use a statically linkable native archive or framework compatible
-  with device arm64 and simulator targets.
-
-These are architectural targets, not support claims.
+Linux will use an ELF shared library, Windows will use a DLL with an explicit
+export definition, and Android will package ABI-specific shared objects.
+These remain architectural targets rather than support claims.
 
 ## Development transport
 

@@ -126,6 +126,16 @@ final class RuntimeClient implements RuntimeSession {
   Future<RuntimeResponse> framePresented(int revision) =>
       _send(_Command.framePresented, revision);
 
+  Future<int> debugOutstandingBufferCount() async {
+    final response = await _send(_Command.debugOutstandingBuffers, null);
+    if (response.status != RuntimeStatus.ok) {
+      throw StateError(
+        response.errorMessage ?? 'Unable to query outstanding native buffers',
+      );
+    }
+    return response.revision;
+  }
+
   @override
   Future<void> dispose() {
     final existing = _disposeFuture;
@@ -201,7 +211,7 @@ final class RuntimeClient implements RuntimeSession {
   }
 }
 
-enum _Command { step, framePresented, dispose }
+enum _Command { step, framePresented, debugOutstandingBuffers, dispose }
 
 Future<void> _runtimeWorkerMain(List<Object?> startup) async {
   final ready = startup[0]! as SendPort;
@@ -236,6 +246,9 @@ Future<void> _runtimeWorkerMain(List<Object?> startup) async {
           (values[2]! as TransferableTypedData).materialize().asUint8List(),
         ),
         _Command.framePresented => runtime.framePresented(values[2]! as int),
+        _Command.debugOutstandingBuffers => _outstandingBufferSuccess(
+          runtime.debugOutstandingBufferCount,
+        ),
         _Command.dispose => _emptySuccess(),
       };
       stopwatch.stop();
@@ -276,6 +289,14 @@ NativeOutput _emptySuccess() => NativeOutput(
   status: NativeStatus.ok,
   bytes: Uint8List(0),
   revision: 0,
+  nextWakeupNanoseconds: -1,
+  errorMessage: null,
+);
+
+NativeOutput _outstandingBufferSuccess(int count) => NativeOutput(
+  status: NativeStatus.ok,
+  bytes: Uint8List(0),
+  revision: count,
   nextWakeupNanoseconds: -1,
   errorMessage: null,
 );

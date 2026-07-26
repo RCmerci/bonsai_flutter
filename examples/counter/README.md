@@ -12,3 +12,15 @@ make native-object EXAMPLE=counter
 cd examples/counter/flutter
 flutter run -d macos
 ```
+
+Build the target-qualified unsigned iPhoneOS application:
+
+```sh
+make ios-device-native-objects
+cd examples/counter/flutter
+flutter build ios --debug --no-codesign
+```
+
+Use `make ci-ios-device IOS_DEVICE_ID=<physical-device-id>` for the signed
+device matrix after providing the external signing inputs documented in
+`docs/ios-device-testing.md`. iOS Simulator is unsupported.

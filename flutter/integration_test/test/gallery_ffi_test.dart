@@ -95,6 +95,16 @@ void main() {
     expect(find.byType(TextField), findsOneWidget);
     expect(find.byType(CupertinoSwitch), findsOneWidget);
     expect(find.text('Native card: 0'), findsOneWidget);
+    final scrollable = tester.state<ScrollableState>(
+      find.byType(Scrollable).first,
+    );
+    expect(scrollable.position.pixels, 0);
+    await tester.drag(
+      find.byType(SingleChildScrollView),
+      const Offset(0, -120),
+    );
+    await tester.pumpAndSettle();
+    expect(scrollable.position.pixels, greaterThan(0));
     expect(resources.liveResourceCount, 3);
     expect(
       tester

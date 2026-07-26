@@ -148,7 +148,7 @@ let test_legacy_opacity_layout () =
      | Ok decoded -> expect (decoded = frame) "legacy opacity layout changed")
 ;;
 
-let test_phase_four_props_round_trip () =
+let test_layout_material_and_semantics_props_round_trip () =
   let frame =
     Wire_frame.
       { runtime_epoch = 9L
@@ -227,11 +227,11 @@ let test_phase_four_props_round_trip () =
       }
   in
   match Binary_codec.encode frame with
-  | Error error -> fail "Phase 4 encode failed: %s" error.message
+  | Error error -> fail "widget props encode failed: %s" error.message
   | Ok encoded ->
     (match Binary_codec.decode encoded with
-     | Error error -> fail "Phase 4 decode failed: %s" error.message
-     | Ok decoded -> expect (decoded = frame) "Phase 4 props changed during round trip")
+     | Error error -> fail "widget props decode failed: %s" error.message
+     | Ok decoded -> expect (decoded = frame) "widget props changed during round trip")
 ;;
 
 let test_text_input_props_round_trip () =
@@ -478,12 +478,200 @@ let test_interaction_event_round_trip () =
      | Ok decoded -> expect (decoded = batch) "interaction event payload changed")
 ;;
 
+let expect_frame_round_trip label frame =
+  match Binary_codec.encode frame with
+  | Error error -> fail "%s encode failed: %s" label error.message
+  | Ok bytes ->
+    (match Binary_codec.decode bytes with
+     | Error error -> fail "%s decode failed: %s" label error.message
+     | Ok decoded -> expect (decoded = frame) "%s changed during round trip" label)
+;;
+
+let expect_event_batch_round_trip label batch =
+  match Event_batch_codec.encode batch with
+  | Error error -> fail "%s encode failed: %s" label error.message
+  | Ok bytes ->
+    (match Event_batch_codec.decode bytes with
+     | Error error -> fail "%s decode failed: %s" label error.message
+     | Ok decoded -> expect (decoded = batch) "%s changed during round trip" label)
+;;
+
+let test_host_requests_round_trip () =
+  let open Wire_frame in
+  expect_frame_round_trip
+    "host requests"
+    { runtime_epoch = 31L
+    ; base_revision = 2L
+    ; target_revision = 3L
+    ; kind = Incremental_frame
+    ; operations =
+        [ Host_request { request_id = 1L; payload = Clipboard_write { text = "剪贴板😀" } }
+        ; Host_request
+            { request_id = 2L
+            ; payload =
+                Pick_file { allowed_extensions = [ "txt"; "md" ]; allow_multiple = true }
+            }
+        ; Host_request
+            { request_id = 3L; payload = Open_url { uri = "https://example.com/路径" } }
+        ; Cancel_host_request { request_id = 2L }
+        ]
+    }
+;;
+
+let test_host_response_events_round_trip () =
+  let open Inbound_event in
+  expect_event_batch_round_trip
+    "host response events"
+    { runtime_epoch = 31L
+    ; events =
+        [ { sequence = 1L
+          ; displayed_revision = 3L
+          ; node_id = 0L
+          ; handler_id = 0L
+          ; event_tag = Generated_protocol.Event_tag.host_response
+          ; payload =
+              Host_response
+                { request_id = 1L; status = Host_ok; value = Bytes.of_string "accepted" }
+          }
+        ; { sequence = 2L
+          ; displayed_revision = 3L
+          ; node_id = 0L
+          ; handler_id = 0L
+          ; event_tag = Generated_protocol.Event_tag.host_response
+          ; payload =
+              Host_response
+                { request_id = 2L; status = Host_cancelled; value = Bytes.empty }
+          }
+        ]
+    }
+;;
+
+let test_environment_event_round_trip () =
+  let open Inbound_event in
+  let environment =
+    { viewport_width = 1440.
+    ; viewport_height = 900.
+    ; device_pixel_ratio = 2.
+    ; text_scale = 1.1
+    ; brightness = Environment_dark
+    ; platform = "macos"
+    ; locale = "zh_CN"
+    ; safe_area = { left = 0.; top = 24.; right = 0.; bottom = 0. }
+    ; keyboard_insets = { left = 0.; top = 0.; right = 0.; bottom = 280. }
+    ; accessible_navigation = false
+    ; bold_text = false
+    ; invert_colors = false
+    ; disable_animations = false
+    ; reduced_motion = false
+    ; high_contrast = true
+    ; orientation = Landscape
+    ; pointer_kinds = 5
+    }
+  in
+  expect_event_batch_round_trip
+    "environment event"
+    { runtime_epoch = 31L
+    ; events =
+        [ { sequence = 1L
+          ; displayed_revision = 3L
+          ; node_id = 0L
+          ; handler_id = 0L
+          ; event_tag = Generated_protocol.Event_tag.environment_changed
+          ; payload = Environment_changed environment
+          }
+        ]
+    }
+;;
+
+let test_native_widget_props_round_trip () =
+  let open Wire_frame in
+  expect_frame_round_trip
+    "native widget props"
+    { runtime_epoch = 7L
+    ; base_revision = 0L
+    ; target_revision = 1L
+    ; kind = Full_snapshot
+    ; operations =
+        [ Create_node
+            { node_id = 1L
+            ; kind = Native_widget
+            ; props =
+                Native_widget_props
+                  { kind_id = 42
+                  ; version = 3
+                  ; capabilities = 5L
+                  ; payload = Bytes.of_string "\000typed\255"
+                  }
+            ; event_bindings = [ { event_tag = 21; handler_id = 9L } ]
+            ; parent_data = No_parent_data
+            }
+        ; Set_root 1L
+        ]
+    }
+;;
+
+let test_native_event_round_trip () =
+  let open Inbound_event in
+  expect_event_batch_round_trip
+    "native event"
+    { runtime_epoch = 4L
+    ; events =
+        [ { sequence = 1L
+          ; displayed_revision = 3L
+          ; node_id = 8L
+          ; handler_id = 9L
+          ; event_tag = Generated_protocol.Event_tag.native_event
+          ; payload =
+              Native_event
+                { kind_id = 42
+                ; version = 3
+                ; event_id = 7
+                ; payload = Bytes.of_string "\000\023\255"
+                }
+          }
+        ]
+    }
+;;
+
+let test_runtime_stats_round_trip () =
+  let open Wire_frame in
+  expect_frame_round_trip
+    "runtime stats"
+    { runtime_epoch = 9L
+    ; base_revision = 0L
+    ; target_revision = 1L
+    ; kind = Full_snapshot
+    ; operations =
+        [ Create_node
+            { node_id = 1L
+            ; kind = Empty
+            ; props = Empty_props
+            ; event_bindings = []
+            ; parent_data = No_parent_data
+            }
+        ; Set_root 1L
+        ; Runtime_stats
+            { event_batch_size = 3
+            ; bonsai_flush_ns = 11L
+            ; result_read_ns = 12L
+            ; reconcile_ns = 13L
+            ; encode_ns = 14L
+            ; patch_count = 2
+            ; patch_bytes = 80
+            ; lifecycle_ns = 15L
+            ; full_snapshot_count = 1
+            ; resync_count = 0
+            }
+        ]
+    }
+;;
+
 let () =
   test_golden_fixture ();
   test_round_trip ();
   test_animation_props_round_trip ();
   test_legacy_opacity_layout ();
-  test_phase_four_props_round_trip ();
+  test_layout_material_and_semantics_props_round_trip ();
   test_text_input_props_round_trip ();
   test_text_input_rejects_split_surrogate_range ();
   test_malformed_frames ();
@@ -491,5 +679,11 @@ let () =
   test_unknown_event_tag ();
   test_interaction_props_round_trip ();
   test_interaction_event_round_trip ();
+  test_host_requests_round_trip ();
+  test_host_response_events_round_trip ();
+  test_environment_event_round_trip ();
+  test_native_widget_props_round_trip ();
+  test_native_event_round_trip ();
+  test_runtime_stats_round_trip ();
   print_endline "protocol tests passed"
 ;;

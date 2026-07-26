@@ -13,7 +13,13 @@ Future<T> _bounded<T>(Future<T> future, String operation) => future.timeout(
   onTimeout: () => throw TimeoutException('$operation timed out'),
 );
 
-void main() {
+void main() => registerHostNavigationFfiTests();
+
+void registerHostNavigationFfiTests({
+  HostEffectImplementation implementation = const _FakeHostEffects(),
+  Future<void> Function()? beforeClipboardRead,
+  String expectedClipboardText = 'Clipboard from Flutter',
+}) {
   testWidgets('host effects and route stack round trip through OCaml', (
     tester,
   ) async {
@@ -41,7 +47,7 @@ void main() {
       displayedRevision: () => store.revision,
     );
     final dispatcher = HostEffectDispatcher(
-      implementation: const _FakeHostEffects(),
+      implementation: implementation,
       onEvent: queue.enqueue,
     );
     addTearDown(dispatcher.dispose);
@@ -61,6 +67,7 @@ void main() {
     expect(find.text('Host effects and navigation'), findsOneWidget);
     expect(find.text('Clipboard not read'), findsOneWidget);
 
+    await beforeClipboardRead?.call();
     await tester.tap(find.text('Read clipboard'));
     await tester.pump();
     final requestResponse = await tester.runAsync(
@@ -98,7 +105,7 @@ void main() {
       clipboardFrame.targetRevision,
       'clipboard presentation',
     );
-    expect(find.text('Clipboard from Flutter'), findsOneWidget);
+    expect(find.text(expectedClipboardText), findsOneWidget);
 
     await tester.tap(find.text('Open settings'));
     await tester.pump();

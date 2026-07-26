@@ -21,3 +21,15 @@ flutter run -d macos
 The integration test, run with `make integration-test`, simulates editing
 values through Flutter's test text input channel.
 A distributable macOS runner and physical IME automation remain unclaimed.
+
+Build the target-qualified unsigned iPhoneOS application:
+
+```sh
+make ios-device-native-objects
+cd examples/text_input/flutter
+flutter build ios --debug --no-codesign
+```
+
+The signed device suite covers composing text, emoji, and selection when the
+external inputs in `docs/ios-device-testing.md` are available. iOS Simulator
+is unsupported.

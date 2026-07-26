@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
+import 'package:bonsai_flutter_native/bonsai_flutter_native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -17,6 +18,8 @@ void main() {
   testWidgets(
     'Flutter button press crosses FFI and applies one OCaml text patch',
     (tester) async {
+      expect(nativeProtocolVersion, const NativeProtocolVersion(1, 12));
+
       final client = await tester.runAsync(
         () => _bounded(
           RuntimeClient.start(
@@ -38,6 +41,13 @@ void main() {
       expect(initialFrame.kind, FrameKind.fullSnapshot);
       expect(initialFrame.targetRevision, 1);
       expect(initialResponse.revision, 1);
+      final initialOutstandingBuffers = await tester.runAsync(
+        () => _bounded(
+          runtime.debugOutstandingBufferCount(),
+          'initial outstanding-buffer query',
+        ),
+      );
+      expect(initialOutstandingBuffers, 0);
 
       final store = NodeStore()..apply(initialFrame);
       final queue = EventBatchQueue(
@@ -134,6 +144,13 @@ void main() {
       );
       expect(finalPresented, isNotNull);
       expect(finalPresented!.status, RuntimeStatus.ok);
+      final finalOutstandingBuffers = await tester.runAsync(
+        () => _bounded(
+          runtime.debugOutstandingBufferCount(),
+          'final outstanding-buffer query',
+        ),
+      );
+      expect(finalOutstandingBuffers, 0);
     },
   );
 }

@@ -28,23 +28,15 @@
  (libraries bonsai_flutter.ui))
 
 (test
- (name phase_six_tests)
- (libraries bonsai_flutter.ui bonsai_flutter.protocol))
-
-(test
- (name phase_seven_tests)
- (libraries bonsai_flutter.ui bonsai_flutter.protocol))
-
-(test
- (name phase_eight_tests)
- (libraries bonsai_flutter.ui bonsai_flutter.protocol))
-
-(test
  (name material_surface_tests)
  (libraries bonsai_flutter.ui))
 
 (test
  (name core_surface_tests)
+ (libraries bonsai_flutter.ui))
+
+(test
+ (name native_widget_tests)
  (libraries bonsai_flutter.ui))
 
 (test

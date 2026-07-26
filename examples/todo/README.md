@@ -10,3 +10,15 @@ make native-object EXAMPLE=todo
 cd examples/todo/flutter
 flutter run -d macos
 ```
+
+Build the target-qualified unsigned iPhoneOS application:
+
+```sh
+make ios-device-native-objects
+cd examples/todo/flutter
+flutter build ios --debug --no-codesign
+```
+
+The signed physical-device matrix is documented in
+`docs/ios-device-testing.md`. Unsigned packaging is verified; physical
+interaction uses Development signing. iOS Simulator is unsupported.
