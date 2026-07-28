@@ -2,7 +2,7 @@
  (name bonsai_flutter_mail_example)
  (wrapped false)
  (modules mail)
- (libraries bonsai bonsai_flutter.ui bonsai_flutter.driver))
+ (libraries core bonsai bonsai_flutter.ui bonsai_flutter.driver))
 
 (executable
  (name native_embed)

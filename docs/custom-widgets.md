@@ -30,20 +30,27 @@ let card =
 ```
 
 Use `Driver.Handler.create_native` when a typed event schedules a Bonsai
-effect. This preserves the extension type while placing the effect in the
-driver's normal event queue:
+effect. The handler retains its identity while its declared dependencies are
+equal, preserves the extension type, and places the effect in the driver's
+normal event queue:
 
 ```ocaml
 let handler =
-  Driver.Handler.create_native handlers card (fun Activate ->
-    set_count (fun count -> count + 1))
+  Driver.Handler.create_native
+    handlers
+    card
+    ~equal:( == )
+    set_count
+    ~f:(fun set_count Activate ->
+      set_count (fun count -> count + 1))
 in
-Native_widget.widget_with_handler
-  card
-  ~key:(Key.string "card")
-  ~props:"Native card"
-  ~on_event:handler
-  ()
+Bonsai.map handler ~f:(fun handler ->
+  Native_widget.widget_with_handler
+    card
+    ~key:(Key.string "card")
+    ~props:"Native card"
+    ~on_event:handler
+    ())
 ```
 
 ## Dart registration

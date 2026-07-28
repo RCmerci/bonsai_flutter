@@ -47,10 +47,14 @@ let semantic_operations (frame : Protocol.Wire_frame.t) =
 let component ~activations ~after_displays handlers graph =
   let count, increment = Bonsai.state' ~equal:Int.equal 0 graph in
   let increment_handler =
-    Bonsai.map increment ~f:(fun increment ->
-      Driver.Handler.create handlers ~name:"increment" (function
+    Driver.Handler.create
+      handlers
+      ~name:"increment"
+      ~equal:( == )
+      increment
+      ~f:(fun increment -> function
         | Ui.Event.Payload.Unit -> increment (fun value -> value + 1)
-        | _ -> increment Fun.id))
+        | _ -> increment Fun.id)
   in
   let on_activate =
     Bonsai.return (Bonsai.Effect.of_thunk (fun () -> Stdlib.incr activations))
@@ -292,13 +296,17 @@ let host_effect_component ?cancellation host_ref handlers graph =
   let host_effects = Driver.Handler.host_effects handlers in
   host_ref := Some host_effects;
   let request_clipboard =
-    Bonsai.map set_text ~f:(fun set_text ->
-      Driver.Handler.create handlers ~name:"clipboard-read" (fun _ ->
+    Driver.Handler.create
+      handlers
+      ~name:"clipboard-read"
+      ~equal:( == )
+      set_text
+      ~f:(fun set_text _ ->
         Bonsai.Effect.bind
           (Host_effect.Clipboard.read ?cancellation host_effects ())
           ~f:(function
           | Ok clipboard -> set_text (fun _ -> clipboard)
-          | Error _ -> set_text (fun _ -> "Host error"))))
+          | Error _ -> set_text (fun _ -> "Host error")))
   in
   Bonsai.map2 text request_clipboard ~f:(fun text request_clipboard ->
     Ui.Widget.column
@@ -557,3 +565,182 @@ let test_environment_is_dynamic_input () =
 ;;
 
 let () = test_environment_is_dynamic_input ()
+
+type handler_dependency_model =
+  { mode : bool
+  ; observed_mode : bool option
+  }
+
+let equal_handler_dependency_model left right =
+  Bool.equal left.mode right.mode
+  && Option.equal Bool.equal left.observed_mode right.observed_mode
+;;
+
+let handler_dependency_component handlers graph =
+  let model, set_model =
+    Bonsai.state'
+      ~equal:equal_handler_dependency_model
+      { mode = false; observed_mode = None }
+      graph
+  in
+  let toggle_mode =
+    Driver.Handler.create
+      handlers
+      ~name:"toggle-mode"
+      ~equal:( == )
+      set_model
+      ~f:(fun set_model _ ->
+        set_model (fun model -> { model with mode = not model.mode }))
+  in
+  let action_dependencies =
+    Bonsai.both set_model (Bonsai.map model ~f:(fun model -> model.mode))
+  in
+  let observe_mode =
+    Driver.Handler.create
+      handlers
+      ~name:"observe-mode"
+      ~equal:(fun (left_set_model, left_mode) (right_set_model, right_mode) ->
+        left_set_model == right_set_model && Bool.equal left_mode right_mode)
+      action_dependencies
+      ~f:(fun (set_model, mode) _ ->
+        set_model (fun model -> { model with observed_mode = Some mode }))
+  in
+  Bonsai.map2
+    model
+    (Bonsai.both toggle_mode observe_mode)
+    ~f:(fun model handlers ->
+      let toggle_mode, observe_mode = handlers in
+      let observed_mode =
+        match model.observed_mode with
+        | None -> "none"
+        | Some value -> Bool.to_string value
+      in
+      Ui.Widget.column
+        [ Ui.Widget.text ("Observed: " ^ observed_mode)
+        ; Ui.Widget.button
+            ~on_press:toggle_mode
+            ~child:(Ui.Widget.text "Toggle mode")
+            ()
+        ; Ui.Material.text_button
+            ~on_press:observe_mode
+            ~child:(Ui.Widget.text "Observe mode")
+            ()
+        ])
+;;
+
+let find_single_binding_for_kind (frame : Protocol.Wire_frame.t) kind =
+  List.filter_map
+    (function
+      | Protocol.Wire_frame.Create_node
+          { node_id; kind = candidate; event_bindings = [ binding ]; _ }
+        when candidate = kind -> Some (node_id, binding)
+      | _ -> None)
+    frame.operations
+  |> function
+  | [ binding ] -> binding
+  | bindings ->
+    fail
+      "expected one binding for requested node kind, got %d"
+      (List.length bindings)
+;;
+
+let event_batch ~runtime_epoch ~sequence ~revision ~node_id binding =
+  Protocol.Inbound_event.
+    { runtime_epoch
+    ; events =
+        [ { sequence
+          ; displayed_revision = revision
+          ; node_id
+          ; handler_id = binding.Protocol.Wire_frame.handler_id
+          ; event_tag = binding.event_tag
+          ; payload = Unit
+          }
+        ]
+    }
+;;
+
+let test_handler_dependencies_control_identity () =
+  let runtime_epoch = 84L in
+  let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
+  let driver = Driver.create ~runtime_epoch ~time_source handler_dependency_component in
+  let initial =
+    match ok (Driver.step driver ()) with
+    | Some frame -> frame
+    | None -> fail "handler dependency component did not mount"
+  in
+  let initial_wire = decode_frame initial.bytes in
+  let toggle_node, toggle_binding =
+    find_single_binding_for_kind initial_wire Protocol.Wire_frame.Button
+  in
+  let observe_node, initial_observe_binding =
+    find_single_binding_for_kind initial_wire Protocol.Wire_frame.Material_text_button
+  in
+  ok (Driver.frame_presented driver ~revision:initial.revision);
+  let changed_dependency =
+    match
+      ok
+        (Driver.step
+           driver
+           ~events:
+             (event_batch
+                ~runtime_epoch
+                ~sequence:1L
+                ~revision:initial.revision
+                ~node_id:toggle_node
+                toggle_binding)
+           ())
+    with
+    | Some frame -> frame
+    | None -> fail "changing handler dependencies did not emit a frame"
+  in
+  let changed_dependency_operations =
+    semantic_operations (decode_frame changed_dependency.bytes)
+  in
+  let current_observe_binding =
+    match changed_dependency_operations with
+    | [ Protocol.Wire_frame.Update_event_bindings
+          { node_id; event_bindings = [ binding ] }
+      ]
+      when Int64.equal node_id observe_node -> binding
+    | operations ->
+      fail
+        "dependency change must emit one binding update, got %d operations"
+        (List.length operations)
+  in
+  require
+    (not
+       (Int64.equal
+          initial_observe_binding.handler_id
+          current_observe_binding.handler_id))
+    "dependency change reused the previous handler ID";
+  ok (Driver.frame_presented driver ~revision:changed_dependency.revision);
+  let unchanged_dependency =
+    match
+      ok
+        (Driver.step
+           driver
+           ~events:
+             (event_batch
+                ~runtime_epoch
+                ~sequence:2L
+                ~revision:changed_dependency.revision
+                ~node_id:observe_node
+                current_observe_binding)
+           ())
+    with
+    | Some frame -> frame
+    | None -> fail "handler did not observe its updated dependency"
+  in
+  (match semantic_operations (decode_frame unchanged_dependency.bytes) with
+   | [ Protocol.Wire_frame.Update_props
+         { props = Text_props { value = "Observed: true"; _ }; _ }
+     ] -> ()
+   | operations ->
+     fail
+       "unchanged dependencies must retain the binding and update only text, got %d \
+        operations"
+       (List.length operations));
+  Driver.shutdown driver
+;;
+
+let () = test_handler_dependencies_control_identity ()

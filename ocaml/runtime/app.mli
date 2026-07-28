@@ -12,15 +12,22 @@ module Context : sig
   val event_handler
     :  t
     -> ?name:string
-    -> (Bonsai_flutter_ui.Event.Payload.t -> unit Bonsai.Effect.t)
-    -> Bonsai_flutter_ui.Event.Handler.t
+    -> equal:('dependencies -> 'dependencies -> bool)
+    -> 'dependencies Bonsai.t
+    -> f:
+         ('dependencies
+          -> Bonsai_flutter_ui.Event.Payload.t
+          -> unit Bonsai.Effect.t)
+    -> Bonsai_flutter_ui.Event.Handler.t Bonsai.t
 
   val native_event_handler
     :  t
     -> ?name:string
     -> ('props, 'event) Bonsai_flutter_ui.Native_widget.Extension.t
-    -> ('event -> unit Bonsai.Effect.t)
-    -> Bonsai_flutter_ui.Event.Handler.t
+    -> equal:('dependencies -> 'dependencies -> bool)
+    -> 'dependencies Bonsai.t
+    -> f:('dependencies -> 'event -> unit Bonsai.Effect.t)
+    -> Bonsai_flutter_ui.Event.Handler.t Bonsai.t
 end
 
 type t

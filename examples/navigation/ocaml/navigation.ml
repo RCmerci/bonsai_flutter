@@ -3,16 +3,23 @@ module Ui = Bonsai_flutter_ui
 let component handlers graph =
   let details_open, set_details_open = Bonsai.state' ~equal:Bool.equal false graph in
   let open_details =
-    Bonsai.map set_details_open ~f:(fun set_open ->
-      Driver.Handler.create handlers ~name:"navigation-open" (fun _ ->
-        set_open (fun _ -> true)))
+    Driver.Handler.create
+      handlers
+      ~name:"navigation-open"
+      ~equal:( == )
+      set_details_open
+      ~f:(fun set_open _ -> set_open (fun _ -> true))
   in
   let close_details =
-    Bonsai.map set_details_open ~f:(fun set_open ->
-      Driver.Handler.create handlers ~name:"navigation-close" (function
+    Driver.Handler.create
+      handlers
+      ~name:"navigation-close"
+      ~equal:( == )
+      set_details_open
+      ~f:(fun set_open -> function
         | Ui.Event.Payload.Route_pop { page_key = "details"; _ } | Ui.Event.Payload.Unit
           -> set_open (fun _ -> false)
-        | _ -> Bonsai.Effect.Ignore))
+        | _ -> Bonsai.Effect.Ignore)
   in
   let handlers =
     Bonsai.map2 open_details close_details ~f:(fun open_details close_details ->

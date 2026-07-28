@@ -6,20 +6,36 @@
 module Handler : sig
   type t
 
-  (** Creates a UI handler whose returned effect is scheduled by the next
-      [step]. *)
+  (** Creates a dependency-aware UI handler whose returned effect is scheduled
+      by the next [step].
+
+      The returned handler retains its physical identity while [dependencies]
+      are equal according to [equal]. A dependency change creates a fresh
+      handler identity so revision-scoped event dispatch remains safe.
+
+      Every value that can change callback behavior must be included in
+      [dependencies]. A false-positive [equal] result can retain stale callback
+      behavior; a false-negative result only causes an unnecessary event
+      binding update. *)
   val create
     :  t
     -> ?name:string
-    -> (Bonsai_flutter_ui.Event.Payload.t -> unit Bonsai.Effect.t)
-    -> Bonsai_flutter_ui.Event.Handler.t
+    -> equal:('dependencies -> 'dependencies -> bool)
+    -> 'dependencies Bonsai.t
+    -> f:
+         ('dependencies
+          -> Bonsai_flutter_ui.Event.Payload.t
+          -> unit Bonsai.Effect.t)
+    -> Bonsai_flutter_ui.Event.Handler.t Bonsai.t
 
   val create_native
     :  t
     -> ?name:string
     -> ('props, 'event) Bonsai_flutter_ui.Native_widget.Extension.t
-    -> ('event -> unit Bonsai.Effect.t)
-    -> Bonsai_flutter_ui.Event.Handler.t
+    -> equal:('dependencies -> 'dependencies -> bool)
+    -> 'dependencies Bonsai.t
+    -> f:('dependencies -> 'event -> unit Bonsai.Effect.t)
+    -> Bonsai_flutter_ui.Event.Handler.t Bonsai.t
 
   val host_effects : t -> Host_effect.t
   val environment : t -> Environment.t

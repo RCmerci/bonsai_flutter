@@ -298,7 +298,12 @@ let icon ?size ?color code_point =
 ;;
 
 let inert_handler handlers name =
-  Driver.Handler.create handlers ~name (fun _ -> Bonsai.Effect.Ignore)
+  Driver.Handler.create
+    handlers
+    ~name
+    ~equal:Unit.equal
+    (Bonsai.return ())
+    ~f:(fun () _ -> Bonsai.Effect.Ignore)
 ;;
 
 let avatar message =
@@ -340,13 +345,7 @@ let semantic_icon_button ~test_id ~label ~selected ~on_press ~code_point ~color 
             ())
 ;;
 
-let star_control handlers set_state message ~detail =
-  let on_press =
-    Driver.Handler.create handlers ~name:"mail-toggle-star" (fun _ ->
-      set_state (fun state ->
-        update_message state message.id (fun message ->
-          { message with starred = not message.starred })))
-  in
+let star_control on_press message ~detail =
   semantic_icon_button
     ~test_id:
       (if detail then "mail-detail-star" else Printf.sprintf "mail-star-%d" message.id)
@@ -395,13 +394,7 @@ let search_header =
        ~properties:(Ui.Semantics.create ~label:"Search in mail" ~role:Generic ())
 ;;
 
-let mail_row handlers set_state message =
-  let open_message =
-    Driver.Handler.create handlers ~name:"mail-open-message" (fun _ ->
-      set_state (fun state ->
-        update_message state message.id (fun message -> { message with read = true })
-        |> fun state -> { state with selected_id = Some message.id; notice = None }))
-  in
+let render_mail_row ~toggle_star ~open_message ~swipe_action message =
   let sender_weight = if message.read then Ui.Style.Font_weight.Normal else Semi_bold in
   let text_column =
     Ui.Widget.column
@@ -434,7 +427,7 @@ let mail_row handlers set_state message =
           ~weight:(if message.read then Normal else Semi_bold)
           ~color:text_secondary
           message.timestamp
-      ; star_control handlers set_state message ~detail:false
+      ; star_control toggle_star message ~detail:false
       ]
   in
   let content =
@@ -499,75 +492,124 @@ let mail_row handlers set_state message =
       ~disposition:Rebound
       ~icon:end_icon
   in
-  let on_commit =
-    Driver.Handler.create handlers ~name:"mail-swipe-action" (fun payload ->
-      match Ui.Native_widget.Swipe_action.direction_of_payload payload with
-      | None -> Bonsai.Effect.Ignore
-      | Some Start_to_end ->
-        set_state (fun state ->
-          update_message state message.id (fun message ->
-            { message with mailbox = Archived }))
-      | Some End_to_start ->
-        set_state (fun state ->
-          update_message state message.id (fun message ->
-            { message with read = not message.read })))
-  in
   Ui.Native_widget.Swipe_action.create_with_handler
     ~key:(Ui.Key.int message.id)
     ~start_action
     ~end_action
     ~content
-    ~on_commit
+    ~on_commit:swipe_action
     ()
   |> Ui.Widget.with_test_id
        (Ui.Test_id.string (Printf.sprintf "mail-swipe-%d" message.id))
 ;;
 
-let inbox_page handlers set_state state =
+let mail_row handlers set_state message_id message _graph =
+  let dependencies = Bonsai.both set_state message_id in
+  let equal_dependencies (left_set_state, left_id) (right_set_state, right_id) =
+    left_set_state == right_set_state && Int.equal left_id right_id
+  in
+  let toggle_star =
+    Driver.Handler.create
+      handlers
+      ~name:"mail-toggle-star"
+      ~equal:equal_dependencies
+      dependencies
+      ~f:(fun (set_state, message_id) _ ->
+        set_state (fun state ->
+          update_message state message_id (fun message ->
+            { message with starred = not message.starred })))
+  in
+  let open_message =
+    Driver.Handler.create
+      handlers
+      ~name:"mail-open-message"
+      ~equal:equal_dependencies
+      dependencies
+      ~f:(fun (set_state, message_id) _ ->
+        set_state (fun state ->
+          update_message state message_id (fun message -> { message with read = true })
+          |> fun state -> { state with selected_id = Some message_id; notice = None }))
+  in
+  let swipe_action =
+    Driver.Handler.create
+      handlers
+      ~name:"mail-swipe-action"
+      ~equal:equal_dependencies
+      dependencies
+      ~f:(fun (set_state, message_id) payload ->
+        match Ui.Native_widget.Swipe_action.direction_of_payload payload with
+        | None -> Bonsai.Effect.Ignore
+        | Some Start_to_end ->
+          set_state (fun state ->
+            update_message state message_id (fun message ->
+              { message with mailbox = Archived }))
+        | Some End_to_start ->
+          set_state (fun state ->
+            update_message state message_id (fun message ->
+              { message with read = not message.read })))
+  in
+  let events =
+    Bonsai.map2
+      (Bonsai.both toggle_star open_message)
+      swipe_action
+      ~f:(fun (toggle_star, open_message) swipe_action ->
+        toggle_star, open_message, swipe_action)
+  in
+  Bonsai.map2
+    message
+    events
+    ~f:(fun message (toggle_star, open_message, swipe_action) ->
+      render_mail_row ~toggle_star ~open_message ~swipe_action message)
+;;
+
+let inbox_page handlers rows =
   let scroll = inert_handler handlers "mail-list-scroll" in
-  let visible = List.filter (fun message -> message.mailbox = Inbox) state.messages in
-  let list =
-    Ui.Widget.list_view
-      ~on_scroll:scroll
-      (List.map (mail_row handlers set_state) visible)
-      ()
-    |> Ui.Widget.decorated_box
-         ~decoration:
-           (Ui.Style.Decoration.create ~background:surface ~border_radius:26. ())
-  in
-  let content =
-    Ui.Widget.Flex.column
-      [ Ui.Widget.Flex.fixed (padding ~horizontal:16. ~vertical:10. search_header)
-      ; Ui.Widget.Flex.fixed
-          (padding
-             ~horizontal:20.
-             ~vertical:8.
-             (styled_text
-                ~size:15.
-                ~weight:Ui.Style.Font_weight.Semi_bold
-                ~color:text_primary
-                "Inbox"
-              |> Ui.Widget.semantics
-                   ~properties:
-                     (Ui.Semantics.create
-                        ~label:"Inbox"
-                        ~role:Ui.Semantics.Role.Header
-                        ~heading_level:1
-                        ())))
-      ; Ui.Widget.Flex.expanded list
-      ]
-  in
-  Ui.Widget.page
-    ~key:(Ui.Key.string "mail-list")
-    ~page_key:"mail-list"
-    ~can_pop:false
-    (Ui.Material.scaffold
-       ~body:
-         (Ui.Widget.decorated_box
-            ~decoration:(Ui.Style.Decoration.create ~background ())
-            (Ui.Widget.safe_area content))
-       ())
-  |> Ui.Widget.with_test_id (Ui.Test_id.string "mail-list-page")
+  Bonsai.map2 rows scroll ~f:(fun rows scroll ->
+    let rows =
+      match rows with
+      | `Ok rows -> rows
+      | `Duplicate_key message_id ->
+        invalid_arg (Printf.sprintf "Mail: duplicate message ID %d" message_id)
+    in
+    let list =
+      Ui.Widget.list_view ~on_scroll:scroll rows ()
+      |> Ui.Widget.decorated_box
+           ~decoration:
+             (Ui.Style.Decoration.create ~background:surface ~border_radius:26. ())
+    in
+    let content =
+      Ui.Widget.Flex.column
+        [ Ui.Widget.Flex.fixed (padding ~horizontal:16. ~vertical:10. search_header)
+        ; Ui.Widget.Flex.fixed
+            (padding
+               ~horizontal:20.
+               ~vertical:8.
+               (styled_text
+                  ~size:15.
+                  ~weight:Ui.Style.Font_weight.Semi_bold
+                  ~color:text_primary
+                  "Inbox"
+                |> Ui.Widget.semantics
+                     ~properties:
+                       (Ui.Semantics.create
+                          ~label:"Inbox"
+                          ~role:Ui.Semantics.Role.Header
+                          ~heading_level:1
+                          ())))
+        ; Ui.Widget.Flex.expanded list
+        ]
+    in
+    Ui.Widget.page
+      ~key:(Ui.Key.string "mail-list")
+      ~page_key:"mail-list"
+      ~can_pop:false
+      (Ui.Material.scaffold
+         ~body:
+           (Ui.Widget.decorated_box
+              ~decoration:(Ui.Style.Decoration.create ~background ())
+              (Ui.Widget.safe_area content))
+         ())
+    |> Ui.Widget.with_test_id (Ui.Test_id.string "mail-list-page"))
 ;;
 
 let toolbar_action ~test_id ~label ~on_press code_point =
@@ -580,12 +622,7 @@ let toolbar_action ~test_id ~label ~on_press code_point =
     ~color:text_secondary
 ;;
 
-let reply_action handlers set_state ~test_id ~label code_point =
-  let on_press =
-    Driver.Handler.create handlers ~name:"mail-reply-scope-notice" (fun _ ->
-      set_state (fun state ->
-        { state with notice = Some "Composing is outside the scope of this demo." }))
-  in
+let reply_action on_press ~test_id ~label code_point =
   Ui.Material.text_button
     ~on_press
     ~child:
@@ -609,25 +646,17 @@ let reply_action handlers set_state ~test_id ~label code_point =
          (Ui.Semantics.create ~label ~role:Ui.Semantics.Role.Button ~enabled:true ())
 ;;
 
-let detail_page handlers set_state state message =
-  let close name update =
-    Driver.Handler.create handlers ~name (fun _ ->
-      set_state (fun state ->
-        update state |> fun state -> { state with selected_id = None; notice = None }))
-  in
-  let back = close "mail-back" (fun state -> state) in
-  let archive =
-    close "mail-archive" (fun state ->
-      update_message state message.id (fun message -> { message with mailbox = Archived }))
-  in
-  let delete =
-    close "mail-delete" (fun state ->
-      update_message state message.id (fun message -> { message with mailbox = Trash }))
-  in
-  let mark_unread =
-    close "mail-mark-unread" (fun state ->
-      update_message state message.id (fun message -> { message with read = false }))
-  in
+let render_detail_page
+      ~back
+      ~archive
+      ~delete
+      ~mark_unread
+      ~toggle_star
+      ~reply
+      ~scroll
+      ~notice
+      message
+  =
   let toolbar =
     Ui.Widget.row
       [ toolbar_action ~test_id:"mail-back" ~label:"Back" ~on_press:back 0xe092
@@ -671,7 +700,7 @@ let detail_page handlers set_state state message =
                      ~role:Ui.Semantics.Role.Header
                      ~heading_level:1
                      ()))
-      ; Ui.Widget.Flex.fixed (star_control handlers set_state message ~detail:true)
+      ; Ui.Widget.Flex.fixed (star_control toggle_star message ~detail:true)
       ]
   in
   let sender =
@@ -756,23 +785,21 @@ let detail_page handlers set_state state message =
          |> Ui.Widget.with_test_id (Ui.Test_id.string "mail-inline-notice")
          |> Ui.Widget.semantics
               ~properties:(Ui.Semantics.create ~label:notice ~live_region:true ()))
-      state.notice
+      notice
   in
   let replies =
     Ui.Widget.Flex.row
       [ Ui.Widget.Flex.expanded
-          (reply_action handlers set_state ~test_id:"mail-reply" ~label:"Reply" 0xe528)
+          (reply_action reply ~test_id:"mail-reply" ~label:"Reply" 0xe528)
       ; Ui.Widget.Flex.expanded
           (reply_action
-             handlers
-             set_state
+             reply
              ~test_id:"mail-reply-all"
              ~label:"Reply all"
              0xe529)
       ; Ui.Widget.Flex.expanded
           (reply_action
-             handlers
-             set_state
+             reply
              ~test_id:"mail-forward"
              ~label:"Forward"
              0xe2c4)
@@ -792,7 +819,6 @@ let detail_page handlers set_state state message =
     ]
     |> List.filter_map Fun.id
   in
-  let scroll = inert_handler handlers "mail-detail-scroll" in
   let content =
     Ui.Widget.Flex.column
       [ Ui.Widget.Flex.fixed toolbar
@@ -814,11 +840,144 @@ let detail_page handlers set_state state message =
   |> Ui.Widget.with_test_id (Ui.Test_id.string "mail-detail-page")
 ;;
 
+let detail_page handlers set_state message_id detail _graph =
+  let dependencies = Bonsai.both set_state message_id in
+  let equal_dependencies (left_set_state, left_id) (right_set_state, right_id) =
+    left_set_state == right_set_state && Int.equal left_id right_id
+  in
+  let back =
+    Driver.Handler.create
+      handlers
+      ~name:"mail-back"
+      ~equal:( == )
+      set_state
+      ~f:(fun set_state _ ->
+        set_state (fun state -> { state with selected_id = None; notice = None }))
+  in
+  let close name update =
+    Driver.Handler.create
+      handlers
+      ~name
+      ~equal:equal_dependencies
+      dependencies
+      ~f:(fun (set_state, message_id) _ ->
+        set_state (fun state ->
+          update state message_id
+          |> fun state -> { state with selected_id = None; notice = None }))
+  in
+  let archive =
+    close "mail-archive" (fun state message_id ->
+      update_message state message_id (fun message -> { message with mailbox = Archived }))
+  in
+  let delete =
+    close "mail-delete" (fun state message_id ->
+      update_message state message_id (fun message -> { message with mailbox = Trash }))
+  in
+  let mark_unread =
+    close "mail-mark-unread" (fun state message_id ->
+      update_message state message_id (fun message -> { message with read = false }))
+  in
+  let toggle_star =
+    Driver.Handler.create
+      handlers
+      ~name:"mail-toggle-star"
+      ~equal:equal_dependencies
+      dependencies
+      ~f:(fun (set_state, message_id) _ ->
+        set_state (fun state ->
+          update_message state message_id (fun message ->
+            { message with starred = not message.starred })))
+  in
+  let reply =
+    Driver.Handler.create
+      handlers
+      ~name:"mail-reply-scope-notice"
+      ~equal:( == )
+      set_state
+      ~f:(fun set_state _ ->
+        set_state (fun state ->
+          { state with notice = Some "Composing is outside the scope of this demo." }))
+  in
+  let scroll = inert_handler handlers "mail-detail-scroll" in
+  let toolbar_handlers =
+    Bonsai.map2
+      (Bonsai.both back archive)
+      (Bonsai.both delete mark_unread)
+      ~f:(fun (back, archive) (delete, mark_unread) ->
+        back, archive, delete, mark_unread)
+  in
+  let message_actions =
+    Bonsai.map2 toggle_star reply ~f:(fun toggle_star reply ->
+      toggle_star, reply)
+  in
+  let page_events =
+    Bonsai.map2
+      toolbar_handlers
+      (Bonsai.both message_actions scroll)
+      ~f:(fun
+           (back, archive, delete, mark_unread)
+           ((toggle_star, reply), scroll)
+         ->
+        back, archive, delete, mark_unread, toggle_star, reply, scroll)
+  in
+  Bonsai.map2
+    detail
+    page_events
+    ~f:(fun
+         (message, notice)
+         (back, archive, delete, mark_unread, toggle_star, reply, scroll)
+       ->
+      render_detail_page
+        ~back
+        ~archive
+        ~delete
+        ~mark_unread
+        ~toggle_star
+        ~reply
+        ~scroll
+        ~notice
+        message)
+;;
+
 let component handlers graph =
   let state, set_state = Bonsai.state' ~equal:equal_state initial graph in
-  Bonsai.map2 state set_state ~f:(fun state set_state ->
-    let on_pop =
-      Driver.Handler.create handlers ~name:"mail-route-pop" (function
+  let visible_messages =
+    Bonsai.map state ~f:(fun state ->
+      List.filter (fun message -> message.mailbox = Inbox) state.messages)
+  in
+  let rows =
+    Bonsai.assoc_list
+      (module Core.Int)
+      visible_messages
+      ~get_key:(fun message -> message.id)
+      ~f:(mail_row handlers set_state)
+      graph
+  in
+  let inbox = inbox_page handlers rows in
+  let selected_details =
+    Bonsai.map state ~f:(fun state ->
+      match state.selected_id with
+      | None -> []
+      | Some message_id ->
+        (match find_message state.messages message_id with
+         | None -> []
+         | Some message -> [ message, state.notice ]))
+  in
+  let detail_pages =
+    Bonsai.assoc_list
+      (module Core.Int)
+      selected_details
+      ~get_key:(fun (message, _) -> message.id)
+      ~f:(detail_page handlers set_state)
+      graph
+  in
+  let on_pop =
+    Driver.Handler.create
+      handlers
+      ~name:"mail-route-pop"
+      ~equal:( == )
+      set_state
+      ~f:(fun set_state -> function
         | Ui.Event.Payload.Route_pop { page_key; _ } ->
           set_state (fun state ->
             match state.selected_id with
@@ -826,26 +985,31 @@ let component handlers graph =
               { state with selected_id = None; notice = None }
             | None | Some _ -> state)
         | _ -> Bonsai.Effect.Ignore)
-    in
-    let inbox = inbox_page handlers set_state state in
-    let pages =
-      match state.selected_id with
-      | None -> [ inbox ]
-      | Some id ->
-        (match find_message state.messages id with
-         | None -> [ inbox ]
-         | Some message -> [ inbox; detail_page handlers set_state state message ])
-    in
-    Ui.Widget.navigator ~restoration_scope_id:"bonsai-mail" ~on_pop pages
-    |> Ui.Widget.constrained_box
-         ~constraints:(Ui.Layout.Box_constraints.create ~max_width:720. ())
-    |> Ui.Widget.center
-    |> Ui.Widget.theme
-         ~data:
-           (Ui.Theme.material
-              ~brightness:Ui.Style.Brightness.Light
-              ~color_seed:primary
-              ()))
+  in
+  let pages =
+    Bonsai.map2
+      inbox
+      detail_pages
+      ~f:(fun inbox detail_pages ->
+        match detail_pages with
+        | `Ok detail_pages -> inbox :: detail_pages
+        | `Duplicate_key message_id ->
+          invalid_arg (Printf.sprintf "Mail: duplicate selected message ID %d" message_id))
+  in
+  Bonsai.map2
+    pages
+    on_pop
+    ~f:(fun pages on_pop ->
+      Ui.Widget.navigator ~restoration_scope_id:"bonsai-mail" ~on_pop pages
+      |> Ui.Widget.constrained_box
+           ~constraints:(Ui.Layout.Box_constraints.create ~max_width:720. ())
+      |> Ui.Widget.center
+      |> Ui.Widget.theme
+           ~data:
+             (Ui.Theme.material
+                ~brightness:Ui.Style.Brightness.Light
+                ~color_seed:primary
+                ()))
 ;;
 
 let trace message = Printf.eprintf "[Bonsai Mail][ocaml]%s\n%!" message

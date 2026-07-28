@@ -7,9 +7,12 @@ let require condition message = if not condition then fail "%s" message
 let component handlers graph =
   let count, increment = Bonsai.state' ~equal:Int.equal 0 graph in
   let increment =
-    Bonsai.map increment ~f:(fun set_count ->
-      Test.Driver.Handler.create handlers ~name:"increment" (fun _ ->
-        set_count (fun count -> count + 1)))
+    Test.Driver.Handler.create
+      handlers
+      ~name:"increment"
+      ~equal:( == )
+      increment
+      ~f:(fun set_count _ -> set_count (fun count -> count + 1))
   in
   Bonsai.map2 count increment ~f:(fun count increment ->
     Ui.Widget.column

@@ -9,14 +9,22 @@ module Handler = struct
     ; environment : Environment.t
     }
 
-  let create t ?name make_effect =
-    Ui.Event.Handler.create ?name (fun payload ->
-      Queue.add (make_effect payload) t.pending_effects)
+  let create_with_dependencies ~equal dependencies ~f =
+    dependencies
+    |> Bonsai.cutoff ~equal
+    |> Bonsai.map ~f
   ;;
 
-  let create_native t ?name extension make_effect =
-    Ui.Native_widget.event_handler ?name extension (fun event ->
-      Queue.add (make_effect event) t.pending_effects)
+  let create t ?name ~equal dependencies ~f =
+    create_with_dependencies ~equal dependencies ~f:(fun dependencies ->
+      Ui.Event.Handler.create ?name (fun payload ->
+        Queue.add (f dependencies payload) t.pending_effects))
+  ;;
+
+  let create_native t ?name extension ~equal dependencies ~f =
+    create_with_dependencies ~equal dependencies ~f:(fun dependencies ->
+      Ui.Native_widget.event_handler ?name extension (fun event ->
+        Queue.add (f dependencies event) t.pending_effects))
   ;;
 
   let host_effects t = t.host_effects

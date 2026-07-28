@@ -4,9 +4,14 @@ let require condition message = if not condition then failwith message
 
 let component handlers _graph =
   let noop =
-    Driver.Handler.create handlers ~name:"noop" (fun _ -> Bonsai.Effect.return ())
+    Driver.Handler.create
+      handlers
+      ~name:"noop"
+      ~equal:Unit.equal
+      (Bonsai.return ())
+      ~f:(fun () _ -> Bonsai.Effect.return ())
   in
-  Bonsai.return
+  Bonsai.map noop ~f:(fun noop ->
     (Ui.Widget.animated_opacity
        ~animation:
          (Ui.Animation.create
@@ -26,7 +31,7 @@ let component handlers _graph =
               ~left:8.
               ~top:12.
               (Ui.Widget.button ~on_press:noop ~child:(Ui.Widget.text "Overlay") ())
-          ]))
+          ])))
 ;;
 
 let () =

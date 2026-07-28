@@ -6,24 +6,35 @@ let component handlers graph =
     Bonsai.state' ~equal:String.equal "Clipboard not read" graph
   in
   let open_settings =
-    Bonsai.map set_settings_open ~f:(fun set_settings_open ->
-      Driver.Handler.create handlers ~name:"open-settings" (fun _ ->
-        set_settings_open (fun _ -> true)))
+    Driver.Handler.create
+      handlers
+      ~name:"open-settings"
+      ~equal:( == )
+      set_settings_open
+      ~f:(fun set_settings_open _ -> set_settings_open (fun _ -> true))
   in
   let close_settings =
-    Bonsai.map set_settings_open ~f:(fun set_settings_open ->
-      Driver.Handler.create handlers ~name:"close-settings" (function
+    Driver.Handler.create
+      handlers
+      ~name:"close-settings"
+      ~equal:( == )
+      set_settings_open
+      ~f:(fun set_settings_open -> function
         | Ui.Event.Payload.Route_pop { page_key = "settings"; _ } | Ui.Event.Payload.Unit
           -> set_settings_open (fun _ -> false)
-        | _ -> Bonsai.Effect.Ignore))
+        | _ -> Bonsai.Effect.Ignore)
   in
   let host_effects = Driver.Handler.host_effects handlers in
   let read_clipboard =
-    Bonsai.map set_clipboard ~f:(fun set_clipboard ->
-      Driver.Handler.create handlers ~name:"read-clipboard" (fun _ ->
+    Driver.Handler.create
+      handlers
+      ~name:"read-clipboard"
+      ~equal:( == )
+      set_clipboard
+      ~f:(fun set_clipboard _ ->
         Bonsai.Effect.bind (Host_effect.Clipboard.read host_effects ()) ~f:(function
           | Ok text -> set_clipboard (fun _ -> text)
-          | Error _ -> set_clipboard (fun _ -> "Clipboard request failed"))))
+          | Error _ -> set_clipboard (fun _ -> "Clipboard request failed")))
   in
   let state =
     Bonsai.map2 settings_open clipboard ~f:(fun settings_open clipboard ->

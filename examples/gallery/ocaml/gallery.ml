@@ -68,60 +68,115 @@ let interaction_label = function
 
 let make_handlers registry set_model =
   let update name f =
-    Driver.Handler.create registry ~name (fun payload ->
-      set_model (fun model -> f model payload))
+    Driver.Handler.create
+      registry
+      ~name
+      ~equal:( == )
+      set_model
+      ~f:(fun set_model payload -> set_model (fun model -> f model payload))
   in
-  { press =
-      update "gallery-press" (fun model _ ->
-        { model with press_count = model.press_count + 1 })
-  ; toggle =
-      update "gallery-toggle" (fun model payload ->
-        match payload with
-        | Ui.Event.Payload.Bool checked -> { model with checked }
-        | Unit -> { model with checked = not model.checked }
-        | _ -> model)
-  ; text_edit =
-      update "gallery-text-edit" (fun model payload ->
-        match payload with
-        | Ui.Event.Payload.Text_edit edit ->
-          { model with
-            text = edit.text
-          ; document_revision = Int64.succ model.document_revision
-          ; accepted_local_revision = edit.local_revision
-          }
-        | _ -> model)
-  ; text_submit =
-      update "gallery-text-submit" (fun model payload ->
-        match payload with
-        | Ui.Event.Payload.Text value ->
-          { model with interaction_status = "Submitted: " ^ value }
-        | _ -> model)
-  ; focus_changed =
-      update "gallery-focus" (fun model payload ->
-        match payload with
-        | Ui.Event.Payload.Bool focused ->
-          { model with
-            interaction_status =
-              (if focused then "Text field focused" else "Text field blurred")
-          }
-        | _ -> model)
-  ; interaction =
-      update "gallery-interaction" (fun model payload ->
-        { model with interaction_status = interaction_label payload })
-  ; native =
-      Driver.Handler.create_native
-        registry
-        ~name:"gallery-native-card"
-        gallery_card
-        (fun Activate ->
-           set_model (fun model -> { model with native_count = model.native_count + 1 }))
-  ; scroll =
-      update "gallery-scroll" (fun model payload ->
-        match payload with
-        | Ui.Event.Payload.Scroll { pixels; _ } ->
-          { model with interaction_status = Printf.sprintf "Scroll offset: %.0f" pixels }
-        | _ -> model)
-  }
+  let press =
+    update "gallery-press" (fun model _ ->
+      { model with press_count = model.press_count + 1 })
+  in
+  let toggle =
+    update "gallery-toggle" (fun model payload ->
+      match payload with
+      | Ui.Event.Payload.Bool checked -> { model with checked }
+      | Unit -> { model with checked = not model.checked }
+      | _ -> model)
+  in
+  let text_edit =
+    update "gallery-text-edit" (fun model payload ->
+      match payload with
+      | Ui.Event.Payload.Text_edit edit ->
+        { model with
+          text = edit.text
+        ; document_revision = Int64.succ model.document_revision
+        ; accepted_local_revision = edit.local_revision
+        }
+      | _ -> model)
+  in
+  let text_submit =
+    update "gallery-text-submit" (fun model payload ->
+      match payload with
+      | Ui.Event.Payload.Text value ->
+        { model with interaction_status = "Submitted: " ^ value }
+      | _ -> model)
+  in
+  let focus_changed =
+    update "gallery-focus" (fun model payload ->
+      match payload with
+      | Ui.Event.Payload.Bool focused ->
+        { model with
+          interaction_status =
+            (if focused then "Text field focused" else "Text field blurred")
+        }
+      | _ -> model)
+  in
+  let interaction =
+    update "gallery-interaction" (fun model payload ->
+      { model with interaction_status = interaction_label payload })
+  in
+  let native =
+    Driver.Handler.create_native
+      registry
+      ~name:"gallery-native-card"
+      gallery_card
+      ~equal:( == )
+      set_model
+      ~f:(fun set_model Activate ->
+        set_model (fun model -> { model with native_count = model.native_count + 1 }))
+  in
+  let scroll =
+    update "gallery-scroll" (fun model payload ->
+      match payload with
+      | Ui.Event.Payload.Scroll { pixels; _ } ->
+        { model with interaction_status = Printf.sprintf "Scroll offset: %.0f" pixels }
+      | _ -> model)
+  in
+  let first_pair =
+    Bonsai.map2 press toggle ~f:(fun press toggle -> press, toggle)
+  in
+  let second_pair =
+    Bonsai.map2 text_edit text_submit ~f:(fun text_edit text_submit ->
+      text_edit, text_submit)
+  in
+  let third_pair =
+    Bonsai.map2 focus_changed interaction ~f:(fun focus_changed interaction ->
+      focus_changed, interaction)
+  in
+  let fourth_pair =
+    Bonsai.map2 native scroll ~f:(fun native scroll -> native, scroll)
+  in
+  let first_half =
+    Bonsai.map2 first_pair second_pair ~f:(fun (press, toggle) (text_edit, text_submit) ->
+      press, toggle, text_edit, text_submit)
+  in
+  let second_half =
+    Bonsai.map2
+      third_pair
+      fourth_pair
+      ~f:(fun (focus_changed, interaction) (native, scroll) ->
+        focus_changed, interaction, native, scroll)
+  in
+  Bonsai.map2
+    first_half
+    second_half
+    ~f:
+      (fun
+        (press, toggle, text_edit, text_submit)
+        (focus_changed, interaction, native, scroll)
+      ->
+        { press
+        ; toggle
+        ; text_edit
+        ; text_submit
+        ; focus_changed
+        ; interaction
+        ; native
+        ; scroll
+        })
 ;;
 
 let section title children =
@@ -334,6 +389,6 @@ let view model handlers =
 
 let component registry graph =
   let model, set_model = Bonsai.state' ~equal:equal_model initial_model graph in
-  let handlers = Bonsai.map set_model ~f:(make_handlers registry) in
+  let handlers = make_handlers registry set_model in
   Bonsai.map2 model handlers ~f:view
 ;;

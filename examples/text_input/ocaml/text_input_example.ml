@@ -49,8 +49,12 @@ let initial_state =
 let component handlers graph =
   let state, set_state = Bonsai.state' ~equal initial_state graph in
   let edit_handler =
-    Bonsai.map set_state ~f:(fun set_state ->
-      Driver.Handler.create handlers ~name:"text-input-edit" (function
+    Driver.Handler.create
+      handlers
+      ~name:"text-input-edit"
+      ~equal:( == )
+      set_state
+      ~f:(fun set_state -> function
         | Ui.Event.Payload.Text_edit edit ->
           set_state (fun current ->
             if
@@ -65,17 +69,35 @@ let component handlers graph =
               ; update_mode = Ui.Text_editing.Ack
               ; value = value_of_edit edit
               })
-        | _ -> Bonsai.Effect.Ignore))
+        | _ -> Bonsai.Effect.Ignore)
   in
   let submit_handler =
-    Driver.Handler.create handlers ~name:"text-input-submit" (fun _ ->
-      Bonsai.Effect.Ignore)
+    Driver.Handler.create
+      handlers
+      ~name:"text-input-submit"
+      ~equal:Unit.equal
+      (Bonsai.return ())
+      ~f:(fun () _ -> Bonsai.Effect.Ignore)
   in
   let focus_handler =
-    Driver.Handler.create handlers ~name:"text-input-focus" (fun _ ->
-      Bonsai.Effect.Ignore)
+    Driver.Handler.create
+      handlers
+      ~name:"text-input-focus"
+      ~equal:Unit.equal
+      (Bonsai.return ())
+      ~f:(fun () _ -> Bonsai.Effect.Ignore)
   in
-  Bonsai.map2 state edit_handler ~f:(fun state edit_handler ->
+  let text_input_handlers =
+    Bonsai.map2
+      edit_handler
+      (Bonsai.both submit_handler focus_handler)
+      ~f:(fun edit_handler (submit_handler, focus_handler) ->
+        edit_handler, submit_handler, focus_handler)
+  in
+  Bonsai.map2
+    state
+    text_input_handlers
+    ~f:(fun state (edit_handler, submit_handler, focus_handler) ->
     Ui.Widget.text_input
       ~key:(Ui.Key.string "editor")
       ~session_id:state.session_id
