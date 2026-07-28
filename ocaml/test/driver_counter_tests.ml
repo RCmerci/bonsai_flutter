@@ -5,6 +5,14 @@ module Ui = Bonsai_flutter_ui
 let fail format = Printf.ksprintf failwith format
 let require condition message = if not condition then fail "%s" message
 
+let require_substring output substring message =
+  require (Core.String.is_substring output ~substring) message
+;;
+
+let require_no_substring output substring message =
+  require (not (Core.String.is_substring output ~substring)) message
+;;
+
 let ok = function
   | Ok value -> value
   | Error error -> fail "unexpected driver error: %s" (Driver.error_to_string error)
@@ -78,15 +86,39 @@ let () =
   let runtime_epoch = 21L in
   let activations = ref 0 in
   let after_displays = ref 0 in
+  let trace_messages = ref [] in
+  let trace message = trace_messages := message :: !trace_messages in
+  let take_trace () =
+    let output = List.rev !trace_messages |> String.concat "\n" in
+    trace_messages := [];
+    output
+  in
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   let driver =
-    Driver.create ~runtime_epoch ~time_source (component ~activations ~after_displays)
+    Driver.create
+      ~trace
+      ~runtime_epoch
+      ~time_source
+      (component ~activations ~after_displays)
   in
   let initial =
     match ok (Driver.step driver ()) with
     | Some frame -> frame
     | None -> fail "initial step must emit a full snapshot"
   in
+  let initial_trace = take_trace () in
+  require_substring
+    initial_trace
+    "[widget-diff] targetRevision=1 kind=full_snapshot"
+    "initial trace did not identify the full widget diff";
+  require_substring
+    initial_trace
+    "Text \"Count: 0\""
+    "initial widget diff omitted the counter value";
+  require_substring
+    initial_trace
+    "Text \"Increment\""
+    "initial widget diff omitted the button label";
   require
     (Runtime.Frame_patch.kind initial.frame_patch = Full_snapshot)
     "initial step must reconcile a full snapshot";
@@ -103,8 +135,21 @@ let () =
     (!activations = 0 && !after_displays = 0)
     "initial step must not trigger presentation-gated lifecycle events";
   ok (Driver.frame_presented driver ~revision:initial.revision);
+  ignore (take_trace ());
   require (!activations = 1) "initial presentation must trigger activation";
   require (!after_displays = 1) "initial presentation must trigger after-display";
+  (match ok (Driver.step driver ()) with
+   | None -> ()
+   | Some _ -> fail "unchanged step unexpectedly emitted a frame");
+  let unchanged_trace = take_trace () in
+  require_no_substring
+    unchanged_trace
+    "[widget-diff]"
+    "unchanged step emitted a widget diff";
+  require_no_substring
+    unchanged_trace
+    "Count: 0"
+    "unchanged step printed the widget tree";
   let events =
     Protocol.Inbound_event.
       { runtime_epoch
@@ -124,6 +169,23 @@ let () =
     | Some frame -> frame
     | None -> fail "Counter press must emit an incremental frame"
   in
+  let updated_trace = take_trace () in
+  require_substring
+    updated_trace
+    "[widget-diff] targetRevision=2 kind=incremental_frame"
+    "incremental trace did not identify the widget diff";
+  require_substring
+    updated_trace
+    "updateProps"
+    "incremental widget diff omitted the operation";
+  require_substring
+    updated_trace
+    "Text \"Count: 1\""
+    "incremental widget diff omitted the changed counter";
+  require_no_substring
+    updated_trace
+    "Text \"Increment\""
+    "incremental widget diff included an unchanged child";
   let updated_wire =
     match Protocol.Binary_codec.decode updated.bytes with
     | Ok frame -> frame
@@ -131,7 +193,7 @@ let () =
   in
   (match semantic_operations updated_wire with
    | [ Protocol.Wire_frame.Update_props
-         { node_id = _; props = Text_props { value = "Count: 1" } }
+         { node_id = _; props = Text_props { value = "Count: 1"; _ } }
      ] -> ()
    | operations ->
      fail
@@ -196,7 +258,7 @@ let () =
   in
   (match semantic_operations after_rejection_wire with
    | [ Protocol.Wire_frame.Update_props
-         { node_id = _; props = Text_props { value = "Count: 2" } }
+         { node_id = _; props = Text_props { value = "Count: 2"; _ } }
      ] -> ()
    | _ -> fail "rejected batch leaked a previously queued Bonsai effect");
   let resync_request =
@@ -321,7 +383,8 @@ let test_host_effect_round_trip () =
   in
   let response_wire = decode_frame response_frame.bytes in
   (match semantic_operations response_wire with
-   | [ Protocol.Wire_frame.Update_props { props = Text_props { value = "来自 Flutter" }; _ }
+   | [ Protocol.Wire_frame.Update_props
+         { props = Text_props { value = "来自 Flutter"; _ }; _ }
      ] -> ()
    | _ -> fail "host response did not produce the expected text patch");
   require
@@ -470,7 +533,7 @@ let test_environment_is_dynamic_input () =
   let updated = decode_frame updated_frame.bytes in
   (match semantic_operations updated with
    | [ Protocol.Wire_frame.Update_props
-         { props = Text_props { value = "1440x900 zh-CN" }; _ }
+         { props = Text_props { value = "1440x900 zh-CN"; _ }; _ }
      ] -> ()
    | _ -> fail "environment change did not produce the expected text patch");
   let unchanged =

@@ -235,3 +235,146 @@ module Virtual_list = struct
     ;;
   end
 end
+
+module Swipe_action = struct
+  let kind_id = 2
+  let version = 1
+  let commit_event_id = 1
+
+  type direction =
+    | Start_to_end
+    | End_to_start
+
+  type disposition =
+    | Dismiss
+    | Rebound
+
+  type action =
+    { label : string
+    ; background : Style.Color.t
+    ; disposition : disposition
+    ; icon : Widget.t
+    }
+
+  let action ~label ~background ~disposition ~icon =
+    if String.length label = 0
+    then invalid_arg "Native_widget.Swipe_action: action label must not be empty";
+    ignore (Text_editing.Utf16.length label);
+    { label; background; disposition; icon }
+  ;;
+
+  type props =
+    { start_action : action option
+    ; end_action : action option
+    }
+
+  let disposition_byte = function
+    | Dismiss -> 0
+    | Rebound -> 1
+  ;;
+
+  let encode_props { start_action; end_action } =
+    let label = function
+      | None -> ""
+      | Some action -> action.label
+    in
+    let start_label = label start_action in
+    let end_label = label end_action in
+    let start_length = String.length start_label in
+    let end_length = String.length end_label in
+    let payload = Bytes.make (20 + start_length + end_length) '\000' in
+    let enabled option flag = if Option.is_some option then flag else 0 in
+    Bytes.set payload 0 (Char.chr (enabled start_action 1 lor enabled end_action 2));
+    Bytes.set
+      payload
+      1
+      (Char.chr
+         (Option.fold
+            ~none:0
+            ~some:(fun action -> disposition_byte action.disposition)
+            start_action));
+    Bytes.set
+      payload
+      2
+      (Char.chr
+         (Option.fold
+            ~none:0
+            ~some:(fun action -> disposition_byte action.disposition)
+            end_action));
+    let background = function
+      | None -> 0l
+      | Some action -> Style.Color.Private.to_argb32 action.background
+    in
+    Bytes.set_int32_le payload 4 (background start_action);
+    Bytes.set_int32_le payload 8 (background end_action);
+    Little_endian.set_u32 payload 12 start_length;
+    Little_endian.set_u32 payload 16 end_length;
+    Bytes.blit_string start_label 0 payload 20 start_length;
+    Bytes.blit_string end_label 0 payload (20 + start_length) end_length;
+    payload
+  ;;
+
+  let decode_event ~event_id payload =
+    if event_id <> commit_event_id
+    then Error "unknown swipe action event"
+    else if Bytes.length payload <> 1
+    then Error "swipe action direction payload must be exactly one byte"
+    else (
+      match Char.code (Bytes.get payload 0) with
+      | 0 -> Ok Start_to_end
+      | 1 -> Ok End_to_start
+      | _ -> Error "unknown swipe action direction")
+  ;;
+
+  let extension =
+    Extension.create
+      ~kind_id
+      ~version
+      ~capabilities:[ Capability.Stateful; Resource; Semantics ]
+      ~encode_props
+      ~decode_event
+      ()
+  ;;
+
+  let validate_actions start_action end_action =
+    if Option.is_none start_action && Option.is_none end_action
+    then invalid_arg "Native_widget.Swipe_action: at least one action is required"
+  ;;
+
+  let children start_action end_action content =
+    let icon = function
+      | None -> Widget.empty ()
+      | Some action -> action.icon
+    in
+    [ content; icon start_action; icon end_action ]
+  ;;
+
+  let direction_of_payload = function
+    | Event.Payload.Native_event event
+      when event.kind_id = kind_id && event.version = version ->
+      Result.to_option (decode_event ~event_id:event.event_id event.payload)
+    | _ -> None
+  ;;
+
+  let create ?key ?start_action ?end_action ~content ~on_commit () =
+    validate_actions start_action end_action;
+    widget
+      extension
+      ?key
+      ~props:{ start_action; end_action }
+      ~on_event:on_commit
+      ~children:(children start_action end_action content)
+      ()
+  ;;
+
+  let create_with_handler ?key ?start_action ?end_action ~content ~on_commit () =
+    validate_actions start_action end_action;
+    widget_with_handler
+      extension
+      ?key
+      ~props:{ start_action; end_action }
+      ~on_event:on_commit
+      ~children:(children start_action end_action content)
+      ()
+  ;;
+end

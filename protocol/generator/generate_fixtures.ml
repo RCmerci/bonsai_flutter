@@ -55,7 +55,14 @@ let counter_frame : Protocol.Wire_frame.t =
       ; Create_node
           { node_id = 2L
           ; kind = Text
-          ; props = Text_props { value = "Count: 0" }
+          ; props =
+              Text_props
+                { value = "Count: 0"
+                ; style = None
+                ; text_align = Start
+                ; max_lines = None
+                ; overflow = Clip_text
+                }
           ; event_bindings = []
           ; parent_data = No_parent_data
           }
@@ -82,7 +89,18 @@ let fixtures : (string * Protocol.Wire_frame.t) list =
       ; target_revision = 2L
       ; kind = Incremental_frame
       ; operations =
-          [ Update_props { node_id = 2L; props = Text_props { value = "计数: 😀" } } ]
+          [ Update_props
+              { node_id = 2L
+              ; props =
+                  Text_props
+                    { value = "计数: 😀"
+                    ; style = None
+                    ; text_align = Start
+                    ; max_lines = None
+                    ; overflow = Clip_text
+                    }
+              }
+          ]
       } )
   ; ( "ocaml_reordered_children.hex"
     , { runtime_epoch = 7L

@@ -190,7 +190,7 @@ abstract final class FrameCodec {
           'Operation is outside BeginFrame/EndFrame',
         );
       }
-      operations.add(_readOperation(opcode, body));
+      operations.add(_readOperation(opcode, body, protocolMinor: minor));
       body.requireDone();
     }
     if (!sawBegin || !sawEnd) {
@@ -285,11 +285,15 @@ abstract final class FrameCodec {
     }
   }
 
-  static FrameOperation _readOperation(int opcode, _Reader body) {
+  static FrameOperation _readOperation(
+    int opcode,
+    _Reader body, {
+    required int protocolMinor,
+  }) {
     if (opcode == OperationId.createNode) {
       final nodeId = body.uint64();
       final kind = _readNodeKind(body);
-      final props = _readProps(body, kind);
+      final props = _readProps(body, kind, protocolMinor: protocolMinor);
       final bindings = _readBindings(body);
       final parentData = _readParentData(body);
       return CreateNode(
@@ -301,7 +305,10 @@ abstract final class FrameCodec {
       );
     }
     if (opcode == OperationId.updateProps) {
-      return UpdateProps(nodeId: body.uint64(), props: _readUpdateProps(body));
+      return UpdateProps(
+        nodeId: body.uint64(),
+        props: _readUpdateProps(body, protocolMinor: protocolMinor),
+      );
     }
     if (opcode == OperationId.updateEventBindings) {
       return UpdateEventBindings(
@@ -357,8 +364,8 @@ abstract final class FrameCodec {
       case (NodeKind.row, LinearProps()):
       case (NodeKind.column, LinearProps()):
         return;
-      case (NodeKind.text, TextProps(:final value)):
-        writer.string(value);
+      case (NodeKind.text, final TextProps props):
+        _writeTextProps(writer, props);
       case (NodeKind.richText, RichTextProps(:final spans)):
         _writeStringList(writer, spans, 'rich text span');
       case (
@@ -599,11 +606,11 @@ abstract final class FrameCodec {
         writer
           ..uint16(NodeKindId.environmentBoundary)
           ..uint64(0);
-      case TextProps(:final value):
+      case final TextProps props:
         writer
           ..uint16(NodeKindId.text)
-          ..uint64(1)
-          ..string(value);
+          ..uint64(_changedFields(props));
+        _writeTextProps(writer, props);
       case RichTextProps(:final spans):
         writer
           ..uint16(NodeKindId.richText)
@@ -923,11 +930,18 @@ abstract final class FrameCodec {
     }
   }
 
-  static UiProps _readUpdateProps(_Reader reader) {
+  static UiProps _readUpdateProps(
+    _Reader reader, {
+    required int protocolMinor,
+  }) {
     final kind = _readNodeKind(reader);
     final changedFields = reader.uint64();
-    final props = _readProps(reader, kind);
-    if (changedFields != _changedFields(props)) {
+    final props = _readProps(reader, kind, protocolMinor: protocolMinor);
+    final expectedChangedFields =
+        kind == NodeKind.text && protocolMinor < _styledTextProtocolMinor
+        ? _fieldMask(TextPropId.value)
+        : _changedFields(props);
+    if (changedFields != expectedChangedFields) {
       _fail(
         ProtocolErrorCode.invalidProps,
         'Unsupported changed-field bitset $changedFields',
@@ -936,10 +950,14 @@ abstract final class FrameCodec {
     return props;
   }
 
-  static UiProps _readProps(_Reader reader, NodeKind kind) => switch (kind) {
+  static UiProps _readProps(
+    _Reader reader,
+    NodeKind kind, {
+    required int protocolMinor,
+  }) => switch (kind) {
     NodeKind.empty || NodeKind.stack => const EmptyProps(),
     NodeKind.environmentBoundary => const EnvironmentBoundaryProps(),
-    NodeKind.text => TextProps(reader.string()),
+    NodeKind.text => _readTextProps(reader, protocolMinor: protocolMinor),
     NodeKind.richText => RichTextProps(_readStringList(reader)),
     NodeKind.icon => IconProps(
       codePoint: reader.uint32(),
@@ -1294,6 +1312,117 @@ abstract final class FrameCodec {
       opcode == OperationId.runtimeNotification;
 }
 
+void _writeTextProps(_Writer writer, TextProps props) {
+  writer.string(props.value);
+  final style = props.style;
+  if (style == null) {
+    writer.uint8(0);
+  } else {
+    for (final entry in [
+      (style.fontSize, 'Text font size'),
+      (style.lineHeight, 'Text line height'),
+    ]) {
+      final value = entry.$1;
+      if (value != null && (!value.isFinite || value <= 0)) {
+        _fail(ProtocolErrorCode.invalidProps, '${entry.$2} must be positive');
+      }
+    }
+    writer
+      ..uint8(1)
+      ..optionalFloat64(style.fontSize);
+    if (style.fontWeight == null) {
+      writer.uint8(0);
+    } else {
+      writer
+        ..uint8(1)
+        ..uint8(style.fontWeight!.index);
+    }
+    writer.optionalFloat64(style.lineHeight);
+    _writeOptionalArgb32(writer, style.colorArgb);
+  }
+  writer.uint8(props.textAlign.index);
+  if (props.maxLines == null) {
+    writer.uint8(0);
+  } else {
+    if (props.maxLines! <= 0) {
+      _fail(ProtocolErrorCode.invalidProps, 'Text max lines must be positive');
+    }
+    writer
+      ..uint8(1)
+      ..uint32(props.maxLines!);
+  }
+  writer.uint8(props.overflow.index);
+}
+
+const _styledTextProtocolMinor = 13;
+
+TextProps _readTextProps(_Reader reader, {required int protocolMinor}) {
+  final value = reader.string();
+  if (protocolMinor < _styledTextProtocolMinor) {
+    return TextProps(value);
+  }
+  final style = switch (reader.uint8()) {
+    0 => null,
+    1 => TextStyleValue(
+      fontSize: _readPositiveOptionalFloat(reader, 'Text font size'),
+      fontWeight: switch (reader.uint8()) {
+        0 => null,
+        1 => _enumValue(
+          TextFontWeight.values,
+          reader.uint8(),
+          'text font weight',
+        ),
+        final tag => _fail(
+          ProtocolErrorCode.invalidProps,
+          'Invalid optional text font weight tag $tag',
+        ),
+      },
+      lineHeight: _readPositiveOptionalFloat(reader, 'Text line height'),
+      colorArgb: _readOptionalArgb32(reader),
+    ),
+    final tag => _fail(
+      ProtocolErrorCode.invalidProps,
+      'Invalid optional text style tag $tag',
+    ),
+  };
+  final textAlign = _enumValue(
+    TextAlignValue.values,
+    reader.uint8(),
+    'text alignment',
+  );
+  final maxLines = switch (reader.uint8()) {
+    0 => null,
+    1 => reader.uint32(),
+    final tag => _fail(
+      ProtocolErrorCode.invalidProps,
+      'Invalid optional text max lines tag $tag',
+    ),
+  };
+  if (maxLines == 0) {
+    _fail(ProtocolErrorCode.invalidProps, 'Text max lines must be positive');
+  }
+  final overflow = _enumValue(
+    TextOverflowValue.values,
+    reader.uint8(),
+    'text overflow',
+  );
+  return TextProps(
+    value,
+    style: style,
+    textAlign: textAlign,
+    maxLines: maxLines,
+    overflow: overflow,
+  );
+}
+
+double? _readPositiveOptionalFloat(_Reader reader, String label) {
+  final value = reader.optionalFloat64();
+  if (value != null && value <= 0) {
+    _fail(ProtocolErrorCode.invalidProps, '$label must be positive');
+  }
+  return value;
+}
+
 int _fieldMask(int propertyId) => 1 << (propertyId - 1);
 
 int _changedFields(UiProps props) => switch (props) {
@@ -1301,7 +1430,12 @@ int _changedFields(UiProps props) => switch (props) {
   LinearProps() ||
   GestureProps() ||
   EnvironmentBoundaryProps() => 0,
-  TextProps() => _fieldMask(TextPropId.value),
+  TextProps() =>
+    _fieldMask(TextPropId.value) |
+        _fieldMask(TextPropId.textStyle) |
+        _fieldMask(TextPropId.textAlign) |
+        _fieldMask(TextPropId.maxLines) |
+        _fieldMask(TextPropId.overflow),
   RichTextProps() => _fieldMask(RichTextPropId.spans),
   IconProps() =>
     _fieldMask(IconPropId.codePoint) |

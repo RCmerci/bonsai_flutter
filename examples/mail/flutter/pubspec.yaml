@@ -1,0 +1,30 @@
+name: bonsai_flutter_mail_example
+description: OCaml-owned fictional mail reader example.
+publish_to: none
+version: 0.0.0
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=3.44.0"
+
+hooks:
+  user_defines:
+    bonsai_flutter_native:
+      native_artifact_root: ../../../_build/native-artifacts/mail/
+      require_ocaml_backend: true
+
+dependencies:
+  bonsai_flutter:
+    path: ../../../flutter/packages/bonsai_flutter
+  bonsai_flutter_native:
+    path: ../../../flutter/packages/bonsai_flutter_native
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

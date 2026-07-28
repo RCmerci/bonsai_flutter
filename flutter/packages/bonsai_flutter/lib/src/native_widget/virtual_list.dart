@@ -8,6 +8,7 @@ import 'native_widget_registry.dart';
 
 abstract final class NativeWidgetKind {
   static const int virtualList = 1;
+  static const int swipeAction = 2;
 }
 
 abstract final class VirtualListEvent {

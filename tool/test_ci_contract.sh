@@ -113,7 +113,12 @@ require_text \
   "$native_object_commands" \
   "tool/macos/stage_native_objects.sh examples" \
   "native-objects"
-for example in counter gallery host_effects host_navigation navigation text_input todo; do
+single_native_object_commands=$(make -n native-object EXAMPLE=mail)
+require_text \
+  "$single_native_object_commands" \
+  "tool/macos/stage_native_objects.sh example mail" \
+  "native-object"
+for example in counter gallery host_effects host_navigation mail navigation text_input todo; do
   require_file "examples/$example/ocaml/native_embed.ml"
   require_text \
     "$native_object_commands" \
@@ -169,6 +174,7 @@ for example_library in \
   bonsai_flutter_gallery \
   bonsai_flutter_host_effects_example \
   bonsai_flutter_host_navigation_example \
+  bonsai_flutter_mail_example \
   bonsai_flutter_navigation_example \
   bonsai_flutter_text_input_example \
   bonsai_flutter_todo_example

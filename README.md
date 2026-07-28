@@ -110,10 +110,10 @@ flutter run -d macos
 
 Each directory under `examples/` owns its OCaml component, native entrypoint,
 complete-object target, Flutter shell, and build-hook configuration.
-`make native-object EXAMPLE=counter` creates
-`_build/default/examples/counter/ocaml/native_embed.exe.o`. The package build
-hook links it into the application; no dylib is copied manually. Run
-`make native-objects` to build every standalone example object.
+`make native-object EXAMPLE=counter` builds the complete object and stages it
+under `_build/native-artifacts/counter/`, where the package build hook links it
+into the application. No dylib is copied manually. Run `make native-objects` to
+build and stage every standalone example object.
 
 ## Testing
 
@@ -189,9 +189,9 @@ Flutter Web is out of scope.
 ## Examples
 
 The repository contains OCaml-owned Counter, Todo, Text Input, Host Effects,
-Navigation, and Gallery applications under [`examples`](examples). Their
-Flutter directories contain only host setup, renderer registration, and
-native-library initialization.
+Navigation, Host Navigation, Gallery, and Bonsai Mail applications under
+[`examples`](examples). Their Flutter directories contain only host setup,
+renderer registration, and native-library initialization.
 
 ## Current limitations and roadmap
 

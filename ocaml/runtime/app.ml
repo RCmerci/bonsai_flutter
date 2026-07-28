@@ -9,6 +9,7 @@ end
 
 type t =
   { name : string option
+  ; trace : (string -> unit) option
   ; component : Context.t -> Bonsai.graph -> Bonsai_flutter_ui.Widget.t Bonsai.t
   }
 
@@ -20,13 +21,14 @@ let validate_name = function
     then invalid_arg "App.create: name must not contain NUL"
 ;;
 
-let create ?name component =
+let create ?name ?trace component =
   validate_name name;
-  { name; component }
+  { name; trace; component }
 ;;
 
 let name t = t.name
 
 module Private = struct
   let component t = t.component
+  let trace t = t.trace
 end

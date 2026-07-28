@@ -102,6 +102,19 @@ completion identity, reduced-motion behavior, protocol round trips, and
 controller disposal after node removal. Environment tests verify semantic
 change filtering.
 
+Navigation motion tests sample observable page positions rather than route
+implementation types. They cover front-loaded monotonic entrance, exact
+landing, inbox parallax, one-to-one edge tracking, cancel, distance and fling
+commit, root and `canPop` guards, transition-in-progress guards, RTL, reduced
+motion, and single typed RoutePop emission.
+
+Swipe-action tests cover exact binary validation, built-in registration,
+horizontal tracking and direction reversal, clipped pill growth, distance and
+velocity thresholds, one-shot haptics, dismiss and rebound timing, vertical
+ListView arbitration, cancellation of row and nested-button taps, custom
+Semantics actions, disabled directions, keyed updates, node drop, RTL, and
+reduced motion. Widget tests avoid wall-clock performance assertions.
+
 ## Cross-language
 
 Fixture provenance is part of the test contract:
@@ -171,6 +184,32 @@ OCaml continuation, and applies the resulting text patch. It then opens an
 OCaml-owned Settings page containing Overlay and MaterialDialog nodes and
 returns a system pop to OCaml before the route is removed.
 
+The Mail integration test starts the `mail` entrypoint, verifies that drag
+deltas remain local, sends one Archive commit through FFI, applies the
+incremental row removal while retaining the following keyed Element, opens an
+unread detail page, drives an interactive leading-edge pop, and confirms that
+the matching RoutePop returns to an inbox where the message remains read.
+
+For interaction tuning, use a compact physical iPhone in Profile mode. The
+dedicated driver warms every interaction twice, records twenty detail
+entrances, edge-pop cancels, edge-pop commits, row-swipe cancels, and row-swipe
+commits, then enforces a 16 ms p90 build and raster budget:
+
+```sh
+cd flutter/integration_test
+flutter drive --profile --no-dds \
+  -d <physical-device-id> \
+  --target integration_test/mail_profile_test.dart \
+  --driver test_driver/mail_profile_test.dart \
+  --timeout 600
+```
+
+The summary is written to `build/mail_profile_summary.json`. The recorded
+physical-iPhone 13 acceptance run had zero missed build and raster budgets;
+the worst p90 build and raster times across a second concurrent screen-capture
+run were 3.641 ms and 0.012 ms. Shared CI widget-test timing is not a
+performance acceptance signal.
+
 The macOS integration command is:
 
 ```sh
@@ -197,8 +236,9 @@ Run the complete hosted boundary:
 make ci-ios
 ```
 
-The repository has verified unsigned iPhoneOS arm64 builds for all seven
-standalone examples and the aggregate integration application. Counter
+The repository contains eight standalone examples. Unsigned iPhoneOS arm64
+builds are verified for the original seven and the aggregate integration
+application; Bonsai Mail awaits the next full hosted packaging run. Counter
 Debug, Profile, and Release frameworks pass the artifact audit. That audit
 checks the final Mach-O platform, architecture, minimum version, Bitcode,
 install name, linked libraries, exact public exports, Native Assets manifest,

@@ -47,7 +47,8 @@ val error_to_string : error -> string
 type t
 
 val create
-  :  runtime_epoch:int64
+  :  ?trace:(string -> unit)
+  -> runtime_epoch:int64
   -> time_source:Bonsai.Time_source.t
   -> (Handler.t -> Bonsai.graph -> Bonsai_flutter_ui.Widget.t Bonsai.t)
   -> t

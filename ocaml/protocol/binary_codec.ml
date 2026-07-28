@@ -116,6 +116,60 @@ let write_optional_argb32 writer = function
     Writer.u32 writer (Int32.to_int value)
 ;;
 
+let text_font_weight_id = function
+  | Wire_frame.Normal -> 0
+  | Medium -> 1
+  | Semi_bold -> 2
+  | Bold -> 3
+;;
+
+let text_align_id = function
+  | Wire_frame.Start -> 0
+  | Center_text -> 1
+  | End -> 2
+;;
+
+let text_overflow_id = function
+  | Wire_frame.Clip_text -> 0
+  | Fade -> 1
+  | Ellipsis -> 2
+  | Visible -> 3
+;;
+
+let write_text_style writer = function
+  | None -> Writer.u8 writer 0
+  | Some (style : Wire_frame.text_style) ->
+    Writer.u8 writer 1;
+    write_optional_f64 writer style.font_size;
+    (match style.font_weight with
+     | None -> Writer.u8 writer 0
+     | Some weight ->
+       Writer.u8 writer 1;
+       Writer.u8 writer (text_font_weight_id weight));
+    write_optional_f64 writer style.line_height;
+    write_optional_argb32 writer style.color
+;;
+
+let write_optional_u32 writer label = function
+  | None -> Writer.u8 writer 0
+  | Some value ->
+    check_u32 label value;
+    if value = 0 then fail Invalid_props "%s must be positive" label;
+    Writer.u8 writer 1;
+    Writer.u32 writer value
+;;
+
+let write_text_props
+      writer
+      ({ value; style; text_align; max_lines; overflow } : Wire_frame.text_props)
+  =
+  write_string writer value;
+  write_text_style writer style;
+  Writer.u8 writer (text_align_id text_align);
+  write_optional_u32 writer "text max lines" max_lines;
+  Writer.u8 writer (text_overflow_id overflow)
+;;
+
 let alignment_id (alignment : Wire_frame.alignment) =
   match alignment with
   | Wire_frame.Top_start -> 0
@@ -321,7 +375,7 @@ let write_props writer kind props =
   | Environment_boundary, Environment_boundary_props
   | Row, Linear_props
   | Column, Linear_props -> ()
-  | Text, Text_props { value } -> write_string writer value
+  | Text, Text_props props -> write_text_props writer props
   | Rich_text, Rich_text_props { spans } ->
     check_u16 "rich text span count" (List.length spans);
     Writer.u16 writer (List.length spans);
@@ -587,7 +641,16 @@ let field_mask id = Int64.shift_left 1L (id - 1)
 let changed_fields = function
   | Wire_frame.Empty_props | Linear_props | Gesture_props | Environment_boundary_props ->
     0L
-  | Text_props _ -> field_mask Generated_protocol.Text_prop.value
+  | Text_props _ ->
+    List.fold_left
+      Int64.logor
+      0L
+      [ field_mask Generated_protocol.Text_prop.value
+      ; field_mask Generated_protocol.Text_prop.text_style
+      ; field_mask Generated_protocol.Text_prop.text_align
+      ; field_mask Generated_protocol.Text_prop.max_lines
+      ; field_mask Generated_protocol.Text_prop.overflow
+      ]
   | Rich_text_props _ -> field_mask Generated_protocol.Rich_text_prop.spans
   | Icon_props _ ->
     List.fold_left
@@ -785,7 +848,7 @@ let write_update_props writer props =
   match props with
   | Wire_frame.Empty_props | Linear_props | Gesture_props | Environment_boundary_props ->
     ()
-  | Text_props { value } -> write_string writer value
+  | Text_props props -> write_text_props writer props
   | Rich_text_props { spans } ->
     check_u16 "rich text span count" (List.length spans);
     Writer.u16 writer (List.length spans);
@@ -1421,7 +1484,12 @@ let read_optional_f64 reader =
   match Reader.u8 reader with
   | 0 -> None
   | 1 -> Some (read_finite_f64 reader)
-  | value -> fail Invalid_props "invalid optional float tag %d" value
+  | value ->
+    fail
+      Invalid_props
+      "invalid optional float tag %d at byte %d"
+      value
+      (reader.Reader.position - 1)
 ;;
 
 let read_optional_u8 reader =
@@ -1436,6 +1504,81 @@ let read_optional_argb32 reader =
   | 0 -> None
   | 1 -> Some (Int32.of_int (Reader.u32 reader))
   | value -> fail Invalid_props "invalid optional ARGB tag %d" value
+;;
+
+let read_positive_optional_f64 reader label =
+  match read_optional_f64 reader with
+  | None -> None
+  | Some value ->
+    if Float.compare value 0. <= 0 then fail Invalid_props "%s must be positive" label;
+    Some value
+;;
+
+let read_text_style reader =
+  match Reader.u8 reader with
+  | 0 -> None
+  | 1 ->
+    let font_size = read_positive_optional_f64 reader "text font size" in
+    let font_weight =
+      match Reader.u8 reader with
+      | 0 -> None
+      | 1 ->
+        Some
+          (match Reader.u8 reader with
+           | 0 -> Wire_frame.Normal
+           | 1 -> Medium
+           | 2 -> Semi_bold
+           | 3 -> Bold
+           | value -> fail Invalid_props "invalid text font weight %d" value)
+      | value -> fail Invalid_props "invalid optional text font weight tag %d" value
+    in
+    let line_height = read_positive_optional_f64 reader "text line height" in
+    let color = read_optional_argb32 reader in
+    Some Wire_frame.{ font_size; font_weight; line_height; color }
+  | value -> fail Invalid_props "invalid optional text style tag %d" value
+;;
+
+let read_text_align reader =
+  match Reader.u8 reader with
+  | 0 -> Wire_frame.Start
+  | 1 -> Center_text
+  | 2 -> End
+  | value -> fail Invalid_props "invalid text alignment %d" value
+;;
+
+let read_optional_positive_u32 reader label =
+  match Reader.u8 reader with
+  | 0 -> None
+  | 1 ->
+    let value = Reader.u32 reader in
+    if value = 0 then fail Invalid_props "%s must be positive" label;
+    Some value
+  | value -> fail Invalid_props "invalid optional u32 tag %d" value
+;;
+
+let read_text_overflow reader =
+  match Reader.u8 reader with
+  | 0 -> Wire_frame.Clip_text
+  | 1 -> Fade
+  | 2 -> Ellipsis
+  | 3 -> Visible
+  | value -> fail Invalid_props "invalid text overflow %d" value
+;;
+
+let styled_text_protocol_minor = 13
+
+let read_text_props reader ~protocol_minor =
+  let value = read_string reader in
+  if protocol_minor < styled_text_protocol_minor
+  then
+    Wire_frame.
+      { value; style = None; text_align = Start; max_lines = None; overflow = Clip_text }
+  else (
+    let style = read_text_style reader in
+    let text_align = read_text_align reader in
+    let max_lines = read_optional_positive_u32 reader "text max lines" in
+    let overflow = read_text_overflow reader in
+    Wire_frame.{ value; style; text_align; max_lines; overflow })
 ;;
 
 let read_animation reader =
@@ -1526,11 +1669,11 @@ let read_node_kind reader =
   | value -> fail Unknown_node_kind "unknown node kind %d" value
 ;;
 
-let read_props reader kind =
+let read_props reader kind ~protocol_minor =
   match kind with
   | Wire_frame.Empty | Stack -> Empty_props
   | Environment_boundary -> Environment_boundary_props
-  | Text -> Text_props { value = read_string reader }
+  | Text -> Text_props (read_text_props reader ~protocol_minor)
   | Rich_text ->
     Rich_text_props
       { spans = List.init (Reader.u16 reader) (fun _ -> read_string reader) }
@@ -1538,12 +1681,10 @@ let read_props reader kind =
     let code_point = Reader.u32 reader in
     if code_point > 0x10ffff || (code_point >= 0xd800 && code_point <= 0xdfff)
     then fail Invalid_props "icon code point is not a Unicode scalar";
-    Icon_props
-      { code_point
-      ; font_family = read_optional_string reader
-      ; size = read_optional_f64 reader
-      ; color = read_optional_argb32 reader
-      }
+    let font_family = read_optional_string reader in
+    let size = read_optional_f64 reader in
+    let color = read_optional_argb32 reader in
+    Icon_props { code_point; font_family; size; color }
   | Image ->
     let uri = read_string reader in
     if String.length uri = 0 then fail Invalid_props "image URI must not be empty";
@@ -1558,8 +1699,9 @@ let read_props reader kind =
       | 6 -> Scale_down
       | value -> fail Invalid_props "invalid image fit %d" value
     in
-    Image_props
-      { uri; fit; width = read_optional_f64 reader; height = read_optional_f64 reader }
+    let width = read_optional_f64 reader in
+    let height = read_optional_f64 reader in
+    Image_props { uri; fit; width; height }
   | Row | Column -> Linear_props
   | Button -> Button_props { enabled = read_bool reader }
   | Padding ->
@@ -1588,8 +1730,9 @@ let read_props reader kind =
     let height_factor = read_optional_f64 reader in
     Center_props { width_factor; height_factor }
   | Sized_box ->
-    Sized_box_props
-      { width = read_optional_f64 reader; height = read_optional_f64 reader }
+    let width = read_optional_f64 reader in
+    let height = read_optional_f64 reader in
+    Sized_box_props { width; height }
   | Constrained_box ->
     let min_width = read_finite_f64 reader in
     let max_width = read_finite_f64 reader in
@@ -1854,11 +1997,16 @@ let read_props reader kind =
     Native_widget_props { kind_id; version; capabilities; payload }
 ;;
 
-let read_update_props reader =
+let read_update_props reader ~protocol_minor =
   let kind = read_node_kind reader in
   let changed = Reader.u64 reader in
-  let props = read_props reader kind in
-  let expected = changed_fields props in
+  let props = read_props reader kind ~protocol_minor in
+  let expected =
+    match props with
+    | Wire_frame.Text_props _ when protocol_minor < styled_text_protocol_minor ->
+      field_mask Generated_protocol.Text_prop.value
+    | _ -> changed_fields props
+  in
   if changed <> expected then fail Invalid_props "unsupported changed-field bitset";
   props
 ;;
@@ -1974,21 +2122,25 @@ let read_parent_data reader =
   | value -> fail Invalid_props "invalid parent-data tag %d" value
 ;;
 
-let read_operation opcode body =
+let read_operation opcode body ~protocol_minor =
   let open Wire_frame in
   let operation =
     if opcode = Generated_protocol.Operation.create_node
     then (
       let node_id = Reader.u64 body in
       let kind = read_node_kind body in
-      let props = read_props body kind in
+      let props =
+        try read_props body kind ~protocol_minor with
+        | Codec_error error ->
+          fail error.code "node %Ld kind %d: %s" node_id (node_kind_id kind) error.message
+      in
       let event_bindings = read_bindings body in
       let parent_data = read_parent_data body in
       Create_node { node_id; kind; props; event_bindings; parent_data })
     else if opcode = Generated_protocol.Operation.update_props
     then (
       let node_id = Reader.u64 body in
-      let props = read_update_props body in
+      let props = read_update_props body ~protocol_minor in
       Update_props { node_id; props })
     else if opcode = Generated_protocol.Operation.update_event_bindings
     then (
@@ -2112,7 +2264,7 @@ let decode bytes =
       else (
         if (not !saw_begin) || !saw_end
         then fail Invalid_operation_order "operation is outside BeginFrame/EndFrame";
-        operations := read_operation opcode body :: !operations)
+        operations := read_operation opcode body ~protocol_minor:minor :: !operations)
     done;
     if (not !saw_begin) || not !saw_end
     then fail Invalid_operation_order "frame is missing BeginFrame or EndFrame";

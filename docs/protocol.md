@@ -27,7 +27,7 @@ The current decoder rejects a wrong magic, unsupported major or newer minor
 version, short or noncanonical header, nonzero flags, nonzero checksum or
 reserved fields, an inconsistent payload length, truncated input, trailing
 operation bytes, and frames above the configured maximum. CRC32C negotiation
-is reserved for a later compatible protocol minor version; version 1.12
+is reserved for a later compatible protocol minor version; version 1.13
 requires the flags and checksum fields to be zero.
 
 ## Frame kinds
@@ -43,7 +43,7 @@ Payload operations have a one-byte opcode, a four-byte byte length, and a
 kind-specific generated body. A decoder validates the body length before
 allocating.
 
-Version 1.12 uses these primitive encodings:
+Version 1.13 uses these primitive encodings:
 
 - integers are unsigned little-endian values of their declared width;
 - runtime IDs and revisions are restricted to the positive `int64` range;
@@ -103,7 +103,7 @@ implemented kind-specific property layouts are:
 
 | Kind | Property body, in generated field-ID order |
 | --- | --- |
-| Text | `value:string` |
+| Text | `value:string`, optional text style, `text_align:u8`, `max_lines:optional u32`, `overflow:u8` |
 | Button | `enabled:bool` |
 | Padding | `left:f64`, `top:f64`, `right:f64`, `bottom:f64` |
 | Center | `width_factor:optional f64`, `height_factor:optional f64` |
@@ -121,15 +121,18 @@ implemented kind-specific property layouts are:
 typed property value. Empty and linear values use mask zero; multi-property
 values set each implemented field bit. Future fields extend the
 kind-specific generated layout rather than inserting a dynamic property map.
+Protocol 1.13 extends Text with optional font size, font weight, line height,
+and ARGB color, followed by alignment, an optional positive line limit, and
+overflow behavior. A missing style preserves Flutter defaults.
 The TextInput editing value is a UTF-8 string, an ordered pair of `u32`
 selection offsets, and an optional ordered pair of `u32` composing offsets.
 Every offset is a UTF-16 code-unit boundary. Keyboard type, input action, and
 update mode are bounded `u8` enums.
 
-Version 1.12 decoders continue to accept earlier 1.x frames whose operations
-use layouts defined by that earlier minor version. In particular, the
-protocol test suite decodes the unchanged 1.11 `Opacity` layout with the 1.12
-decoder.
+Version 1.13 decoders continue to accept earlier 1.x frames whose operations
+use layouts defined by that earlier minor version. In particular, the protocol
+test suite decodes the value-only Text layout from 1.12 and the unchanged
+`Opacity` layout from 1.11.
 
 ## Event batches
 

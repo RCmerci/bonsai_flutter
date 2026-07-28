@@ -57,6 +57,105 @@ void main() {
     );
   });
 
+  testWidgets(
+    'styled text maps typography, limits, overflow, and incremental updates',
+    (tester) async {
+      final store = NodeStore()
+        ..apply(
+          const Frame(
+            runtimeEpoch: 22,
+            baseRevision: 0,
+            targetRevision: 1,
+            kind: FrameKind.fullSnapshot,
+            operations: [
+              CreateNode(
+                nodeId: 1,
+                kind: NodeKind.semantics,
+                props: SemanticsProps(
+                  label: 'Unread planning message',
+                  role: SemanticsRoleValue.header,
+                ),
+                eventBindings: [],
+              ),
+              CreateNode(
+                nodeId: 2,
+                kind: NodeKind.text,
+                props: TextProps(
+                  'Quarterly planning',
+                  style: TextStyleValue(
+                    fontSize: 16,
+                    fontWeight: TextFontWeight.semiBold,
+                    lineHeight: 1.4,
+                    colorArgb: 0xff183758,
+                  ),
+                  textAlign: TextAlignValue.end,
+                  maxLines: 2,
+                  overflow: TextOverflowValue.ellipsis,
+                ),
+                eventBindings: [],
+              ),
+              SetChildren(nodeId: 1, children: [2]),
+              SetRoot(1),
+            ],
+          ),
+        );
+      await tester.pumpWidget(
+        MaterialApp(home: BonsaiFlutterView(store: store)),
+      );
+
+      var rendered = tester.widget<Text>(find.text('Quarterly planning'));
+      expect(rendered.style?.fontSize, 16);
+      expect(rendered.style?.fontWeight, FontWeight.w600);
+      expect(rendered.style?.height, 1.4);
+      expect(rendered.style?.color, const Color(0xff183758));
+      expect(rendered.textAlign, TextAlign.end);
+      expect(rendered.maxLines, 2);
+      expect(rendered.overflow, TextOverflow.ellipsis);
+      expect(
+        tester.getSemantics(find.text('Quarterly planning')).label,
+        contains('Unread planning message'),
+      );
+
+      store.apply(
+        const Frame(
+          runtimeEpoch: 22,
+          baseRevision: 1,
+          targetRevision: 2,
+          kind: FrameKind.incremental,
+          operations: [
+            UpdateProps(
+              nodeId: 2,
+              props: TextProps(
+                'Quarterly planning',
+                style: TextStyleValue(
+                  fontSize: 18,
+                  fontWeight: TextFontWeight.bold,
+                  lineHeight: 1.2,
+                  colorArgb: 0xff203040,
+                ),
+                textAlign: TextAlignValue.center,
+                maxLines: 1,
+                overflow: TextOverflowValue.fade,
+              ),
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
+
+      rendered = tester.widget<Text>(find.text('Quarterly planning'));
+      expect(rendered.style?.fontSize, 18);
+      expect(rendered.style?.fontWeight, FontWeight.w700);
+      expect(rendered.textAlign, TextAlign.center);
+      expect(rendered.maxLines, 1);
+      expect(rendered.overflow, TextOverflow.fade);
+      expect(
+        tester.getSemantics(find.text('Quarterly planning')).label,
+        contains('Unread planning message'),
+      );
+    },
+  );
+
   testWidgets('button press dispatches only the bound typed event', (
     tester,
   ) async {

@@ -15,16 +15,16 @@ void main() {
       final expected = readHexFixture('counter_full.hex');
 
       expect(encoded, orderedEquals(expected));
-      expect(encoded.length, 144);
+      expect(encoded.length, 148);
       expect(encoded.sublist(0, 4), [0x42, 0x46, 0x46, 0x52]);
       expect(readUint16(encoded, 4), 1);
-      expect(readUint16(encoded, 6), 12);
+      expect(readUint16(encoded, 6), 13);
       expect(readUint16(encoded, 8), 48);
       expect(encoded[10], 2);
       expect(readUint64(encoded, 12), 7);
       expect(readUint64(encoded, 20), 0);
       expect(readUint64(encoded, 28), 1);
-      expect(readUint32(encoded, 36), 96);
+      expect(readUint32(encoded, 36), 100);
     });
 
     test('round trips an incremental Unicode property update', () {
@@ -46,6 +46,48 @@ void main() {
       final update = decoded.operations.single as UpdateProps;
       expect(update.nodeId, 2);
       expect(update.props, const TextProps('计数: 1'));
+    });
+
+    test('round trips every styled text property', () {
+      const props = TextProps(
+        'Quarterly planning',
+        style: TextStyleValue(
+          fontSize: 16,
+          fontWeight: TextFontWeight.semiBold,
+          lineHeight: 1.4,
+          colorArgb: 0xff183758,
+        ),
+        textAlign: TextAlignValue.end,
+        maxLines: 2,
+        overflow: TextOverflowValue.ellipsis,
+      );
+      const frame = Frame(
+        runtimeEpoch: 7,
+        baseRevision: 1,
+        targetRevision: 2,
+        kind: FrameKind.incremental,
+        operations: [UpdateProps(nodeId: 2, props: props)],
+      );
+
+      final decoded = FrameCodec.decode(FrameCodec.encode(frame));
+
+      expect((decoded.operations.single as UpdateProps).props, props);
+    });
+
+    test('decodes the protocol 1.12 text property layout', () {
+      final decoded = FrameCodec.decode(
+        readHexFixture('legacy_1_12_counter_full.hex'),
+      );
+
+      expect(decoded.runtimeEpoch, 7);
+      expect(decoded.baseRevision, 0);
+      expect(decoded.targetRevision, 1);
+      expect(decoded.kind, FrameKind.fullSnapshot);
+      expect(decoded.operations, hasLength(4));
+      expect(
+        (decoded.operations[1] as CreateNode).props,
+        const TextProps('Count: 0'),
+      );
     });
 
     test('round trips host requests and declarative navigation props', () {

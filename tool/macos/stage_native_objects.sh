@@ -29,16 +29,19 @@ stage_object() {
     arm64
 }
 
-test "$#" -eq 1 ||
-  fail "usage: tool/macos/stage_native_objects.sh <examples|integration>"
+test "$#" -ge 1 && test "$#" -le 2 ||
+  fail "usage: tool/macos/stage_native_objects.sh <examples|integration|example NAME>"
 
 case "$1" in
   examples)
+    test "$#" -eq 1 ||
+      fail "examples does not accept an additional argument"
     for example in \
       counter \
       gallery \
       host_effects \
       host_navigation \
+      mail \
       navigation \
       text_input \
       todo
@@ -49,12 +52,28 @@ case "$1" in
     done
     ;;
   integration)
+    test "$#" -eq 1 ||
+      fail "integration does not accept an additional argument"
     stage_object \
       integration_test \
       "$source_root/flutter/integration_test/ocaml/native_integration_embed.exe.o"
     ;;
+  example)
+    test "$#" -eq 2 ||
+      fail "example requires an example name"
+    case "$2" in
+      counter | gallery | host_effects | host_navigation | mail | navigation | text_input | todo)
+        stage_object \
+          "$2" \
+          "$source_root/examples/$2/ocaml/native_embed.exe.o"
+        ;;
+      *)
+        fail "unknown example: $2"
+        ;;
+    esac
+    ;;
   *)
-    fail "expected examples or integration"
+    fail "expected examples, integration, or example NAME"
     ;;
 esac
 

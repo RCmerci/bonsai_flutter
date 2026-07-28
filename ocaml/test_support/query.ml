@@ -46,7 +46,7 @@ let matches query node =
      | None -> false)
   | Visible_text text ->
     (match node.Runtime.Mounted_tree.Snapshot.props with
-     | Ui.Widget.Private.Text_props { value } -> String.equal value text
+     | Ui.Widget.Private.Text_props { value; _ } -> String.equal value text
      | _ -> false)
   | Semantics_label label ->
     (match node.Runtime.Mounted_tree.Snapshot.props with

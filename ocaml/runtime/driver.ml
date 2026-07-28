@@ -58,6 +58,7 @@ let error_to_string = function
 
 type t =
   { runtime_epoch : int64
+  ; trace : (string -> unit) option
   ; bonsai : Ui.Widget.t Bonsai_runtime_adapter.t
   ; reconciler : Runtime.Reconciler.t
   ; handlers : Runtime.Handler_registry.t
@@ -72,7 +73,7 @@ type t =
   ; mutable resync_count : int
   }
 
-let create ~runtime_epoch ~time_source component =
+let create ?trace ~runtime_epoch ~time_source component =
   if Int64.compare runtime_epoch 0L <= 0
   then invalid_arg "Driver.create: runtime_epoch must be positive";
   let pending_queue = Queue.create () in
@@ -90,6 +91,7 @@ let create ~runtime_epoch ~time_source component =
   in
   let bonsai = Bonsai_runtime_adapter.create ~time_source (component pending_effects) in
   { runtime_epoch
+  ; trace
   ; bonsai
   ; reconciler = Runtime.Reconciler.create ~runtime_epoch
   ; handlers = Runtime.Handler_registry.create ~runtime_epoch
@@ -103,6 +105,14 @@ let create ~runtime_epoch ~time_source component =
   ; full_snapshot_count = 0
   ; resync_count = 0
   }
+;;
+
+let trace t message =
+  match t.trace with
+  | None -> ()
+  | Some sink ->
+    (try sink message with
+     | _ -> ())
 ;;
 
 let now_ns () = Int64.of_float (Unix.gettimeofday () *. 1_000_000_000.)
@@ -169,7 +179,41 @@ let wire_node_kind = function
 let wire_props = function
   | Ui.Widget.Private.Empty_props -> Ok Protocol.Wire_frame.Empty_props
   | Stack_props -> Ok Empty_props
-  | Text_props { value } -> Ok (Text_props { value })
+  | Text_props { value; style; text_align; max_lines; overflow } ->
+    let style =
+      Option.map
+        (fun (style : Ui.Style.Text_style.Private.view) ->
+           let font_weight =
+             Option.map
+               (function
+                 | Ui.Style.Font_weight.Normal -> Protocol.Wire_frame.Normal
+                 | Medium -> Medium
+                 | Semi_bold -> Semi_bold
+                 | Bold -> Bold)
+               style.font_weight
+           in
+           Protocol.Wire_frame.
+             { font_size = style.font_size
+             ; font_weight
+             ; line_height = style.line_height
+             ; color = style.color
+             })
+        style
+    in
+    let text_align =
+      match text_align with
+      | Ui.Style.Text_align.Start -> Protocol.Wire_frame.Start
+      | Center -> Center_text
+      | End -> End
+    in
+    let overflow =
+      match overflow with
+      | Ui.Style.Text_overflow.Clip -> Protocol.Wire_frame.Clip_text
+      | Fade -> Fade
+      | Ellipsis -> Ellipsis
+      | Visible -> Visible
+    in
+    Ok (Text_props { value; style; text_align; max_lines; overflow })
   | Rich_text_props { spans } -> Ok (Rich_text_props { spans })
   | Icon_props { code_point; font_family; size; color } ->
     Ok (Icon_props { code_point; font_family; size; color })
@@ -564,6 +608,124 @@ let next_revision revision =
   else Ok (Int64.succ revision)
 ;;
 
+let frame_kind_name = function
+  | Runtime.Frame_patch.Full_snapshot -> "full_snapshot"
+  | Incremental_frame -> "incremental_frame"
+;;
+
+let operation_summary operations =
+  let create_node = ref 0 in
+  let update_props = ref 0 in
+  let update_event_bindings = ref 0 in
+  let set_children = ref 0 in
+  let set_root = ref 0 in
+  let drop_node = ref 0 in
+  let host_request = ref 0 in
+  let cancel_host_request = ref 0 in
+  List.iter
+    (function
+      | Protocol.Wire_frame.Create_node _ -> incr create_node
+      | Update_props _ -> incr update_props
+      | Update_event_bindings _ -> incr update_event_bindings
+      | Set_children _ -> incr set_children
+      | Set_root _ -> incr set_root
+      | Drop_node _ -> incr drop_node
+      | Host_request _ -> incr host_request
+      | Cancel_host_request _ -> incr cancel_host_request
+      | Runtime_stats _ -> ())
+    operations;
+  Printf.sprintf
+    "createNode=%d updateProps=%d updateEventBindings=%d setChildren=%d \
+     setRoot=%d dropNode=%d hostRequest=%d cancelHostRequest=%d"
+    !create_node
+    !update_props
+    !update_event_bindings
+    !set_children
+    !set_root
+    !drop_node
+    !host_request
+    !cancel_host_request
+;;
+
+type widget_change =
+  { node_id : Runtime.Node_id.t
+  ; mutable operations : string list
+  ; mutable widget : Ui.Widget.t option
+  }
+
+let find_source_widget mounted_tree node_id =
+  let rec find (node : Runtime.Mounted_tree.Private.node) =
+    if Runtime.Node_id.equal node.node_id node_id
+    then Some node.source_widget
+    else Array.find_map find node.children
+  in
+  Option.bind mounted_tree (fun tree -> find (Runtime.Mounted_tree.Private.root tree))
+;;
+
+let incremental_widget_diff ~old_tree ~new_tree operations =
+  let changes_by_node = Hashtbl.create (List.length operations) in
+  let changes = ref [] in
+  let add operation node_id mounted_tree =
+    let widget = find_source_widget mounted_tree node_id in
+    match Hashtbl.find_opt changes_by_node node_id with
+    | Some change ->
+      if not (List.mem operation change.operations)
+      then change.operations <- change.operations @ [ operation ];
+      if Option.is_none change.widget then change.widget <- widget
+    | None ->
+      let change = { node_id; operations = [ operation ]; widget } in
+      Hashtbl.add changes_by_node node_id change;
+      changes := change :: !changes
+  in
+  List.iter
+    (function
+      | Runtime.Frame_patch.Operation.Create_node { node_id; _ } ->
+        add "createNode" node_id new_tree
+      | Update_props { node_id; _ } -> add "updateProps" node_id new_tree
+      | Update_event_bindings { node_id; _ } ->
+        add "updateEventBindings" node_id new_tree
+      | Set_children { node_id; _ } -> add "setChildren" node_id new_tree
+      | Set_root node_id -> add "setRoot" node_id new_tree
+      | Drop_node node_id -> add "dropNode" node_id old_tree)
+    operations;
+  List.rev !changes
+  |> List.map (fun change ->
+    let description =
+      match change.widget with
+      | Some widget -> Ui.Debug.dump_widget widget
+      | None -> "<widget unavailable>"
+    in
+    Printf.sprintf
+      "  %s node=%Ld %s"
+      (String.concat "+" change.operations)
+      (Runtime.Node_id.to_int64 change.node_id)
+      description)
+  |> String.concat "\n"
+;;
+
+let trace_widget_diff t ~target_revision ~widget ~old_tree output =
+  let frame_patch = output.Runtime.Reconciler.frame_patch in
+  if not (Runtime.Frame_patch.is_empty frame_patch)
+  then (
+    let frame_kind = Runtime.Frame_patch.kind frame_patch in
+    let diff =
+      match frame_kind with
+      | Runtime.Frame_patch.Full_snapshot -> Ui.Debug.dump_tree widget
+      | Incremental_frame ->
+        incremental_widget_diff
+          ~old_tree
+          ~new_tree:(Some output.mounted_tree)
+          (Runtime.Frame_patch.operations frame_patch)
+    in
+    trace
+      t
+      (Printf.sprintf
+         "[widget-diff] targetRevision=%Ld kind=%s\n%s"
+         target_revision
+         (frame_kind_name frame_kind)
+         diff))
+;;
+
 let produce_frame t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot =
   match next_revision t.revision with
   | Error _ as error -> error
@@ -583,15 +745,28 @@ let produce_frame t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot =
      | Error error -> Error (Runtime_error error)
      | Ok output ->
        let reconcile_ns = elapsed_ns reconcile_started in
+       trace_widget_diff
+         t
+         ~target_revision
+         ~widget
+         ~old_tree:t.mounted_tree
+         output;
        let host_operations = Host_effect.Private.take_operations t.host_effects in
        if Runtime.Frame_patch.is_empty output.frame_patch && host_operations = []
-       then Ok None
+       then (
+         trace t (Printf.sprintf "[outbound-no-frame] revision=%Ld" t.revision);
+         Ok None)
        else (
          match wire_operations (Runtime.Frame_patch.operations output.frame_patch) with
          | Error _ as error -> error
          | Ok ui_operations ->
            let operations = ui_operations @ host_operations in
            let frame_kind = Runtime.Frame_patch.kind output.frame_patch in
+           let base_revision =
+             match frame_kind with
+             | Runtime.Frame_patch.Full_snapshot -> 0L
+             | Incremental_frame -> t.revision
+           in
            if frame_kind = Runtime.Frame_patch.Full_snapshot
            then t.full_snapshot_count <- t.full_snapshot_count + 1;
            if force_full_snapshot then t.resync_count <- t.resync_count + 1;
@@ -611,10 +786,7 @@ let produce_frame t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot =
            let wire_frame stats =
              Protocol.Wire_frame.
                { runtime_epoch = t.runtime_epoch
-               ; base_revision =
-                   (match frame_kind with
-                    | Runtime.Frame_patch.Full_snapshot -> 0L
-                    | Incremental_frame -> t.revision)
+               ; base_revision
                ; target_revision
                ; kind = wire_frame_kind frame_kind
                ; operations = operations @ [ Runtime_stats stats ]
@@ -640,6 +812,19 @@ let produce_frame t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot =
                   | Ok () ->
                     t.mounted_tree <- Some output.mounted_tree;
                     t.revision <- target_revision;
+                    trace
+                      t
+                      (Printf.sprintf
+                         "[outbound-frame] direction=ocaml->flutter epoch=%Ld \
+                          kind=%s baseRevision=%Ld targetRevision=%Ld \
+                          operations=%d bytes=%d\n  operationSummary=%s"
+                         t.runtime_epoch
+                         (frame_kind_name frame_kind)
+                         base_revision
+                         target_revision
+                         (List.length operations)
+                         (Bytes.length bytes)
+                         (operation_summary operations));
                     Ok
                       (Some
                          { revision = target_revision
@@ -647,6 +832,127 @@ let produce_frame t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot =
                          ; bytes
                          ; stats
                          }))))))
+;;
+
+let event_tag_name event_tag =
+  match Protocol.Generated_protocol.Event_tag.debug_name event_tag with
+  | Some name -> name
+  | None -> Printf.sprintf "unknown(%d)" event_tag
+;;
+
+let pointer_kind_name = function
+  | Protocol.Inbound_event.Mouse -> "mouse"
+  | Touch -> "touch"
+  | Stylus -> "stylus"
+  | Inverted_stylus -> "inverted_stylus"
+  | Trackpad -> "trackpad"
+  | Unknown_pointer -> "unknown"
+;;
+
+let key_action_name = function
+  | Protocol.Inbound_event.Key_down -> "down"
+  | Key_up -> "up"
+  | Key_repeat -> "repeat"
+;;
+
+let host_response_status_name = function
+  | Protocol.Inbound_event.Host_ok -> "ok"
+  | Host_error -> "error"
+  | Host_cancelled -> "cancelled"
+;;
+
+let payload_summary = function
+  | Protocol.Inbound_event.Unit -> "unit"
+  | Bool value -> Printf.sprintf "bool(%b)" value
+  | Text value -> Printf.sprintf "text(bytes=%d)" (String.length value)
+  | Text_edit edit ->
+    Printf.sprintf
+      "text_edit(session=%Ld localRevision=%Ld baseDocumentRevision=%Ld bytes=%d)"
+      edit.session_id
+      edit.local_revision
+      edit.base_document_revision
+      (String.length edit.text)
+  | Int64 value -> Printf.sprintf "int64(%Ld)" value
+  | Tap tap ->
+    Printf.sprintf
+      "tap(local=%g,%g global=%g,%g pointer=%s)"
+      tap.local_x
+      tap.local_y
+      tap.global_x
+      tap.global_y
+      (pointer_kind_name tap.pointer_kind)
+  | Pointer pointer ->
+    Printf.sprintf
+      "pointer(id=%Ld local=%g,%g global=%g,%g pointer=%s buttons=%d)"
+      pointer.pointer_id
+      pointer.local_x
+      pointer.local_y
+      pointer.global_x
+      pointer.global_y
+      (pointer_kind_name pointer.pointer_kind)
+      pointer.buttons
+  | Key key ->
+    Printf.sprintf
+      "key(logical=%Ld physical=%Ld action=%s modifiers=%d)"
+      key.logical_key
+      key.physical_key
+      (key_action_name key.action)
+      key.modifiers
+  | Scroll { pixels; delta } ->
+    Printf.sprintf "scroll(pixels=%g delta=%g)" pixels delta
+  | Visible_range { first_index; last_exclusive } ->
+    Printf.sprintf
+      "visible_range(first=%Ld lastExclusive=%Ld)"
+      first_index
+      last_exclusive
+  | Route_pop route ->
+    Printf.sprintf
+      "route_pop(pageKey=%S resultBytes=%d)"
+      route.page_key
+      (Option.fold ~none:0 ~some:String.length route.result)
+  | Host_response response ->
+    Printf.sprintf
+      "host_response(request=%Ld status=%s bytes=%d)"
+      response.request_id
+      (host_response_status_name response.status)
+      (Bytes.length response.value)
+  | Environment_changed environment ->
+    Printf.sprintf
+      "environment_changed(platform=%S locale=%S viewport=%gx%g)"
+      environment.platform
+      environment.locale
+      environment.viewport_width
+      environment.viewport_height
+  | Native_event event ->
+    Printf.sprintf
+      "native_event(kind=%d version=%d event=%d bytes=%d)"
+      event.kind_id
+      event.version
+      event.event_id
+      (Bytes.length event.payload)
+;;
+
+let trace_inbound_event_batch t (batch : Protocol.Inbound_event.batch) =
+  let output = Buffer.create 256 in
+  Printf.bprintf
+    output
+    "[inbound-event-batch] direction=flutter->ocaml epoch=%Ld events=%d"
+    batch.runtime_epoch
+    (List.length batch.events);
+  List.iter
+    (fun (event : Protocol.Inbound_event.t) ->
+       Printf.bprintf
+         output
+         "\n  sequence=%Ld displayedRevision=%Ld node=%Ld handler=%Ld tag=%s \
+          payload=%s"
+         event.sequence
+         event.displayed_revision
+         event.node_id
+         event.handler_id
+         (event_tag_name event.event_tag)
+         (payload_summary event.payload))
+    batch.events;
+  trace t (Buffer.contents output)
 ;;
 
 let environment_of_protocol (environment : Protocol.Inbound_event.environment)
@@ -687,6 +993,7 @@ let environment_of_protocol (environment : Protocol.Inbound_event.environment)
 ;;
 
 let step t ?events () =
+  Option.iter (trace_inbound_event_batch t) events;
   if t.is_shutdown
   then Error Shutdown
   else (
@@ -776,6 +1083,11 @@ let exception_message exception_ =
 ;;
 
 let frame_presented t ~revision =
+  trace
+    t
+    (Printf.sprintf
+       "[presentation-ack] revision=%Ld direction=flutter->ocaml"
+       revision);
   if t.is_shutdown
   then Error Shutdown
   else (

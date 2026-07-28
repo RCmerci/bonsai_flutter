@@ -7,6 +7,7 @@ NATIVE_OBJECT_TARGETS = \
 	examples/gallery/ocaml/native_embed.exe.o \
 	examples/host_effects/ocaml/native_embed.exe.o \
 	examples/host_navigation/ocaml/native_embed.exe.o \
+	examples/mail/ocaml/native_embed.exe.o \
 	examples/navigation/ocaml/native_embed.exe.o \
 	examples/text_input/ocaml/native_embed.exe.o \
 	examples/todo/ocaml/native_embed.exe.o
@@ -51,6 +52,7 @@ native-analyze:
 
 native-object:
 	BONSAI_FLUTTER_EMBED_OCAML=enabled dune build $(NATIVE_OBJECT_TARGET)
+	tool/macos/stage_native_objects.sh example $(EXAMPLE)
 
 native-objects:
 	BONSAI_FLUTTER_EMBED_OCAML=enabled dune build $(NATIVE_OBJECT_TARGETS)
@@ -99,9 +101,9 @@ ci-flutter:
 	cd flutter/packages/bonsai_flutter_native && dart run ffigen --config ffigen.yaml
 	git diff --exit-code -- flutter/packages/bonsai_flutter_native/lib/bonsai_flutter_native_bindings_generated.dart
 	cd flutter/integration_test && flutter pub get
-	cd flutter/integration_test && dart format --output=none --set-exit-if-changed benchmark integration_test lib test
+	cd flutter/integration_test && dart format --output=none --set-exit-if-changed benchmark integration_test lib test test_driver
 	cd flutter/integration_test && flutter analyze
-	@set -e; for example in counter todo text_input host_effects navigation gallery host_navigation; do \
+	@set -e; for example in counter todo text_input host_effects navigation gallery host_navigation mail; do \
 	  (cd "examples/$$example/flutter" && flutter pub get && dart format --output=none --set-exit-if-changed lib && flutter analyze); \
 	done
 

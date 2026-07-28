@@ -33,6 +33,73 @@ module Color = struct
   end
 end
 
+module Font_weight = struct
+  type t =
+    | Normal
+    | Medium
+    | Semi_bold
+    | Bold
+end
+
+module Text_align = struct
+  type t =
+    | Start
+    | Center
+    | End
+end
+
+module Text_overflow = struct
+  type t =
+    | Clip
+    | Fade
+    | Ellipsis
+    | Visible
+end
+
+module Text_style = struct
+  type t =
+    { font_size : float option
+    ; font_weight : Font_weight.t option
+    ; line_height : float option
+    ; color : Color.t option
+    }
+
+  let positive_finite label = function
+    | None -> None
+    | Some value ->
+      if (not (Float.is_finite value)) || Float.compare value 0. <= 0
+      then
+        invalid_arg
+          (Printf.sprintf "Style.Text_style.%s must be finite and positive" label);
+      Some value
+  ;;
+
+  let create ?font_size ?font_weight ?line_height ?color () =
+    { font_size = positive_finite "font_size" font_size
+    ; font_weight
+    ; line_height = positive_finite "line_height" line_height
+    ; color
+    }
+  ;;
+
+  module Private = struct
+    type view =
+      { font_size : float option
+      ; font_weight : Font_weight.t option
+      ; line_height : float option
+      ; color : int32 option
+      }
+
+    let view (t : t) : view =
+      { font_size = t.font_size
+      ; font_weight = t.font_weight
+      ; line_height = t.line_height
+      ; color = Option.map Color.Private.to_argb32 t.color
+      }
+    ;;
+  end
+end
+
 module Image_fit = struct
   type t =
     | Fill

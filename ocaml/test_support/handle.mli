@@ -32,6 +32,17 @@ val apply_text_edit
 val key_down : t -> Query.t -> logical_key:int64 -> unit
 val focus : t -> Query.t -> unit
 val blur : t -> Query.t -> unit
+val route_pop : t -> Query.t -> page_key:string -> ?result:string -> unit -> unit
+
+val native_event
+  :  t
+  -> Query.t
+  -> kind_id:int
+  -> version:int
+  -> event_id:int
+  -> payload:bytes
+  -> unit
+
 val resize : t -> width:float -> height:float -> unit
 val set_environment : t -> Environment.snapshot -> unit
 

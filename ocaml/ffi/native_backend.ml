@@ -85,7 +85,11 @@ let create config =
       let handle = fresh_handle () in
       let time_source = Bonsai.Time_source.create ~start:(Core.Time_ns.now ()) in
       let driver =
-        Driver.create ~runtime_epoch:handle ~time_source (App.Private.component app)
+        Driver.create
+          ?trace:(App.Private.trace app)
+          ~runtime_epoch:handle
+          ~time_source
+          (App.Private.component app)
       in
       Hashtbl.add runtimes handle driver;
       { status = Ok; handle; error = "" }

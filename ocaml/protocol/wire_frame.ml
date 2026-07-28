@@ -85,6 +85,38 @@ type brightness =
   | Light
   | Dark
 
+type text_font_weight =
+  | Normal
+  | Medium
+  | Semi_bold
+  | Bold
+
+type text_align =
+  | Start
+  | Center_text
+  | End
+
+type text_overflow =
+  | Clip_text
+  | Fade
+  | Ellipsis
+  | Visible
+
+type text_style =
+  { font_size : float option
+  ; font_weight : text_font_weight option
+  ; line_height : float option
+  ; color : int32 option
+  }
+
+type text_props =
+  { value : string
+  ; style : text_style option
+  ; text_align : text_align
+  ; max_lines : int option
+  ; overflow : text_overflow
+  }
+
 type semantics_role =
   | Generic
   | Semantics_button
@@ -187,7 +219,7 @@ type animation =
 
 type props =
   | Empty_props
-  | Text_props of { value : string }
+  | Text_props of text_props
   | Rich_text_props of { spans : string list }
   | Icon_props of
       { code_point : int

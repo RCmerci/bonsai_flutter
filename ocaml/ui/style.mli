@@ -17,6 +17,52 @@ module Color : sig
   end
 end
 
+module Font_weight : sig
+  type t =
+    | Normal
+    | Medium
+    | Semi_bold
+    | Bold
+end
+
+module Text_align : sig
+  type t =
+    | Start
+    | Center
+    | End
+end
+
+module Text_overflow : sig
+  type t =
+    | Clip
+    | Fade
+    | Ellipsis
+    | Visible
+end
+
+module Text_style : sig
+  type t
+
+  val create
+    :  ?font_size:float
+    -> ?font_weight:Font_weight.t
+    -> ?line_height:float
+    -> ?color:Color.t
+    -> unit
+    -> t
+
+  module Private : sig
+    type view =
+      { font_size : float option
+      ; font_weight : Font_weight.t option
+      ; line_height : float option
+      ; color : int32 option
+      }
+
+    val view : t -> view
+  end
+end
+
 module Image_fit : sig
   type t =
     | Fill

@@ -34,6 +34,7 @@ for example in \
   gallery \
   host_effects \
   host_navigation \
+  mail \
   navigation \
   text_input \
   todo
@@ -63,6 +64,7 @@ for example in \
   gallery \
   host_effects \
   host_navigation \
+  mail \
   navigation \
   text_input \
   todo

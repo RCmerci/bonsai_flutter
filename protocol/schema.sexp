@@ -1,7 +1,7 @@
 ((protocol
   (name bonsai_flutter)
   (major 1)
-  (minor 12)
+  (minor 13)
   (endianness little)
   (header_bytes 48)
   (max_frame_bytes 16777216)

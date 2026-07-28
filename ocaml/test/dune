@@ -6,7 +6,8 @@
  (name protocol_tests)
  (deps
   ../../protocol/generated/fixtures/counter_full.hex
-  ../../protocol/generated/fixtures/counter_press.hex)
+  ../../protocol/generated/fixtures/counter_press.hex
+  ../../protocol/generated/fixtures/legacy_1_12_counter_full.hex)
  (libraries bonsai_flutter.protocol))
 
 (test
@@ -78,4 +79,16 @@
   bonsai_flutter.ui
   bonsai_flutter.protocol
   bonsai_flutter.driver
-  bonsai_flutter.native_backend))
+  bonsai_flutter.native_backend
+  bonsai_flutter_mail_example
+  unix))
+
+(test
+ (name mail_example_tests)
+ (libraries
+  core
+  bonsai
+  bonsai_flutter.ui
+  bonsai_flutter.runtime
+  bonsai_flutter_test
+  bonsai_flutter_mail_example))

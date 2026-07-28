@@ -27,6 +27,9 @@ type t
 
 val create
   :  ?name:string
+  (** [trace], when supplied, receives runtime diagnostic messages. Trace sink
+      failures are ignored so diagnostics cannot interrupt rendering. *)
+  -> ?trace:(string -> unit)
   -> (Context.t -> Bonsai.graph -> Bonsai_flutter_ui.Widget.t Bonsai.t)
   -> t
 
@@ -38,4 +41,6 @@ module Private : sig
     -> Driver.Handler.t
     -> Bonsai.graph
     -> Bonsai_flutter_ui.Widget.t Bonsai.t
+
+  val trace : t -> (string -> unit) option
 end

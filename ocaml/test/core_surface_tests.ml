@@ -167,9 +167,64 @@ let test_semantics_properties () =
     "semantics properties were not preserved"
 ;;
 
+let test_styled_text_constructor_and_validation () =
+  let color = Ui.Style.Color.rgb ~red:24 ~green:55 ~blue:88 in
+  let style =
+    Ui.Style.Text_style.create
+      ~font_size:16.
+      ~font_weight:Ui.Style.Font_weight.Semi_bold
+      ~line_height:1.4
+      ~color
+      ()
+  in
+  let text =
+    Ui.Widget.text
+      ~style
+      ~text_align:Ui.Style.Text_align.End
+      ~max_lines:2
+      ~overflow:Ui.Style.Text_overflow.Ellipsis
+      "A long subject"
+  in
+  (match (Ui.Widget.Private.view text).props with
+   | Text_props
+       { value
+       ; style =
+           Some
+             { font_size = Some font_size
+             ; font_weight = Some Semi_bold
+             ; line_height = Some line_height
+             ; color = Some encoded_color
+             }
+       ; text_align = End
+       ; max_lines = Some max_lines
+       ; overflow = Ellipsis
+       } ->
+     check (String.equal value "A long subject") "styled text lost its value";
+     check (Float.equal font_size 16.) "styled text lost its font size";
+     check (Float.equal line_height 1.4) "styled text lost its line height";
+     check (Int32.equal encoded_color 0xff183758l) "styled text lost its color";
+     check (Int.equal max_lines 2) "styled text lost its line limit"
+   | _ -> failwith "styled text properties were not preserved");
+  let expect_invalid create message =
+    match create () with
+    | exception Invalid_argument _ -> ()
+    | _ -> failwith message
+  in
+  expect_invalid
+    (fun () -> Ui.Style.Text_style.create ~font_size:0. ())
+    "zero font size was accepted";
+  expect_invalid
+    (fun () -> Ui.Style.Text_style.create ~line_height:nan ())
+    "non-finite line height was accepted";
+  expect_invalid
+    (fun () -> Ui.Widget.text ~max_lines:0 "Invalid")
+    "zero maximum lines was accepted"
+;;
+
 let () =
   test_core_constructors ();
   test_navigation_constructors ();
   test_debug_tree ();
-  test_semantics_properties ()
+  test_semantics_properties ();
+  test_styled_text_constructor_and_validation ()
 ;;

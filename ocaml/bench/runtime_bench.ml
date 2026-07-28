@@ -160,7 +160,14 @@ let protocol_frame count =
       Protocol.Wire_frame.Create_node
         { node_id = Int64.of_int (index + 1)
         ; kind = Text
-        ; props = Text_props { value = Printf.sprintf "Item %d" index }
+        ; props =
+            Text_props
+              { value = Printf.sprintf "Item %d" index
+              ; style = None
+              ; text_align = Start
+              ; max_lines = None
+              ; overflow = Clip_text
+              }
         ; event_bindings = []
         ; parent_data = No_parent_data
         })
@@ -196,7 +203,18 @@ let benchmark_protocol () =
       ; target_revision = 2L
       ; kind = Incremental_frame
       ; operations =
-          [ Update_props { node_id = 1L; props = Text_props { value = "Changed" } } ]
+          [ Update_props
+              { node_id = 1L
+              ; props =
+                  Text_props
+                    { value = "Changed"
+                    ; style = None
+                    ; text_align = Start
+                    ; max_lines = None
+                    ; overflow = Clip_text
+                    }
+              }
+          ]
       }
   in
   benchmark "protocol encode full snapshot" 500 (fun _ -> ignore (encode_exn full));

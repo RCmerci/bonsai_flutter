@@ -7,7 +7,16 @@ type t
 
 val with_test_id : Test_id.t -> t -> t
 val empty : ?key:Key.t -> unit -> t
-val text : ?key:Key.t -> string -> t
+
+val text
+  :  ?key:Key.t
+  -> ?style:Style.Text_style.t
+  -> ?text_align:Style.Text_align.t
+  -> ?max_lines:int
+  -> ?overflow:Style.Text_overflow.t
+  -> string
+  -> t
+
 val rich_text : ?key:Key.t -> string list -> t
 
 val icon
@@ -297,7 +306,13 @@ module Private : sig
 
   type props =
     | Empty_props
-    | Text_props of { value : string }
+    | Text_props of
+        { value : string
+        ; style : Style.Text_style.Private.view option
+        ; text_align : Style.Text_align.t
+        ; max_lines : int option
+        ; overflow : Style.Text_overflow.t
+        }
     | Rich_text_props of { spans : string list }
     | Icon_props of
         { code_point : int

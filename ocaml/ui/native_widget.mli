@@ -81,3 +81,42 @@ module Virtual_list : sig
     val encode_visible_range : first_index:int -> last_exclusive:int -> bytes
   end
 end
+
+module Swipe_action : sig
+  type direction =
+    | Start_to_end
+    | End_to_start
+
+  type disposition =
+    | Dismiss
+    | Rebound
+
+  type action
+
+  val action
+    :  label:string
+    -> background:Style.Color.t
+    -> disposition:disposition
+    -> icon:Widget.t
+    -> action
+
+  val create
+    :  ?key:Key.t
+    -> ?start_action:action
+    -> ?end_action:action
+    -> content:Widget.t
+    -> on_commit:(direction -> unit)
+    -> unit
+    -> Widget.t
+
+  val direction_of_payload : Event.Payload.t -> direction option
+
+  val create_with_handler
+    :  ?key:Key.t
+    -> ?start_action:action
+    -> ?end_action:action
+    -> content:Widget.t
+    -> on_commit:Event.Handler.t
+    -> unit
+    -> Widget.t
+end

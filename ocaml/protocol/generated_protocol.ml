@@ -1,7 +1,7 @@
 (* Generated from [protocol/schema.sexp]. Do not edit. *)
 
 let protocol_major = 1
-let protocol_minor = 12
+let protocol_minor = 13
 
 module Limits = struct
   let header_bytes = 48

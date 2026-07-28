@@ -85,7 +85,7 @@ module Snapshot = struct
   let find_by_text t text =
     find_matching t (fun node ->
       match node.props with
-      | Ui.Widget.Private.Text_props { value } -> String.equal value text
+      | Ui.Widget.Private.Text_props { value; _ } -> String.equal value text
       | _ -> false)
   ;;
 

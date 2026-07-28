@@ -81,6 +81,12 @@ enum ClipBehaviorValue { hardEdge, antiAlias, antiAliasWithSaveLayer }
 
 enum ThemeBrightness { light, dark }
 
+enum TextFontWeight { normal, medium, semiBold, bold }
+
+enum TextAlignValue { start, center, end }
+
+enum TextOverflowValue { clip, fade, ellipsis, visible }
+
 enum SemanticsRoleValue {
   generic(0),
   button(1),
@@ -193,16 +199,58 @@ final class LinearProps extends UiProps {
   int get hashCode => 2;
 }
 
+final class TextStyleValue {
+  const TextStyleValue({
+    this.fontSize,
+    this.fontWeight,
+    this.lineHeight,
+    this.colorArgb,
+  });
+
+  final double? fontSize;
+  final TextFontWeight? fontWeight;
+  final double? lineHeight;
+  final int? colorArgb;
+
+  @override
+  bool operator ==(Object other) =>
+      other is TextStyleValue &&
+      other.fontSize == fontSize &&
+      other.fontWeight == fontWeight &&
+      other.lineHeight == lineHeight &&
+      other.colorArgb == colorArgb;
+
+  @override
+  int get hashCode => Object.hash(fontSize, fontWeight, lineHeight, colorArgb);
+}
+
 final class TextProps extends UiProps {
-  const TextProps(this.value);
+  const TextProps(
+    this.value, {
+    this.style,
+    this.textAlign = TextAlignValue.start,
+    this.maxLines,
+    this.overflow = TextOverflowValue.clip,
+  });
 
   final String value;
+  final TextStyleValue? style;
+  final TextAlignValue textAlign;
+  final int? maxLines;
+  final TextOverflowValue overflow;
 
   @override
-  bool operator ==(Object other) => other is TextProps && other.value == value;
+  bool operator ==(Object other) =>
+      other is TextProps &&
+      other.value == value &&
+      other.style == style &&
+      other.textAlign == textAlign &&
+      other.maxLines == maxLines &&
+      other.overflow == overflow;
 
   @override
-  int get hashCode => Object.hash(TextProps, value);
+  int get hashCode =>
+      Object.hash(TextProps, value, style, textAlign, maxLines, overflow);
 }
 
 final class RichTextProps extends UiProps {

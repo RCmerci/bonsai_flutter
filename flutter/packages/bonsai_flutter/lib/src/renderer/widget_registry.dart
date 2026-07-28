@@ -6,6 +6,7 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
 import '../native_widget/native_widget_registry.dart';
+import '../native_widget/swipe_action.dart';
 import '../native_widget/virtual_list.dart';
 import '../protocol/event_batch.dart';
 import '../protocol/frame.dart';
@@ -48,6 +49,7 @@ final class WidgetRegistry {
         NativeWidgetRegistry(capabilityBits: NativeCapability.core);
     if (nativeWidgets == null) {
       registerVirtualList(extensions);
+      registerSwipeAction(extensions);
     }
     return WidgetRegistry({
       NodeKind.empty: _buildEmpty,
@@ -164,7 +166,35 @@ Widget _buildText(
 ) {
   _expectChildCount(node, children, 0);
   final props = _expectProps<TextProps>(node);
-  return Text(props.value);
+  final style = props.style;
+  return Text(
+    props.value,
+    style: style == null
+        ? null
+        : TextStyle(
+            fontSize: style.fontSize,
+            fontWeight: switch (style.fontWeight) {
+              null || TextFontWeight.normal => FontWeight.w400,
+              TextFontWeight.medium => FontWeight.w500,
+              TextFontWeight.semiBold => FontWeight.w600,
+              TextFontWeight.bold => FontWeight.w700,
+            },
+            height: style.lineHeight,
+            color: style.colorArgb == null ? null : Color(style.colorArgb!),
+          ),
+    textAlign: switch (props.textAlign) {
+      TextAlignValue.start => TextAlign.start,
+      TextAlignValue.center => TextAlign.center,
+      TextAlignValue.end => TextAlign.end,
+    },
+    maxLines: props.maxLines,
+    overflow: switch (props.overflow) {
+      TextOverflowValue.clip => TextOverflow.clip,
+      TextOverflowValue.fade => TextOverflow.fade,
+      TextOverflowValue.ellipsis => TextOverflow.ellipsis,
+      TextOverflowValue.visible => TextOverflow.visible,
+    },
+  );
 }
 
 Widget _buildRichText(
@@ -1048,14 +1078,23 @@ Widget _buildNavigator(
     restorationScopeId: props.restorationScopeId,
     pages: [
       for (final page in pages)
-        _BonsaiPage(
-          key: ValueKey<String>(page.props.pageKey),
-          name: page.props.pageKey,
-          restorationId: page.props.restorationId,
-          canPop: page.props.canPop,
-          transition: page.props.transition,
-          child: page.child,
-        ),
+        if (page.props.transition == PageTransition.slide)
+          cupertino.CupertinoPage<void>(
+            key: ValueKey<String>(page.props.pageKey),
+            name: page.props.pageKey,
+            restorationId: page.props.restorationId,
+            canPop: page.props.canPop,
+            child: page.child,
+          )
+        else
+          _BonsaiPage(
+            key: ValueKey<String>(page.props.pageKey),
+            name: page.props.pageKey,
+            restorationId: page.props.restorationId,
+            canPop: page.props.canPop,
+            transition: page.props.transition,
+            child: page.child,
+          ),
     ],
     onDidRemovePage: (page) {
       if (binding == null || onEvent == null) return;
@@ -1247,15 +1286,8 @@ final class _BonsaiPage extends Page<void> {
       transitionsBuilder: (_, animation, _, routeChild) =>
           FadeTransition(opacity: animation, child: routeChild),
     ),
-    PageTransition.slide => PageRouteBuilder<void>(
-      settings: this,
-      pageBuilder: (_, _, _) => child,
-      transitionsBuilder: (_, animation, _, routeChild) => SlideTransition(
-        position: animation.drive(
-          Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero),
-        ),
-        child: routeChild,
-      ),
+    PageTransition.slide => throw StateError(
+      'Slide pages must use CupertinoPage',
     ),
   };
 }

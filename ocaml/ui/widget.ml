@@ -136,7 +136,13 @@ type material_button_variant =
 
 type props =
   | Empty_props
-  | Text_props of { value : string }
+  | Text_props of
+      { value : string
+      ; style : Style.Text_style.Private.view option
+      ; text_align : Style.Text_align.t
+      ; max_lines : int option
+      ; overflow : Style.Text_overflow.t
+      }
   | Rich_text_props of { spans : string list }
   | Icon_props of
       { code_point : int
@@ -321,7 +327,12 @@ let props_equal left right =
   | Stack_props, Stack_props
   | Gesture_props, Gesture_props
   | Environment_boundary_props, Environment_boundary_props -> true
-  | Text_props left, Text_props right -> String.equal left.value right.value
+  | Text_props left, Text_props right ->
+    String.equal left.value right.value
+    && Option.equal ( = ) left.style right.style
+    && left.text_align = right.text_align
+    && Option.equal Int.equal left.max_lines right.max_lines
+    && left.overflow = right.overflow
   | Rich_text_props left, Rich_text_props right ->
     List.equal String.equal left.spans right.spans
   | Icon_props left, Icon_props right ->
@@ -525,11 +536,29 @@ let empty ?key () =
   create ~key ~kind:Kind.Empty ~props:Empty_props ~event_bindings:[||] ~children:[||]
 ;;
 
-let text ?key value =
+let text
+      ?key
+      ?style
+      ?(text_align = Style.Text_align.Start)
+      ?max_lines
+      ?(overflow = Style.Text_overflow.Clip)
+      value
+  =
+  Option.iter
+    (fun value ->
+       if value <= 0 then invalid_arg "Widget.text: max_lines must be positive")
+    max_lines;
   create
     ~key
     ~kind:Kind.Text
-    ~props:(Text_props { value })
+    ~props:
+      (Text_props
+         { value
+         ; style = Option.map Style.Text_style.Private.view style
+         ; text_align
+         ; max_lines
+         ; overflow
+         })
     ~event_bindings:[||]
     ~children:[||]
 ;;
@@ -1226,7 +1255,7 @@ module For_testing = struct
 
   let text_content t =
     match t.view.props with
-    | Text_props { value } -> Some value
+    | Text_props { value; _ } -> Some value
     | _ -> None
   ;;
 end
@@ -1262,7 +1291,13 @@ module Private = struct
 
   type nonrec props = props =
     | Empty_props
-    | Text_props of { value : string }
+    | Text_props of
+        { value : string
+        ; style : Style.Text_style.Private.view option
+        ; text_align : Style.Text_align.t
+        ; max_lines : int option
+        ; overflow : Style.Text_overflow.t
+        }
     | Rich_text_props of { spans : string list }
     | Icon_props of
         { code_point : int

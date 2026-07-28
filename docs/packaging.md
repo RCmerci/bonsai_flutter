@@ -107,9 +107,10 @@ blanket reasons.
 
 ## Current evidence boundary
 
-All seven standalone examples and the aggregate integration application build
-as unsigned iPhoneOS arm64 applications. Counter Debug, Profile, and Release
-frameworks pass the repository bundle audit.
+The repository contains eight standalone examples. The original seven and the
+aggregate integration application build as unsigned iPhoneOS arm64
+applications; Bonsai Mail awaits the next full hosted packaging run. Counter
+Debug, Profile, and Release frameworks pass the repository bundle audit.
 
 Development-signed installation and launch have been verified on a physical
 iPhone. Release archive export and distribution signing remain outside the

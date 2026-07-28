@@ -98,7 +98,7 @@ let render_tree t =
       (fun test_id -> Printf.bprintf output " test_id=%s" (Ui.Test_id.to_string test_id))
       node.test_id;
     (match node.props with
-     | Ui.Widget.Private.Text_props { value } ->
+     | Ui.Widget.Private.Text_props { value; _ } ->
        Buffer.add_char output ' ';
        Buffer.add_string output (Printf.sprintf "%S" value)
      | Native_widget_props { kind_id; version; _ } ->
@@ -217,10 +217,50 @@ let dispatch t query tag payload =
     ()
 ;;
 
-let click t query = dispatch t query Ui.Event.Tag.Press Protocol.Inbound_event.Unit
+let click t query =
+  let node = require_node t query in
+  let binds tag =
+    Array.exists
+      (fun binding ->
+         Ui.Event.Tag.equal binding.Runtime.Mounted_tree.Mounted_binding.event_tag tag)
+      node.event_bindings
+  in
+  if binds Ui.Event.Tag.Press
+  then dispatch t query Ui.Event.Tag.Press Protocol.Inbound_event.Unit
+  else if binds Ui.Event.Tag.Tap
+  then
+    dispatch
+      t
+      query
+      Ui.Event.Tag.Tap
+      (Protocol.Inbound_event.Tap
+         { local_x = 0.
+         ; local_y = 0.
+         ; global_x = 0.
+         ; global_y = 0.
+         ; pointer_kind = Mouse
+         })
+  else fail "matched node does not bind a press or tap event"
+;;
 
 let long_press t query =
   dispatch t query Ui.Event.Tag.Long_press Protocol.Inbound_event.Unit
+;;
+
+let route_pop t query ~page_key ?result () =
+  dispatch
+    t
+    query
+    Ui.Event.Tag.Route_pop
+    (Protocol.Inbound_event.Route_pop { page_key; result })
+;;
+
+let native_event t query ~kind_id ~version ~event_id ~payload =
+  dispatch
+    t
+    query
+    Ui.Event.Tag.Native_event
+    (Protocol.Inbound_event.Native_event { kind_id; version; event_id; payload })
 ;;
 
 let apply_text_edit

@@ -27,18 +27,20 @@ let bytes_of_hex text =
        Char.chr ((digit compact.[offset] lsl 4) lor digit compact.[offset + 1]))
 ;;
 
-let fixture () =
+let fixture_named name =
   let path =
-    let from_root = "protocol/generated/fixtures/counter_full.hex" in
+    let from_root = "protocol/generated/fixtures/" ^ name in
     if Sys.file_exists from_root
     then from_root
-    else "../../protocol/generated/fixtures/counter_full.hex"
+    else "../../protocol/generated/fixtures/" ^ name
   in
   let channel = open_in_bin path in
   Fun.protect
     ~finally:(fun () -> close_in channel)
     (fun () -> really_input_string channel (in_channel_length channel) |> bytes_of_hex)
 ;;
+
+let fixture () = fixture_named "counter_full.hex"
 
 let counter_frame =
   Wire_frame.
@@ -57,7 +59,14 @@ let counter_frame =
         ; Create_node
             { node_id = 2L
             ; kind = Text
-            ; props = Text_props { value = "Count: 0" }
+            ; props =
+                Text_props
+                  { value = "Count: 0"
+                  ; style = None
+                  ; text_align = Start
+                  ; max_lines = None
+                  ; overflow = Clip_text
+                  }
             ; event_bindings = []
             ; parent_data = No_parent_data
             }
@@ -81,7 +90,18 @@ let test_round_trip () =
       ; target_revision = 2L
       ; kind = Incremental_frame
       ; operations =
-          [ Update_props { node_id = 2L; props = Text_props { value = "计数: 1" } } ]
+          [ Update_props
+              { node_id = 2L
+              ; props =
+                  Text_props
+                    { value = "计数: 1"
+                    ; style = None
+                    ; text_align = Start
+                    ; max_lines = None
+                    ; overflow = Clip_text
+                    }
+              }
+          ]
       }
   in
   match Binary_codec.encode frame with
@@ -90,6 +110,48 @@ let test_round_trip () =
     (match Binary_codec.decode encoded with
      | Error error -> fail "decode failed: %s" error.message
      | Ok decoded -> expect (decoded = frame) "round trip changed the incremental frame")
+;;
+
+let test_styled_text_props_round_trip () =
+  let props =
+    Wire_frame.Text_props
+      { value = "Quarterly planning"
+      ; style =
+          Some
+            { font_size = Some 16.
+            ; font_weight = Some Semi_bold
+            ; line_height = Some 1.4
+            ; color = Some 0xff183758l
+            }
+      ; text_align = End
+      ; max_lines = Some 2
+      ; overflow = Ellipsis
+      }
+  in
+  let frame =
+    Wire_frame.
+      { runtime_epoch = 7L
+      ; base_revision = 1L
+      ; target_revision = 2L
+      ; kind = Incremental_frame
+      ; operations = [ Update_props { node_id = 2L; props } ]
+      }
+  in
+  match Binary_codec.encode frame with
+  | Error error -> fail "styled text encode failed: %s" error.message
+  | Ok encoded ->
+    (match Binary_codec.decode encoded with
+     | Error error -> fail "styled text decode failed: %s" error.message
+     | Ok decoded ->
+       expect
+         (decoded = frame)
+         "styled text round trip changed style, alignment, line limit, or overflow")
+;;
+
+let test_legacy_text_props_layout () =
+  match Binary_codec.decode (fixture_named "legacy_1_12_counter_full.hex") with
+  | Error error -> fail "legacy text frame decode failed: %s" error.message
+  | Ok decoded -> expect (decoded = counter_frame) "legacy text frame changed on decode"
 ;;
 
 let test_animation_props_round_trip () =
@@ -669,6 +731,8 @@ let test_runtime_stats_round_trip () =
 let () =
   test_golden_fixture ();
   test_round_trip ();
+  test_styled_text_props_round_trip ();
+  test_legacy_text_props_layout ();
   test_animation_props_round_trip ();
   test_legacy_opacity_layout ();
   test_layout_material_and_semantics_props_round_trip ();

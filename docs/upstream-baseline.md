@@ -142,9 +142,10 @@ packages, 102 target runtime components, and one target-build package. Host
 PPX executables remain macOS processes.
 
 The iPhoneOS arm64 object and linked host are platform `IOS` with minimum
-13.0. All seven example applications and the aggregate integration
-application build unsigned; Counter Debug, Profile, and Release pass the
-framework audit.
+13.0. The original seven example applications and the aggregate integration
+application build unsigned. The repository now contains eight standalone
+examples; Bonsai Mail awaits the next full hosted packaging run. Counter Debug,
+Profile, and Release pass the framework audit.
 
 iOS Simulator is intentionally outside the repository support boundary.
 
