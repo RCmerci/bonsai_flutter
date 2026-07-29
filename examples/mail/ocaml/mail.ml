@@ -1019,3 +1019,4 @@ let app = App.create ~name:"Bonsai Mail" ~trace component
 module For_testing = struct
   let initial_inbox_ids = List.map (fun message -> message.id) initial_messages
 end
+;;
