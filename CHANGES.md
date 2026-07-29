@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Replaced command-driven wakeups with a foreground-vsync pump. Visible idle
+  runtimes advance public Bonsai clock and lifecycle semantics once per
+  backpressured eligible Flutter frame; hidden, paused, and detached runtimes
+  suspend and catch up after resume.
+- Added exact presentation identities for every logical pump, including
+  no-diff and recoverable cycles, with one unresolved-token barrier,
+  two-phase renderer and event-prefix transactions, guarded post-frame
+  success, deterministic rejection recovery, and lifecycle commit only after
+  real presentation.
+- Advanced the native runtime boundary to exact ABI 2.0 while retaining
+  renderer protocol 1.12. Added monotonic pump time, explicit presentation
+  success and rejection, stable cross-language error codes, generated binding
+  checks, complete-object symbol audits, and exact owned-buffer release.
+- Added bounded frame-loop, worker, root, OCaml clock/lifecycle, native bridge,
+  and real-FFI autonomous-pump coverage. No upstream source, dependency
+  revision, private time-source API, forced frame, or background timer is
+  required.
 - Established the OCaml-first architecture, native renderer boundary, binary
   protocol, lifecycle, reconciliation, and text-input decisions.
 - Recorded the initial upstream toolchain baseline.
@@ -80,7 +97,7 @@
   environment, epoch/revision, and animated-opacity coverage plus deterministic
   `make protocol-fixtures-{generate,check}` commands enforced by CI.
 - Added a process-wide native application registry and named OCaml callbacks
-  for create, step, frame presentation, and destroy. The C bridge retains only
+  for create, logical pumping, presentation, and destroy. The C bridge retains only
   integer handles, registers foreign threads, holds the OCaml runtime lock only
   during callbacks, and copies all results into C-owned memory.
 - Added an opt-in Dune complete object containing the linked Counter,

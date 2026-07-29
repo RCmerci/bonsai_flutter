@@ -6,6 +6,8 @@ import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/runtime_harness.dart';
+
 const _operationTimeout = Duration(seconds: 10);
 
 Future<T> _bounded<T>(Future<T> future, String operation) => future.timeout(
@@ -32,15 +34,14 @@ void registerHostNavigationFfiTests({
       ),
     );
     expect(client, isNotNull);
-    final runtime = client!;
-    addTearDown(() => _bounded(runtime.dispose(), 'RuntimeClient.dispose'));
+    final harness = RuntimeHarness(client!);
+    addTearDown(() => _bounded(harness.dispose(), 'RuntimeHarness.dispose'));
 
-    final initialResponse = await tester.runAsync(
-      () => _bounded(runtime.step(Uint8List(0)), 'initial navigation step'),
+    final initialCycle = await tester.runAsync(
+      () => _bounded(harness.grant(), 'initial navigation grant'),
     );
-    expect(initialResponse, isNotNull);
-    expect(initialResponse!.status, RuntimeStatus.ok);
-    final initial = FrameCodec.decode(initialResponse.bytes);
+    expect(initialCycle, isNotNull);
+    final initial = FrameCodec.decode(initialCycle!.bytes);
     final store = NodeStore()..apply(initial);
     final queue = EventBatchQueue(
       runtimeEpoch: initial.runtimeEpoch,
@@ -57,13 +58,6 @@ void registerHostNavigationFfiTests({
         home: BonsaiFlutterView(store: store, onEvent: queue.enqueue),
       ),
     );
-    await _present(
-      tester,
-      runtime,
-      initial.targetRevision,
-      'initial presentation',
-    );
-
     expect(find.text('Host effects and navigation'), findsOneWidget);
     expect(find.text('Clipboard not read'), findsOneWidget);
 
@@ -72,8 +66,8 @@ void registerHostNavigationFfiTests({
     await tester.pump();
     final requestResponse = await tester.runAsync(
       () => _bounded(
-        runtime.sendEventBatch(queue.takeBatch()!),
-        'clipboard request event',
+        harness.advance(events: EventBatchCodec.encode(queue.takeBatch()!)),
+        'clipboard request pump',
       ),
     );
     final requestFrame = FrameCodec.decode(requestResponse!.bytes);
@@ -82,48 +76,30 @@ void registerHostNavigationFfiTests({
       isA<ClipboardReadRequest>(),
     );
     store.apply(requestFrame);
-    await _present(
-      tester,
-      runtime,
-      requestFrame.targetRevision,
-      'request presentation',
-    );
     await dispatcher.dispatch(requestFrame);
 
     final response = await tester.runAsync(
       () => _bounded(
-        runtime.sendEventBatch(queue.takeBatch()!),
-        'clipboard host response',
+        harness.advance(events: EventBatchCodec.encode(queue.takeBatch()!)),
+        'clipboard host-response pump',
       ),
     );
     final clipboardFrame = FrameCodec.decode(response!.bytes);
     store.apply(clipboardFrame);
     await tester.pump();
-    await _present(
-      tester,
-      runtime,
-      clipboardFrame.targetRevision,
-      'clipboard presentation',
-    );
     expect(find.text(expectedClipboardText), findsOneWidget);
 
     await tester.tap(find.text('Open settings'));
     await tester.pump();
     final navigationResponse = await tester.runAsync(
       () => _bounded(
-        runtime.sendEventBatch(queue.takeBatch()!),
-        'open settings event',
+        harness.advance(events: EventBatchCodec.encode(queue.takeBatch()!)),
+        'open settings pump',
       ),
     );
     final navigationFrame = FrameCodec.decode(navigationResponse!.bytes);
     store.apply(navigationFrame);
     await tester.pumpAndSettle();
-    await _present(
-      tester,
-      runtime,
-      navigationFrame.targetRevision,
-      'settings presentation',
-    );
 
     expect(find.text('Settings'), findsOneWidget);
     expect(find.text('Overlay owned by OCaml'), findsOneWidget);
@@ -134,8 +110,8 @@ void registerHostNavigationFfiTests({
     await tester.pumpAndSettle();
     final popResponse = await tester.runAsync(
       () => _bounded(
-        runtime.sendEventBatch(queue.takeBatch()!),
-        'system route pop',
+        harness.advance(events: EventBatchCodec.encode(queue.takeBatch()!)),
+        'system route-pop pump',
       ),
     );
     final popFrame = FrameCodec.decode(popResponse!.bytes);
@@ -144,20 +120,8 @@ void registerHostNavigationFfiTests({
 
     expect(find.text('Host effects and navigation'), findsOneWidget);
     expect(find.text('Settings'), findsNothing);
+    harness.acknowledge();
   });
-}
-
-Future<void> _present(
-  WidgetTester tester,
-  RuntimeSession runtime,
-  int revision,
-  String operation,
-) async {
-  final response = await tester.runAsync(
-    () => _bounded(runtime.framePresented(revision), operation),
-  );
-  expect(response, isNotNull);
-  expect(response!.status, RuntimeStatus.ok);
 }
 
 final class _FakeHostEffects implements HostEffectImplementation {

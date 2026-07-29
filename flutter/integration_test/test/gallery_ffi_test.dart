@@ -7,6 +7,8 @@ import 'package:flutter/cupertino.dart' show CupertinoSwitch;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/runtime_harness.dart';
+
 const _operationTimeout = Duration(seconds: 10);
 
 Future<T> _bounded<T>(Future<T> future, String operation) => future.timeout(
@@ -25,15 +27,14 @@ void main() {
       ),
     );
     expect(client, isNotNull);
-    final runtime = client!;
-    addTearDown(() => _bounded(runtime.dispose(), 'RuntimeClient.dispose'));
+    final harness = RuntimeHarness(client!);
+    addTearDown(() => _bounded(harness.dispose(), 'RuntimeHarness.dispose'));
 
-    final initialResponse = await tester.runAsync(
-      () => _bounded(runtime.step(Uint8List(0)), 'initial gallery step'),
+    final initialCycle = await tester.runAsync(
+      () => _bounded(harness.grant(), 'initial gallery grant'),
     );
-    expect(initialResponse, isNotNull);
-    expect(initialResponse!.status, RuntimeStatus.ok);
-    final initialFrame = FrameCodec.decode(initialResponse.bytes);
+    expect(initialCycle, isNotNull);
+    final initialFrame = FrameCodec.decode(initialCycle!.bytes);
     final store = NodeStore()..apply(initialFrame);
     final queue = EventBatchQueue(
       runtimeEpoch: initialFrame.runtimeEpoch,
@@ -122,25 +123,18 @@ void main() {
       isTrue,
     );
 
-    final initialPresented = await tester.runAsync(
-      () => _bounded(
-        runtime.framePresented(initialFrame.targetRevision),
-        'initial gallery presentation',
-      ),
-    );
-    expect(initialPresented, isNotNull);
-    expect(initialPresented!.status, RuntimeStatus.ok);
-
     await tester.tap(find.byType(Checkbox));
     await tester.pump();
     final batch = queue.takeBatch();
     expect(batch, isNotNull);
     final updateResponse = await tester.runAsync(
-      () => _bounded(runtime.sendEventBatch(batch!), 'gallery checkbox event'),
+      () => _bounded(
+        harness.advance(events: EventBatchCodec.encode(batch!)),
+        'gallery checkbox pump',
+      ),
     );
     expect(updateResponse, isNotNull);
-    expect(updateResponse!.status, RuntimeStatus.ok);
-    final incremental = FrameCodec.decode(updateResponse.bytes);
+    final incremental = FrameCodec.decode(updateResponse!.bytes);
     expect(incremental.kind, FrameKind.incremental);
     expect(incremental.operations.whereType<CreateNode>(), isEmpty);
     expect(incremental.operations.whereType<DropNode>(), isEmpty);
@@ -161,14 +155,6 @@ void main() {
     store.apply(incremental);
     await tester.pump();
     expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isTrue);
-    final updatePresented = await tester.runAsync(
-      () => _bounded(
-        runtime.framePresented(incremental.targetRevision),
-        'gallery update presentation',
-      ),
-    );
-    expect(updatePresented, isNotNull);
-    expect(updatePresented!.status, RuntimeStatus.ok);
 
     Future<void> tapListTileAndExpect(bool expectedValue) async {
       await tester.tap(find.text('Typed ListTile'));
@@ -177,18 +163,13 @@ void main() {
       expect(listTileBatch, isNotNull);
       final listTileResponse = await tester.runAsync(
         () => _bounded(
-          runtime.sendEventBatch(listTileBatch!),
-          'gallery list tile event',
+          harness.advance(events: EventBatchCodec.encode(listTileBatch!)),
+          'gallery list tile pump',
         ),
       );
       expect(listTileResponse, isNotNull);
       expect(
-        listTileResponse!.status,
-        RuntimeStatus.ok,
-        reason: listTileResponse.errorMessage,
-      );
-      expect(
-        listTileResponse.bytes,
+        listTileResponse!.bytes,
         isNotEmpty,
         reason: 'ListTile press must update the OCaml selection state',
       );
@@ -199,14 +180,6 @@ void main() {
         tester.widget<Checkbox>(find.byType(Checkbox)).value,
         expectedValue,
       );
-      final listTilePresented = await tester.runAsync(
-        () => _bounded(
-          runtime.framePresented(listTileFrame.targetRevision),
-          'gallery list tile presentation',
-        ),
-      );
-      expect(listTilePresented, isNotNull);
-      expect(listTilePresented!.status, RuntimeStatus.ok);
     }
 
     await tester.ensureVisible(find.text('Typed ListTile'));
@@ -230,28 +203,15 @@ void main() {
     );
     final longPressResponse = await tester.runAsync(
       () => _bounded(
-        runtime.sendEventBatch(longPressBatch),
-        'gallery long press event',
+        harness.advance(events: EventBatchCodec.encode(longPressBatch)),
+        'gallery long press pump',
       ),
     );
     expect(longPressResponse, isNotNull);
-    expect(
-      longPressResponse!.status,
-      RuntimeStatus.ok,
-      reason: longPressResponse.errorMessage,
-    );
-    final longPressFrame = FrameCodec.decode(longPressResponse.bytes);
+    final longPressFrame = FrameCodec.decode(longPressResponse!.bytes);
     store.apply(longPressFrame);
     await tester.pump();
     expect(find.text('Pointer event received in OCaml'), findsOneWidget);
-    final longPressPresented = await tester.runAsync(
-      () => _bounded(
-        runtime.framePresented(longPressFrame.targetRevision),
-        'gallery long press presentation',
-      ),
-    );
-    expect(longPressPresented, isNotNull);
-    expect(longPressPresented!.status, RuntimeStatus.ok);
 
     const editedUnicodeText = 'Type 中文 or 😀 edited';
     await tester.ensureVisible(find.byType(TextField));
@@ -262,27 +222,14 @@ void main() {
     expect(textFocusBatch, isNotNull);
     final textFocusResponse = await tester.runAsync(
       () => _bounded(
-        runtime.sendEventBatch(textFocusBatch!),
-        'gallery Unicode text focus event',
+        harness.advance(events: EventBatchCodec.encode(textFocusBatch!)),
+        'gallery Unicode text focus pump',
       ),
     );
     expect(textFocusResponse, isNotNull);
-    expect(
-      textFocusResponse!.status,
-      RuntimeStatus.ok,
-      reason: textFocusResponse.errorMessage,
-    );
-    final textFocusFrame = FrameCodec.decode(textFocusResponse.bytes);
+    final textFocusFrame = FrameCodec.decode(textFocusResponse!.bytes);
     store.apply(textFocusFrame);
     await tester.pump();
-    final textFocusPresented = await tester.runAsync(
-      () => _bounded(
-        runtime.framePresented(textFocusFrame.targetRevision),
-        'gallery Unicode text focus presentation',
-      ),
-    );
-    expect(textFocusPresented, isNotNull);
-    expect(textFocusPresented!.status, RuntimeStatus.ok);
 
     await tester.enterText(find.byType(TextField), editedUnicodeText);
     await tester.pump();
@@ -290,31 +237,18 @@ void main() {
     expect(textEditBatch, isNotNull);
     final textEditResponse = await tester.runAsync(
       () => _bounded(
-        runtime.sendEventBatch(textEditBatch!),
-        'gallery Unicode text edit event',
+        harness.advance(events: EventBatchCodec.encode(textEditBatch!)),
+        'gallery Unicode text edit pump',
       ),
     );
     expect(textEditResponse, isNotNull);
-    expect(
-      textEditResponse!.status,
-      RuntimeStatus.ok,
-      reason: textEditResponse.errorMessage,
-    );
-    final textEditFrame = FrameCodec.decode(textEditResponse.bytes);
+    final textEditFrame = FrameCodec.decode(textEditResponse!.bytes);
     store.apply(textEditFrame);
     await tester.pump();
     expect(
       find.text('Canonical OCaml value: $editedUnicodeText'),
       findsOneWidget,
     );
-    final textEditPresented = await tester.runAsync(
-      () => _bounded(
-        runtime.framePresented(textEditFrame.targetRevision),
-        'gallery Unicode text edit presentation',
-      ),
-    );
-    expect(textEditPresented, isNotNull);
-    expect(textEditPresented!.status, RuntimeStatus.ok);
 
     await tester.ensureVisible(find.text('Native card: 0'));
     await tester.pumpAndSettle();
@@ -324,17 +258,12 @@ void main() {
     expect(nativeBatch, isNotNull);
     final nativeResponse = await tester.runAsync(
       () => _bounded(
-        runtime.sendEventBatch(nativeBatch!),
-        'gallery native event',
+        harness.advance(events: EventBatchCodec.encode(nativeBatch!)),
+        'gallery native-event pump',
       ),
     );
     expect(nativeResponse, isNotNull);
-    expect(
-      nativeResponse!.status,
-      RuntimeStatus.ok,
-      reason: nativeResponse.errorMessage,
-    );
-    final nativeFrame = FrameCodec.decode(nativeResponse.bytes);
+    final nativeFrame = FrameCodec.decode(nativeResponse!.bytes);
     expect(nativeFrame.kind, FrameKind.incremental);
     expect(nativeFrame.operations.whereType<CreateNode>(), isEmpty);
     expect(nativeFrame.operations.whereType<DropNode>(), isEmpty);
@@ -352,5 +281,6 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     resources.dispose();
     expect(resources.liveResourceCount, 0);
+    harness.acknowledge();
   });
 }

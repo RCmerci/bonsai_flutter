@@ -1,8 +1,11 @@
+_bf_abi_version_major
+_bf_abi_version_minor
 _bf_protocol_version_major
 _bf_protocol_version_minor
 _bf_runtime_create
-_bf_runtime_step
-_bf_runtime_frame_presented
+_bf_runtime_pump
+_bf_runtime_presentation_succeeded
+_bf_runtime_presentation_rejected
 _bf_runtime_get_last_error
 _bf_buffer_free
 _bf_runtime_outstanding_buffers

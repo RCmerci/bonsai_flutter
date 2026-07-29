@@ -1,3 +1,4 @@
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
@@ -35,13 +36,134 @@ final class _TracedRuntimeSession implements RuntimeSession {
   final MailRuntimeTraceSink _trace;
 
   @override
-  Future<RuntimeResponse> step(Uint8List input) {
-    _trace('[Bonsai Mail][command] step inputBytes=${input.length}');
-    return _run('step', () => _runtime.step(input));
+  Stream<RuntimeUpdate> get updates => _runtime.updates.map((update) {
+    RuntimeUpdate forwarded = update;
+    switch (update) {
+      case CycleReady():
+        final bytes = update.bytes.materialize().asUint8List();
+        _trace(
+          '[Bonsai Mail][cycle] '
+          'presentation=${update.presentationId} '
+          'revision=${update.revision} '
+          'frameBytes=${bytes.length} '
+          'recoverable=${update.recoverableDiagnostic?.code.name ?? 'none'}',
+        );
+        forwarded = CycleReady(
+          presentationId: update.presentationId,
+          revision: update.revision,
+          bytes: TransferableTypedData.fromList([bytes]),
+          recoverableDiagnostic: update.recoverableDiagnostic,
+        );
+      case RuntimeFatalDiagnostic():
+        _trace('[Bonsai Mail][fatal] code=${update.diagnostic.code.name}');
+      case RuntimeDebugSnapshot() || RuntimeDisposed():
+        break;
+    }
+    return forwarded;
+  });
+
+  @override
+  void grantVsync({required int generation}) {
+    _trace('[Bonsai Mail][command] grantVsync generation=$generation');
+    _runSync('grantVsync', () => _runtime.grantVsync(generation: generation));
   }
 
   @override
-  Future<RuntimeResponse> sendEventBatch(EventBatch batch) {
+  void setFrameEligibility({required int generation, required bool eligible}) {
+    _trace(
+      '[Bonsai Mail][visibility] '
+      'generation=$generation eligible=$eligible',
+    );
+    _runSync(
+      'visibility',
+      () => _runtime.setFrameEligibility(
+        generation: generation,
+        eligible: eligible,
+      ),
+    );
+  }
+
+  @override
+  void presentationSucceeded({
+    required int generation,
+    required int presentationId,
+    required int revision,
+    required Uint8List eventBatch,
+  }) {
+    _traceEventBatch(eventBatch);
+    _trace(
+      '[Bonsai Mail][presentation] succeeded '
+      'generation=$generation presentation=$presentationId '
+      'revision=$revision eventBytes=${eventBatch.length}',
+    );
+    _runSync(
+      'presentationSucceeded',
+      () => _runtime.presentationSucceeded(
+        generation: generation,
+        presentationId: presentationId,
+        revision: revision,
+        eventBatch: eventBatch,
+      ),
+    );
+  }
+
+  @override
+  void presentationRejected({
+    required int generation,
+    required int presentationId,
+    required int revision,
+    required PresentationRejectionReason reason,
+  }) {
+    _trace(
+      '[Bonsai Mail][presentation] rejected '
+      'generation=$generation presentation=$presentationId '
+      'revision=$revision reason=${reason.name}',
+    );
+    _runSync(
+      'presentationRejected',
+      () => _runtime.presentationRejected(
+        generation: generation,
+        presentationId: presentationId,
+        revision: revision,
+        reason: reason,
+      ),
+    );
+  }
+
+  @override
+  Future<RuntimeDebugSnapshot> debugSnapshot() async {
+    try {
+      final snapshot = await _runtime.debugSnapshot();
+      _trace(
+        '[Bonsai Mail][debug] '
+        'state=${snapshot.state.name} generation=${snapshot.liveGeneration} '
+        'eligible=${snapshot.eligible} pumps=${snapshot.pumpCount} '
+        'presentation=${snapshot.unresolvedPresentationId ?? 'none'}',
+      );
+      return snapshot;
+    } catch (error) {
+      _trace(
+        '[Bonsai Mail][error] command=debugSnapshot type=${error.runtimeType}',
+      );
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> dispose() async {
+    _trace('[Bonsai Mail][runtime] dispose');
+    try {
+      await _runtime.dispose();
+      _trace('[Bonsai Mail][runtime] disposed');
+    } catch (error) {
+      _trace('[Bonsai Mail][error] command=dispose type=${error.runtimeType}');
+      rethrow;
+    }
+  }
+
+  void _traceEventBatch(Uint8List bytes) {
+    if (bytes.isEmpty) return;
+    final batch = EventBatchCodec.decode(bytes);
     final events = batch.events;
     final sequences = events.isEmpty
         ? 'none'
@@ -66,52 +188,14 @@ final class _TracedRuntimeSession implements RuntimeSession {
       'displayedRevision=$displayedRevision '
       'tags=$tags',
     );
-    return _run('eventBatch', () => _runtime.sendEventBatch(batch));
   }
 
-  @override
-  Future<RuntimeResponse> framePresented(int revision) {
-    _trace('[Bonsai Mail][presentation] acknowledge revision=$revision');
-    return _run('framePresented', () => _runtime.framePresented(revision));
-  }
-
-  @override
-  Future<void> dispose() async {
-    _trace('[Bonsai Mail][runtime] dispose');
+  void _runSync(String command, void Function() invoke) {
     try {
-      await _runtime.dispose();
-      _trace('[Bonsai Mail][runtime] disposed');
-    } catch (error) {
-      _trace('[Bonsai Mail][error] command=dispose type=${error.runtimeType}');
-      rethrow;
-    }
-  }
-
-  Future<RuntimeResponse> _run(
-    String command,
-    Future<RuntimeResponse> Function() invoke,
-  ) async {
-    try {
-      final response = await invoke();
-      _trace(
-        '[Bonsai Mail][response] '
-        'command=$command '
-        'request=${response.requestSequence} '
-        'status=${response.status.name} '
-        'error=${response.errorCode.name} '
-        'revision=${response.revision} '
-        'frameBytes=${response.bytes.length} '
-        'nextWakeup=${_wakeup(response.nextWakeupNanoseconds)} '
-        'ffiUs=${response.ffiDuration.inMicroseconds} '
-        'transferUs=${response.isolateTransferDuration.inMicroseconds}',
-      );
-      return response;
+      invoke();
     } catch (error) {
       _trace('[Bonsai Mail][error] command=$command type=${error.runtimeType}');
       rethrow;
     }
   }
 }
-
-String _wakeup(int nanoseconds) =>
-    nanoseconds < 0 ? 'none' : '${nanoseconds}ns';

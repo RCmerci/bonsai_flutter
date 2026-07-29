@@ -136,7 +136,8 @@ All version-sensitive Bonsai integration is confined to
 Each runtime has:
 
 - a random nonzero 64-bit epoch;
-- monotonically increasing node, handler, request, event, and frame counters;
+- monotonically increasing node, handler, request, event, renderer-revision,
+  and presentation counters;
 - one Bonsai driver;
 - one mounted root;
 - a bounded set of handler frames retained until presentation acknowledgment;
@@ -144,9 +145,32 @@ Each runtime has:
 - current environment;
 - an explicit live, recovering, fatal, or destroyed state.
 
-All calls for one runtime are serialized on its Dart runtime isolate. A frame
-is based on the last revision accepted by Dart. A base-revision mismatch
-causes a full snapshot; it never causes partial mutation.
+All calls for one runtime are serialized on its Dart runtime isolate. Every
+successful logical pump reserves a presentation token, including no-diff and
+recoverable dropped-input pumps. Renderer revision advances only when bytes
+are emitted. At most one token is unresolved, and a frame is based on the last
+revision successfully presented by Flutter. Rejection burns any candidate
+revision and forces a full snapshot; it never causes partial mutation.
+
+## Foreground scheduling
+
+Flutter owns a recursive `SchedulerBinding.scheduleFrameCallback` loop.
+`resumed` and `inactive` runtimes with `framesEnabled == true` grant at most
+one logical pump per eligible Flutter frame. The runtime worker coalesces
+grants behind the unresolved-presentation barrier, so a visually idle
+foreground runtime continues advancing Bonsai clocks and lifecycle work
+without concurrent native calls.
+
+`hidden`, `paused`, `detached`, and loss of `framesEnabled` stop the loop and
+invalidate queued grants while retaining an unresolved token. Resume creates a
+new scheduler generation, presents any retained token, and catches up overdue
+work on later frames. There is no deadline scheduler, periodic timer, forced
+frame, native callback thread, or background fallback.
+
+The worker-owned monotonic `Stopwatch` is sampled immediately before native
+pumps and accepted presentation success. OCaml maps elapsed nanoseconds onto a
+retained public `Bonsai.Time_source`. This requires no upstream feature patch,
+dependency revision change, private time-source API, or shadow timer registry.
 
 ## Public application shape
 
@@ -218,8 +242,9 @@ UTF-16-indexed TextEdit events while retaining earlier-minor decode
 compatibility. Version 1.3 adds typed host request/cancel/response operations,
 dynamic environment snapshots, and Navigator/Page/Overlay/MaterialDialog
 layouts. Version 1.4 adds the NativeWidget envelope, capability declarations,
-opaque typed properties, and typed native events. The Dart decoder's output is
-accepted by the same atomic `NodeStore`.
+opaque typed properties, and typed native events. Later compatible minors
+extend the typed surface; current producers and consumers report protocol
+1.12. The Dart decoder's output is accepted by the same atomic `NodeStore`.
 Checksum negotiation, the remaining widget families, and supported-platform
 packaging remain later vertical slices.
 
@@ -248,11 +273,11 @@ document revision and accepts, corrects, or force-replaces typed editing
 values. `RendererResourceStore` synchronizes resource lifetime with epoch,
 full-snapshot generation, node ID, and node kind.
 
-`BonsaiFlutterRoot` owns native runtime startup, the initial full snapshot,
-event-batch draining, atomic store application, post-frame presentation
-acknowledgments, fatal-state rendering, and disposal. It accepts a registry
-and runtime factory for renderer extensions and deterministic tests, but it
-does not accept application state or reducers.
+`BonsaiFlutterRoot` owns native runtime startup, the foreground frame loop,
+ordered cycle updates, event-prefix preparation, two-phase store application,
+guarded post-frame presentation acknowledgment, fatal-state rendering, and
+disposal. It accepts a registry and runtime factory for renderer extensions
+and deterministic tests, but it does not accept application state or reducers.
 
 `BonsaiFlutterRoot` also owns a `HostEffectDispatcher` and an
 `EnvironmentReporter`. Host operations are ignored by the `NodeStore` and
@@ -271,13 +296,13 @@ Button presses are never coalesced and exert explicit backpressure when the
 bound is full. Scroll and visible-range state updates replace an older pending
 update for the same node, handler, and tag; a coalescible update is the only
 kind that may be dropped. Accepted events receive monotonic sequences.
-`NodeHost` uses the latest store revision when the callback's handler ID still
+`NodeHost` uses the latest presented revision when the callback's handler ID still
 matches the committed node. If the binding has changed before Flutter rebuilds
 an existing stateful host, it uses the revision captured by the build that
 created the old callback instead. This keeps a handler and revision from the
 same frame without making unchanged callbacks stale after unrelated frames.
-`RuntimeClient.sendEventBatch` encodes the typed batch before transferring it
-to the runtime isolate.
+The root prepares an exact event prefix for each presentation success and
+commits that prefix only after the ordered handoff succeeds.
 
 On the OCaml side, `Event_dispatcher` converts validated wire tags and payloads
 into the public UI event types, reconstructs opaque node and handler IDs
@@ -293,12 +318,14 @@ logical reconciliation, handler-frame installation, and binary encoding. Its
 Counter test decodes an initial full
 snapshot, acknowledges presentation, dispatches a press, and observes exactly
 one incremental text-property operation for `Count: 1`. A rejected mixed-valid
-event batch cannot leak a queued effect into a later step.
+event batch cannot leak a queued effect into a later pump.
 
-The native-assets package now exposes the stable runtime-level C ABI, generated
-FFI bindings, explicit native output ownership, and an idempotent Dart wrapper.
-A dedicated Dart isolate serializes runtime calls and transfers byte payloads
-without exposing native pointers to the UI isolate.
+The native-assets package exposes exact ABI 2.0 independently from renderer
+protocol 1.12, generated FFI bindings, presentation identity, explicit native
+output ownership, and an idempotent Dart wrapper. A dedicated Dart isolate
+serializes pump, presentation-success, presentation-rejection, and destroy
+calls and transfers byte payloads without exposing native pointers to the UI
+isolate.
 
 Each example owns a complete-object target that links only its application
 entrypoint with the real Bonsai driver, native handle registry, OCaml runtime,

@@ -28,6 +28,7 @@ Asia/Shanghai. Versions and revisions are recorded inputs to the build.
 | `janestreet/bonsai_web` | `989c18b5381cad767365923d4f0b758c6f3c602c` | Inspected only |
 | `janestreet/bonsai_term` | `2457232d3aa144fb887a053748a920544db60f72` | Inspected only |
 | `janestreet/bonsai_concrete` | `10601f857306e691462fa049cb8b58c162d86cca` | `v0.18~preview.130.106+341` |
+| `janestreet/incremental` | `98b5750ec3c006641351bfd858a89136a5dbc52c` | `v0.18~preview.130.106+341` |
 | `janestreet/virtual_dom` | `4e9549cdd71dc62f0e78917e088d607b219f1ba3` | Transitive `Ui_effect` provider |
 | `janestreet/basement` | `5c640c230a3989f8e505cda7aa6aca9925a23a5b` | `v0.18~preview.130.106+341` |
 | `janestreet/opam-repository` | `6789b91abef324f0f9dc2a07332afc4843c7dbe5` | Jane package index |
@@ -105,6 +106,13 @@ val Bonsai_driver.has_after_display_events : 'result Bonsai_driver.t -> bool
 `trigger_lifecycles` performs deactivation, activation, and after-display
 scheduling, so the Flutter backend calls it only after acknowledging the
 corresponding presented revision.
+
+The foreground-vsync pump retains the public `Bonsai.Time_source` supplied at
+driver creation and advances it through the public clock API before each
+logical flush. The selected revisions already provide the required clock,
+flush, lifecycle, and observer-invalidation operations. This feature changes
+no upstream source, overlay, package constraint, lockfile, or pinned revision
+and uses no private time-source operation.
 
 ## Private API audit
 

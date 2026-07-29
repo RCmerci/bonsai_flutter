@@ -1,7 +1,30 @@
+// ignore_for_file: prefer_initializing_formals
+
+import 'dart:typed_data';
+
 import '../debug/frame_stats.dart';
 import '../protocol/event_batch.dart';
 import '../protocol/generated_protocol.dart';
 import '../renderer/widget_registry.dart';
+
+final class PreparedEventBatch {
+  PreparedEventBatch._({
+    required EventBatchQueue owner,
+    required this.prefixLength,
+    required this.encodedBytes,
+    required int generation,
+    required List<int> sequences,
+  }) : _owner = owner,
+       _generation = generation,
+       _sequences = sequences;
+
+  final EventBatchQueue _owner;
+  final int _generation;
+  final List<int> _sequences;
+  final int prefixLength;
+  final Uint8List encodedBytes;
+  bool _committed = false;
+}
 
 final class EventQueueBackpressureException implements Exception {
   const EventQueueBackpressureException(this.message);
@@ -35,6 +58,7 @@ final class EventBatchQueue {
   var _droppedCount = 0;
   var _reportedCoalescedCount = 0;
   var _reportedDroppedCount = 0;
+  var _commitGeneration = 0;
 
   int get pendingCount => _pending.length;
   int get coalescedCount => _coalescedCount;
@@ -96,20 +120,52 @@ final class EventBatchQueue {
 
   EventBatch? takeBatch() {
     if (_pending.isEmpty) return null;
-    final batch = EventBatch(
-      runtimeEpoch: runtimeEpoch,
-      events: List.of(_pending),
+    final prepared = prepareBatch();
+    final batch = EventBatchCodec.decode(prepared.encodedBytes);
+    commit(prepared);
+    return batch;
+  }
+
+  PreparedEventBatch prepareBatch() {
+    final events = List<UiEvent>.of(_pending);
+    final batch = EventBatch(runtimeEpoch: runtimeEpoch, events: events);
+    return PreparedEventBatch._(
+      owner: this,
+      prefixLength: events.length,
+      encodedBytes: events.isEmpty
+          ? Uint8List(0)
+          : EventBatchCodec.encode(batch),
+      generation: _commitGeneration,
+      sequences: List.unmodifiable(events.map((event) => event.sequence)),
     );
+  }
+
+  void commit(PreparedEventBatch prepared) {
+    if (!identical(prepared._owner, this)) {
+      throw StateError('Prepared event batch belongs to another queue');
+    }
+    if (prepared._committed || prepared._generation != _commitGeneration) {
+      throw StateError('Prepared event batch is stale or already committed');
+    }
+    if (prepared.prefixLength > _pending.length) {
+      throw StateError('Prepared event prefix is no longer available');
+    }
+    for (var index = 0; index < prepared.prefixLength; index += 1) {
+      if (_pending[index].sequence != prepared._sequences[index]) {
+        throw StateError('Prepared event prefix no longer matches the queue');
+      }
+    }
     DebugFrameRecorder.recordEventBatch(
       runtimeEpoch: runtimeEpoch,
-      batchSize: batch.events.length,
+      batchSize: prepared.prefixLength,
       coalesced: _coalescedCount - _reportedCoalescedCount,
       dropped: _droppedCount - _reportedDroppedCount,
     );
     _reportedCoalescedCount = _coalescedCount;
     _reportedDroppedCount = _droppedCount;
-    _pending.clear();
-    return batch;
+    _pending.removeRange(0, prepared.prefixLength);
+    prepared._committed = true;
+    _commitGeneration += 1;
   }
 }
 

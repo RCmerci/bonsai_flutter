@@ -9,8 +9,8 @@ let component handlers graph =
       ~equal:( == )
       set_count
       ~f:(fun set_count -> function
-        | Ui.Event.Payload.Unit -> set_count (fun count -> count + 1)
-        | _ -> Bonsai.Effect.Ignore)
+      | Ui.Event.Payload.Unit -> set_count (fun count -> count + 1)
+      | _ -> Bonsai.Effect.Ignore)
   in
   Bonsai.map2 count increment ~f:(fun count increment ->
     Ui.Material.scaffold

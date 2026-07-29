@@ -66,7 +66,7 @@ let install t frame =
     Ok ())
 ;;
 
-let mark_frame_presented t ~revision =
+let mark_displayed_revision t ~revision =
   match Hashtbl.find_opt t.frames revision with
   | None -> Error (Runtime_error.Stale_event { revision })
   | Some _ ->
@@ -91,8 +91,8 @@ let retire_superseded t ~displayed_revision =
   retire_before t ~revision:(Int64.pred displayed_revision)
 ;;
 
-let frame_presented t ~revision =
-  match mark_frame_presented t ~revision with
+let commit_displayed_revision t ~revision =
+  match mark_displayed_revision t ~revision with
   | Error _ as error -> error
   | Ok () ->
     retire_superseded t ~displayed_revision:revision;
@@ -142,36 +142,52 @@ let validate_event t ~last_event_sequence (event : event) =
                else Ok (event, entry)))))
 ;;
 
-let dispatch_batch t events =
+module Validated_batch = struct
+  type validated_event = event * Frame.entry
+
+  type t =
+    { events : validated_event list
+    ; last_event_sequence : int64 option
+    }
+end
+
+let validate_batch t events =
   let rec validate reversed last_event_sequence = function
-    | [] -> Ok (List.rev reversed, last_event_sequence)
+    | [] -> Ok Validated_batch.{ events = List.rev reversed; last_event_sequence }
     | event :: rest ->
       (match validate_event t ~last_event_sequence event with
        | Error _ as error -> error
        | Ok validated -> validate (validated :: reversed) (Some event.event_sequence) rest)
   in
-  match validate [] t.last_event_sequence events with
+  validate [] t.last_event_sequence events
+;;
+
+let dispatch_validated t (validated : Validated_batch.t) =
+  let rec invoke = function
+    | [] ->
+      t.last_event_sequence <- validated.last_event_sequence;
+      Ok ()
+    | (event, entry) :: rest ->
+      (try
+         Ui.Event.Handler.Private.invoke entry.Frame.handler event.payload;
+         invoke rest
+       with
+       | exception_ ->
+         let backtrace = Printexc.get_raw_backtrace () in
+         Error
+           (Runtime_error.Handler_exception
+              { handler_id = event.handler_id
+              ; message = exception_message exception_
+              ; backtrace = Printexc.raw_backtrace_to_string backtrace
+              }))
+  in
+  invoke validated.events
+;;
+
+let dispatch_batch t events =
+  match validate_batch t events with
   | Error _ as error -> error
-  | Ok (validated, last_event_sequence) ->
-    let rec invoke = function
-      | [] ->
-        t.last_event_sequence <- last_event_sequence;
-        Ok ()
-      | (event, entry) :: rest ->
-        (try
-           Ui.Event.Handler.Private.invoke entry.Frame.handler event.payload;
-           invoke rest
-         with
-         | exception_ ->
-           let backtrace = Printexc.get_raw_backtrace () in
-           Error
-             (Runtime_error.Handler_exception
-                { handler_id = event.handler_id
-                ; message = exception_message exception_
-                ; backtrace = Printexc.raw_backtrace_to_string backtrace
-                }))
-    in
-    invoke validated
+  | Ok validated -> dispatch_validated t validated
 ;;
 
 let dispatch t event = dispatch_batch t [ event ]

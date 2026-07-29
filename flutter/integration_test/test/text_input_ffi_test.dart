@@ -6,6 +6,8 @@ import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/runtime_harness.dart';
+
 const _operationTimeout = Duration(seconds: 10);
 
 Future<T> _bounded<T>(Future<T> future, String operation) => future.timeout(
@@ -26,15 +28,14 @@ void main() {
       ),
     );
     expect(client, isNotNull);
-    final runtime = client!;
-    addTearDown(() => _bounded(runtime.dispose(), 'RuntimeClient.dispose'));
+    final harness = RuntimeHarness(client!);
+    addTearDown(() => _bounded(harness.dispose(), 'RuntimeHarness.dispose'));
 
-    final initialResponse = await tester.runAsync(
-      () => _bounded(runtime.step(Uint8List(0)), 'initial text input step'),
+    final initialCycle = await tester.runAsync(
+      () => _bounded(harness.grant(), 'initial text input grant'),
     );
-    expect(initialResponse, isNotNull);
-    expect(initialResponse!.status, RuntimeStatus.ok);
-    final initialFrame = FrameCodec.decode(initialResponse.bytes);
+    expect(initialCycle, isNotNull);
+    final initialFrame = FrameCodec.decode(initialCycle!.bytes);
     final store = NodeStore()..apply(initialFrame);
     final queue = EventBatchQueue(
       runtimeEpoch: initialFrame.runtimeEpoch,
@@ -57,15 +58,6 @@ void main() {
     final controller = editable.controller;
     expect(controller.text, 'Type here');
 
-    final presented = await tester.runAsync(
-      () => _bounded(
-        runtime.framePresented(initialFrame.targetRevision),
-        'initial text input presentation',
-      ),
-    );
-    expect(presented, isNotNull);
-    expect(presented!.status, RuntimeStatus.ok);
-
     controller.value = const TextEditingValue(
       text: '拼😀',
       selection: TextSelection.collapsed(offset: 3),
@@ -80,13 +72,12 @@ void main() {
 
     final response = await tester.runAsync(
       () => _bounded(
-        runtime.sendEventBatch(queue.takeBatch()!),
-        'rapid composing event batch',
+        harness.advance(events: EventBatchCodec.encode(queue.takeBatch()!)),
+        'rapid composing event pump',
       ),
     );
     expect(response, isNotNull);
-    expect(response!.status, RuntimeStatus.ok);
-    final incremental = FrameCodec.decode(response.bytes);
+    final incremental = FrameCodec.decode(response!.bytes);
     expect(incremental.kind, FrameKind.incremental);
     final update = incremental.operations.whereType<UpdateProps>().single;
     expect(
@@ -113,5 +104,6 @@ void main() {
       isTrue,
     );
     expect(resources.liveResourceCount, 1);
+    harness.acknowledge();
   });
 }

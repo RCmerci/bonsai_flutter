@@ -1,100 +1,140 @@
 # Native runtime boundary
 
+## Version contract
+
+`bonsai_flutter_native.h` defines native ABI `2.0`. The renderer wire protocol
+remains `1.12`; ABI and protocol versions are queried and validated
+independently. The Dart wrapper requires an exact ABI major and minor match
+before runtime creation.
+
+ABI v2 intentionally has no compatibility fallback for the removed
+`bf_runtime_step` and `bf_runtime_frame_presented` operations.
+
 ## ABI surface
 
-`bonsai_flutter_native.h` is the stable C boundary. It exposes protocol-version
-queries and these runtime-level operations:
+The stable runtime-driving operations are:
 
 ```c
-bf_runtime *bf_runtime_create(const uint8_t *config, size_t config_length);
-bf_status bf_runtime_step(
-  bf_runtime *runtime,
-  const uint8_t *input,
-  size_t input_length,
-  bf_output_buffer *output);
-bf_status bf_runtime_frame_presented(
-  bf_runtime *runtime,
-  uint64_t revision,
-  bf_output_buffer *output);
+bf_runtime *bf_runtime_create(
+    const uint8_t *config,
+    size_t config_length);
+
+bf_status bf_runtime_pump(
+    bf_runtime *runtime,
+    int64_t monotonic_now_ns,
+    const uint8_t *input,
+    size_t input_length,
+    bf_output_buffer *output);
+
+bf_status bf_runtime_presentation_succeeded(
+    bf_runtime *runtime,
+    uint64_t presentation_id,
+    uint64_t revision,
+    int64_t monotonic_now_ns,
+    bf_output_buffer *output);
+
+bf_status bf_runtime_presentation_rejected(
+    bf_runtime *runtime,
+    uint64_t presentation_id,
+    uint64_t revision,
+    int32_t rejection_reason,
+    bf_output_buffer *output);
+
 bf_status bf_runtime_get_last_error(
-  bf_runtime *runtime,
-  bf_output_buffer *output);
+    bf_runtime *runtime,
+    bf_output_buffer *output);
+
 void bf_buffer_free(bf_runtime *runtime, const uint8_t *data);
 void bf_runtime_destroy(bf_runtime *runtime);
 ```
 
-`bf_status` is a fixed-width `int32_t`, not a C enum with
-implementation-defined width. All public symbols have explicit default
-visibility. No node- or widget-level operation crosses this boundary.
+Version queries, outstanding-buffer diagnostics, and the declarations above
+are the complete public C surface. Status and error codes use fixed-width
+`int32_t` values, and every public symbol has explicit default visibility.
+No node- or widget-level operation crosses this boundary.
 
-## Ownership
+## Output and presentation identity
 
-- Dart owns input memory and keeps it valid only for the duration of a call.
+Every call initializes the same `bf_output_buffer` layout:
+
+```c
+typedef struct bf_output_buffer {
+  const uint8_t *data;
+  size_t length;
+  uint64_t presentation_id;
+  uint64_t revision;
+  bf_status status;
+  bf_error_code error_code;
+} bf_output_buffer;
+```
+
+Every successful logical pump returns a positive presentation ID, even when
+`data == NULL` and `length == 0`. The presentation ID identifies the
+lifecycle transaction; the renderer revision identifies wire state and
+changes only when frame bytes are emitted. Success or rejection must echo the
+exact unresolved pair.
+
+A recoverable input error may still return a valid token and optional recovery
+bytes. Fatal status terminates the ordered runtime session.
+
+## Buffer ownership
+
+- Dart owns input memory and keeps it valid only for the synchronous call.
 - The native runtime owns every non-null output pointer.
 - Dart validates the pointer/length pair, caps it at 16 MiB, copies it into a
-  Dart `Uint8List`, and calls `bf_buffer_free` in the same synchronous call.
-- The native runtime tracks outstanding allocations. Destroying a runtime
-  releases any allocation that its caller did not return.
+  `Uint8List`, and calls `bf_buffer_free` before returning from the wrapper.
+- The same ownership rule applies to success, recoverable, fatal, and
+  diagnostic outputs.
+- The native runtime tracks outstanding allocations; destroy releases any
+  allocation its caller did not return.
 - `bf_runtime` is opaque. Dart never retains an OCaml heap pointer.
-- `NativeRuntime.dispose` is idempotent, and every later call is rejected.
+- `NativeRuntime.dispose` is idempotent, and every later operation is
+  rejected.
 
-The generated FFI declarations remain private to the native package. Public
-Dart code uses `NativeRuntime`, `NativeOutput`, and `NativeStatus`.
+Generated FFI declarations remain private to the native package. Public Dart
+code uses `NativeRuntime`, `NativeOutput`, `NativeStatus`, and typed rejection
+reasons.
 
-## Isolate serialization
+## Ordered isolate session
 
-`RuntimeClient` spawns one dedicated isolate. That isolate creates and owns the
-native runtime and performs every `step`, `frame_presented`, and `destroy`
-operation. The UI isolate sends commands with monotonically increasing request
-sequences. Byte payloads and responses use `TransferableTypedData`.
+`RuntimeClient` spawns one dedicated isolate that creates and owns the native
+runtime. UI-to-worker commands form one ordered stream of visibility changes,
+vsync grants, exact presentation results, debug barriers, and disposal.
+Worker-to-UI updates form one ordered stream of readiness, `CycleReady`, fatal
+diagnostics, debug snapshots, and disposal completion.
 
-The worker consumes its `ReceivePort` with one `await for` loop. Calls for one
-runtime therefore cannot overlap. Shutdown is an ordered command: earlier
-requests finish first, native destroy runs once, and the UI side waits for an
-acknowledgment before closing its response port.
+The worker consumes one `ReceivePort` sequentially, so native calls cannot
+overlap. Grants coalesce while a presentation is unresolved. Shutdown is an
+ordered exact-once command: earlier work finishes first, native destroy runs
+once, and both sides close their ports and update streams once.
 
-`sendEventBatch` accepts the typed protocol model, encodes it on the UI side,
-and transfers only its bytes. Event queuing is bounded before this point:
-ordered events apply backpressure, while supported high-frequency state events
-use explicit per-tag coalescing.
+Event bytes are prepared by the bounded UI-side queue. Ordered events apply
+backpressure; supported high-frequency state events coalesce only by their
+explicit node, handler, and tag identity. The prepared prefix is committed
+only after synchronous presentation handoff succeeds.
 
-## Error boundary and current status
+## OCaml callback bridge
 
-The ABI never throws across C. Each call returns `OK`, `RECOVERABLE_ERROR`, or
-`FATAL_ERROR`; `bf_runtime_get_last_error` returns a native-owned diagnostic
-buffer through the same ownership path.
-
-The opt-in embedded route starts the OCaml runtime once with
-`caml_startup_exn`, resolves four named callbacks, and releases the runtime
-lock between calls:
+The embedded route starts OCaml once with `caml_startup_exn` and resolves five
+named callbacks:
 
 ```text
 bonsai_flutter.create
-bonsai_flutter.step
-bonsai_flutter.frame_presented
+bonsai_flutter.pump
+bonsai_flutter.presentation_succeeded
+bonsai_flutter.presentation_rejected
 bonsai_flutter.destroy
 ```
 
 Foreign Dart threads register with the OCaml runtime, acquire its lock for one
-callback, copy all returned bytes and diagnostics to C-owned memory, and
+callback, copy all returned bytes and diagnostics into C-owned memory, and
 release the lock. No OCaml value survives a callback. C retains only a random
-positive `int64` handle; the process-wide OCaml table maps that handle to a
-`Driver.t`.
+positive `int64` handle; the process-wide OCaml table maps it to a `Driver.t`.
 
-The create configuration is currently a registered entrypoint name. An
-unknown entrypoint, unknown handle, malformed event batch, driver error, or
-callback exception becomes status data rather than crossing the ABI as an
-exception. The create API still returns only a null pointer on failure, so a
-structured create diagnostic is a remaining ABI refinement.
+The ABI never throws across C. Unknown entrypoints or handles, invalid clocks,
+malformed event batches, presentation mismatches, driver failures, and OCaml
+exceptions become stable status and error-code data.
 
-The C boundary, generated bindings, owned-buffer wrapper, package build hook,
-dedicated isolate, and embedded route have been exercised on the macOS arm64
-host. A Flutter widget integration test clicks a real `ElevatedButton`, sends
-the typed batch through the isolate and FFI, runs the real Bonsai driver, and
-applies exactly one incremental `Count: 1` property update while preserving
-unaffected Elements.
-
-This establishes the vertical slice on the project OCaml 5.3.0 baseline. The
-complete object is selected explicitly by application packages because it
-contains their linked entrypoints. The default hook continues to build the
-truthful fatal-status fallback when no application object is supplied.
+The complete-object symbol audit requires every ABI v2 operation and rejects
+the removed v1 runtime-driving symbols. The generated Dart binding check
+guards the C/Dart struct layout and declarations.

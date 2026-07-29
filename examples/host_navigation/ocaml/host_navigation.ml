@@ -20,9 +20,9 @@ let component handlers graph =
       ~equal:( == )
       set_settings_open
       ~f:(fun set_settings_open -> function
-        | Ui.Event.Payload.Route_pop { page_key = "settings"; _ } | Ui.Event.Payload.Unit
-          -> set_settings_open (fun _ -> false)
-        | _ -> Bonsai.Effect.Ignore)
+      | Ui.Event.Payload.Route_pop { page_key = "settings"; _ } | Ui.Event.Payload.Unit ->
+        set_settings_open (fun _ -> false)
+      | _ -> Bonsai.Effect.Ignore)
   in
   let host_effects = Driver.Handler.host_effects handlers in
   let read_clipboard =

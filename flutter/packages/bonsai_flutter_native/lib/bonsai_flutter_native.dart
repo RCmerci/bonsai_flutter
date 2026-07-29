@@ -4,32 +4,18 @@ import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 
 import 'bonsai_flutter_native_bindings_generated.dart' as bindings;
+import 'src/native_version_facade.dart';
+
+export 'src/native_version_facade.dart'
+    show
+        NativeAbiVersion,
+        NativeLibraryLoadingException,
+        NativeProtocolVersion,
+        nativeAbiVersion,
+        nativeProtocolVersion,
+        validateNativeVersions;
 
 const int _maxNativeOutputBytes = 16 * 1024 * 1024;
-
-final class NativeProtocolVersion {
-  const NativeProtocolVersion(this.major, this.minor);
-
-  final int major;
-  final int minor;
-
-  @override
-  bool operator ==(Object other) =>
-      other is NativeProtocolVersion &&
-      other.major == major &&
-      other.minor == minor;
-
-  @override
-  int get hashCode => Object.hash(major, minor);
-
-  @override
-  String toString() => '$major.$minor';
-}
-
-final NativeProtocolVersion nativeProtocolVersion = NativeProtocolVersion(
-  bindings.bf_protocol_version_major(),
-  bindings.bf_protocol_version_minor(),
-);
 
 enum NativeStatus { ok, recoverableError, fatalError }
 
@@ -46,9 +32,23 @@ enum NativeRuntimeErrorCode {
   ocamlException(9),
   dartRendererException(10),
   lifecycleException(11),
-  nativeLibraryLoadingError(12);
+  nativeLibraryLoadingError(12),
+  invalidPresentation(13),
+  invalidMonotonicTime(14),
+  invalidSchedulerState(15);
 
   const NativeRuntimeErrorCode(this.wireId);
+
+  final int wireId;
+}
+
+enum NativePresentationRejectionReason {
+  decodeFailed(0),
+  frameValidationFailed(1),
+  rendererEpochMismatch(2),
+  rendererRevisionMismatch(3);
+
+  const NativePresentationRejectionReason(this.wireId);
 
   final int wireId;
 }
@@ -57,16 +57,16 @@ final class NativeOutput {
   const NativeOutput({
     required this.status,
     required this.bytes,
+    required this.presentationId,
     required this.revision,
-    required this.nextWakeupNanoseconds,
     required this.errorMessage,
     this.errorCode = NativeRuntimeErrorCode.none,
   });
 
   final NativeStatus status;
   final Uint8List bytes;
+  final int presentationId;
   final int revision;
-  final int nextWakeupNanoseconds;
   final String? errorMessage;
   final NativeRuntimeErrorCode errorCode;
 }
@@ -75,6 +75,7 @@ final class NativeRuntime {
   NativeRuntime._(this._pointer);
 
   factory NativeRuntime.create([Uint8List? config]) {
+    validateNativeVersions(nativeVersionFacade);
     final bytes = config ?? Uint8List(0);
     final pointer = _withNativeBytes(
       bytes,
@@ -95,25 +96,62 @@ final class NativeRuntime {
     return bindings.bf_runtime_outstanding_buffers(_pointer);
   }
 
-  NativeOutput step(Uint8List input) {
+  NativeOutput pump({
+    required int monotonicNowNanoseconds,
+    required Uint8List input,
+  }) {
     _checkLive();
+    _checkSignedInt64(monotonicNowNanoseconds, 'monotonicNowNanoseconds');
     return _withNativeBytes(
       input,
       (data) => _invoke(
-        (output) =>
-            bindings.bf_runtime_step(_pointer, data, input.length, output),
+        (output) => bindings.bf_runtime_pump(
+          _pointer,
+          monotonicNowNanoseconds,
+          data,
+          input.length,
+          output,
+        ),
       ),
     );
   }
 
-  NativeOutput framePresented(int revision) {
+  NativeOutput presentationSucceeded({
+    required int presentationId,
+    required int revision,
+    required int monotonicNowNanoseconds,
+  }) {
     _checkLive();
-    if (revision < 0 || revision > 0x7fffffffffffffff) {
-      throw RangeError.range(revision, 0, 0x7fffffffffffffff, 'revision');
-    }
+    _checkPositiveInt64(presentationId, 'presentationId');
+    _checkUnsignedSignedRange(revision, 'revision');
+    _checkSignedInt64(monotonicNowNanoseconds, 'monotonicNowNanoseconds');
     return _invoke(
-      (output) =>
-          bindings.bf_runtime_frame_presented(_pointer, revision, output),
+      (output) => bindings.bf_runtime_presentation_succeeded(
+        _pointer,
+        presentationId,
+        revision,
+        monotonicNowNanoseconds,
+        output,
+      ),
+    );
+  }
+
+  NativeOutput presentationRejected({
+    required int presentationId,
+    required int revision,
+    required NativePresentationRejectionReason reason,
+  }) {
+    _checkLive();
+    _checkPositiveInt64(presentationId, 'presentationId');
+    _checkUnsignedSignedRange(revision, 'revision');
+    return _invoke(
+      (output) => bindings.bf_runtime_presentation_rejected(
+        _pointer,
+        presentationId,
+        revision,
+        reason.wireId,
+        output,
+      ),
     );
   }
 
@@ -143,8 +181,8 @@ final class NativeRuntime {
       return NativeOutput(
         status: status,
         bytes: copied.bytes,
+        presentationId: copied.presentationId,
         revision: copied.revision,
-        nextWakeupNanoseconds: copied.nextWakeupNanoseconds,
         errorMessage: errorMessage,
         errorCode: errorCode,
       );
@@ -189,8 +227,8 @@ final class NativeRuntime {
     }
     return _CopiedOutput(
       bytes: bytes,
+      presentationId: value.presentation_id,
       revision: value.revision,
-      nextWakeupNanoseconds: value.next_wakeup_ns,
     );
   }
 
@@ -204,13 +242,13 @@ final class NativeRuntime {
 final class _CopiedOutput {
   const _CopiedOutput({
     required this.bytes,
+    required this.presentationId,
     required this.revision,
-    required this.nextWakeupNanoseconds,
   });
 
   final Uint8List bytes;
+  final int presentationId;
   final int revision;
-  final int nextWakeupNanoseconds;
 }
 
 NativeStatus _status(int value) => switch (value) {
@@ -235,5 +273,23 @@ T _withNativeBytes<T>(Uint8List bytes, T Function(Pointer<Uint8>) body) {
     return body(pointer);
   } finally {
     calloc.free(pointer);
+  }
+}
+
+void _checkSignedInt64(int value, String name) {
+  if (value < 0 || value > 0x7fffffffffffffff) {
+    throw RangeError.range(value, 0, 0x7fffffffffffffff, name);
+  }
+}
+
+void _checkPositiveInt64(int value, String name) {
+  if (value <= 0 || value > 0x7fffffffffffffff) {
+    throw RangeError.range(value, 1, 0x7fffffffffffffff, name);
+  }
+}
+
+void _checkUnsignedSignedRange(int value, String name) {
+  if (value < 0 || value > 0x7fffffffffffffff) {
+    throw RangeError.range(value, 0, 0x7fffffffffffffff, name);
   }
 }

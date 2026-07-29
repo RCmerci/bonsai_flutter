@@ -17,9 +17,9 @@ let component handlers graph =
       ~equal:( == )
       set_details_open
       ~f:(fun set_open -> function
-        | Ui.Event.Payload.Route_pop { page_key = "details"; _ } | Ui.Event.Payload.Unit
-          -> set_open (fun _ -> false)
-        | _ -> Bonsai.Effect.Ignore)
+      | Ui.Event.Payload.Route_pop { page_key = "details"; _ } | Ui.Event.Payload.Unit ->
+        set_open (fun _ -> false)
+      | _ -> Bonsai.Effect.Ignore)
   in
   let handlers =
     Bonsai.map2 open_details close_details ~f:(fun open_details close_details ->

@@ -40,6 +40,134 @@ reject_pattern() {
   fi
 }
 
+require_exact_installed_version() {
+  package=$1
+  expected=$2
+  actual=$(opam list --installed --short --columns=version "$package" 2>/dev/null) ||
+    fail "$package is not installed"
+  test "$actual" = "$expected" ||
+    fail "$package version is $actual, expected $expected"
+}
+
+require_opam_source_revision() {
+  package=$1
+  version=$2
+  revision=$3
+  metadata=$(opam show --raw "$package.$version" 2>/dev/null) ||
+    fail "unable to read opam metadata for $package.$version"
+  require_text \
+    "$metadata" \
+    "$package/archive/$revision.tar.gz" \
+    "$package source metadata"
+}
+
+require_sha256() {
+  path=$1
+  expected=$2
+  actual=$(shasum -a 256 "$path" | awk '{ print $1 }')
+  test "$actual" = "$expected" ||
+    fail "$path SHA-256 is $actual, expected $expected"
+}
+
+upstream_version='v0.18~preview.130.106+341'
+require_exact_installed_version bonsai "$upstream_version"
+require_exact_installed_version bonsai_concrete "$upstream_version"
+require_exact_installed_version incremental "$upstream_version"
+require_opam_source_revision \
+  bonsai \
+  "$upstream_version" \
+  f31661450eb133fe89564219d97669c2735c6622
+require_opam_source_revision \
+  bonsai_concrete \
+  "$upstream_version" \
+  10601f857306e691462fa049cb8b58c162d86cca
+require_opam_source_revision \
+  incremental \
+  "$upstream_version" \
+  98b5750ec3c006641351bfd858a89136a5dbc52c
+
+flutter_metadata=$(flutter --version --machine)
+require_text "$flutter_metadata" '"frameworkVersion": "3.44.8"' "Flutter metadata"
+require_text \
+  "$flutter_metadata" \
+  '"frameworkRevision": "058e0af2c2b57e369d905a03ac9748b0ebf543c6"' \
+  "Flutter metadata"
+
+upstream_baseline=$(cat docs/upstream-baseline.md)
+for revision in \
+  f31661450eb133fe89564219d97669c2735c6622 \
+  10601f857306e691462fa049cb8b58c162d86cca \
+  98b5750ec3c006641351bfd858a89136a5dbc52c \
+  058e0af2c2b57e369d905a03ac9748b0ebf543c6
+do
+  require_text "$upstream_baseline" "$revision" "upstream baseline"
+done
+
+patch_files=$(
+  find . \
+    -path './.git' -prune -o \
+    -path './_build' -prune -o \
+    -type f \( -name '*.patch' -o -name '*.diff' \) -print |
+    LC_ALL=C sort
+)
+expected_patch_files='./vendor/patches/basement-macos.patch
+./vendor/patches/ios/jst-config-host-discover.patch'
+test "$patch_files" = "$expected_patch_files" ||
+  fail "upstream patch allowlist changed:
+$patch_files"
+require_sha256 \
+  vendor/patches/basement-macos.patch \
+  1c97bd1e3ad6eeefe30fce6a81a06ed4685fdef95efb53e67cd9389b6201327b
+require_sha256 \
+  vendor/patches/ios/jst-config-host-discover.patch \
+  d1d9fbbf8df8f8e315fad1a834352a5a80e948e62012a104d5362461f195df78
+
+if find vendor \
+  -type d \
+  \( \
+    -name bonsai -o \
+    -name bonsai_concrete -o \
+    -name incremental -o \
+    -name incr_dom -o \
+    -name flutter \
+  \) |
+  grep . >/dev/null; then
+  fail "vendor contains a forbidden upstream source overlay"
+fi
+
+dependency_control_text=$(cat \
+  bonsai_flutter.opam \
+  bonsai_flutter_test.opam \
+  dune-project \
+  .github/workflows/*.yml \
+  tool/ci/*.sh \
+  tool/ios/*.sh \
+  tool/macos/*.sh)
+reject_pattern \
+  "$dependency_control_text" \
+  'opam[[:space:]]+pin[[:space:]]+add[[:space:]]+(bonsai|bonsai_concrete|incremental|incr_dom)' \
+  "dependency controls"
+reject_pattern \
+  "$dependency_control_text" \
+  'file://[^[:space:]]*(bonsai|bonsai_concrete|incremental|incr_dom)' \
+  "dependency controls"
+
+runtime_source=$(cat \
+  ocaml/runtime/*.ml \
+  ocaml/runtime/*.mli \
+  ocaml/ffi/*.ml \
+  ocaml/ffi/*.mli \
+  flutter/packages/bonsai_flutter/lib/src/runtime/*.dart \
+  flutter/packages/bonsai_flutter/lib/src/root/*.dart)
+reject_pattern \
+  "$runtime_source" \
+  'Time_source[.]Private|Obj[.]magic' \
+  "runtime source"
+reject_pattern \
+  "$runtime_source" \
+  'Timer[.]periodic|scheduleForcedFrame|scheduleWarmUpFrame|forceFrames|Ticker[.]forceFrames' \
+  "runtime source"
+
 dry_run_target() {
   target=$1
   if ! output=$(make -n "$target" 2>&1); then

@@ -69,6 +69,17 @@
  (libraries core bonsai bonsai_flutter.runtime_adapter))
 
 (test
+ (name frame_driven_pump_tests)
+ (modules frame_driven_pump_tests)
+ (libraries
+  core
+  bonsai
+  bonsai_flutter.ui
+  bonsai_flutter.protocol
+  bonsai_flutter.runtime
+  bonsai_flutter.driver))
+
+(test
  (name driver_counter_tests)
  (modules driver_counter_tests)
  (libraries

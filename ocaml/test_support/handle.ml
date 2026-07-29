@@ -7,8 +7,9 @@ type t =
   ; runtime_epoch : int64
   ; mutable sequence : int64
   ; mutable last_frame : Driver.frame option
+  ; mutable last_pump_result : Driver.pump_result option
+  ; mutable next_monotonic_ns : int64
   ; mutable baseline : string
-  ; mutable presented_revision : int64
   ; pending_requests : (int64, Protocol.Wire_frame.host_request_payload) Hashtbl.t
   }
 
@@ -34,10 +35,12 @@ let record_frame t frame =
       wire.operations
 ;;
 
-let step t ?events () =
-  match driver_ok (Driver.step t.driver ?events ()) with
-  | None -> ()
-  | Some frame -> record_frame t frame
+let logical_pump t ?events () =
+  let monotonic_now_ns = t.next_monotonic_ns in
+  t.next_monotonic_ns <- Int64.succ monotonic_now_ns;
+  let result = driver_ok (Driver.pump t.driver ~monotonic_now_ns ?events ()) in
+  Option.iter (record_frame t) result.frame;
+  t.last_pump_result <- Some result
 ;;
 
 let snapshot t =
@@ -211,7 +214,7 @@ let dispatch t query tag payload =
       ; payload
       }
   in
-  step
+  logical_pump
     t
     ~events:Protocol.Inbound_event.{ runtime_epoch = t.runtime_epoch; events = [ event ] }
     ()
@@ -381,7 +384,7 @@ let set_environment t environment =
       ; payload = Environment_changed (protocol_environment environment)
       }
   in
-  step
+  logical_pump
     t
     ~events:Protocol.Inbound_event.{ runtime_epoch = t.runtime_epoch; events = [ event ] }
     ()
@@ -421,19 +424,65 @@ let respond_to_host_effect t ?request_id ?(status = Protocol.Inbound_event.Host_
       ; payload = Host_response { request_id; status; value }
       }
   in
-  step
+  logical_pump
     t
     ~events:Protocol.Inbound_event.{ runtime_epoch = t.runtime_epoch; events = [ event ] }
     ();
   Hashtbl.remove t.pending_requests request_id
 ;;
 
-let trigger_frame_presented t =
-  let revision = Driver.For_testing.revision t.driver in
-  if Int64.compare revision t.presented_revision > 0
-  then (
-    driver_ok (Driver.frame_presented t.driver ~revision);
-    t.presented_revision <- revision)
+let present t =
+  match t.last_pump_result with
+  | None -> ()
+  | Some result ->
+    let monotonic_now_ns = t.next_monotonic_ns in
+    driver_ok
+      (Driver.presentation_succeeded
+         t.driver
+         ~presentation_id:result.presentation_id
+         ~renderer_revision:result.renderer_revision
+         ~monotonic_now_ns);
+    t.last_pump_result <- None
+;;
+
+let pump t ~monotonic_now_ns ?events () =
+  let result = driver_ok (Driver.pump t.driver ~monotonic_now_ns ?events ()) in
+  Option.iter (record_frame t) result.frame;
+  t.last_pump_result <- Some result;
+  t.next_monotonic_ns <- Int64.succ monotonic_now_ns;
+  result
+;;
+
+let unresolved_presentation t =
+  match t.last_pump_result with
+  | Some result -> result
+  | None -> fail "headless driver has no unresolved presentation"
+;;
+
+let presentation_succeeded t ~monotonic_now_ns =
+  let result = unresolved_presentation t in
+  driver_ok
+    (Driver.presentation_succeeded
+       t.driver
+       ~presentation_id:result.presentation_id
+       ~renderer_revision:result.renderer_revision
+       ~monotonic_now_ns);
+  t.last_pump_result <- None
+;;
+
+let presentation_rejected t ~reason =
+  let result = unresolved_presentation t in
+  driver_ok
+    (Driver.presentation_rejected
+       t.driver
+       ~presentation_id:result.presentation_id
+       ~renderer_revision:result.renderer_revision
+       ~reason);
+  t.last_pump_result <- None
+;;
+
+let unresolved_presentation_id t =
+  Option.map (fun result -> result.Driver.presentation_id) t.last_pump_result
 ;;
 
 let last_frame t = t.last_frame
@@ -448,14 +497,17 @@ let create ~runtime_epoch ~time_source component =
     ; runtime_epoch
     ; sequence = 0L
     ; last_frame = None
+    ; last_pump_result = None
+    ; next_monotonic_ns = 0L
     ; baseline = ""
-    ; presented_revision = 0L
     ; pending_requests = Hashtbl.create 4
     }
   in
-  (match driver_ok (Driver.step driver ()) with
-   | None -> fail "initial headless step did not emit a full snapshot"
-   | Some frame -> record_frame t frame);
+  logical_pump t ();
+  (match t.last_pump_result with
+   | Some { frame = Some _; _ } -> ()
+   | None | Some { frame = None; _ } ->
+     fail "initial headless pump did not emit a full snapshot");
   t.baseline <- render_tree t;
   t
 ;;

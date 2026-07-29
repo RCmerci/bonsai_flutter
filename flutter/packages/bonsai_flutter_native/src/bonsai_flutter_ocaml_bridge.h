@@ -8,8 +8,8 @@ typedef struct bf_ocaml_response {
   bf_error_code error_code;
   uint8_t *data;
   size_t length;
+  uint64_t presentation_id;
   uint64_t revision;
-  int64_t next_wakeup_ns;
   char *error;
 } bf_ocaml_response;
 
@@ -21,14 +21,25 @@ bf_status bf_ocaml_bridge_create(const uint8_t *config,
                                  char *error,
                                  size_t error_capacity);
 
-bf_status bf_ocaml_bridge_step(uint64_t handle,
+bf_status bf_ocaml_bridge_pump(uint64_t handle,
+                               int64_t monotonic_now_ns,
                                const uint8_t *input,
                                size_t input_length,
                                bf_ocaml_response *response);
 
-bf_status bf_ocaml_bridge_frame_presented(uint64_t handle,
-                                          uint64_t revision,
-                                          bf_ocaml_response *response);
+bf_status bf_ocaml_bridge_presentation_succeeded(
+    uint64_t handle,
+    uint64_t presentation_id,
+    uint64_t revision,
+    int64_t monotonic_now_ns,
+    bf_ocaml_response *response);
+
+bf_status bf_ocaml_bridge_presentation_rejected(
+    uint64_t handle,
+    uint64_t presentation_id,
+    uint64_t revision,
+    int32_t rejection_reason,
+    bf_ocaml_response *response);
 
 void bf_ocaml_bridge_response_release(bf_ocaml_response *response);
 void bf_ocaml_bridge_destroy(uint64_t handle);

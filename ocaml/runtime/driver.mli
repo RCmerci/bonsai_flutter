@@ -7,7 +7,7 @@ module Handler : sig
   type t
 
   (** Creates a dependency-aware UI handler whose returned effect is scheduled
-      by the next [step].
+      by the next [pump].
 
       The returned handler retains its physical identity while [dependencies]
       are equal according to [equal]. A dependency change creates a fresh
@@ -22,10 +22,7 @@ module Handler : sig
     -> ?name:string
     -> equal:('dependencies -> 'dependencies -> bool)
     -> 'dependencies Bonsai.t
-    -> f:
-         ('dependencies
-          -> Bonsai_flutter_ui.Event.Payload.t
-          -> unit Bonsai.Effect.t)
+    -> f:('dependencies -> Bonsai_flutter_ui.Event.Payload.t -> unit Bonsai.Effect.t)
     -> Bonsai_flutter_ui.Event.Handler.t Bonsai.t
 
   val create_native
@@ -60,6 +57,19 @@ type error =
 
 val error_to_string : error -> string
 
+type pump_result =
+  { presentation_id : int64
+  ; renderer_revision : int64
+  ; frame : frame option
+  ; recoverable_error : error option
+  }
+
+type rejection_reason =
+  | Decode_failed
+  | Frame_validation_failed
+  | Renderer_epoch_mismatch
+  | Renderer_revision_mismatch
+
 type t
 
 val create
@@ -69,16 +79,28 @@ val create
   -> (Handler.t -> Bonsai.graph -> Bonsai_flutter_ui.Widget.t Bonsai.t)
   -> t
 
-(** Dispatches one validated event batch, schedules its effects, flushes
-    Bonsai once, and emits at most one atomic renderer frame. *)
-val step
+(** Advances logical time, consumes at most one atomic input batch, flushes
+    Bonsai once, and reserves one presentation token. *)
+val pump
   :  t
+  -> monotonic_now_ns:int64
   -> ?events:Bonsai_flutter_protocol.Inbound_event.batch
   -> unit
-  -> (frame option, error) result
+  -> (pump_result, error) result
 
-(** Acknowledges Flutter presentation and only then runs lifecycle effects. *)
-val frame_presented : t -> revision:int64 -> (unit, error) result
+val presentation_succeeded
+  :  t
+  -> presentation_id:int64
+  -> renderer_revision:int64
+  -> monotonic_now_ns:int64
+  -> (unit, error) result
+
+val presentation_rejected
+  :  t
+  -> presentation_id:int64
+  -> renderer_revision:int64
+  -> reason:rejection_reason
+  -> (unit, error) result
 
 val shutdown : t -> unit
 val is_shutdown : t -> bool
@@ -90,4 +112,6 @@ module For_testing : sig
   val environment : t -> Environment.snapshot
   val pending_host_effect_count : t -> int
   val retained_handler_frame_count : t -> int
+  val set_next_presentation_id : t -> int64 -> unit
+  val set_next_renderer_revision : t -> int64 -> unit
 end

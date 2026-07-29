@@ -30,4 +30,5 @@
   bonsai_flutter.protocol
   bonsai_flutter.runtime
   bonsai_flutter.runtime_adapter
+  core
   unix))

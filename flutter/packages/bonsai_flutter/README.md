@@ -18,12 +18,21 @@ The current development release contains:
 - keyed per-node widget hosts and a typed application extension registry;
 - subtree-local rebuilds and typed Button event dispatch;
 - bounded event batching, ordered-event backpressure, and state coalescing;
-- a dedicated runtime isolate and native owned-buffer transport boundary;
+- a foreground-vsync pump with background suspension, resume catch-up, and
+  exact presentation-token backpressure;
+- a dedicated ordered runtime isolate and ABI 2.0 native owned-buffer
+  transport boundary for renderer protocol 1.12;
 - node-scoped text-input, focus, scroll, animation, and native resource
   disposal;
 - Flutter-local semantic opacity interpolation with typed completion events
   and reduced-motion handling;
 - a 50,000-item windowed VirtualList prototype.
+
+Visible idle roots continue one backpressured logical pump per eligible
+Flutter frame so Bonsai clocks and lifecycle work advance without external
+input. Hidden, paused, and detached roots do not pump. A mounted foreground
+root therefore does not settle; widget tests should use bounded frames or a
+predicate helper instead of `pumpAndSettle`.
 
 The default native package build reports an unavailable-backend fatal status
 unless an application supplies the opt-in linked OCaml complete object. The

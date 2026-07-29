@@ -153,11 +153,27 @@ let convert_batch (batch : Protocol_event.batch) =
   loop [] batch.events
 ;;
 
-let dispatch_batch registry batch =
+module Validated_batch = struct
+  type t = Handler_registry.Validated_batch.t
+end
+
+let validate_batch registry batch =
   match convert_batch batch with
   | Error error -> Error error
   | Ok events ->
-    (match Handler_registry.dispatch_batch registry events with
-     | Ok () -> Ok ()
+    (match Handler_registry.validate_batch registry events with
+     | Ok validated -> Ok validated
      | Error error -> Error (Handler_error error))
+;;
+
+let dispatch_validated registry validated =
+  match Handler_registry.dispatch_validated registry validated with
+  | Ok () -> Ok ()
+  | Error error -> Error (Handler_error error)
+;;
+
+let dispatch_batch registry batch =
+  match validate_batch registry batch with
+  | Error _ as error -> error
+  | Ok validated -> dispatch_validated registry validated
 ;;

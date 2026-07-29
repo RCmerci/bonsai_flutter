@@ -18,6 +18,38 @@ let ok = function
   | Error error -> fail "unexpected driver error: %s" (Driver.error_to_string error)
 ;;
 
+let next_monotonic_ns = ref 0L
+let pending_presentations : (Driver.t, Driver.pump_result) Hashtbl.t = Hashtbl.create 8
+
+let pump_result driver ?events () =
+  let monotonic_now_ns = !next_monotonic_ns in
+  next_monotonic_ns := Int64.succ monotonic_now_ns;
+  match Driver.pump driver ~monotonic_now_ns ?events () with
+  | Error _ as error -> error
+  | Ok result ->
+    Hashtbl.replace pending_presentations driver result;
+    Ok result
+;;
+
+let pump driver ?events () =
+  Result.map (fun result -> result.Driver.frame) (pump_result driver ?events ())
+;;
+
+let present driver ~revision =
+  match Hashtbl.find_opt pending_presentations driver with
+  | None -> Error (Driver.Invalid_state "test has no pending presentation")
+  | Some result ->
+    if not (Int64.equal revision result.renderer_revision)
+    then Error (Driver.Invalid_state "test supplied the wrong renderer revision")
+    else (
+      Hashtbl.remove pending_presentations driver;
+      Driver.presentation_succeeded
+        driver
+        ~presentation_id:result.presentation_id
+        ~renderer_revision:result.renderer_revision
+        ~monotonic_now_ns:!next_monotonic_ns)
+;;
+
 let decode_frame bytes =
   match Protocol.Binary_codec.decode bytes with
   | Ok frame -> frame
@@ -53,8 +85,8 @@ let component ~activations ~after_displays handlers graph =
       ~equal:( == )
       increment
       ~f:(fun increment -> function
-        | Ui.Event.Payload.Unit -> increment (fun value -> value + 1)
-        | _ -> increment Fun.id)
+      | Ui.Event.Payload.Unit -> increment (fun value -> value + 1)
+      | _ -> increment Fun.id)
   in
   let on_activate =
     Bonsai.return (Bonsai.Effect.of_thunk (fun () -> Stdlib.incr activations))
@@ -106,9 +138,9 @@ let () =
       (component ~activations ~after_displays)
   in
   let initial =
-    match ok (Driver.step driver ()) with
+    match ok (pump driver ()) with
     | Some frame -> frame
-    | None -> fail "initial step must emit a full snapshot"
+    | None -> fail "initial pump must emit a full snapshot"
   in
   let initial_trace = take_trace () in
   require_substring
@@ -125,7 +157,7 @@ let () =
     "initial widget diff omitted the button label";
   require
     (Runtime.Frame_patch.kind initial.frame_patch = Full_snapshot)
-    "initial step must reconcile a full snapshot";
+    "initial pump must reconcile a full snapshot";
   let initial_wire =
     match Protocol.Binary_codec.decode initial.bytes with
     | Ok frame -> frame
@@ -137,23 +169,21 @@ let () =
     "Button must encode the press event tag";
   require
     (!activations = 0 && !after_displays = 0)
-    "initial step must not trigger presentation-gated lifecycle events";
-  ok (Driver.frame_presented driver ~revision:initial.revision);
+    "initial pump must not trigger presentation-gated lifecycle events";
+  ok (present driver ~revision:initial.revision);
   ignore (take_trace ());
   require (!activations = 1) "initial presentation must trigger activation";
   require (!after_displays = 1) "initial presentation must trigger after-display";
-  (match ok (Driver.step driver ()) with
+  (match ok (pump driver ()) with
    | None -> ()
-   | Some _ -> fail "unchanged step unexpectedly emitted a frame");
+   | Some _ -> fail "unchanged pump unexpectedly emitted a frame");
+  ok (present driver ~revision:initial.revision);
   let unchanged_trace = take_trace () in
   require_no_substring
     unchanged_trace
     "[widget-diff]"
-    "unchanged step emitted a widget diff";
-  require_no_substring
-    unchanged_trace
-    "Count: 0"
-    "unchanged step printed the widget tree";
+    "unchanged pump emitted a widget diff";
+  require_no_substring unchanged_trace "Count: 0" "unchanged pump printed the widget tree";
   let events =
     Protocol.Inbound_event.
       { runtime_epoch
@@ -169,7 +199,7 @@ let () =
       }
   in
   let updated =
-    match ok (Driver.step driver ~events ()) with
+    match ok (pump driver ~events ()) with
     | Some frame -> frame
     | None -> fail "Counter press must emit an incremental frame"
   in
@@ -204,10 +234,10 @@ let () =
        "Counter press must emit one text prop patch, got %d operations"
        (List.length operations));
   require
-    (!after_displays = 1)
-    "incremental step must not run after-display before presentation";
-  ok (Driver.frame_presented driver ~revision:updated.revision);
-  require (!after_displays = 2) "incremental presentation must run after-display";
+    (!after_displays = 2)
+    "incremental pump must not run after-display before presentation";
+  ok (present driver ~revision:updated.revision);
+  require (!after_displays = 3) "incremental presentation must run after-display";
   let invalid_batch =
     Protocol.Inbound_event.
       { runtime_epoch
@@ -229,13 +259,15 @@ let () =
           ]
       }
   in
-  (match Driver.step driver ~events:invalid_batch () with
-   | Error (Driver.Event_error _) -> ()
-   | Error error ->
+  let invalid_result = ok (pump_result driver ~events:invalid_batch ()) in
+  (match invalid_result.recoverable_error with
+   | Some (Driver.Event_error _) -> ()
+   | Some error ->
      fail
-       "invalid event batch returned the wrong error: %s"
+       "invalid event batch returned the wrong diagnostic: %s"
        (Driver.error_to_string error)
-   | Ok _ -> fail "invalid event batch was accepted");
+   | None -> fail "invalid event batch lost its recoverable diagnostic");
+  ok (present driver ~revision:invalid_result.renderer_revision);
   let valid_after_rejection =
     Protocol.Inbound_event.
       { runtime_epoch
@@ -251,7 +283,7 @@ let () =
       }
   in
   let after_rejection =
-    match ok (Driver.step driver ~events:valid_after_rejection ()) with
+    match ok (pump driver ~events:valid_after_rejection ()) with
     | Some frame -> frame
     | None -> fail "valid event after rejected batch must emit a frame"
   in
@@ -265,6 +297,7 @@ let () =
          { node_id = _; props = Text_props { value = "Count: 2"; _ } }
      ] -> ()
    | _ -> fail "rejected batch leaked a previously queued Bonsai effect");
+  ok (present driver ~revision:after_rejection.revision);
   let resync_request =
     Protocol.Inbound_event.
       { runtime_epoch
@@ -280,7 +313,7 @@ let () =
       }
   in
   let resync =
-    match ok (Driver.step driver ~events:resync_request ()) with
+    match ok (pump driver ~events:resync_request ()) with
     | Some frame -> frame
     | None -> fail "resync request did not emit a full snapshot"
   in
@@ -288,6 +321,7 @@ let () =
   require (resync_wire.kind = Full_snapshot) "resync was not a full snapshot";
   require (Int64.equal resync_wire.base_revision 0L) "resync base revision was not zero";
   require (resync.stats.resync_count = 1) "resync instrumentation did not increment";
+  ok (present driver ~revision:resync.revision);
   Driver.shutdown driver
 ;;
 
@@ -326,13 +360,13 @@ let test_host_effect_round_trip () =
     Driver.create ~runtime_epoch ~time_source (host_effect_component host_ref)
   in
   let initial =
-    match ok (Driver.step driver ()) with
+    match ok (pump driver ()) with
     | Some frame -> frame
     | None -> fail "host-effect component did not mount"
   in
   let initial_wire = decode_frame initial.bytes in
   let node_id, event_tag, handler_id = find_button_binding initial_wire in
-  ok (Driver.frame_presented driver ~revision:initial.revision);
+  ok (present driver ~revision:initial.revision);
   let press =
     Protocol.Inbound_event.
       { runtime_epoch
@@ -348,7 +382,7 @@ let test_host_effect_round_trip () =
       }
   in
   let request_frame =
-    match ok (Driver.step driver ~events:press ()) with
+    match ok (pump driver ~events:press ()) with
     | Some frame -> frame
     | None -> fail "clipboard effect did not emit a host request"
   in
@@ -368,6 +402,7 @@ let test_host_effect_round_trip () =
   require
     (Host_effect.Private.pending_count host = 1)
     "clipboard request was not retained while pending";
+  ok (present driver ~revision:request_frame.revision);
   let response =
     Protocol.Inbound_event.
       { runtime_epoch
@@ -385,7 +420,7 @@ let test_host_effect_round_trip () =
       }
   in
   let response_frame =
-    match ok (Driver.step driver ~events:response ()) with
+    match ok (pump driver ~events:response ()) with
     | Some frame -> frame
     | None -> fail "host response did not resume the Bonsai effect"
   in
@@ -398,6 +433,7 @@ let test_host_effect_round_trip () =
   require
     (Host_effect.Private.pending_count host = 0)
     "completed host request remained pending";
+  ok (present driver ~revision:response_frame.revision);
   Driver.shutdown driver;
   require
     (Host_effect.Private.pending_count host = 0)
@@ -418,13 +454,13 @@ let test_host_effect_cancellation () =
       (host_effect_component ~cancellation host_ref)
   in
   let initial =
-    match ok (Driver.step driver ()) with
+    match ok (pump driver ()) with
     | Some frame -> frame
     | None -> fail "cancellation component did not mount"
   in
   let initial_wire = decode_frame initial.bytes in
   let node_id, event_tag, handler_id = find_button_binding initial_wire in
-  ok (Driver.frame_presented driver ~revision:initial.revision);
+  ok (present driver ~revision:initial.revision);
   let press =
     Protocol.Inbound_event.
       { runtime_epoch
@@ -440,7 +476,7 @@ let test_host_effect_cancellation () =
       }
   in
   let request_frame =
-    match ok (Driver.step driver ~events:press ()) with
+    match ok (pump driver ~events:press ()) with
     | Some frame -> frame
     | None -> fail "cancellable effect did not emit a host request"
   in
@@ -449,9 +485,10 @@ let test_host_effect_cancellation () =
     | [ Protocol.Wire_frame.Host_request { request_id; _ } ] -> request_id
     | _ -> fail "cancellable effect emitted unexpected operations"
   in
+  ok (present driver ~revision:request_frame.revision);
   Host_effect.Cancellation.cancel cancellation;
   let cancelled =
-    match ok (Driver.step driver ()) with
+    match ok (pump driver ()) with
     | Some frame -> decode_frame frame.bytes
     | None -> fail "cancellation did not resume the effect"
   in
@@ -471,6 +508,13 @@ let test_host_effect_cancellation () =
   require
     (Host_effect.Private.pending_count host = 0)
     "cancelled host effect remained pending";
+  ok
+    (present
+       driver
+       ~revision:
+         (match Hashtbl.find_opt pending_presentations driver with
+          | Some result -> result.renderer_revision
+          | None -> fail "cancellation pump lost its presentation token"));
   Driver.shutdown driver
 ;;
 
@@ -492,11 +536,11 @@ let test_environment_is_dynamic_input () =
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   let driver = Driver.create ~runtime_epoch ~time_source environment_component in
   let initial =
-    match ok (Driver.step driver ()) with
+    match ok (pump driver ()) with
     | Some frame -> frame
     | None -> fail "environment component did not mount"
   in
-  ok (Driver.frame_presented driver ~revision:initial.revision);
+  ok (present driver ~revision:initial.revision);
   let insets = Protocol.Inbound_event.{ left = 0.; top = 0.; right = 0.; bottom = 0. } in
   let environment =
     Protocol.Inbound_event.
@@ -534,7 +578,7 @@ let test_environment_is_dynamic_input () =
       }
   in
   let updated_frame =
-    match ok (Driver.step driver ~events:batch ()) with
+    match ok (pump driver ~events:batch ()) with
     | Some frame -> frame
     | None -> fail "environment change did not invalidate Bonsai"
   in
@@ -544,6 +588,7 @@ let test_environment_is_dynamic_input () =
          { props = Text_props { value = "1440x900 zh-CN"; _ }; _ }
      ] -> ()
    | _ -> fail "environment change did not produce the expected text patch");
+  ok (present driver ~revision:updated_frame.revision);
   let unchanged =
     Protocol.Inbound_event.
       { batch with
@@ -559,8 +604,9 @@ let test_environment_is_dynamic_input () =
       }
   in
   require
-    (ok (Driver.step driver ~events:unchanged ()) = None)
+    (ok (pump driver ~events:unchanged ()) = None)
     "unchanged environment unexpectedly produced a frame";
+  ok (present driver ~revision:updated_frame.revision);
   Driver.shutdown driver
 ;;
 
@@ -605,27 +651,21 @@ let handler_dependency_component handlers graph =
       ~f:(fun (set_model, mode) _ ->
         set_model (fun model -> { model with observed_mode = Some mode }))
   in
-  Bonsai.map2
-    model
-    (Bonsai.both toggle_mode observe_mode)
-    ~f:(fun model handlers ->
-      let toggle_mode, observe_mode = handlers in
-      let observed_mode =
-        match model.observed_mode with
-        | None -> "none"
-        | Some value -> Bool.to_string value
-      in
-      Ui.Widget.column
-        [ Ui.Widget.text ("Observed: " ^ observed_mode)
-        ; Ui.Widget.button
-            ~on_press:toggle_mode
-            ~child:(Ui.Widget.text "Toggle mode")
-            ()
-        ; Ui.Material.text_button
-            ~on_press:observe_mode
-            ~child:(Ui.Widget.text "Observe mode")
-            ()
-        ])
+  Bonsai.map2 model (Bonsai.both toggle_mode observe_mode) ~f:(fun model handlers ->
+    let toggle_mode, observe_mode = handlers in
+    let observed_mode =
+      match model.observed_mode with
+      | None -> "none"
+      | Some value -> Bool.to_string value
+    in
+    Ui.Widget.column
+      [ Ui.Widget.text ("Observed: " ^ observed_mode)
+      ; Ui.Widget.button ~on_press:toggle_mode ~child:(Ui.Widget.text "Toggle mode") ()
+      ; Ui.Material.text_button
+          ~on_press:observe_mode
+          ~child:(Ui.Widget.text "Observe mode")
+          ()
+      ])
 ;;
 
 let find_single_binding_for_kind (frame : Protocol.Wire_frame.t) kind =
@@ -639,9 +679,7 @@ let find_single_binding_for_kind (frame : Protocol.Wire_frame.t) kind =
   |> function
   | [ binding ] -> binding
   | bindings ->
-    fail
-      "expected one binding for requested node kind, got %d"
-      (List.length bindings)
+    fail "expected one binding for requested node kind, got %d" (List.length bindings)
 ;;
 
 let event_batch ~runtime_epoch ~sequence ~revision ~node_id binding =
@@ -664,7 +702,7 @@ let test_handler_dependencies_control_identity () =
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   let driver = Driver.create ~runtime_epoch ~time_source handler_dependency_component in
   let initial =
-    match ok (Driver.step driver ()) with
+    match ok (pump driver ()) with
     | Some frame -> frame
     | None -> fail "handler dependency component did not mount"
   in
@@ -675,11 +713,11 @@ let test_handler_dependencies_control_identity () =
   let observe_node, initial_observe_binding =
     find_single_binding_for_kind initial_wire Protocol.Wire_frame.Material_text_button
   in
-  ok (Driver.frame_presented driver ~revision:initial.revision);
+  ok (present driver ~revision:initial.revision);
   let changed_dependency =
     match
       ok
-        (Driver.step
+        (pump
            driver
            ~events:
              (event_batch
@@ -709,15 +747,13 @@ let test_handler_dependencies_control_identity () =
   in
   require
     (not
-       (Int64.equal
-          initial_observe_binding.handler_id
-          current_observe_binding.handler_id))
+       (Int64.equal initial_observe_binding.handler_id current_observe_binding.handler_id))
     "dependency change reused the previous handler ID";
-  ok (Driver.frame_presented driver ~revision:changed_dependency.revision);
+  ok (present driver ~revision:changed_dependency.revision);
   let unchanged_dependency =
     match
       ok
-        (Driver.step
+        (pump
            driver
            ~events:
              (event_batch

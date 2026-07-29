@@ -34,7 +34,7 @@ let () =
        \  Button test_id=increment events=[press]\n\
        \    Text \"Increment\"")
     "initial pretty-printed tree changed";
-  Test.Handle.trigger_frame_presented handle;
+  Test.Handle.present handle;
   Test.Handle.click handle (Test.Query.test_id "increment");
   require
     (Option.is_some (Test.Handle.find handle (Test.Query.visible_text "Count: 1")))
@@ -44,6 +44,6 @@ let () =
        (Test.Handle.show_diff handle)
        "-   Text \"Count: 0\"\n+   Text \"Count: 1\"")
     "show_diff was not stable";
-  Test.Handle.trigger_frame_presented handle;
+  Test.Handle.present handle;
   Test.Handle.shutdown handle
 ;;

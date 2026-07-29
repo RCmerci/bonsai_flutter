@@ -22,13 +22,9 @@ final class BonsaiFlutterFrameStats {
   int dirtyNodeCount = 0;
   Duration? decodeDuration;
   Duration? nodeStoreApplyDuration;
-  Duration? ffiDuration;
-  Duration? isolateTransferDuration;
   Duration? flutterBuildDuration;
   Duration? layoutDuration;
   Duration? paintDuration;
-  Duration? framePresentedLatency;
-  Duration? lifecycleDuration;
   int? bonsaiFlushNanoseconds;
   int? resultReadNanoseconds;
   int? reconcileNanoseconds;
@@ -114,31 +110,6 @@ final class DebugFrameRecorder {
       coalesced: (current?.coalesced ?? 0) + coalesced,
       dropped: (current?.dropped ?? 0) + dropped,
     );
-  }
-
-  static void recordRuntimeResponse(
-    Frame frame, {
-    required Duration ffiDuration,
-    required Duration isolateTransferDuration,
-  }) {
-    final stats = _byFrame[_key(frame.runtimeEpoch, frame.targetRevision)];
-    if (stats == null) return;
-    stats
-      ..ffiDuration = ffiDuration
-      ..isolateTransferDuration = isolateTransferDuration;
-  }
-
-  static void recordPresented(
-    int runtimeEpoch,
-    int revision, {
-    required Duration latency,
-    required Duration lifecycleDuration,
-  }) {
-    final stats = _byFrame[_key(runtimeEpoch, revision)];
-    if (stats == null) return;
-    stats
-      ..framePresentedLatency = latency
-      ..lifecycleDuration = lifecycleDuration;
   }
 
   static void recordFlutterTiming(

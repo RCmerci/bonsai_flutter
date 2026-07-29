@@ -1,105 +1,131 @@
 # Lifecycle
 
 Flutter presentation is the commit point for Bonsai after-display lifecycle
-effects. Decoding a frame or committing a `NodeStore` transaction is not
+effects. Decoding bytes or committing a `NodeStore` transaction is not
 equivalent to presentation.
 
-## Initial frame
+## Foreground pump loop
+
+`BonsaiFlutterRoot` owns a recursive
+`SchedulerBinding.scheduleFrameCallback` loop. While Flutter is `resumed` or
+`inactive` and `framesEnabled` is true, each callback registers one successor
+and grants at most one logical pump to the dedicated runtime isolate. A
+visually idle foreground runtime therefore continues pumping.
+
+The loop stops for `hidden`, `paused`, `detached`, or independent loss of
+`framesEnabled`. It uses no periodic timer, forced frame, native callback
+thread, busy loop, or background fallback. Resume starts a new scheduler
+generation and catches up elapsed work on later foreground frames.
 
 ```text
-Dart runtime isolate       OCaml runtime            Flutter UI isolate
-        |                       |                           |
-        | create + step         |                           |
-        |---------------------->|                           |
-        |                       | driver.flush              |
-        |                       | driver.result             |
-        |                       | reconcile full snapshot   |
-        |<----------------------|                           |
-        | transfer frame bytes                              |
-        |-------------------------------------------------->|
-        |                                                   | validate + commit
-        |                                                   | build/layout/paint
-        |                  frame_presented(revision)         |
-        |<--------------------------------------------------|
-        |---------------------->|                           |
-        |                       | trigger_lifecycles        |
-        |                       | retire older handlers     |
+Flutter UI isolate       Dart runtime isolate          OCaml runtime
+        |                         |                         |
+        | VsyncGranted(generation)                         |
+        |------------------------>|                         |
+        |                         | pump(now_ns, events)    |
+        |                         |------------------------>|
+        |                         |<------------------------|
+        |<------------------------| CycleReady(token)       |
+        | validate + prepare + commit                       |
+        | build/layout/paint                                |
+        | post-frame success(generation, token, revision)   |
+        |------------------------>|                         |
+        |                         | presentation_succeeded  |
+        |                         |------------------------>|
+        |                         |   commit + lifecycle    |
+        |                         |<------------------------|
 ```
 
-`Bonsai_driver.flush` processes pending actions, clock alarms, and
-before-display work before `result` is read. `trigger_lifecycles` runs only in
-response to `frame_presented`.
+The runtime worker serializes all native calls. While a presentation is
+unresolved, later frame grants coalesce to one pending grant. Visibility loss
+invalidates queued grants but retains the unresolved presentation token.
 
-## Subsequent pump
+## Logical pump
 
-One pump performs this order:
+One accepted pump performs this order:
 
-1. Decode and validate the complete input batch.
-2. Apply an environment update.
-3. Complete host-effect responses.
-4. Resolve UI events against the handler frame for their displayed revision.
-5. Schedule the resulting Bonsai effects.
-6. Advance the Bonsai time source when a timer wakeup is present.
-7. Call `Bonsai_driver.flush`.
-8. Read `Bonsai_driver.result`.
-9. Reconcile the immutable view against the mounted tree.
-10. Freeze the handler registry for the target revision.
-11. Encode one incremental frame or no frame.
-12. Return the next required wakeup time.
+1. Validate the nonnegative, nondecreasing monotonic sample.
+2. Decode and validate the complete input batch without input-derived
+   mutation.
+3. Advance the retained public Bonsai time source.
+4. Apply a valid environment update, host responses, and UI events atomically,
+   or drop the complete invalid batch as a recoverable error.
+5. Flush Bonsai, including due clock alarms and before-display work, to the
+   required fixed point.
+6. Reconcile against the last successfully presented mounted tree.
+7. Prepare the handler frame and host-operation prefix without committing
+   either.
+8. Reserve one positive, non-reusable presentation ID.
+9. If renderer state changed, reserve a new renderer revision and encode one
+   full snapshot or incremental frame.
+10. Retain the complete candidate behind the presentation barrier.
 
-Before-display effects are included in `flush`; if they schedule actions, the
-driver applies and stabilizes them before the view is read.
+Every successful logical pump produces a presentation token, including a
+no-diff pump and a recoverable dropped-input pump. Renderer revision advances
+only when bytes are emitted. No second pump is accepted before the exact
+outstanding token is resolved.
 
-After Flutter presents a revision:
+## Presentation success
 
-1. Mark the revision displayed.
-2. Call `Bonsai_driver.trigger_lifecycles`.
-3. Retain the displayed handler frame and its immediate predecessor, retiring
-   all older frames.
-4. If after-display work scheduled an action, request another pump.
+The token is `(presentation_id, renderer_revision)`. The Flutter root applies
+frame bytes with a two-phase `NodeStore.prepare` and `commit` transaction,
+starts host dispatch only after live renderer commit, and sends success from a
+guarded post-frame callback after a real Flutter frame.
 
-`Driver.frame_presented` implements the first three operations in that exact
-order. Handler-registry marking and retirement are separate tested operations,
-so an older frame is not retired before lifecycle work begins. The one-frame
-grace covers events created by an old Flutter widget callback after `NodeStore`
-commits the next frame but before that widget rebuilds. If the handler ID was
-replaced, the event keeps the callback's source revision and can only resolve
-against that revision's handler frame. If the binding is unchanged, the event
-uses the latest committed revision so a long-lived callback does not become
-artificially stale.
+On exact success, OCaml validates a fresh monotonic sample, commits the
+candidate tree, handler frame, and prepared host-operation prefix, advances
+time without flushing, marks the revision displayed, and triggers lifecycle
+work exactly once. The next granted pump flushes actions scheduled by
+activation or after-display.
+
+The displayed handler frame and its immediate predecessor remain available
+for events created across one Flutter rebuild boundary. A replaced handler
+can resolve only against the source revision captured by its old callback.
+
+## Presentation rejection
+
+Decode failure, frame validation failure, renderer epoch mismatch, and
+renderer revision mismatch reject the exact unresolved token before live
+commit. Rejection runs no lifecycle, preserves the prior mounted and handler
+state, leaves prepared host operations queued, burns any issued renderer
+revision, and forces the next wire frame to be a full snapshot.
+
+A failure after live renderer commit or after host dispatch starts is
+terminal. It must not be reported as a recoverable rejection because the
+candidate may already be externally visible.
+
+## Timers and observed time
+
+The worker owns one `Stopwatch` and samples checked elapsed nanoseconds
+immediately before each native pump and accepted presentation success.
+Flutter frame timestamps and wall-clock time are not clock authority.
+
+OCaml maps elapsed nanoseconds onto the retained `Bonsai.Time_source`.
+`Bonsai.Clock.at`, `every`, `sleep`, `until`, `approx_now`,
+`Bonsai.Clock.Expert.now`, and the corresponding public time-source operations
+advance during foreground logical pumps without external input.
+
+There is no deadline query or timer registry at the native boundary.
+Background suspension performs no logical pumping and promises no background
+timer execution. On resume, an unresolved token is presented first; relative
+timers created by its after-display work start at that acknowledgment time,
+and later foreground pumps catch up older overdue work.
 
 ## Shutdown
 
-Shutdown is serialized with normal calls. It rejects new events, cancels host
-requests, flushes deactivation work where the driver API permits it,
-invalidates driver observers, clears handler frames, releases mounted state,
-and lets Dart dispose every renderer resource before freeing the native
-runtime.
+Shutdown is serialized with normal commands and is idempotent. It rejects new
+commands, closes the update stream once, destroys the native runtime once,
+invalidates Bonsai observers, clears runtime state, and lets Flutter dispose
+renderer resources.
 
-The current public `Bonsai_driver` has no dedicated destroy operation.
-`Bonsai_driver.Expert.invalidate_observers` is isolated in
-`Bonsai_runtime_adapter` as the selected release mechanism.
+The selected public `Bonsai_driver` has no dedicated destroy operation.
+`Bonsai_driver.Expert.invalidate_observers` remains isolated in
+`Bonsai_runtime_adapter` as the release mechanism.
 
-The implemented adapter makes shutdown idempotent and invalidates those
-observers. It cannot yet synthesize component deactivation through the public
-driver API. End-to-end deactivation cleanup therefore remains an explicit
-release blocker rather than a claimed property.
+## Widget-test contract
 
-The implemented Dart `RuntimeClient` already serializes `step`,
-`frame_presented`, and destroy on one runtime isolate and waits for a shutdown
-acknowledgment. The native boundary implements the corresponding ownership and
-status surface. `Bonsai_runtime_adapter` is part of the mandatory OCaml 5.3.0
-build graph; its test proves that `flush` does not run activation or
-after-display effects and that `frame_presented` does. The `Driver` test
-extends that proof through
-event dispatch, state update, reconciliation, encoding, and handler retirement.
-The opt-in native complete object extends the same proof through the C ABI,
-Dart runtime isolate, Flutter presentation acknowledgment, and native destroy.
-The same adapter and driver are linked into the native complete object used by
-the Flutter integration suite.
-
-## Timers
-
-The runtime returns an absolute `next_wakeup_ns`. Dart arms one timer on the
-runtime isolate and calls `step` when it expires. The design does not poll at
-60 Hz. A newly returned earlier deadline replaces the existing timer.
+A mounted foreground root intentionally keeps scheduling frames, so
+`pumpAndSettle` is not a valid completion primitive. Widget and FFI tests use
+bounded frame counts or predicate-based helpers with explicit timeouts and
+diagnostic snapshots. Real-isolate timer tests alternate a bounded wall-clock
+delay in `tester.runAsync` with one `tester.pump()`.

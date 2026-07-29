@@ -404,7 +404,7 @@ let test_handler_change_gets_new_id_and_one_revision_grace () =
       (Widget.button ~key ~on_press:old_handler ~child:(Widget.text "save") ())
   in
   ok (Handler_registry.install registry first.handler_frame);
-  ok (Handler_registry.frame_presented registry ~revision:1L);
+  ok (Handler_registry.commit_displayed_revision registry ~revision:1L);
   let first_node = node_by_key (Mounted_tree.snapshot first.mounted_tree) key in
   let first_binding = binding_exn first_node Event.Tag.Press in
   let second =
@@ -454,7 +454,7 @@ let test_handler_change_gets_new_id_and_one_revision_grace () =
        });
   check_int ~expected:1 ~actual:!old_calls "old handler before presentation";
   check_int ~expected:0 ~actual:!new_calls "new handler before presentation";
-  ok (Handler_registry.frame_presented registry ~revision:2L);
+  ok (Handler_registry.commit_displayed_revision registry ~revision:2L);
   ok
     (Handler_registry.dispatch
        registry
@@ -488,7 +488,7 @@ let test_handler_change_gets_new_id_and_one_revision_grace () =
       (Widget.button ~key ~on_press:new_handler ~child:(Widget.text "save") ())
   in
   ok (Handler_registry.install registry third.handler_frame);
-  ok (Handler_registry.frame_presented registry ~revision:3L);
+  ok (Handler_registry.commit_displayed_revision registry ~revision:3L);
   match
     Handler_registry.dispatch
       registry
@@ -564,7 +564,7 @@ let test_handler_registry_validates_epoch_sequence_and_binding () =
          ())
   in
   ok (Handler_registry.install registry output.handler_frame);
-  ok (Handler_registry.frame_presented registry ~revision:1L);
+  ok (Handler_registry.commit_displayed_revision registry ~revision:1L);
   let node = node_by_key (Mounted_tree.snapshot output.mounted_tree) key in
   let binding = binding_exn node Event.Tag.Press in
   let event =
@@ -615,7 +615,7 @@ let test_handler_exception_is_structured () =
          ())
   in
   ok (Handler_registry.install registry output.handler_frame);
-  ok (Handler_registry.frame_presented registry ~revision:1L);
+  ok (Handler_registry.commit_displayed_revision registry ~revision:1L);
   let node = node_by_key (Mounted_tree.snapshot output.mounted_tree) key in
   let binding = binding_exn node Event.Tag.Press in
   match
@@ -659,7 +659,7 @@ let test_handler_retirement_is_separate_from_presentation_marking () =
   in
   ok (Handler_registry.install registry first.handler_frame);
   ok (Handler_registry.install registry second.handler_frame);
-  ok (Handler_registry.mark_frame_presented registry ~revision:2L);
+  ok (Handler_registry.mark_displayed_revision registry ~revision:2L);
   check_int
     ~expected:2
     ~actual:(Handler_registry.retained_frame_count registry)
@@ -817,7 +817,7 @@ let test_layout_material_and_semantics_widgets_are_incremental () =
   let binding = binding_exn checkbox Event.Tag.Value_changed in
   let registry = Handler_registry.create ~runtime_epoch:59L in
   ok (Handler_registry.install registry second.handler_frame);
-  ok (Handler_registry.frame_presented registry ~revision:2L);
+  ok (Handler_registry.commit_displayed_revision registry ~revision:2L);
   ok
     (Handler_registry.dispatch
        registry
@@ -897,7 +897,7 @@ let test_text_input_props_and_typed_edit_are_incremental () =
   let binding = binding_exn editor Event.Tag.Text_edit in
   let registry = Handler_registry.create ~runtime_epoch:60L in
   ok (Handler_registry.install registry second.handler_frame);
-  ok (Handler_registry.frame_presented registry ~revision:2L);
+  ok (Handler_registry.commit_displayed_revision registry ~revision:2L);
   ok
     (Handler_registry.dispatch
        registry

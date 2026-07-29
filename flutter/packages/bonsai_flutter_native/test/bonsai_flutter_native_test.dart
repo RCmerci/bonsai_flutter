@@ -1,9 +1,55 @@
 import 'dart:typed_data';
 
 import 'package:bonsai_flutter_native/bonsai_flutter_native.dart';
+import 'package:bonsai_flutter_native/src/native_version_facade.dart';
 import 'package:test/test.dart';
 
+final class _FakeNativeVersionFacade implements NativeVersionFacade {
+  const _FakeNativeVersionFacade({
+    required this.abi,
+    this.protocol = const NativeProtocolVersion(1, 12),
+  });
+
+  @override
+  final NativeAbiVersion abi;
+
+  @override
+  final NativeProtocolVersion protocol;
+}
+
 void main() {
+  test('requires exact ABI 2.0 independently from protocol 1.12', () {
+    expect(nativeAbiVersion, const NativeAbiVersion(2, 0));
+    expect(nativeProtocolVersion, const NativeProtocolVersion(1, 12));
+  });
+
+  test('rejects ABI major and minor mismatch before runtime creation', () {
+    expect(
+      () => validateNativeVersions(
+        const _FakeNativeVersionFacade(abi: NativeAbiVersion(1, 0)),
+      ),
+      throwsA(isA<NativeLibraryLoadingException>()),
+    );
+    expect(
+      () => validateNativeVersions(
+        const _FakeNativeVersionFacade(abi: NativeAbiVersion(2, 1)),
+      ),
+      throwsA(isA<NativeLibraryLoadingException>()),
+    );
+  });
+
+  test('rejects protocol mismatch before runtime creation', () {
+    expect(
+      () => validateNativeVersions(
+        const _FakeNativeVersionFacade(
+          abi: NativeAbiVersion(2, 0),
+          protocol: NativeProtocolVersion(1, 11),
+        ),
+      ),
+      throwsA(isA<NativeLibraryLoadingException>()),
+    );
+  });
+
   test('reports the stable native protocol version', () {
     expect(nativeProtocolVersion, const NativeProtocolVersion(1, 12));
   });
@@ -12,22 +58,44 @@ void main() {
     final runtime = NativeRuntime.create();
     addTearDown(runtime.dispose);
 
-    final output = runtime.step(Uint8List.fromList([1, 2, 3]));
+    final output = runtime.pump(
+      monotonicNowNanoseconds: 1,
+      input: Uint8List.fromList([1, 2, 3]),
+    );
 
     expect(output.status, NativeStatus.fatalError);
     expect(output.errorCode, NativeRuntimeErrorCode.nativeLibraryLoadingError);
     expect(output.bytes, isEmpty);
+    expect(output.presentationId, 0);
     expect(output.revision, 0);
-    expect(output.nextWakeupNanoseconds, -1);
     expect(output.errorMessage, 'bonsai_flutter runtime error 12');
     expect(runtime.debugOutstandingBufferCount, 0);
   });
 
-  test('frame-presented uses the same serialized error boundary', () {
+  test('presentation success uses the same serialized error boundary', () {
     final runtime = NativeRuntime.create();
     addTearDown(runtime.dispose);
 
-    final output = runtime.framePresented(42);
+    final output = runtime.presentationSucceeded(
+      presentationId: 42,
+      revision: 7,
+      monotonicNowNanoseconds: 99,
+    );
+
+    expect(output.status, NativeStatus.fatalError);
+    expect(output.errorMessage, 'bonsai_flutter runtime error 12');
+    expect(runtime.debugOutstandingBufferCount, 0);
+  });
+
+  test('presentation rejection validates and forwards an exact reason', () {
+    final runtime = NativeRuntime.create();
+    addTearDown(runtime.dispose);
+
+    final output = runtime.presentationRejected(
+      presentationId: 42,
+      revision: 7,
+      reason: NativePresentationRejectionReason.rendererRevisionMismatch,
+    );
 
     expect(output.status, NativeStatus.fatalError);
     expect(output.errorMessage, 'bonsai_flutter runtime error 12');
@@ -39,7 +107,12 @@ void main() {
     addTearDown(runtime.dispose);
 
     for (var iteration = 0; iteration < 1000; iteration += 1) {
-      expect(runtime.step(Uint8List(0)).status, NativeStatus.fatalError);
+      expect(
+        runtime
+            .pump(monotonicNowNanoseconds: iteration, input: Uint8List(0))
+            .status,
+        NativeStatus.fatalError,
+      );
     }
 
     expect(runtime.debugOutstandingBufferCount, 0);
@@ -52,6 +125,9 @@ void main() {
     runtime.dispose();
 
     expect(runtime.isDisposed, isTrue);
-    expect(() => runtime.step(Uint8List(0)), throwsA(isA<StateError>()));
+    expect(
+      () => runtime.pump(monotonicNowNanoseconds: 0, input: Uint8List(0)),
+      throwsA(isA<StateError>()),
+    );
   });
 }

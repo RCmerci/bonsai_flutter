@@ -5,6 +5,8 @@ import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../test/support/runtime_harness.dart';
+
 const _timeout = Duration(seconds: 10);
 
 Future<T> _bounded<T>(Future<T> future) => future.timeout(_timeout);
@@ -23,12 +25,11 @@ void main() {
       ),
     );
     expect(runtime, isNotNull);
-    addTearDown(() => _bounded(runtime!.dispose()));
+    final harness = RuntimeHarness(runtime!);
+    addTearDown(() => _bounded(harness.dispose()));
 
-    final initialResponse = await tester.runAsync(
-      () => _bounded(runtime!.step(Uint8List(0))),
-    );
-    final initial = FrameCodec.decode(initialResponse!.bytes);
+    final initialCycle = await tester.runAsync(() => _bounded(harness.grant()));
+    final initial = FrameCodec.decode(initialCycle!.bytes);
     final store = NodeStore()..apply(initial);
     final queue = EventBatchQueue(
       runtimeEpoch: initial.runtimeEpoch,
@@ -39,39 +40,45 @@ void main() {
         home: BonsaiFlutterView(store: store, onEvent: queue.enqueue),
       ),
     );
-    await tester.runAsync(
-      () => _bounded(runtime!.framePresented(initial.targetRevision)),
-    );
-
     await tester.tap(find.byType(ElevatedButton));
     await tester.pump();
-    final click = Stopwatch()..start();
+    final clickPump = Stopwatch()..start();
     final clickResponse = await tester.runAsync(
-      () => _bounded(runtime!.sendEventBatch(queue.takeBatch()!)),
+      () => _bounded(
+        harness.advance(events: EventBatchCodec.encode(queue.takeBatch()!)),
+      ),
     );
+    clickPump.stop();
+    _metric('click native pump', clickPump.elapsed);
     final incremental = FrameCodec.decode(clickResponse!.bytes);
+    final clickPresentation = Stopwatch()..start();
     store.apply(incremental);
     await tester.pump();
-    await tester.runAsync(
-      () => _bounded(runtime!.framePresented(incremental.targetRevision)),
-    );
-    click.stop();
-    _metric('click-to-frame-presented', click.elapsed);
+    clickPresentation.stop();
+    _metric('click renderer presentation', clickPresentation.elapsed);
 
     queue.requestResync();
-    final resync = Stopwatch()..start();
+    final resyncPump = Stopwatch()..start();
     final resyncResponse = await tester.runAsync(
-      () => _bounded(runtime!.sendEventBatch(queue.takeBatch()!)),
+      () => _bounded(
+        harness.advance(events: EventBatchCodec.encode(queue.takeBatch()!)),
+      ),
     );
+    resyncPump.stop();
+    _metric('full resync native pump', resyncPump.elapsed);
     final fullResync = FrameCodec.decode(resyncResponse!.bytes);
     expect(fullResync.kind, FrameKind.fullSnapshot);
+    final resyncPresentation = Stopwatch()..start();
     store.apply(fullResync);
     await tester.pump();
-    await tester.runAsync(
-      () => _bounded(runtime!.framePresented(fullResync.targetRevision)),
-    );
-    resync.stop();
-    _metric('full resync presented', resync.elapsed);
+    resyncPresentation.stop();
+    _metric('full resync renderer presentation', resyncPresentation.elapsed);
+
+    final acknowledgment = Stopwatch()..start();
+    harness.acknowledge();
+    await tester.runAsync(() => _bounded(runtime.debugSnapshot()));
+    acknowledgment.stop();
+    _metric('presentation acknowledgment', acknowledgment.elapsed);
 
     final visibleStore = NodeStore()..apply(_visibleFrame(1000));
     final visible = Stopwatch()..start();

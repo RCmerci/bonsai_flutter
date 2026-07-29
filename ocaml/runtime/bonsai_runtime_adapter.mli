@@ -21,17 +21,14 @@ val result : 'result t -> 'result
 (** Schedules an effect for application by a subsequent [flush]. *)
 val schedule_event : 'result t -> unit Bonsai.Effect.t -> unit
 
-(** Reports whether [flush] has pending before-display work. *)
-val has_before_display_events : 'result t -> bool
-
-(** Reports whether a presented frame has pending lifecycle work. *)
-val has_after_display_events : 'result t -> bool
+(** Advances the owned logical clock without flushing Bonsai. *)
+val advance_clock : 'result t -> to_:Core.Time_ns.t -> unit
 
 (** Runs activation, deactivation, and after-display work.
 
     The runtime must call this only after Flutter acknowledges presentation of
     the corresponding frame. *)
-val frame_presented : 'result t -> unit
+val trigger_lifecycles : 'result t -> unit
 
 (** Invalidates the upstream driver's Incremental observers.
 

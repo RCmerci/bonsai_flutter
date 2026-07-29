@@ -1,87 +1,44 @@
-import 'dart:typed_data';
-
 import 'package:bonsai_flutter/bonsai_flutter.dart';
-import 'package:test/test.dart';
-
-void expectBackendNotLinked(RuntimeResponse response) {
-  expect(response.errorCode, RuntimeErrorCode.nativeLibraryLoadingError);
-  expect(
-    response.errorMessage,
-    anyOf(
-      'bonsai_flutter runtime error 12',
-      contains('OCaml runtime backend is not linked'),
-    ),
-  );
-}
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test(
-    'dedicated runtime isolate owns native calls and transfers responses',
-    () async {
-      final client = await RuntimeClient.start();
-      addTearDown(client.dispose);
-
-      final response = await client.step(Uint8List.fromList([1, 2, 3]));
-
-      expect(response.status, RuntimeStatus.fatalError);
-      expect(response.bytes, isEmpty);
-      expectBackendNotLinked(response);
-    },
-  );
-
-  test('queues concurrent commands through one serialized worker', () async {
+  test('dedicated isolate emits terminal native diagnostics', () async {
     final client = await RuntimeClient.start();
     addTearDown(client.dispose);
+    final update = client.updates.first;
 
-    final responses = await Future.wait([
-      client.step(Uint8List.fromList([1])),
-      client.framePresented(1),
-      client.step(Uint8List.fromList([2])),
-    ]);
+    client.setFrameEligibility(generation: 1, eligible: true);
+    client.grantVsync(generation: 1);
 
+    final fatal = await update as RuntimeFatalDiagnostic;
+    expect(fatal.diagnostic.code, RuntimeErrorCode.nativeLibraryLoadingError);
     expect(
-      responses.map((response) => response.requestSequence),
-      orderedEquals([1, 2, 3]),
-    );
-    expect(
-      responses.map((response) => response.status),
-      everyElement(RuntimeStatus.fatalError),
+      fatal.diagnostic.message,
+      anyOf(
+        'bonsai_flutter runtime error 12',
+        contains('OCaml runtime backend is not linked'),
+      ),
     );
   });
 
-  test(
-    'encodes a typed event batch before crossing the isolate boundary',
-    () async {
-      final client = await RuntimeClient.start();
-      addTearDown(client.dispose);
-      final batch = EventBatch(
-        runtimeEpoch: 21,
-        events: [
-          UiEvent(
-            sequence: 1,
-            displayedRevision: 1,
-            nodeId: 3,
-            handlerId: 9001,
-            eventTag: EventTagId.press,
-            payload: const UnitEventPayload(),
-          ),
-        ],
-      );
+  test('same-port debug request observes prior visibility command', () async {
+    final client = await RuntimeClient.start();
+    addTearDown(client.dispose);
 
-      final response = await client.sendEventBatch(batch);
+    client.setFrameEligibility(generation: 7, eligible: false);
+    final snapshot = await client.debugSnapshot();
 
-      expect(response.status, RuntimeStatus.fatalError);
-      expectBackendNotLinked(response);
-    },
-  );
+    expect(snapshot.liveGeneration, 7);
+    expect(snapshot.eligible, isFalse);
+    expect(snapshot.pumpCount, 0);
+  });
 
-  test('shutdown is acknowledged and rejects later commands', () async {
+  test('shutdown is exact once and rejects later commands', () async {
     final client = await RuntimeClient.start();
 
-    expect(await client.debugOutstandingBufferCount(), 0);
     await client.dispose();
     await client.dispose();
 
-    expect(() => client.step(Uint8List(0)), throwsA(isA<StateError>()));
+    expect(() => client.grantVsync(generation: 1), throwsA(isA<StateError>()));
   });
 }

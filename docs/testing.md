@@ -56,17 +56,23 @@ case to detect accidental quadratic matching.
 The mandatory adapter test links the selected upstream driver through
 `Bonsai_runtime_adapter`. It verifies real Bonsai state application and proves
 that activation and after-display effects remain pending until
-`frame_presented`.
+the exact presentation token succeeds.
 
 A second Counter test exercises the complete headless runtime
-step: full-frame encoding, presentation acknowledgment, revision-scoped press
+pump: full-frame encoding, presentation acknowledgment, revision-scoped press
 dispatch, Bonsai state update, and a single incremental text-property patch.
 It also rejects a mixed-validity event batch and proves that its earlier valid
-event cannot leak into a subsequent step.
+event cannot leak into a subsequent pump.
 
 The driver suite also suspends and resumes a Bonsai host effect,
 checks pending-request cleanup, and applies EnvironmentChanged as a Bonsai
 dynamic input. Sending the same environment twice produces no second frame.
+
+The foreground-pump suite drives fake monotonic samples through the real
+Bonsai adapter and covers `Clock.at`, `every`, `sleep`, `until`, observed time,
+before-display fixed points, after-display, same-path lifecycle replacement,
+no-diff tokens, exact token barriers, rejection recovery, atomic invalid
+input, host-operation replay, and sequence overflow.
 
 `bonsai_flutter_test` queries nodes by test ID, application key, semantic role,
 visible text, semantics label, and node kind. It does not implement CSS
@@ -89,6 +95,20 @@ The `BonsaiFlutterRoot` widget is tested with an injected deterministic runtime
 session. The test covers startup, initial full-snapshot presentation, event
 draining, incremental frame application, post-frame acknowledgment, and
 runtime disposal without loading a native artifact.
+
+Frame-loop tests prove one recursive `scheduleFrameCallback` chain, scheduler
+generation guards, at most one grant per bounded Flutter frame, suspension for
+hidden and paused states, retained-token resume, independent
+`framesEnabled` loss, stale callback rejection, and exact disposal.
+Worker tests prove grant coalescing behind the presentation barrier, ordered
+success and rejection, checked monotonic conversion, visibility barriers, and
+exact-once terminal cleanup.
+
+A live foreground root intentionally does not settle. Widget tests use
+bounded frame counts or predicate-based helpers instead of `pumpAndSettle`.
+Real-isolate timer tests use a wall-clock timeout, alternate a short
+`tester.runAsync` delay with one `tester.pump()`, and include worker debug
+state in timeout diagnostics.
 
 Host-effect tests use injected implementations and cover success, typed error,
 cancellation, duplicate IDs, and disposal while work is pending. Navigation
@@ -155,8 +175,8 @@ the `native_embed.exe.o` target in its own `ocaml/` directory. The integration
 tests:
 
 - load the generated package code asset;
-- start the dedicated Dart runtime isolate with the `counter` OCaml
-  entrypoint;
+- start the dedicated Dart runtime isolate and drive its ordered update
+  session with foreground grants;
 - decode and commit the initial full snapshot;
 - render it with the standard Flutter registry;
 - click the real `ElevatedButton`;
@@ -164,7 +184,7 @@ tests:
 - observe Bonsai state change and exactly one incremental text-property patch;
 - preserve the root and Button Elements while changing `Count: 0` to
   `Count: 1`;
-- acknowledge both presented revisions and destroy the runtime.
+- acknowledge exact presentation tokens and destroy the runtime.
 
 The Gallery integration test starts the `gallery` OCaml entrypoint, verifies
 Padding, ScrollView, Button, Checkbox, dark Theme, and an accessibility label,
@@ -173,7 +193,7 @@ Bonsai state, and returns only Semantics and MaterialCheckbox property
 updates—no node create or drop operations.
 
 The Text Input integration test starts the `text_input` entrypoint and changes
-the live controller twice before one runtime step. Its event batch preserves
+the live controller twice before one runtime pump. Its event batch preserves
 the Chinese/emoji UTF-16 composing range. Bonsai accepts both edits in one
 flush and emits one TextInput Ack for the latest local revision; Flutter keeps
 the same controller and composing range.
@@ -189,6 +209,13 @@ deltas remain local, sends one Archive commit through FFI, applies the
 incremental row removal while retaining the following keyed Element, opens an
 unread detail page, drives an interactive leading-edge pop, and confirms that
 the matching RoutePop returns to an inbox where the message remains read.
+
+The autonomous-pump fixture supplies no tap, host response, environment
+update, or manual native pump. It presents phase 0, advances through
+after-display to phase 1, and reaches phase 2 after a 50 ms Bonsai sleep. A
+second scenario follows the valid mobile background sequence, proves with a
+same-port snapshot that pump count remains unchanged while hidden or paused,
+then resumes and catches up using real foreground frames.
 
 For interaction tuning, use a compact physical iPhone in Profile mode. The
 dedicated driver warms every interaction twice, records twenty detail

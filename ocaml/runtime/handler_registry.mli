@@ -33,7 +33,7 @@ val create : runtime_epoch:int64 -> t
 val install : t -> Frame.t -> (unit, Runtime_error.t) result
 
 (** Marks a revision as displayed without retiring any handler frames. *)
-val mark_frame_presented : t -> revision:int64 -> (unit, Runtime_error.t) result
+val mark_displayed_revision : t -> revision:int64 -> (unit, Runtime_error.t) result
 
 (** Retires handler frames strictly older than [revision]. *)
 val retire_before : t -> revision:int64 -> unit
@@ -46,9 +46,15 @@ val retire_superseded : t -> displayed_revision:int64 -> unit
 (** Marks a revision displayed and retires frames outside the grace period.
 
     Runtime drivers that must run lifecycle work between those operations
-    should call [mark_frame_presented] and [retire_superseded] separately. *)
-val frame_presented : t -> revision:int64 -> (unit, Runtime_error.t) result
+    should call [mark_displayed_revision] and [retire_superseded] separately. *)
+val commit_displayed_revision : t -> revision:int64 -> (unit, Runtime_error.t) result
 
+module Validated_batch : sig
+  type t
+end
+
+val validate_batch : t -> event list -> (Validated_batch.t, Runtime_error.t) result
+val dispatch_validated : t -> Validated_batch.t -> (unit, Runtime_error.t) result
 val dispatch : t -> event -> (unit, Runtime_error.t) result
 val dispatch_batch : t -> event list -> (unit, Runtime_error.t) result
 val retained_frame_count : t -> int

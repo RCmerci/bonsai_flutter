@@ -17,8 +17,8 @@ type create_result =
 type output =
   { status : status
   ; bytes : bytes
+  ; presentation_id : int64
   ; revision : int64
-  ; next_wakeup_ns : int64
   ; error_code : int
   ; error : string
   }
@@ -28,8 +28,9 @@ type output =
 val embed : name:string -> App.t -> unit
 
 val create : bytes -> create_result
-val step : int64 -> bytes -> output
-val frame_presented : int64 -> int64 -> output
+val pump : int64 -> int64 -> bytes -> output
+val presentation_succeeded : int64 -> int64 -> int64 -> int64 -> output
+val presentation_rejected : int64 -> int64 -> int64 -> int -> output
 val destroy : int64 -> unit
 
 module For_testing : sig

@@ -73,7 +73,7 @@ let test_initial_inbox_and_semantics () =
 ;;
 
 let native_swipe handle id direction =
-  Test.Handle.trigger_frame_presented handle;
+  Test.Handle.present handle;
   Test.Handle.native_event
     handle
     (Test.Query.test_id (Printf.sprintf "mail-swipe-%d" id))
@@ -90,7 +90,7 @@ let test_star_preserves_keyed_row_identity () =
       | Some row -> row
       | None -> fail "mail row 2 is missing"
     in
-    Test.Handle.trigger_frame_presented handle;
+    Test.Handle.present handle;
     Test.Handle.click handle (Test.Query.test_id "mail-star-2");
     let row_after =
       match Test.Handle.find handle (Test.Query.test_id "mail-row-2") with
@@ -114,7 +114,7 @@ let test_open_marks_read_and_platform_pop_preserves_state () =
         (Test.Query.test_id "mail-swipe-1")
         "mail swipe host 1 is missing before open"
     in
-    Test.Handle.trigger_frame_presented handle;
+    Test.Handle.present handle;
     Test.Handle.click handle (Test.Query.test_id "mail-row-1");
     let swipe_while_open =
       require_node
@@ -137,7 +137,7 @@ let test_open_marks_read_and_platform_pop_preserves_state () =
       handle
       (Test.Query.visible_text "Mara Vale")
       "detail sender does not match the selected message";
-    Test.Handle.trigger_frame_presented handle;
+    Test.Handle.present handle;
     Test.Handle.route_pop
       handle
       (Test.Query.kind "Navigator")
@@ -239,7 +239,7 @@ let test_swipe_read_action_updates_in_place_without_navigation () =
 let test_swipe_event_filtering_and_nested_action_isolation () =
   with_handle (fun handle ->
     let send kind_id version event_id payload =
-      Test.Handle.trigger_frame_presented handle;
+      Test.Handle.present handle;
       Test.Handle.native_event
         handle
         (Test.Query.test_id "mail-swipe-1")
@@ -269,9 +269,9 @@ let test_swipe_event_filtering_and_nested_action_isolation () =
 
 let test_stale_route_pop_is_ignored () =
   with_handle (fun handle ->
-    Test.Handle.trigger_frame_presented handle;
+    Test.Handle.present handle;
     Test.Handle.click handle (Test.Query.test_id "mail-row-1");
-    Test.Handle.trigger_frame_presented handle;
+    Test.Handle.present handle;
     Test.Handle.route_pop
       handle
       (Test.Query.kind "Navigator")
@@ -281,7 +281,7 @@ let test_stale_route_pop_is_ignored () =
       handle
       (Test.Query.test_id "mail-detail-page")
       "stale route-pop key cleared the selected detail";
-    Test.Handle.trigger_frame_presented handle;
+    Test.Handle.present handle;
     Test.Handle.route_pop
       handle
       (Test.Query.kind "Navigator")
@@ -296,11 +296,11 @@ let test_stale_route_pop_is_ignored () =
 let test_archive_delete_and_mark_unread () =
   let expect_removed action_id message_id =
     with_handle (fun handle ->
-      Test.Handle.trigger_frame_presented handle;
+      Test.Handle.present handle;
       Test.Handle.click
         handle
         (Test.Query.test_id (Printf.sprintf "mail-row-%d" message_id));
-      Test.Handle.trigger_frame_presented handle;
+      Test.Handle.present handle;
       Test.Handle.click handle (Test.Query.test_id action_id);
       require_absent
         handle
@@ -317,9 +317,9 @@ let test_archive_delete_and_mark_unread () =
   expect_removed "mail-archive" 1;
   expect_removed "mail-delete" 2;
   with_handle (fun handle ->
-    Test.Handle.trigger_frame_presented handle;
+    Test.Handle.present handle;
     Test.Handle.click handle (Test.Query.test_id "mail-row-3");
-    Test.Handle.trigger_frame_presented handle;
+    Test.Handle.present handle;
     Test.Handle.click handle (Test.Query.test_id "mail-mark-unread");
     require_absent
       handle
@@ -333,19 +333,19 @@ let test_archive_delete_and_mark_unread () =
 
 let test_detail_star_attachment_and_reply_notice () =
   with_handle (fun handle ->
-    Test.Handle.trigger_frame_presented handle;
+    Test.Handle.present handle;
     Test.Handle.click handle (Test.Query.test_id "mail-row-4");
     require_present
       handle
       (Test.Query.test_id "mail-attachment")
       "fixture attachment is missing";
-    Test.Handle.trigger_frame_presented handle;
+    Test.Handle.present handle;
     Test.Handle.click handle (Test.Query.test_id "mail-detail-star");
     require_present
       handle
       (Test.Query.semantics_label "Starred message from Juniper Works")
       "detail star did not update selected state";
-    Test.Handle.trigger_frame_presented handle;
+    Test.Handle.present handle;
     Test.Handle.click handle (Test.Query.test_id "mail-reply-all");
     require_present
       handle

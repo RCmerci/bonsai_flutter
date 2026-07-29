@@ -21,13 +21,12 @@ type create_result =
 type output =
   { status : status
   ; bytes : bytes
+  ; presentation_id : int64
   ; revision : int64
-  ; next_wakeup_ns : int64
   ; error_code : int
   ; error : string
   }
 
-let no_wakeup = -1L
 let runtimes : (int64, Driver.t) Hashtbl.t = Hashtbl.create 8
 let random = Random.State.make_self_init ()
 
@@ -42,12 +41,13 @@ let create_error error = { status = Fatal_error; handle = 0L; error }
 let output
       ?(status = Ok)
       ?(bytes = Bytes.empty)
+      ?(presentation_id = 0L)
       ?(revision = 0L)
       ?(error_code = 0)
       ?(error = "")
       ()
   =
-  { status; bytes; revision; next_wakeup_ns = no_wakeup; error_code; error }
+  { status; bytes; presentation_id; revision; error_code; error }
 ;;
 
 let fresh_handle () =
@@ -97,7 +97,7 @@ let create config =
   | exception_ -> create_error (exception_message exception_)
 ;;
 
-let driver_error error =
+let driver_error_metadata error =
   let status, error_code =
     match error with
     | Driver.Event_error
@@ -116,12 +116,22 @@ let driver_error error =
     | Event_error (Invalid_event _) -> Recoverable_error, 1
     | Codec_error _ -> Fatal_error, 1
     | Unsupported_widget _ -> Fatal_error, 4
-    | Invalid_state _ -> Fatal_error, 5
+    | Invalid_state message ->
+      if Core.String.is_substring message ~substring:"monotonic"
+      then Recoverable_error, 14
+      else if Core.String.is_substring message ~substring:"presentation"
+      then Recoverable_error, 13
+      else Fatal_error, 15
     | Lifecycle_error _ -> Fatal_error, 11
     | Host_response_error _ -> Fatal_error, 8
     | Shutdown -> Fatal_error, 9
   in
-  output ~status ~error_code ~error:(Driver.error_to_string error) ()
+  status, error_code, Driver.error_to_string error
+;;
+
+let driver_error error =
+  let status, error_code, error = driver_error_metadata error in
+  output ~status ~error_code ~error ()
 ;;
 
 let find_runtime handle =
@@ -132,39 +142,108 @@ let find_runtime handle =
       (output ~status:Fatal_error ~error_code:9 ~error:"Unknown native runtime handle" ())
 ;;
 
-let step handle input =
+let pump handle monotonic_now_ns input =
   try
     match find_runtime handle with
     | Result.Error output -> output
     | Result.Ok driver ->
-      let result =
+      let decoded_events, decode_error =
         if Bytes.length input = 0
-        then Driver.step driver ()
+        then None, None
         else (
           match Protocol.Event_batch_codec.decode input with
+          | Result.Ok events -> Some events, None
           | Result.Error error ->
-            Result.Error
-              (Driver.Event_error
-                 (Bonsai_flutter_runtime.Event_dispatcher.Invalid_event error.message))
-          | Result.Ok events -> Driver.step driver ~events ())
+            ( None
+            , Some
+                (Driver.Event_error
+                   (Bonsai_flutter_runtime.Event_dispatcher.Invalid_event error.message))
+            ))
+      in
+      let result =
+        match decoded_events with
+        | None -> Driver.pump driver ~monotonic_now_ns ()
+        | Some events -> Driver.pump driver ~monotonic_now_ns ~events ()
       in
       (match result with
        | Result.Error error -> driver_error error
-       | Result.Ok None -> output ()
-       | Result.Ok (Some frame) -> output ~bytes:frame.bytes ~revision:frame.revision ())
+       | Result.Ok result ->
+         let recoverable_error =
+           match decode_error with
+           | Some error -> Some error
+           | None -> result.recoverable_error
+         in
+         let bytes =
+           match result.frame with
+           | None -> Bytes.empty
+           | Some frame -> frame.bytes
+         in
+         (match recoverable_error with
+          | None ->
+            output
+              ~bytes
+              ~presentation_id:result.presentation_id
+              ~revision:result.renderer_revision
+              ()
+          | Some error ->
+            let _, error_code, error = driver_error_metadata error in
+            output
+              ~status:Recoverable_error
+              ~bytes
+              ~presentation_id:result.presentation_id
+              ~revision:result.renderer_revision
+              ~error_code
+              ~error
+              ()))
   with
   | exception_ ->
     output ~status:Fatal_error ~error_code:9 ~error:(exception_message exception_) ()
 ;;
 
-let frame_presented handle revision =
+let presentation_succeeded handle presentation_id revision monotonic_now_ns =
   try
     match find_runtime handle with
     | Result.Error output -> output
     | Result.Ok driver ->
-      (match Driver.frame_presented driver ~revision with
-       | Result.Ok () -> output ~revision ()
+      (match
+         Driver.presentation_succeeded
+           driver
+           ~presentation_id
+           ~renderer_revision:revision
+           ~monotonic_now_ns
+       with
+       | Result.Ok () -> output ()
        | Result.Error error -> driver_error error)
+  with
+  | exception_ ->
+    output ~status:Fatal_error ~error_code:9 ~error:(exception_message exception_) ()
+;;
+
+let rejection_reason = function
+  | 0 -> Result.Ok Driver.Decode_failed
+  | 1 -> Result.Ok Driver.Frame_validation_failed
+  | 2 -> Result.Ok Driver.Renderer_epoch_mismatch
+  | 3 -> Result.Ok Driver.Renderer_revision_mismatch
+  | _ -> Result.Error "Unknown presentation rejection reason"
+;;
+
+let presentation_rejected handle presentation_id revision reason =
+  try
+    match find_runtime handle with
+    | Result.Error output -> output
+    | Result.Ok driver ->
+      (match rejection_reason reason with
+       | Result.Error error -> output ~status:Recoverable_error ~error_code:13 ~error ()
+       | Result.Ok reason ->
+         (match
+            Driver.presentation_rejected
+              driver
+              ~presentation_id
+              ~renderer_revision:revision
+              ~reason
+          with
+          | Result.Ok () -> output ()
+          | Result.Error error -> driver_error error))
   with
   | exception_ ->
     output ~status:Fatal_error ~error_code:9 ~error:(exception_message exception_) ()
@@ -187,29 +266,42 @@ let callback_create config =
   status_code result.status, result.handle, result.error
 ;;
 
-let callback_step handle input =
-  let result = step handle (Bytes.of_string input) in
+let callback_pump handle monotonic_now_ns input =
+  let result = pump handle monotonic_now_ns (Bytes.of_string input) in
   ( status_code result.status
   , Bytes.to_string result.bytes
+  , result.presentation_id
   , result.revision
-  , result.next_wakeup_ns
   , result.error_code
   , result.error )
 ;;
 
-let callback_frame_presented handle revision =
-  let result = frame_presented handle revision in
+let callback_presentation_succeeded handle presentation_id revision monotonic_now_ns =
+  let result = presentation_succeeded handle presentation_id revision monotonic_now_ns in
   ( status_code result.status
   , Bytes.to_string result.bytes
+  , result.presentation_id
   , result.revision
-  , result.next_wakeup_ns
+  , result.error_code
+  , result.error )
+;;
+
+let callback_presentation_rejected handle presentation_id revision reason =
+  let result = presentation_rejected handle presentation_id revision reason in
+  ( status_code result.status
+  , Bytes.to_string result.bytes
+  , result.presentation_id
+  , result.revision
   , result.error_code
   , result.error )
 ;;
 
 let () =
   Callback.register "bonsai_flutter.create" callback_create;
-  Callback.register "bonsai_flutter.step" callback_step;
-  Callback.register "bonsai_flutter.frame_presented" callback_frame_presented;
+  Callback.register "bonsai_flutter.pump" callback_pump;
+  Callback.register
+    "bonsai_flutter.presentation_succeeded"
+    callback_presentation_succeeded;
+  Callback.register "bonsai_flutter.presentation_rejected" callback_presentation_rejected;
   Callback.register "bonsai_flutter.destroy" destroy
 ;;

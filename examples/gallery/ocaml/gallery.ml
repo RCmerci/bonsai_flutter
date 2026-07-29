@@ -135,9 +135,7 @@ let make_handlers registry set_model =
         { model with interaction_status = Printf.sprintf "Scroll offset: %.0f" pixels }
       | _ -> model)
   in
-  let first_pair =
-    Bonsai.map2 press toggle ~f:(fun press toggle -> press, toggle)
-  in
+  let first_pair = Bonsai.map2 press toggle ~f:(fun press toggle -> press, toggle) in
   let second_pair =
     Bonsai.map2 text_edit text_submit ~f:(fun text_edit text_submit ->
       text_edit, text_submit)
@@ -146,9 +144,7 @@ let make_handlers registry set_model =
     Bonsai.map2 focus_changed interaction ~f:(fun focus_changed interaction ->
       focus_changed, interaction)
   in
-  let fourth_pair =
-    Bonsai.map2 native scroll ~f:(fun native scroll -> native, scroll)
-  in
+  let fourth_pair = Bonsai.map2 native scroll ~f:(fun native scroll -> native, scroll) in
   let first_half =
     Bonsai.map2 first_pair second_pair ~f:(fun (press, toggle) (text_edit, text_submit) ->
       press, toggle, text_edit, text_submit)
@@ -168,15 +164,15 @@ let make_handlers registry set_model =
         (press, toggle, text_edit, text_submit)
         (focus_changed, interaction, native, scroll)
       ->
-        { press
-        ; toggle
-        ; text_edit
-        ; text_submit
-        ; focus_changed
-        ; interaction
-        ; native
-        ; scroll
-        })
+      { press
+      ; toggle
+      ; text_edit
+      ; text_submit
+      ; focus_changed
+      ; interaction
+      ; native
+      ; scroll
+      })
 ;;
 
 let section title children =

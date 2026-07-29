@@ -36,30 +36,51 @@ typedef int32_t bf_error_code;
 #define BF_ERROR_DART_RENDERER_EXCEPTION 10
 #define BF_ERROR_LIFECYCLE_EXCEPTION 11
 #define BF_ERROR_NATIVE_LIBRARY_LOADING_ERROR 12
+#define BF_ERROR_INVALID_PRESENTATION 13
+#define BF_ERROR_INVALID_MONOTONIC_TIME 14
+#define BF_ERROR_INVALID_SCHEDULER_STATE 15
+
+#define BF_REJECTION_DECODE_FAILED 0
+#define BF_REJECTION_FRAME_VALIDATION_FAILED 1
+#define BF_REJECTION_RENDERER_EPOCH_MISMATCH 2
+#define BF_REJECTION_RENDERER_REVISION_MISMATCH 3
 
 typedef struct bf_output_buffer {
   const uint8_t *data;
   size_t length;
+  uint64_t presentation_id;
   uint64_t revision;
-  int64_t next_wakeup_ns;
   bf_status status;
   bf_error_code error_code;
 } bf_output_buffer;
 
+BF_EXPORT uint16_t bf_abi_version_major(void);
+BF_EXPORT uint16_t bf_abi_version_minor(void);
 BF_EXPORT uint16_t bf_protocol_version_major(void);
 BF_EXPORT uint16_t bf_protocol_version_minor(void);
 
 BF_EXPORT bf_runtime *bf_runtime_create(const uint8_t *config,
                                         size_t config_length);
 
-BF_EXPORT bf_status bf_runtime_step(bf_runtime *runtime,
+BF_EXPORT bf_status bf_runtime_pump(bf_runtime *runtime,
+                                    int64_t monotonic_now_ns,
                                     const uint8_t *input,
                                     size_t input_length,
                                     bf_output_buffer *output);
 
-BF_EXPORT bf_status bf_runtime_frame_presented(bf_runtime *runtime,
-                                               uint64_t revision,
-                                               bf_output_buffer *output);
+BF_EXPORT bf_status bf_runtime_presentation_succeeded(
+    bf_runtime *runtime,
+    uint64_t presentation_id,
+    uint64_t revision,
+    int64_t monotonic_now_ns,
+    bf_output_buffer *output);
+
+BF_EXPORT bf_status bf_runtime_presentation_rejected(
+    bf_runtime *runtime,
+    uint64_t presentation_id,
+    uint64_t revision,
+    int32_t rejection_reason,
+    bf_output_buffer *output);
 
 BF_EXPORT bf_status bf_runtime_get_last_error(bf_runtime *runtime,
                                               bf_output_buffer *output);

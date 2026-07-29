@@ -105,10 +105,7 @@ let component handlers graph =
       ~get_key:(fun item -> item.id)
       ~f:(fun item_id item _graph ->
         let dependencies = Bonsai.both set_state item_id in
-        let equal_dependencies
-              (left_set_state, left_id)
-              (right_set_state, right_id)
-          =
+        let equal_dependencies (left_set_state, left_id) (right_set_state, right_id) =
           left_set_state == right_set_state && Int.equal left_id right_id
         in
         let select =
@@ -127,10 +124,10 @@ let component handlers graph =
             ~equal:equal_dependencies
             dependencies
             ~f:(fun (set_state, item_id) -> function
-              | Ui.Event.Payload.Bool completed ->
-                set_state (fun state ->
-                  update_item state item_id (fun item -> { item with completed }))
-              | _ -> Bonsai.Effect.Ignore)
+            | Ui.Event.Payload.Bool completed ->
+              set_state (fun state ->
+                update_item state item_id (fun item -> { item with completed }))
+            | _ -> Bonsai.Effect.Ignore)
         in
         let delete =
           Driver.Handler.create
@@ -143,7 +140,8 @@ let component handlers graph =
                 { state with
                   selected =
                     (if state.selected = Some item_id then None else state.selected)
-                ; items = List.filter (fun candidate -> candidate.id <> item_id) state.items
+                ; items =
+                    List.filter (fun candidate -> candidate.id <> item_id) state.items
                 }))
         in
         let edit =
@@ -153,15 +151,15 @@ let component handlers graph =
             ~equal:equal_dependencies
             dependencies
             ~f:(fun (set_state, item_id) -> function
-              | Ui.Event.Payload.Text_edit edit ->
-                set_state (fun state ->
-                  update_item state item_id (fun item ->
-                    { item with
-                      title = edit.text
-                    ; document_revision = Int64.succ item.document_revision
-                    ; accepted_local_revision = edit.local_revision
-                    }))
-              | _ -> Bonsai.Effect.Ignore)
+            | Ui.Event.Payload.Text_edit edit ->
+              set_state (fun state ->
+                update_item state item_id (fun item ->
+                  { item with
+                    title = edit.text
+                  ; document_revision = Int64.succ item.document_revision
+                  ; accepted_local_revision = edit.local_revision
+                  }))
+            | _ -> Bonsai.Effect.Ignore)
         in
         let submit =
           Driver.Handler.create
@@ -178,9 +176,9 @@ let component handlers graph =
             ~equal:equal_dependencies
             dependencies
             ~f:(fun (set_state, item_id) -> function
-              | Ui.Event.Payload.Bool true ->
-                set_state (fun state -> { state with selected = Some item_id })
-              | Ui.Event.Payload.Bool false | _ -> Bonsai.Effect.Ignore)
+            | Ui.Event.Payload.Bool true ->
+              set_state (fun state -> { state with selected = Some item_id })
+            | Ui.Event.Payload.Bool false | _ -> Bonsai.Effect.Ignore)
         in
         let primary_handlers =
           Bonsai.map2 select toggle ~f:(fun select toggle -> select, toggle)
@@ -195,19 +193,13 @@ let component handlers graph =
           Bonsai.map2
             primary_handlers
             (Bonsai.both edit_handlers input_handlers)
-            ~f:(fun
-                 (select, toggle)
-                 ((delete, edit), (submit, focus))
-               ->
+            ~f:(fun (select, toggle) ((delete, edit), (submit, focus)) ->
               select, toggle, delete, edit, submit, focus)
         in
         Bonsai.map2
           (Bonsai.both item selected)
           row_handlers
-          ~f:(fun
-               (item, selected)
-               (select, toggle, delete, edit, submit, focus)
-             ->
+          ~f:(fun (item, selected) (select, toggle, delete, edit, submit, focus) ->
             let key = Ui.Key.int item.id in
             Ui.Widget.Flex.row
               ~key
@@ -247,10 +239,8 @@ let component handlers graph =
       graph
   in
   let static_handlers =
-    Bonsai.map2
-      (Bonsai.both add reverse)
-      scroll
-      ~f:(fun (add, reverse) scroll -> add, reverse, scroll)
+    Bonsai.map2 (Bonsai.both add reverse) scroll ~f:(fun (add, reverse) scroll ->
+      add, reverse, scroll)
   in
   Bonsai.map2 rows static_handlers ~f:(fun rows (add, reverse, scroll) ->
     let rows =

@@ -261,4 +261,80 @@ void main() {
     );
     expect(notifications, 1);
   });
+
+  test('prepare validates a full transaction without live mutation', () {
+    final store = NodeStore();
+
+    final prepared = store.prepare(counterSnapshot(text: 'Count: 0'));
+
+    expect(store.nodes, isEmpty);
+    expect(store.runtimeEpoch, isNull);
+    expect(store.revision, 0);
+
+    final result = store.commit(prepared);
+
+    expect(store.revision, 1);
+    expect(store.node(2).props, const TextProps('Count: 0'));
+    expect(result.dirtyNodeIds, {1, 2});
+  });
+
+  test('prepared frame commits once and rejects reuse', () {
+    final store = NodeStore();
+    final prepared = store.prepare(counterSnapshot(text: 'Count: 0'));
+
+    store.commit(prepared);
+
+    expect(() => store.commit(prepared), throwsStateError);
+  });
+
+  test('prepared frame rejects a changed live base before mutation', () {
+    final store = NodeStore()..apply(counterSnapshot(text: 'Count: 0'));
+    final stale = store.prepare(
+      const Frame(
+        runtimeEpoch: 7,
+        baseRevision: 1,
+        targetRevision: 2,
+        kind: FrameKind.incremental,
+        operations: [
+          UpdateProps(nodeId: 2, props: TextProps('stale prepared value')),
+        ],
+      ),
+    );
+    store.apply(
+      const Frame(
+        runtimeEpoch: 7,
+        baseRevision: 1,
+        targetRevision: 2,
+        kind: FrameKind.incremental,
+        operations: [
+          UpdateProps(nodeId: 2, props: TextProps('committed value')),
+        ],
+      ),
+    );
+
+    expect(() => store.commit(stale), throwsStateError);
+    expect(store.node(2).props, const TextProps('committed value'));
+    expect(store.revision, 2);
+  });
+
+  test('listener failure occurs after the prepared state commits', () {
+    final store = NodeStore()..apply(counterSnapshot(text: 'Count: 0'));
+    store.subscribeStore(() => throw StateError('listener failed'));
+    final prepared = store.prepare(
+      const Frame(
+        runtimeEpoch: 7,
+        baseRevision: 1,
+        targetRevision: 2,
+        kind: FrameKind.incremental,
+        operations: [
+          UpdateProps(nodeId: 2, props: TextProps('committed before failure')),
+        ],
+      ),
+    );
+
+    expect(() => store.commit(prepared), throwsStateError);
+    expect(store.revision, 2);
+    expect(store.node(2).props, const TextProps('committed before failure'));
+    expect(() => store.commit(prepared), throwsStateError);
+  });
 }

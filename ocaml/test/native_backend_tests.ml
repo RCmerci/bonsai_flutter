@@ -41,8 +41,8 @@ let counter handlers graph =
       ~equal:( == )
       increment
       ~f:(fun increment -> function
-        | Ui.Event.Payload.Unit -> increment (fun value -> value + 1)
-        | _ -> increment Fun.id)
+      | Ui.Event.Payload.Unit -> increment (fun value -> value + 1)
+      | _ -> increment Fun.id)
   in
   Bonsai.map2 count increment_handler ~f:(fun count increment_handler ->
     Ui.Widget.column
@@ -60,22 +60,29 @@ let () =
   let created = Native_backend.create (Bytes.of_string "counter") in
   require (created.status = Native_backend.Ok) "registered entrypoint did not create";
   require (Int64.compare created.handle 0L > 0) "native handle must be positive";
-  let initial = Native_backend.step created.handle Bytes.empty in
-  require (initial.status = Native_backend.Ok) "initial native step failed";
-  require (Bytes.length initial.bytes > 0) "initial native step returned no frame";
+  let initial = Native_backend.pump created.handle 0L Bytes.empty in
+  require (initial.status = Native_backend.Ok) "initial native pump failed";
+  require (Bytes.length initial.bytes > 0) "initial native pump returned no frame";
+  require (initial.presentation_id = 1L) "initial presentation ID must be one";
   require (initial.revision = 1L) "initial native revision must be one";
   (match Protocol.Binary_codec.decode initial.bytes with
    | Ok { kind = Full_snapshot; _ } -> ()
    | Ok _ -> fail "initial native frame was not a full snapshot"
    | Error error -> fail "initial native frame did not decode: %s" error.message);
-  let presented = Native_backend.frame_presented created.handle initial.revision in
+  let presented =
+    Native_backend.presentation_succeeded
+      created.handle
+      initial.presentation_id
+      initial.revision
+      0L
+  in
   require (presented.status = Native_backend.Ok) "frame presentation failed";
   Native_backend.destroy created.handle;
   Native_backend.destroy created.handle;
-  let after_destroy = Native_backend.step created.handle Bytes.empty in
+  let after_destroy = Native_backend.pump created.handle 1L Bytes.empty in
   require
     (after_destroy.status = Native_backend.Fatal_error)
-    "destroyed native handle accepted a step";
+    "destroyed native handle accepted a pump";
   require
     (String.length after_destroy.error > 0)
     "destroyed native handle returned no diagnostic";
@@ -83,7 +90,7 @@ let () =
   for _iteration = 1 to 100 do
     let runtime = Native_backend.create (Bytes.of_string "counter") in
     require (runtime.status = Native_backend.Ok) "soak runtime did not create";
-    ignore (Native_backend.step runtime.handle Bytes.empty);
+    ignore (Native_backend.pump runtime.handle 0L Bytes.empty);
     Native_backend.destroy runtime.handle
   done;
   require
@@ -96,9 +103,15 @@ let () =
     capture_stderr (fun () ->
       let runtime = Native_backend.create (Bytes.of_string "mail") in
       require (runtime.status = Native_backend.Ok) "traced mail runtime did not create";
-      let initial = Native_backend.step runtime.handle Bytes.empty in
-      require (initial.status = Native_backend.Ok) "traced mail initial step failed";
-      let presented = Native_backend.frame_presented runtime.handle initial.revision in
+      let initial = Native_backend.pump runtime.handle 0L Bytes.empty in
+      require (initial.status = Native_backend.Ok) "traced mail initial pump failed";
+      let presented =
+        Native_backend.presentation_succeeded
+          runtime.handle
+          initial.presentation_id
+          initial.revision
+          0L
+      in
       require (presented.status = Native_backend.Ok) "traced mail presentation failed";
       let resync =
         Protocol.Inbound_event.
@@ -119,7 +132,7 @@ let () =
         | Ok bytes -> bytes
         | Error error -> fail "resync batch did not encode: %s" error.message
       in
-      let resynced = Native_backend.step runtime.handle encoded_resync in
+      let resynced = Native_backend.pump runtime.handle 1L encoded_resync in
       require (resynced.status = Native_backend.Ok) "traced mail resync failed";
       Native_backend.destroy runtime.handle)
   in
@@ -140,7 +153,7 @@ let () =
     "trace omitted outbound frame revisions";
   require_substring
     trace
-    "[Bonsai Mail][ocaml][presentation-ack] revision=1"
+    "[Bonsai Mail][ocaml][presentation-ack] presentationId=1 revision=1"
     "trace did not include the presentation acknowledgment";
   require_substring
     trace

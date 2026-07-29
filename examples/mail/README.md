@@ -37,10 +37,10 @@ flutter run -d macos
 ```
 
 The debug run prints a concise runtime trace to the terminal. It shows the
-entrypoint startup, serialized runtime commands, event-batch ordering, runtime
-status, revisions, frame byte counts, FFI and isolate-transfer timings,
-presentation acknowledgments, and shutdown. Event payloads and native error
-messages are intentionally omitted.
+entrypoint startup, foreground grants, visibility generations, ordered cycles,
+event-batch ordering, presentation identities, revisions, frame byte counts,
+recoverable diagnostics, acknowledgments, and shutdown. Event payloads and
+native error messages are intentionally omitted.
 
 The OCaml side prints only the logical widgets changed by each reconciliation,
 a summary of every frame sent to Flutter, every event batch received from
@@ -59,13 +59,14 @@ Theme
       Navigator
 [Bonsai Mail][ocaml][outbound-frame] direction=ocaml->flutter epoch=... kind=full_snapshot baseRevision=0 targetRevision=1 operations=... bytes=...
 [Bonsai Mail][runtime] ready
-[Bonsai Mail][command] step inputBytes=0
-[Bonsai Mail][response] command=step request=1 status=ok error=none revision=1 frameBytes=14352 nextWakeup=none ffiUs=824 transferUs=91
+[Bonsai Mail][visibility] generation=1 eligible=true
+[Bonsai Mail][command] grantVsync generation=1
+[Bonsai Mail][cycle] presentation=1 revision=1 frameBytes=14352 recoverable=none
 [Bonsai Mail][event-batch] epoch=... events=1 sequences=1..1 displayedRevision=1 tags=tap
 [Bonsai Mail][ocaml][inbound-event-batch] direction=flutter->ocaml epoch=... events=1
   sequence=1 displayedRevision=1 node=... handler=... tag=tap payload=tap
-[Bonsai Mail][presentation] acknowledge revision=2
-[Bonsai Mail][ocaml][presentation-ack] revision=2 direction=flutter->ocaml
+[Bonsai Mail][presentation] succeeded generation=1 presentation=2 revision=2 eventBytes=...
+[Bonsai Mail][ocaml][presentation-ack] presentation=2 revision=2 direction=flutter->ocaml
 [Bonsai Mail][ocaml][widget-diff] targetRevision=2 kind=incremental_frame
   updateProps node=... Text "Updated subject"
 ```

@@ -133,7 +133,7 @@ ci-ios-device:
 
 ci-sanitizers:
 	mkdir -p _build/ci
-	@if test "$$(uname -s)" = Darwin; then \
+	@set -e; if test "$$(uname -s)" = Darwin; then \
 	  clang -std=c11 -Wall -Wextra -Werror -g -DBF_WITH_OCAML flutter/packages/bonsai_flutter_native/src/bonsai_flutter_native.c flutter/packages/bonsai_flutter_native/test/mock_ocaml_bridge.c flutter/packages/bonsai_flutter_native/test/native_bridge_test.c -o _build/ci/native_bridge_sanitized; \
 	  _build/ci/native_bridge_sanitized; \
 	else \

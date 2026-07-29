@@ -15,8 +15,9 @@ static int bf_ocaml_initialized = 0;
 static char bf_ocaml_initialization_error[256] = {0};
 
 static const value *bf_create_callback = NULL;
-static const value *bf_step_callback = NULL;
-static const value *bf_frame_presented_callback = NULL;
+static const value *bf_pump_callback = NULL;
+static const value *bf_presentation_succeeded_callback = NULL;
+static const value *bf_presentation_rejected_callback = NULL;
 static const value *bf_destroy_callback = NULL;
 
 static void bf_copy_error(char *destination,
@@ -50,12 +51,16 @@ static void bf_ocaml_initialize_once(void) {
     return;
   }
   bf_create_callback = caml_named_value("bonsai_flutter.create");
-  bf_step_callback = caml_named_value("bonsai_flutter.step");
-  bf_frame_presented_callback =
-      caml_named_value("bonsai_flutter.frame_presented");
+  bf_pump_callback = caml_named_value("bonsai_flutter.pump");
+  bf_presentation_succeeded_callback =
+      caml_named_value("bonsai_flutter.presentation_succeeded");
+  bf_presentation_rejected_callback =
+      caml_named_value("bonsai_flutter.presentation_rejected");
   bf_destroy_callback = caml_named_value("bonsai_flutter.destroy");
-  if (bf_create_callback == NULL || bf_step_callback == NULL ||
-      bf_frame_presented_callback == NULL || bf_destroy_callback == NULL) {
+  if (bf_create_callback == NULL || bf_pump_callback == NULL ||
+      bf_presentation_succeeded_callback == NULL ||
+      bf_presentation_rejected_callback == NULL ||
+      bf_destroy_callback == NULL) {
     bf_copy_error(bf_ocaml_initialization_error,
                   sizeof(bf_ocaml_initialization_error),
                   "OCaml runtime callbacks are not registered");
@@ -119,8 +124,7 @@ static int bf_error_code_from_value(value code_value,
     return 0;
   }
   code = Int_val(code_value);
-  if (code < BF_ERROR_NONE ||
-      code > BF_ERROR_NATIVE_LIBRARY_LOADING_ERROR) {
+  if (code < BF_ERROR_NONE || code > BF_ERROR_INVALID_SCHEDULER_STATE) {
     return 0;
   }
   *result = (bf_error_code)code;
@@ -174,7 +178,6 @@ static void bf_response_reset(bf_ocaml_response *response) {
   memset(response, 0, sizeof(*response));
   response->status = BF_STATUS_FATAL_ERROR;
   response->error_code = BF_ERROR_OCAML_EXCEPTION;
-  response->next_wakeup_ns = -1;
 }
 
 static void bf_response_failure(bf_ocaml_response *response,
@@ -249,29 +252,58 @@ bf_status bf_ocaml_bridge_create(const uint8_t *config,
   return status;
 }
 
+typedef enum bf_callback_kind {
+  BF_CALLBACK_PUMP,
+  BF_CALLBACK_PRESENTATION_SUCCEEDED,
+  BF_CALLBACK_PRESENTATION_REJECTED
+} bf_callback_kind;
+
 static bf_status bf_call_output_callback_locked(
     const value *callback,
+    bf_callback_kind kind,
     uint64_t handle,
+    int64_t monotonic_now_ns,
     const uint8_t *input,
     size_t input_length,
+    uint64_t presentation_id,
     uint64_t revision,
-    int is_frame_presented,
+    int32_t rejection_reason,
     bf_ocaml_response *response) {
   CAMLparam0();
-  CAMLlocal3(handle_value, argument, result);
+  CAMLlocal5(handle_value,
+             monotonic_value,
+             input_value,
+             presentation_value,
+             revision_value);
+  CAMLlocal1(result);
+  value arguments[4];
+  int argument_count;
   bf_status status = BF_STATUS_FATAL_ERROR;
   const char *input_bytes =
       input_length == 0 ? "" : (const char *)input;
 
   bf_response_reset(response);
   handle_value = caml_copy_int64((int64_t)handle);
-  if (is_frame_presented) {
-    argument = caml_copy_int64((int64_t)revision);
-    result = caml_callback2_exn(*callback, handle_value, argument);
+  monotonic_value = caml_copy_int64(monotonic_now_ns);
+  presentation_value = caml_copy_int64((int64_t)presentation_id);
+  revision_value = caml_copy_int64((int64_t)revision);
+  input_value = caml_alloc_initialized_string(input_length, input_bytes);
+  arguments[0] = handle_value;
+  if (kind == BF_CALLBACK_PUMP) {
+    arguments[1] = monotonic_value;
+    arguments[2] = input_value;
+    argument_count = 3;
   } else {
-    argument = caml_alloc_initialized_string(input_length, input_bytes);
-    result = caml_callback2_exn(*callback, handle_value, argument);
+    arguments[1] = presentation_value;
+    arguments[2] = revision_value;
+    if (kind == BF_CALLBACK_PRESENTATION_SUCCEEDED) {
+      arguments[3] = monotonic_value;
+    } else {
+      arguments[3] = Val_int(rejection_reason);
+    }
+    argument_count = 4;
   }
+  result = caml_callbackN_exn(*callback, argument_count, arguments);
   if (Is_exception_result(result)) {
     bf_response_failure(response, "OCaml runtime callback raised");
   } else if (!bf_valid_tuple(result, 6) ||
@@ -286,13 +318,24 @@ static bf_status bf_call_output_callback_locked(
     status = BF_STATUS_FATAL_ERROR;
   } else {
     response->status = status;
-    response->revision = (uint64_t)Int64_val(Field(result, 2));
-    response->next_wakeup_ns = Int64_val(Field(result, 3));
+    response->presentation_id = (uint64_t)Int64_val(Field(result, 2));
+    response->revision = (uint64_t)Int64_val(Field(result, 3));
     if (!bf_copy_ocaml_bytes(Field(result, 1),
                              &response->data,
                              &response->length) ||
         !bf_copy_ocaml_error(Field(result, 5), &response->error)) {
       bf_response_failure(response, "Failed to copy the OCaml runtime response");
+      status = BF_STATUS_FATAL_ERROR;
+    } else if (kind == BF_CALLBACK_PUMP &&
+               status != BF_STATUS_FATAL_ERROR &&
+               response->presentation_id == 0) {
+      bf_response_failure(response, "OCaml pump returned no presentation token");
+      status = BF_STATUS_FATAL_ERROR;
+    } else if (kind != BF_CALLBACK_PUMP &&
+               (response->presentation_id != 0 || response->revision != 0 ||
+                response->length != 0)) {
+      bf_response_failure(response,
+                          "OCaml presentation callback returned unexpected output");
       status = BF_STATUS_FATAL_ERROR;
     }
   }
@@ -300,11 +343,14 @@ static bf_status bf_call_output_callback_locked(
 }
 
 static bf_status bf_call_output_callback(const value *callback,
+                                         bf_callback_kind kind,
                                          uint64_t handle,
+                                         int64_t monotonic_now_ns,
                                          const uint8_t *input,
                                          size_t input_length,
+                                         uint64_t presentation_id,
                                          uint64_t revision,
-                                         int is_frame_presented,
+                                         int32_t rejection_reason,
                                          bf_ocaml_response *response) {
   int registered;
   bf_status status;
@@ -314,38 +360,69 @@ static bf_status bf_call_output_callback(const value *callback,
   }
   registered = bf_enter_ocaml();
   status = bf_call_output_callback_locked(callback,
+                                          kind,
                                           handle,
+                                          monotonic_now_ns,
                                           input,
                                           input_length,
+                                          presentation_id,
                                           revision,
-                                          is_frame_presented,
+                                          rejection_reason,
                                           response);
   bf_leave_ocaml(registered);
   return status;
 }
 
-bf_status bf_ocaml_bridge_step(uint64_t handle,
+bf_status bf_ocaml_bridge_pump(uint64_t handle,
+                               int64_t monotonic_now_ns,
                                const uint8_t *input,
                                size_t input_length,
                                bf_ocaml_response *response) {
-  return bf_call_output_callback(bf_step_callback,
+  return bf_call_output_callback(bf_pump_callback,
+                                 BF_CALLBACK_PUMP,
                                  handle,
+                                 monotonic_now_ns,
                                  input,
                                  input_length,
+                                 0,
                                  0,
                                  0,
                                  response);
 }
 
-bf_status bf_ocaml_bridge_frame_presented(uint64_t handle,
-                                          uint64_t revision,
-                                          bf_ocaml_response *response) {
-  return bf_call_output_callback(bf_frame_presented_callback,
+bf_status bf_ocaml_bridge_presentation_succeeded(
+    uint64_t handle,
+    uint64_t presentation_id,
+    uint64_t revision,
+    int64_t monotonic_now_ns,
+    bf_ocaml_response *response) {
+  return bf_call_output_callback(bf_presentation_succeeded_callback,
+                                 BF_CALLBACK_PRESENTATION_SUCCEEDED,
                                  handle,
+                                 monotonic_now_ns,
                                  NULL,
                                  0,
+                                 presentation_id,
                                  revision,
-                                 1,
+                                 0,
+                                 response);
+}
+
+bf_status bf_ocaml_bridge_presentation_rejected(
+    uint64_t handle,
+    uint64_t presentation_id,
+    uint64_t revision,
+    int32_t rejection_reason,
+    bf_ocaml_response *response) {
+  return bf_call_output_callback(bf_presentation_rejected_callback,
+                                 BF_CALLBACK_PRESENTATION_REJECTED,
+                                 handle,
+                                 0,
+                                 NULL,
+                                 0,
+                                 presentation_id,
+                                 revision,
+                                 rejection_reason,
                                  response);
 }
 

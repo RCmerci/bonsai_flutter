@@ -10,9 +10,7 @@ module Handler = struct
     }
 
   let create_with_dependencies ~equal dependencies ~f =
-    dependencies
-    |> Bonsai.cutoff ~equal
-    |> Bonsai.map ~f
+    dependencies |> Bonsai.cutoff ~equal |> Bonsai.map ~f
   ;;
 
   let create t ?name ~equal dependencies ~f =
@@ -48,6 +46,19 @@ type error =
   | Host_response_error of string
   | Shutdown
 
+type pump_result =
+  { presentation_id : int64
+  ; renderer_revision : int64
+  ; frame : frame option
+  ; recoverable_error : error option
+  }
+
+type rejection_reason =
+  | Decode_failed
+  | Frame_validation_failed
+  | Renderer_epoch_mismatch
+  | Renderer_revision_mismatch
+
 let event_error_to_string = function
   | Runtime.Event_dispatcher.Invalid_event message -> "invalid event: " ^ message
   | Handler_error error -> Runtime.Runtime_error.to_string error
@@ -64,17 +75,36 @@ let error_to_string = function
   | Shutdown -> "driver is shut down"
 ;;
 
+type pending_presentation =
+  { presentation_id : int64
+  ; renderer_revision : int64
+  ; candidate_tree : Runtime.Mounted_tree.t
+  ; candidate_handler_frame : Runtime.Handler_registry.Frame.t option
+  ; prepared_host_operations : Host_effect.Prepared_operations.t
+  ; emitted_frame : frame option
+  }
+
 type t =
   { runtime_epoch : int64
   ; trace : (string -> unit) option
+  ; time_source : Bonsai.Time_source.t
+  ; logical_time_origin : Core.Time_ns.t
   ; bonsai : Ui.Widget.t Bonsai_runtime_adapter.t
   ; reconciler : Runtime.Reconciler.t
   ; handlers : Runtime.Handler_registry.t
   ; pending_effects : Handler.t
   ; host_effects : Host_effect.t
   ; environment : Environment.t
-  ; mutable mounted_tree : Runtime.Mounted_tree.t option
-  ; mutable revision : int64
+  ; mutable displayed_tree : Runtime.Mounted_tree.t option
+  ; mutable displayed_revision : int64
+  ; mutable last_monotonic_ns : int64
+  ; mutable last_event_sequence : int64 option
+  ; mutable next_presentation_id : int64
+  ; mutable presentation_sequence_exhausted : bool
+  ; mutable next_renderer_revision : int64
+  ; mutable pending_presentation : pending_presentation option
+  ; mutable force_full_snapshot_next : bool
+  ; mutable terminal_error : error option
   ; mutable is_shutdown : bool
   ; mutable last_lifecycle_ns : int64
   ; mutable full_snapshot_count : int
@@ -100,14 +130,24 @@ let create ?trace ~runtime_epoch ~time_source component =
   let bonsai = Bonsai_runtime_adapter.create ~time_source (component pending_effects) in
   { runtime_epoch
   ; trace
+  ; time_source
+  ; logical_time_origin = Bonsai.Time_source.now time_source
   ; bonsai
   ; reconciler = Runtime.Reconciler.create ~runtime_epoch
   ; handlers = Runtime.Handler_registry.create ~runtime_epoch
   ; pending_effects
   ; host_effects = host_effect_manager
   ; environment = environment_input
-  ; mounted_tree = None
-  ; revision = 0L
+  ; displayed_tree = None
+  ; displayed_revision = 0L
+  ; last_monotonic_ns = -1L
+  ; last_event_sequence = None
+  ; next_presentation_id = 1L
+  ; presentation_sequence_exhausted = false
+  ; next_renderer_revision = 1L
+  ; pending_presentation = None
+  ; force_full_snapshot_next = false
+  ; terminal_error = None
   ; is_shutdown = false
   ; last_lifecycle_ns = 0L
   ; full_snapshot_count = 0
@@ -610,12 +650,6 @@ let drain_effects t =
   done
 ;;
 
-let next_revision revision =
-  if Int64.equal revision Int64.max_int
-  then Error (Invalid_state "revision counter exhausted")
-  else Ok (Int64.succ revision)
-;;
-
 let frame_kind_name = function
   | Runtime.Frame_patch.Full_snapshot -> "full_snapshot"
   | Incremental_frame -> "incremental_frame"
@@ -643,8 +677,8 @@ let operation_summary operations =
       | Runtime_stats _ -> ())
     operations;
   Printf.sprintf
-    "createNode=%d updateProps=%d updateEventBindings=%d setChildren=%d \
-     setRoot=%d dropNode=%d hostRequest=%d cancelHostRequest=%d"
+    "createNode=%d updateProps=%d updateEventBindings=%d setChildren=%d setRoot=%d \
+     dropNode=%d hostRequest=%d cancelHostRequest=%d"
     !create_node
     !update_props
     !update_event_bindings
@@ -690,8 +724,7 @@ let incremental_widget_diff ~old_tree ~new_tree operations =
       | Runtime.Frame_patch.Operation.Create_node { node_id; _ } ->
         add "createNode" node_id new_tree
       | Update_props { node_id; _ } -> add "updateProps" node_id new_tree
-      | Update_event_bindings { node_id; _ } ->
-        add "updateEventBindings" node_id new_tree
+      | Update_event_bindings { node_id; _ } -> add "updateEventBindings" node_id new_tree
       | Set_children { node_id; _ } -> add "setChildren" node_id new_tree
       | Set_root node_id -> add "setRoot" node_id new_tree
       | Drop_node node_id -> add "dropNode" node_id old_tree)
@@ -734,112 +767,126 @@ let trace_widget_diff t ~target_revision ~widget ~old_tree output =
          diff))
 ;;
 
-let produce_frame t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot =
-  match next_revision t.revision with
-  | Error _ as error -> error
-  | Ok target_revision ->
+type produced_candidate =
+  { candidate_tree : Runtime.Mounted_tree.t
+  ; candidate_handler_frame : Runtime.Handler_registry.Frame.t option
+  ; prepared_host_operations : Host_effect.Prepared_operations.t
+  ; renderer_revision : int64
+  ; emitted_frame : frame option
+  }
+
+let produce_candidate t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot =
+  if Int64.equal t.next_renderer_revision Int64.max_int
+  then Error (Invalid_state "renderer revision counter exhausted")
+  else (
+    let target_revision = t.next_renderer_revision in
     let result_started = now_ns () in
     let widget = Bonsai_runtime_adapter.result t.bonsai in
     let result_read_ns = elapsed_ns result_started in
     let reconcile_started = now_ns () in
-    (match
-       Runtime.Reconciler.reconcile
-         t.reconciler
-         ~base_revision:t.revision
-         ~target_revision
-         ~old:(if force_full_snapshot then None else t.mounted_tree)
-         widget
-     with
-     | Error error -> Error (Runtime_error error)
-     | Ok output ->
-       let reconcile_ns = elapsed_ns reconcile_started in
-       trace_widget_diff
-         t
-         ~target_revision
-         ~widget
-         ~old_tree:t.mounted_tree
-         output;
-       let host_operations = Host_effect.Private.take_operations t.host_effects in
-       if Runtime.Frame_patch.is_empty output.frame_patch && host_operations = []
-       then (
-         trace t (Printf.sprintf "[outbound-no-frame] revision=%Ld" t.revision);
-         Ok None)
-       else (
-         match wire_operations (Runtime.Frame_patch.operations output.frame_patch) with
-         | Error _ as error -> error
-         | Ok ui_operations ->
-           let operations = ui_operations @ host_operations in
-           let frame_kind = Runtime.Frame_patch.kind output.frame_patch in
-           let base_revision =
-             match frame_kind with
-             | Runtime.Frame_patch.Full_snapshot -> 0L
-             | Incremental_frame -> t.revision
-           in
-           if frame_kind = Runtime.Frame_patch.Full_snapshot
-           then t.full_snapshot_count <- t.full_snapshot_count + 1;
-           if force_full_snapshot then t.resync_count <- t.resync_count + 1;
-           let stats : Protocol.Wire_frame.runtime_stats =
-             { event_batch_size
-             ; bonsai_flush_ns
-             ; result_read_ns
-             ; reconcile_ns
-             ; encode_ns = 0L
-             ; patch_count = List.length operations
-             ; patch_bytes = 0
-             ; lifecycle_ns = t.last_lifecycle_ns
-             ; full_snapshot_count = t.full_snapshot_count
-             ; resync_count = t.resync_count
-             }
-           in
-           let wire_frame stats =
-             Protocol.Wire_frame.
-               { runtime_epoch = t.runtime_epoch
-               ; base_revision
-               ; target_revision
-               ; kind = wire_frame_kind frame_kind
-               ; operations = operations @ [ Runtime_stats stats ]
+    match
+      Runtime.Reconciler.reconcile
+        t.reconciler
+        ~base_revision:t.displayed_revision
+        ~target_revision
+        ~old:(if force_full_snapshot then None else t.displayed_tree)
+        widget
+    with
+    | Error error -> Error (Runtime_error error)
+    | Ok output ->
+      let reconcile_ns = elapsed_ns reconcile_started in
+      trace_widget_diff t ~target_revision ~widget ~old_tree:t.displayed_tree output;
+      let prepared_host_operations = Host_effect.prepare_operations t.host_effects in
+      let host_operations =
+        Host_effect.Prepared_operations.operations prepared_host_operations
+      in
+      if Runtime.Frame_patch.is_empty output.frame_patch && host_operations = []
+      then (
+        trace t (Printf.sprintf "[outbound-no-frame] revision=%Ld" t.displayed_revision);
+        Ok
+          { candidate_tree = output.mounted_tree
+          ; candidate_handler_frame = None
+          ; prepared_host_operations
+          ; renderer_revision = t.displayed_revision
+          ; emitted_frame = None
+          })
+      else (
+        match wire_operations (Runtime.Frame_patch.operations output.frame_patch) with
+        | Error _ as error -> error
+        | Ok ui_operations ->
+          let operations = ui_operations @ host_operations in
+          let frame_kind = Runtime.Frame_patch.kind output.frame_patch in
+          let base_revision =
+            match frame_kind with
+            | Runtime.Frame_patch.Full_snapshot -> 0L
+            | Incremental_frame -> t.displayed_revision
+          in
+          if frame_kind = Runtime.Frame_patch.Full_snapshot
+          then t.full_snapshot_count <- t.full_snapshot_count + 1;
+          if force_full_snapshot then t.resync_count <- t.resync_count + 1;
+          let stats : Protocol.Wire_frame.runtime_stats =
+            { event_batch_size
+            ; bonsai_flush_ns
+            ; result_read_ns
+            ; reconcile_ns
+            ; encode_ns = 0L
+            ; patch_count = List.length operations
+            ; patch_bytes = 0
+            ; lifecycle_ns = t.last_lifecycle_ns
+            ; full_snapshot_count = t.full_snapshot_count
+            ; resync_count = t.resync_count
+            }
+          in
+          let wire_frame stats =
+            Protocol.Wire_frame.
+              { runtime_epoch = t.runtime_epoch
+              ; base_revision
+              ; target_revision
+              ; kind = wire_frame_kind frame_kind
+              ; operations = operations @ [ Runtime_stats stats ]
+              }
+          in
+          let encode_started = now_ns () in
+          (match Protocol.Binary_codec.encode (wire_frame stats) with
+           | Error error -> Error (Codec_error error)
+           | Ok provisional_bytes ->
+             let stats =
+               { stats with
+                 encode_ns = elapsed_ns encode_started
+               ; patch_bytes = Bytes.length provisional_bytes
                }
-           in
-           let encode_started = now_ns () in
-           (match Protocol.Binary_codec.encode (wire_frame stats) with
-            | Error error -> Error (Codec_error error)
-            | Ok provisional_bytes ->
-              let stats =
-                { stats with
-                  encode_ns = elapsed_ns encode_started
-                ; patch_bytes = Bytes.length provisional_bytes
-                }
-              in
-              (match Protocol.Binary_codec.encode (wire_frame stats) with
-               | Error error -> Error (Codec_error error)
-               | Ok bytes ->
-                 (match
-                    Runtime.Handler_registry.install t.handlers output.handler_frame
-                  with
-                  | Error error -> Error (Runtime_error error)
-                  | Ok () ->
-                    t.mounted_tree <- Some output.mounted_tree;
-                    t.revision <- target_revision;
-                    trace
-                      t
-                      (Printf.sprintf
-                         "[outbound-frame] direction=ocaml->flutter epoch=%Ld \
-                          kind=%s baseRevision=%Ld targetRevision=%Ld \
-                          operations=%d bytes=%d\n  operationSummary=%s"
-                         t.runtime_epoch
-                         (frame_kind_name frame_kind)
-                         base_revision
-                         target_revision
-                         (List.length operations)
-                         (Bytes.length bytes)
-                         (operation_summary operations));
-                    Ok
-                      (Some
-                         { revision = target_revision
-                         ; frame_patch = output.frame_patch
-                         ; bytes
-                         ; stats
-                         }))))))
+             in
+             (match Protocol.Binary_codec.encode (wire_frame stats) with
+              | Error error -> Error (Codec_error error)
+              | Ok bytes ->
+                let frame =
+                  { revision = target_revision
+                  ; frame_patch = output.frame_patch
+                  ; bytes
+                  ; stats
+                  }
+                in
+                t.next_renderer_revision <- Int64.succ target_revision;
+                trace
+                  t
+                  (Printf.sprintf
+                     "[outbound-frame] direction=ocaml->flutter epoch=%Ld kind=%s \
+                      baseRevision=%Ld targetRevision=%Ld operations=%d bytes=%d\n\
+                     \  operationSummary=%s"
+                     t.runtime_epoch
+                     (frame_kind_name frame_kind)
+                     base_revision
+                     target_revision
+                     (List.length operations)
+                     (Bytes.length bytes)
+                     (operation_summary operations));
+                Ok
+                  { candidate_tree = output.mounted_tree
+                  ; candidate_handler_frame = Some output.handler_frame
+                  ; prepared_host_operations
+                  ; renderer_revision = target_revision
+                  ; emitted_frame = Some frame
+                  }))))
 ;;
 
 let event_tag_name event_tag =
@@ -906,13 +953,9 @@ let payload_summary = function
       key.physical_key
       (key_action_name key.action)
       key.modifiers
-  | Scroll { pixels; delta } ->
-    Printf.sprintf "scroll(pixels=%g delta=%g)" pixels delta
+  | Scroll { pixels; delta } -> Printf.sprintf "scroll(pixels=%g delta=%g)" pixels delta
   | Visible_range { first_index; last_exclusive } ->
-    Printf.sprintf
-      "visible_range(first=%Ld lastExclusive=%Ld)"
-      first_index
-      last_exclusive
+    Printf.sprintf "visible_range(first=%Ld lastExclusive=%Ld)" first_index last_exclusive
   | Route_pop route ->
     Printf.sprintf
       "route_pop(pageKey=%S resultBytes=%d)"
@@ -951,8 +994,7 @@ let trace_inbound_event_batch t (batch : Protocol.Inbound_event.batch) =
     (fun (event : Protocol.Inbound_event.t) ->
        Printf.bprintf
          output
-         "\n  sequence=%Ld displayedRevision=%Ld node=%Ld handler=%Ld tag=%s \
-          payload=%s"
+         "\n  sequence=%Ld displayedRevision=%Ld node=%Ld handler=%Ld tag=%s payload=%s"
          event.sequence
          event.displayed_revision
          event.node_id
@@ -1000,120 +1042,382 @@ let environment_of_protocol (environment : Protocol.Inbound_event.environment)
   }
 ;;
 
-let step t ?events () =
-  Option.iter (trace_inbound_event_batch t) events;
-  if t.is_shutdown
-  then Error Shutdown
-  else (
-    let force_full_snapshot = ref false in
-    let dispatch_result =
-      match events with
-      | None -> Ok ()
-      | Some (events : Protocol.Inbound_event.batch) ->
-        let control_events, ui_events =
-          List.partition
-            (fun (event : Protocol.Inbound_event.t) ->
-               event.event_tag = Protocol.Generated_protocol.Event_tag.host_response
-               || event.event_tag
-                  = Protocol.Generated_protocol.Event_tag.environment_changed
-               || event.event_tag = Protocol.Generated_protocol.Event_tag.resync_requested)
-            events.events
-        in
-        let ui_batch = Protocol.Inbound_event.{ events with events = ui_events } in
-        let dispatch_ui =
-          match ui_events with
-          | [] -> Ok ()
-          | _ ->
-            (match Runtime.Event_dispatcher.dispatch_batch t.handlers ui_batch with
-             | Ok () -> Ok ()
-             | Error error -> Error (Event_error error))
-        in
-        (match dispatch_ui with
-         | Error _ as error -> error
-         | Ok () ->
-           if not (Int64.equal events.runtime_epoch t.runtime_epoch)
-           then Error (Host_response_error "runtime epoch mismatch")
-           else (
-             let rec resolve = function
-               | [] -> Ok ()
-               | (event : Protocol.Inbound_event.t) :: rest ->
-                 (match event.payload with
-                  | Host_response response
-                    when Int64.equal event.node_id 0L && Int64.equal event.handler_id 0L
-                    ->
-                    (match Host_effect.Private.resolve t.host_effects response with
-                     | Ok () -> resolve rest
-                     | Error message -> Error (Host_response_error message))
-                  | Environment_changed environment
-                    when Int64.equal event.node_id 0L && Int64.equal event.handler_id 0L
-                    ->
-                    ignore
-                      (Environment.Private.update
-                         t.environment
-                         (environment_of_protocol environment));
-                    resolve rest
-                  | Unit
-                    when event.event_tag
-                         = Protocol.Generated_protocol.Event_tag.resync_requested
-                         && Int64.equal event.node_id 0L
-                         && Int64.equal event.handler_id 0L ->
-                    force_full_snapshot := true;
-                    resolve rest
-                  | _ -> Error (Host_response_error "malformed runtime control event"))
-             in
-             resolve control_events))
-    in
-    match dispatch_result with
-    | Error _ as error ->
-      Queue.clear t.pending_effects.pending_effects;
-      error
-    | Ok () ->
-      drain_effects t;
-      let flush_started = now_ns () in
-      Bonsai_runtime_adapter.flush t.bonsai;
-      let bonsai_flush_ns = elapsed_ns flush_started in
-      let event_batch_size =
-        match events with
-        | None -> 0
-        | Some events -> List.length events.Protocol.Inbound_event.events
-      in
-      produce_frame
-        t
-        ~event_batch_size
-        ~bonsai_flush_ns
-        ~force_full_snapshot:!force_full_snapshot)
-;;
-
 let exception_message exception_ =
   match exception_ with
   | Failure message | Invalid_argument message -> message
   | _ -> Printexc.to_string exception_
 ;;
 
-let frame_presented t ~revision =
-  trace
-    t
-    (Printf.sprintf
-       "[presentation-ack] revision=%Ld direction=flutter->ocaml"
-       revision);
-  if t.is_shutdown
-  then Error Shutdown
+type validated_control =
+  | Validated_host_response of Host_effect.Private.Validated_response.t
+  | Validated_environment of Environment.snapshot
+  | Validated_resync
+
+type validated_input =
+  { ui_events : Runtime.Event_dispatcher.Validated_batch.t option
+  ; controls : validated_control list
+  ; last_event_sequence : int64 option
+  ; force_full_snapshot : bool
+  }
+
+let terminal t error =
+  t.terminal_error <- Some error;
+  error
+;;
+
+let active_error t = if t.is_shutdown then Some Shutdown else t.terminal_error
+
+let logical_time t monotonic_now_ns =
+  if Int64.compare monotonic_now_ns 0L < 0
+  then Error (Invalid_state "monotonic time must be nonnegative")
+  else if Int64.compare monotonic_now_ns t.last_monotonic_ns < 0
+  then Error (Invalid_state "monotonic time moved backwards")
   else (
-    match Runtime.Handler_registry.mark_frame_presented t.handlers ~revision with
-    | Error error -> Error (Runtime_error error)
-    | Ok () ->
-      let lifecycle_started = now_ns () in
-      (try
-         Bonsai_runtime_adapter.frame_presented t.bonsai;
-         Runtime.Handler_registry.retire_superseded
-           t.handlers
-           ~displayed_revision:revision;
-         t.last_lifecycle_ns <- elapsed_ns lifecycle_started;
-         Ok ()
-       with
-       | exception_ ->
-         t.last_lifecycle_ns <- elapsed_ns lifecycle_started;
-         Error (Lifecycle_error (exception_message exception_))))
+    try
+      let span =
+        monotonic_now_ns |> Core.Int63.of_int64_exn |> Core.Time_ns.Span.of_int63_ns
+      in
+      let target = Core.Time_ns.add t.logical_time_origin span in
+      if Core.Time_ns.compare target t.logical_time_origin < 0
+      then Error (Invalid_state "logical time overflow")
+      else Ok target
+    with
+    | _ -> Error (Invalid_state "monotonic time is not representable"))
+;;
+
+let valid_environment (environment : Protocol.Inbound_event.environment) =
+  let finite_nonnegative value = Float.is_finite value && Float.compare value 0. >= 0 in
+  let valid_insets (insets : Protocol.Inbound_event.edge_insets) =
+    finite_nonnegative insets.left
+    && finite_nonnegative insets.top
+    && finite_nonnegative insets.right
+    && finite_nonnegative insets.bottom
+  in
+  finite_nonnegative environment.viewport_width
+  && finite_nonnegative environment.viewport_height
+  && finite_nonnegative environment.device_pixel_ratio
+  && finite_nonnegative environment.text_scale
+  && valid_insets environment.safe_area
+  && valid_insets environment.keyboard_insets
+;;
+
+let validate_input t (batch : Protocol.Inbound_event.batch) =
+  if not (Int64.equal batch.runtime_epoch t.runtime_epoch)
+  then Error (Host_response_error "runtime epoch mismatch")
+  else (
+    let seen_host_responses = Hashtbl.create 8 in
+    let rec validate_events reversed_ui reversed_controls last_sequence force = function
+      | [] ->
+        let ui_events = List.rev reversed_ui in
+        let ui_batch = Protocol.Inbound_event.{ batch with events = ui_events } in
+        let validated_ui =
+          match ui_events with
+          | [] -> Ok None
+          | _ ->
+            (match Runtime.Event_dispatcher.validate_batch t.handlers ui_batch with
+             | Ok validated -> Ok (Some validated)
+             | Error error -> Error (Event_error error))
+        in
+        (match validated_ui with
+         | Error _ as error -> error
+         | Ok ui_events ->
+           Ok
+             { ui_events
+             ; controls = List.rev reversed_controls
+             ; last_event_sequence = last_sequence
+             ; force_full_snapshot = force
+             })
+      | (event : Protocol.Inbound_event.t) :: rest ->
+        if
+          match last_sequence with
+          | Some previous -> Int64.compare event.sequence previous <= 0
+          | None -> false
+        then
+          Error
+            (Host_response_error
+               (Printf.sprintf
+                  "duplicate or out-of-order event sequence %Ld"
+                  event.sequence))
+        else (
+          let next_sequence = Some event.sequence in
+          let is_host_response =
+            event.event_tag = Protocol.Generated_protocol.Event_tag.host_response
+          in
+          let is_environment =
+            event.event_tag = Protocol.Generated_protocol.Event_tag.environment_changed
+          in
+          let is_resync =
+            event.event_tag = Protocol.Generated_protocol.Event_tag.resync_requested
+          in
+          if is_host_response || is_environment || is_resync
+          then
+            if
+              (not (Int64.equal event.node_id 0L))
+              || (not (Int64.equal event.handler_id 0L))
+              || not (Int64.equal event.displayed_revision t.displayed_revision)
+            then Error (Host_response_error "malformed runtime control event")
+            else if is_host_response
+            then (
+              match event.payload with
+              | Host_response response ->
+                if Hashtbl.mem seen_host_responses response.request_id
+                then
+                  Error
+                    (Host_response_error
+                       (Printf.sprintf
+                          "duplicate host response ID %Ld"
+                          response.request_id))
+                else (
+                  Hashtbl.add seen_host_responses response.request_id ();
+                  match Host_effect.Private.validate_response t.host_effects response with
+                  | Error message -> Error (Host_response_error message)
+                  | Ok response ->
+                    validate_events
+                      reversed_ui
+                      (Validated_host_response response :: reversed_controls)
+                      next_sequence
+                      force
+                      rest)
+              | _ -> Error (Host_response_error "malformed host response event"))
+            else if is_environment
+            then (
+              match event.payload with
+              | Environment_changed environment when valid_environment environment ->
+                validate_events
+                  reversed_ui
+                  (Validated_environment (environment_of_protocol environment)
+                   :: reversed_controls)
+                  next_sequence
+                  force
+                  rest
+              | _ -> Error (Host_response_error "malformed environment event"))
+            else (
+              match event.payload with
+              | Unit ->
+                validate_events
+                  reversed_ui
+                  (Validated_resync :: reversed_controls)
+                  next_sequence
+                  true
+                  rest
+              | _ -> Error (Host_response_error "malformed resync event"))
+          else
+            validate_events
+              (event :: reversed_ui)
+              reversed_controls
+              next_sequence
+              force
+              rest)
+    in
+    validate_events [] [] t.last_event_sequence false batch.events)
+;;
+
+let execute_validated_input t validated =
+  let execute_ui =
+    match validated.ui_events with
+    | None -> Ok ()
+    | Some ui_events ->
+      (match Runtime.Event_dispatcher.dispatch_validated t.handlers ui_events with
+       | Ok () -> Ok ()
+       | Error error -> Error (Event_error error))
+  in
+  match execute_ui with
+  | Error _ as error -> error
+  | Ok () ->
+    let rec execute_controls = function
+      | [] ->
+        t.last_event_sequence <- validated.last_event_sequence;
+        Ok ()
+      | Validated_host_response response :: rest ->
+        (match Host_effect.Private.resolve_validated t.host_effects response with
+         | Ok () -> execute_controls rest
+         | Error message -> Error (Host_response_error message))
+      | Validated_environment environment :: rest ->
+        ignore (Environment.Private.update t.environment environment);
+        execute_controls rest
+      | Validated_resync :: rest -> execute_controls rest
+    in
+    execute_controls validated.controls
+;;
+
+let reserve_presentation_id t =
+  if t.presentation_sequence_exhausted
+  then Error (Invalid_state "presentation ID counter exhausted")
+  else (
+    let presentation_id = t.next_presentation_id in
+    if Int64.equal presentation_id Int64.max_int
+    then t.presentation_sequence_exhausted <- true
+    else t.next_presentation_id <- Int64.succ presentation_id;
+    Ok presentation_id)
+;;
+
+let pump t ~monotonic_now_ns ?events () =
+  Option.iter (trace_inbound_event_batch t) events;
+  match active_error t with
+  | Some error -> Error error
+  | None ->
+    (match t.pending_presentation with
+     | Some _ -> Error (Invalid_state "a presentation is already pending")
+     | None ->
+       (match logical_time t monotonic_now_ns with
+        | Error _ as error -> error
+        | Ok logical_time ->
+          let validated_input, recoverable_error =
+            match events with
+            | None -> None, None
+            | Some events ->
+              (match validate_input t events with
+               | Ok validated -> Some validated, None
+               | Error error -> None, Some error)
+          in
+          let force_full_snapshot =
+            t.force_full_snapshot_next
+            ||
+            match validated_input with
+            | Some validated -> validated.force_full_snapshot
+            | None -> false
+          in
+          (try
+             Bonsai_runtime_adapter.advance_clock t.bonsai ~to_:logical_time;
+             ignore (Bonsai.Time_source.now t.time_source);
+             t.last_monotonic_ns <- monotonic_now_ns;
+             (match validated_input with
+              | None -> ()
+              | Some validated ->
+                (match execute_validated_input t validated with
+                 | Ok () -> ()
+                 | Error error -> raise (Failure (error_to_string error))));
+             drain_effects t;
+             let flush_started = now_ns () in
+             Bonsai_runtime_adapter.flush t.bonsai;
+             let bonsai_flush_ns = elapsed_ns flush_started in
+             let event_batch_size =
+               match events with
+               | None -> 0
+               | Some events -> List.length events.Protocol.Inbound_event.events
+             in
+             match
+               produce_candidate t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot
+             with
+             | Error error -> Error (terminal t error)
+             | Ok candidate ->
+               (match reserve_presentation_id t with
+                | Error error -> Error (terminal t error)
+                | Ok presentation_id ->
+                  let pending =
+                    { presentation_id
+                    ; renderer_revision = candidate.renderer_revision
+                    ; candidate_tree = candidate.candidate_tree
+                    ; candidate_handler_frame = candidate.candidate_handler_frame
+                    ; prepared_host_operations = candidate.prepared_host_operations
+                    ; emitted_frame = candidate.emitted_frame
+                    }
+                  in
+                  t.pending_presentation <- Some pending;
+                  Ok
+                    { presentation_id
+                    ; renderer_revision = candidate.renderer_revision
+                    ; frame = candidate.emitted_frame
+                    ; recoverable_error
+                    })
+           with
+           | exception_ ->
+             let error = Invalid_state (exception_message exception_) in
+             Error (terminal t error))))
+;;
+
+let exact_pending t ~presentation_id ~renderer_revision =
+  match t.pending_presentation with
+  | None -> Error (Invalid_state "no presentation is pending")
+  | Some pending ->
+    if not (Int64.equal pending.presentation_id presentation_id)
+    then Error (Invalid_state "presentation ID does not match the pending token")
+    else if not (Int64.equal pending.renderer_revision renderer_revision)
+    then Error (Invalid_state "renderer revision does not match the pending token")
+    else Ok pending
+;;
+
+let presentation_succeeded t ~presentation_id ~renderer_revision ~monotonic_now_ns =
+  match active_error t with
+  | Some error -> Error error
+  | None ->
+    (match exact_pending t ~presentation_id ~renderer_revision with
+     | Error _ as error -> error
+     | Ok pending ->
+       (match logical_time t monotonic_now_ns with
+        | Error _ as error -> error
+        | Ok logical_time ->
+          trace
+            t
+            (Printf.sprintf
+               "[presentation-ack] presentationId=%Ld revision=%Ld \
+                direction=flutter->ocaml"
+               presentation_id
+               renderer_revision);
+          let fail_fatal error = Error (terminal t error) in
+          (match
+             Host_effect.commit_operations t.host_effects pending.prepared_host_operations
+           with
+           | Error message -> fail_fatal (Invalid_state message)
+           | Ok () ->
+             t.displayed_tree <- Some pending.candidate_tree;
+             let commit_handler =
+               match pending.emitted_frame, pending.candidate_handler_frame with
+               | None, None -> Ok ()
+               | Some _, Some handler_frame ->
+                 (match Runtime.Handler_registry.install t.handlers handler_frame with
+                  | Error error -> Error (Runtime_error error)
+                  | Ok () ->
+                    (match
+                       Runtime.Handler_registry.mark_displayed_revision
+                         t.handlers
+                         ~revision:renderer_revision
+                     with
+                     | Error error -> Error (Runtime_error error)
+                     | Ok () ->
+                       t.displayed_revision <- renderer_revision;
+                       Runtime.Handler_registry.retire_superseded
+                         t.handlers
+                         ~displayed_revision:renderer_revision;
+                       Ok ()))
+               | None, Some _ | Some _, None ->
+                 Error
+                   (Invalid_state "candidate frame and handler metadata are inconsistent")
+             in
+             (match commit_handler with
+              | Error error -> fail_fatal error
+              | Ok () ->
+                (try
+                   Bonsai_runtime_adapter.advance_clock t.bonsai ~to_:logical_time;
+                   ignore (Bonsai.Time_source.now t.time_source);
+                   t.last_monotonic_ns <- monotonic_now_ns;
+                   t.pending_presentation <- None;
+                   t.force_full_snapshot_next <- false;
+                   let lifecycle_started = now_ns () in
+                   Bonsai_runtime_adapter.trigger_lifecycles t.bonsai;
+                   t.last_lifecycle_ns <- elapsed_ns lifecycle_started;
+                   Ok ()
+                 with
+                 | exception_ ->
+                   fail_fatal (Lifecycle_error (exception_message exception_)))))))
+;;
+
+let presentation_rejected t ~presentation_id ~renderer_revision ~reason:_ =
+  match active_error t with
+  | Some error -> Error error
+  | None ->
+    (match exact_pending t ~presentation_id ~renderer_revision with
+     | Error _ as error -> error
+     | Ok _ ->
+       trace
+         t
+         (Printf.sprintf
+            "[presentation-rejected] presentationId=%Ld revision=%Ld"
+            presentation_id
+            renderer_revision);
+       t.pending_presentation <- None;
+       t.force_full_snapshot_next <- true;
+       Ok ())
 ;;
 
 let shutdown t =
@@ -1130,12 +1434,25 @@ let is_shutdown t = t.is_shutdown
 
 module For_testing = struct
   let runtime_epoch t = t.runtime_epoch
-  let revision t = t.revision
-  let snapshot t = Option.map Runtime.Mounted_tree.snapshot t.mounted_tree
+  let revision t = t.displayed_revision
+
+  let snapshot t =
+    match t.pending_presentation with
+    | Some pending -> Some (Runtime.Mounted_tree.snapshot pending.candidate_tree)
+    | None -> Option.map Runtime.Mounted_tree.snapshot t.displayed_tree
+  ;;
+
   let environment t = Environment.Private.current t.environment
   let pending_host_effect_count t = Host_effect.Private.pending_count t.host_effects
 
   let retained_handler_frame_count t =
     Runtime.Handler_registry.retained_frame_count t.handlers
   ;;
+
+  let set_next_presentation_id t value =
+    t.next_presentation_id <- value;
+    t.presentation_sequence_exhausted <- false
+  ;;
+
+  let set_next_renderer_revision t value = t.next_renderer_revision <- value
 end

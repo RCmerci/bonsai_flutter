@@ -55,21 +55,21 @@ let component handlers graph =
       ~equal:( == )
       set_state
       ~f:(fun set_state -> function
-        | Ui.Event.Payload.Text_edit edit ->
-          set_state (fun current ->
-            if
-              (not (Int64.equal edit.session_id current.session_id))
-              || Int64.compare edit.local_revision current.accepted_local_revision <= 0
-              || Int64.compare edit.base_document_revision current.document_revision > 0
-            then current
-            else
-              { current with
-                document_revision = Int64.succ current.document_revision
-              ; accepted_local_revision = edit.local_revision
-              ; update_mode = Ui.Text_editing.Ack
-              ; value = value_of_edit edit
-              })
-        | _ -> Bonsai.Effect.Ignore)
+      | Ui.Event.Payload.Text_edit edit ->
+        set_state (fun current ->
+          if
+            (not (Int64.equal edit.session_id current.session_id))
+            || Int64.compare edit.local_revision current.accepted_local_revision <= 0
+            || Int64.compare edit.base_document_revision current.document_revision > 0
+          then current
+          else
+            { current with
+              document_revision = Int64.succ current.document_revision
+            ; accepted_local_revision = edit.local_revision
+            ; update_mode = Ui.Text_editing.Ack
+            ; value = value_of_edit edit
+            })
+      | _ -> Bonsai.Effect.Ignore)
   in
   let submit_handler =
     Driver.Handler.create
@@ -98,15 +98,15 @@ let component handlers graph =
     state
     text_input_handlers
     ~f:(fun state (edit_handler, submit_handler, focus_handler) ->
-    Ui.Widget.text_input
-      ~key:(Ui.Key.string "editor")
-      ~session_id:state.session_id
-      ~document_revision:state.document_revision
-      ~accepted_local_revision:state.accepted_local_revision
-      ~update_mode:state.update_mode
-      ~value:state.value
-      ~on_edit:edit_handler
-      ~on_submit:submit_handler
-      ~on_focus_changed:focus_handler
-      ())
+      Ui.Widget.text_input
+        ~key:(Ui.Key.string "editor")
+        ~session_id:state.session_id
+        ~document_revision:state.document_revision
+        ~accepted_local_revision:state.accepted_local_revision
+        ~update_mode:state.update_mode
+        ~value:state.value
+        ~on_edit:edit_handler
+        ~on_submit:submit_handler
+        ~on_focus_changed:focus_handler
+        ())
 ;;

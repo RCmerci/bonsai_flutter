@@ -25,11 +25,14 @@ expected_architecture=$4
 
 defined_symbols=$(nm -g "$object_path" | awk '$2 ~ /^[TDSB]$/ { print $3 }')
 for symbol in \
+  _bf_abi_version_major \
+  _bf_abi_version_minor \
   _bf_protocol_version_major \
   _bf_protocol_version_minor \
   _bf_runtime_create \
-  _bf_runtime_step \
-  _bf_runtime_frame_presented \
+  _bf_runtime_pump \
+  _bf_runtime_presentation_succeeded \
+  _bf_runtime_presentation_rejected \
   _bf_runtime_get_last_error \
   _bf_buffer_free \
   _bf_runtime_outstanding_buffers \
@@ -38,6 +41,15 @@ for symbol in \
 do
   printf '%s\n' "$defined_symbols" | grep -Fx "$symbol" >/dev/null ||
     fail "$object_path does not define $symbol"
+done
+
+for removed_symbol in \
+  _bf_runtime_step \
+  _bf_runtime_frame_presented
+do
+  if printf '%s\n' "$defined_symbols" | grep -Fx "$removed_symbol" >/dev/null; then
+    fail "$object_path still defines removed ABI v1 symbol $removed_symbol"
+  fi
 done
 
 if LC_ALL=C strings -a -n 8 "$object_path" |

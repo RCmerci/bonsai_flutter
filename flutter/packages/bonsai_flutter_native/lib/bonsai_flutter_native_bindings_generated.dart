@@ -5,6 +5,12 @@
 import 'dart:ffi' as ffi;
 
 @ffi.Native<ffi.Uint16 Function()>()
+external int bf_abi_version_major();
+
+@ffi.Native<ffi.Uint16 Function()>()
+external int bf_abi_version_minor();
+
+@ffi.Native<ffi.Uint16 Function()>()
 external int bf_protocol_version_major();
 
 @ffi.Native<ffi.Uint16 Function()>()
@@ -21,13 +27,15 @@ external ffi.Pointer<bf_runtime> bf_runtime_create(
 @ffi.Native<
   bf_status Function(
     ffi.Pointer<bf_runtime>,
+    ffi.Int64,
     ffi.Pointer<ffi.Uint8>,
     ffi.Size,
     ffi.Pointer<bf_output_buffer>,
   )
 >()
-external int bf_runtime_step(
+external int bf_runtime_pump(
   ffi.Pointer<bf_runtime> runtime,
+  int monotonic_now_ns,
   ffi.Pointer<ffi.Uint8> input,
   int input_length,
   ffi.Pointer<bf_output_buffer> output,
@@ -37,12 +45,33 @@ external int bf_runtime_step(
   bf_status Function(
     ffi.Pointer<bf_runtime>,
     ffi.Uint64,
+    ffi.Uint64,
+    ffi.Int64,
     ffi.Pointer<bf_output_buffer>,
   )
 >()
-external int bf_runtime_frame_presented(
+external int bf_runtime_presentation_succeeded(
   ffi.Pointer<bf_runtime> runtime,
+  int presentation_id,
   int revision,
+  int monotonic_now_ns,
+  ffi.Pointer<bf_output_buffer> output,
+);
+
+@ffi.Native<
+  bf_status Function(
+    ffi.Pointer<bf_runtime>,
+    ffi.Uint64,
+    ffi.Uint64,
+    ffi.Int32,
+    ffi.Pointer<bf_output_buffer>,
+  )
+>()
+external int bf_runtime_presentation_rejected(
+  ffi.Pointer<bf_runtime> runtime,
+  int presentation_id,
+  int revision,
+  int rejection_reason,
   ffi.Pointer<bf_output_buffer> output,
 );
 
@@ -82,10 +111,10 @@ final class bf_output_buffer extends ffi.Struct {
   external int length;
 
   @ffi.Uint64()
-  external int revision;
+  external int presentation_id;
 
-  @ffi.Int64()
-  external int next_wakeup_ns;
+  @ffi.Uint64()
+  external int revision;
 
   @bf_status()
   external int status;
@@ -125,3 +154,17 @@ const int BF_ERROR_DART_RENDERER_EXCEPTION = 10;
 const int BF_ERROR_LIFECYCLE_EXCEPTION = 11;
 
 const int BF_ERROR_NATIVE_LIBRARY_LOADING_ERROR = 12;
+
+const int BF_ERROR_INVALID_PRESENTATION = 13;
+
+const int BF_ERROR_INVALID_MONOTONIC_TIME = 14;
+
+const int BF_ERROR_INVALID_SCHEDULER_STATE = 15;
+
+const int BF_REJECTION_DECODE_FAILED = 0;
+
+const int BF_REJECTION_FRAME_VALIDATION_FAILED = 1;
+
+const int BF_REJECTION_RENDERER_EPOCH_MISMATCH = 2;
+
+const int BF_REJECTION_RENDERER_REVISION_MISMATCH = 3;

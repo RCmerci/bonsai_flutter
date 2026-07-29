@@ -2,6 +2,14 @@
 
 ## 0.1.0-dev.1
 
+- Added the foreground-vsync frame loop, ordered runtime session, generation
+  guards, presentation-token barrier, background suspension, and resume
+  catch-up.
+- Added two-phase `NodeStore` and event-prefix transactions with guarded
+  post-frame success, exact pre-commit rejection, and terminal post-commit
+  failures.
+- Added bounded widget-test helpers and real-FFI autonomous clock and
+  lifecycle coverage. Live foreground roots intentionally do not settle.
 - Added the typed in-memory frame model and transactional `NodeStore`.
 - Added the bounded binary frame codec and producer-owned cross-language
   fixtures with byte-for-byte clean checks.

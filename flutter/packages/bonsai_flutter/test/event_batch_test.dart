@@ -439,6 +439,122 @@ void main() {
       expect(queue.droppedCount, 1);
       expect(queue.takeBatch()!.events.single.eventTag, EventTagId.press);
     });
+
+    test('prepare preserves events until exact prefix commit', () {
+      final queue = EventBatchQueue(
+        runtimeEpoch: 21,
+        displayedRevision: () => 10,
+      );
+      queue.enqueue(
+        rendererEvent(
+          eventTag: EventTagId.press,
+          payload: const UnitEventPayload(),
+        ),
+      );
+      queue.enqueue(
+        rendererEvent(
+          eventTag: EventTagId.key,
+          payload: const KeyEventPayload(
+            logicalKey: 13,
+            physicalKey: 40,
+            action: KeyActionValue.down,
+            modifiers: 0,
+          ),
+        ),
+      );
+
+      final prepared = queue.prepareBatch();
+
+      expect(prepared.prefixLength, 2);
+      expect(
+        EventBatchCodec.decode(prepared.encodedBytes).events,
+        hasLength(2),
+      );
+      expect(queue.pendingCount, 2);
+
+      queue.enqueue(
+        rendererEvent(
+          eventTag: EventTagId.press,
+          payload: const UnitEventPayload(),
+        ),
+      );
+      queue.commit(prepared);
+
+      expect(queue.pendingCount, 1);
+      expect(queue.prepareBatch().prefixLength, 1);
+    });
+
+    test('failed handoff preserves the prepared prefix for retry', () {
+      final queue = EventBatchQueue(
+        runtimeEpoch: 21,
+        displayedRevision: () => 11,
+      );
+      queue.enqueue(
+        rendererEvent(
+          eventTag: EventTagId.press,
+          payload: const UnitEventPayload(),
+        ),
+      );
+      final first = queue.prepareBatch();
+
+      expect(queue.pendingCount, 1);
+
+      final retry = queue.prepareBatch();
+      expect(retry.encodedBytes, orderedEquals(first.encodedBytes));
+      queue.commit(retry);
+      expect(queue.pendingCount, 0);
+    });
+
+    test(
+      'prepared prefixes are exact-once and reject stale queue identity',
+      () {
+        final queue = EventBatchQueue(
+          runtimeEpoch: 21,
+          displayedRevision: () => 12,
+        );
+        queue.enqueue(
+          rendererEvent(
+            eventTag: EventTagId.press,
+            payload: const UnitEventPayload(),
+          ),
+        );
+        final stale = queue.prepareBatch();
+        final committed = queue.prepareBatch();
+        queue.commit(committed);
+
+        expect(() => queue.commit(committed), throwsStateError);
+        expect(() => queue.commit(stale), throwsStateError);
+      },
+    );
+
+    test(
+      'events capture presented revision instead of later applied revision',
+      () {
+        var presentedRevision = 1;
+        final queue = EventBatchQueue(
+          runtimeEpoch: 21,
+          displayedRevision: () => presentedRevision,
+        );
+        queue.enqueue(
+          rendererEvent(
+            eventTag: EventTagId.press,
+            payload: const UnitEventPayload(),
+          ),
+        );
+        presentedRevision = 2;
+        queue.enqueue(
+          rendererEvent(
+            eventTag: EventTagId.press,
+            payload: const UnitEventPayload(),
+          ),
+        );
+
+        final events = EventBatchCodec.decode(
+          queue.prepareBatch().encodedBytes,
+        ).events;
+        expect(events.map((event) => event.displayedRevision), [1, 2]);
+      },
+    );
   });
 }
 

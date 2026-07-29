@@ -25,9 +25,6 @@ let () =
   require
     (!activations = 0 && !after_displays = 0)
     "flush must not trigger after-display lifecycle events";
-  require
-    (Bonsai_runtime_adapter.has_after_display_events adapter)
-    "the initial frame must report pending after-display lifecycle events";
   Bonsai_runtime_adapter.schedule_event adapter toggle_effect;
   Bonsai_runtime_adapter.flush adapter;
   let state, _ = Bonsai_runtime_adapter.result adapter in
@@ -35,7 +32,7 @@ let () =
   require
     (!activations = 0 && !after_displays = 0)
     "state updates must not trigger lifecycle events before frame presentation";
-  Bonsai_runtime_adapter.frame_presented adapter;
+  Bonsai_runtime_adapter.trigger_lifecycles adapter;
   require (!activations = 1) "activation must run after frame presentation";
   require (!after_displays = 1) "after-display must run after frame presentation";
   Bonsai_runtime_adapter.shutdown adapter;

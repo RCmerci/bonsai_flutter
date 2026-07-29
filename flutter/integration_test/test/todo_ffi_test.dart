@@ -5,6 +5,8 @@ import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/runtime_harness.dart';
+
 const _timeout = Duration(seconds: 10);
 
 Future<T> _bounded<T>(Future<T> future) => future.timeout(_timeout);
@@ -19,12 +21,11 @@ void main() {
       ),
     );
     expect(runtime, isNotNull);
-    addTearDown(() => _bounded(runtime!.dispose()));
+    final harness = RuntimeHarness(runtime!);
+    addTearDown(() => _bounded(harness.dispose()));
 
-    final initialResponse = await tester.runAsync(
-      () => _bounded(runtime!.step(Uint8List(0))),
-    );
-    final initialFrame = FrameCodec.decode(initialResponse!.bytes);
+    final initialCycle = await tester.runAsync(() => _bounded(harness.grant()));
+    final initialFrame = FrameCodec.decode(initialCycle!.bytes);
     final store = NodeStore()..apply(initialFrame);
     final queue = EventBatchQueue(
       runtimeEpoch: initialFrame.runtimeEpoch,
@@ -51,17 +52,12 @@ void main() {
     );
     expect(editorBefore.focusNode.hasFocus, isTrue);
 
-    final presented = await tester.runAsync(
-      () => _bounded(runtime!.framePresented(initialFrame.targetRevision)),
-    );
-    expect(presented!.status, RuntimeStatus.ok);
-
     await tester.tap(find.text('Reverse'));
     await tester.pump();
     final batch = queue.takeBatch();
     expect(batch, isNotNull);
     final response = await tester.runAsync(
-      () => _bounded(runtime!.sendEventBatch(batch!)),
+      () => _bounded(harness.advance(events: EventBatchCodec.encode(batch!))),
     );
     final frame = FrameCodec.decode(response!.bytes);
     expect(frame.kind, FrameKind.incremental);
@@ -83,5 +79,6 @@ void main() {
     expect(identical(editorAfter.controller, editorBefore.controller), isTrue);
     expect(identical(editorAfter.focusNode, editorBefore.focusNode), isTrue);
     expect(editorAfter.focusNode.hasFocus, isTrue);
+    harness.acknowledge();
   });
 }

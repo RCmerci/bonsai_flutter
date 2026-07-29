@@ -13,6 +13,7 @@ import '../renderer/node_host.dart';
 import '../renderer/renderer_resource_store.dart';
 import '../renderer/widget_registry.dart';
 import '../runtime/event_batch_queue.dart';
+import '../runtime/foreground_frame_loop.dart';
 import '../runtime/runtime_client.dart';
 import '../store/node_store.dart';
 
@@ -28,6 +29,7 @@ final class BonsaiFlutterRoot extends StatefulWidget {
     this.loading,
     this.errorBuilder,
     this.hostEffects,
+    this.frameEligibilitySource,
     super.key,
   }) : runtimeStarter =
            runtimeStarter ?? ((config) => RuntimeClient.start(config: config)),
@@ -39,20 +41,39 @@ final class BonsaiFlutterRoot extends StatefulWidget {
   final Widget? loading;
   final RuntimeErrorBuilder? errorBuilder;
   final HostEffectImplementation? hostEffects;
+  final FrameEligibilitySource? frameEligibilitySource;
 
   @override
   State<BonsaiFlutterRoot> createState() => _BonsaiFlutterRootState();
 }
 
+final class _PendingPresentation {
+  _PendingPresentation({
+    required this.presentationId,
+    required this.revision,
+    required this.generation,
+  });
+
+  final int presentationId;
+  final int revision;
+  int generation;
+  bool postFrameArmed = false;
+}
+
 final class _BonsaiFlutterRootState extends State<BonsaiFlutterRoot> {
   RuntimeSession? _runtime;
+  StreamSubscription<RuntimeUpdate>? _runtimeUpdates;
+  ForegroundFrameLoop? _frameLoop;
   NodeStore? _store;
   EventBatchQueue? _events;
   HostEffectDispatcher? _hostEffects;
   final RendererResourceStore _resources = RendererResourceStore();
+  CycleReady? _heldCycle;
+  _PendingPresentation? _pendingPresentation;
   Object? _error;
-  Future<void> _draining = Future.value();
+  bool _eligible = true;
   bool _disposed = false;
+  int _displayedRevision = 0;
 
   @override
   void initState() {
@@ -64,14 +85,12 @@ final class _BonsaiFlutterRootState extends State<BonsaiFlutterRoot> {
   @override
   void dispose() {
     _disposed = true;
+    _frameLoop?.dispose();
+    unawaited(_runtimeUpdates?.cancel());
     final runtime = _runtime;
-    if (runtime != null) {
-      unawaited(runtime.dispose());
-    }
+    if (runtime != null) unawaited(runtime.dispose());
     final hostEffects = _hostEffects;
-    if (hostEffects != null) {
-      unawaited(hostEffects.dispose());
-    }
+    if (hostEffects != null) unawaited(hostEffects.dispose());
     _resources.dispose();
     WidgetsBinding.instance.removeTimingsCallback(_recordFrameTimings);
     super.dispose();
@@ -86,48 +105,204 @@ final class _BonsaiFlutterRootState extends State<BonsaiFlutterRoot> {
         return;
       }
       _runtime = runtime;
-      final response = await runtime.step(Uint8List(0));
-      _requireSuccess(response);
-      if (response.bytes.isEmpty) {
-        throw StateError('Initial runtime step returned no frame');
-      }
-      final frame = FrameCodec.decode(response.bytes);
-      DebugFrameRecorder.recordRuntimeResponse(
-        frame,
-        ffiDuration: response.ffiDuration,
-        isolateTransferDuration: response.isolateTransferDuration,
-      );
-      if (frame.kind != FrameKind.fullSnapshot) {
-        throw StateError('Initial runtime step must return a full snapshot');
-      }
-      final store = NodeStore()..apply(frame);
-      _store = store;
-      _resources.synchronize(store);
-      _events = EventBatchQueue(
-        runtimeEpoch: frame.runtimeEpoch,
-        displayedRevision: () => store.revision,
-      );
       _hostEffects = HostEffectDispatcher(
         implementation:
             widget.hostEffects ??
             FlutterHostEffectImplementation(resources: _resources),
         onEvent: _onEvent,
       );
-      _dispatchHostOperations(frame);
-      if (mounted) {
-        setState(() {});
-      }
-      await _acknowledgeAfterFrame(
-        runtime,
-        frame.runtimeEpoch,
-        frame.targetRevision,
+      _runtimeUpdates = runtime.updates.listen(
+        _handleRuntimeUpdate,
+        onError: _reportError,
       );
+      final eligibility =
+          widget.frameEligibilitySource ?? AppLifecycleFrameEligibilitySource();
+      final loop = ForegroundFrameLoop(
+        scheduler: SchedulerBindingFrameScheduler(),
+        eligibilitySource: eligibility,
+        onBeginFrame: _onBeginFrame,
+        onGenerationInvalidated: (_) {},
+        onEligibilityChanged: (generation, eligible) {
+          _eligible = eligible;
+          runtime!.setFrameEligibility(
+            generation: generation,
+            eligible: eligible,
+          );
+          return !_disposed && _error == null;
+        },
+        onError: _reportError,
+      );
+      _frameLoop = loop;
+      loop.start();
     } catch (error, stackTrace) {
       if (runtime != null && !identical(runtime, _runtime)) {
         await runtime.dispose();
       }
       _reportError(error, stackTrace);
     }
+  }
+
+  void _onBeginFrame(int generation, Duration _) {
+    if (_disposed || _error != null) return;
+    final pending = _pendingPresentation;
+    if (pending != null) {
+      if (!pending.postFrameArmed || pending.generation != generation) {
+        pending.generation = generation;
+        _armPostFrame(pending);
+      }
+    } else {
+      final held = _heldCycle;
+      if (held != null) {
+        _heldCycle = null;
+        _applyCycle(held, generation);
+      }
+    }
+    _runtime?.grantVsync(generation: generation);
+  }
+
+  void _handleRuntimeUpdate(RuntimeUpdate update) {
+    if (_disposed || _error != null) return;
+    switch (update) {
+      case CycleReady():
+        if (_heldCycle != null || _pendingPresentation != null) {
+          _reportError(
+            StateError('Runtime produced more than one unresolved cycle'),
+            StackTrace.current,
+          );
+          return;
+        }
+        _heldCycle = update;
+      case RuntimeFatalDiagnostic():
+        _reportError(
+          BonsaiRuntimeException(
+            status: RuntimeStatus.fatalError,
+            code: update.diagnostic.code,
+            message: update.diagnostic.message,
+          ),
+          StackTrace.current,
+        );
+      case RuntimeDebugSnapshot() || RuntimeDisposed():
+        break;
+    }
+  }
+
+  void _applyCycle(CycleReady update, int generation) {
+    final runtime = _runtime;
+    if (runtime == null || !_eligible || _disposed) {
+      _heldCycle = update;
+      return;
+    }
+    Frame? frame;
+    PreparedNodeStoreFrame? prepared;
+    var committed = false;
+    try {
+      final bytes = update.bytes.materialize().asUint8List();
+      if (bytes.isNotEmpty) {
+        try {
+          frame = FrameCodec.decode(bytes);
+        } catch (_) {
+          runtime.presentationRejected(
+            generation: generation,
+            presentationId: update.presentationId,
+            revision: update.revision,
+            reason: PresentationRejectionReason.decodeFailed,
+          );
+          return;
+        }
+        final store = _store ?? NodeStore();
+        try {
+          prepared = store.prepare(frame);
+        } on FrameApplyException catch (error) {
+          final reason = switch (error.code) {
+            FrameErrorCode.epochMismatch =>
+              PresentationRejectionReason.rendererEpochMismatch,
+            FrameErrorCode.revisionMismatch =>
+              PresentationRejectionReason.rendererRevisionMismatch,
+            _ => PresentationRejectionReason.frameValidationFailed,
+          };
+          runtime.presentationRejected(
+            generation: generation,
+            presentationId: update.presentationId,
+            revision: update.revision,
+            reason: reason,
+          );
+          return;
+        }
+        store.commit(prepared);
+        committed = true;
+        _store = store;
+        _events ??= EventBatchQueue(
+          runtimeEpoch: frame.runtimeEpoch,
+          displayedRevision: () => _displayedRevision,
+        );
+        _resources.synchronize(store);
+        final dispatch = _hostEffects?.dispatch(frame);
+        if (dispatch != null) {
+          unawaited(
+            dispatch.catchError((Object error, StackTrace stackTrace) {
+              _reportError(error, stackTrace);
+            }),
+          );
+        }
+        if (mounted) setState(() {});
+      }
+      final pending = _PendingPresentation(
+        presentationId: update.presentationId,
+        revision: update.revision,
+        generation: generation,
+      );
+      _pendingPresentation = pending;
+      _armPostFrame(pending);
+    } catch (error, stackTrace) {
+      if (!committed) {
+        try {
+          runtime.presentationRejected(
+            generation: generation,
+            presentationId: update.presentationId,
+            revision: update.revision,
+            reason: PresentationRejectionReason.frameValidationFailed,
+          );
+          return;
+        } catch (_) {
+          // The original failure remains authoritative.
+        }
+      }
+      _reportError(error, stackTrace);
+    }
+  }
+
+  void _armPostFrame(_PendingPresentation pending) {
+    final loop = _frameLoop;
+    if (loop == null || pending.postFrameArmed || !_eligible) return;
+    pending.postFrameArmed = true;
+    loop.addGuardedPostFrameCallback(
+      generation: pending.generation,
+      callback: (_) {
+        pending.postFrameArmed = false;
+        if (_disposed ||
+            _error != null ||
+            !identical(_pendingPresentation, pending)) {
+          return;
+        }
+        try {
+          final runtime = _runtime;
+          if (runtime == null) return;
+          final events = _events?.prepareBatch();
+          final eventBatch = events?.encodedBytes ?? Uint8List(0);
+          _displayedRevision = pending.revision;
+          runtime.presentationSucceeded(
+            generation: pending.generation,
+            presentationId: pending.presentationId,
+            revision: pending.revision,
+            eventBatch: eventBatch,
+          );
+          if (events != null) _events!.commit(events);
+          _pendingPresentation = null;
+        } catch (error, stackTrace) {
+          _reportError(error, stackTrace);
+        }
+      },
+    );
   }
 
   void _onEvent(RendererEvent event) {
@@ -137,98 +312,7 @@ final class _BonsaiFlutterRootState extends State<BonsaiFlutterRoot> {
       events.enqueue(event);
     } catch (error, stackTrace) {
       _reportError(error, stackTrace);
-      return;
     }
-    _draining = _draining.then((_) => _drainEvents()).catchError((
-      Object error,
-      StackTrace stackTrace,
-    ) {
-      _reportError(error, stackTrace);
-    });
-  }
-
-  Future<void> _drainEvents() async {
-    final runtime = _runtime;
-    final events = _events;
-    final store = _store;
-    if (runtime == null || events == null || store == null || _disposed) return;
-    for (
-      var batch = events.takeBatch();
-      batch != null;
-      batch = events.takeBatch()
-    ) {
-      final response = await runtime.sendEventBatch(batch);
-      if (_isRecoverableStaleEvent(response)) continue;
-      _requireSuccess(response);
-      if (response.bytes.isEmpty) continue;
-      final frame = FrameCodec.decode(response.bytes);
-      DebugFrameRecorder.recordRuntimeResponse(
-        frame,
-        ffiDuration: response.ffiDuration,
-        isolateTransferDuration: response.isolateTransferDuration,
-      );
-      try {
-        store.apply(frame);
-        _resources.synchronize(store);
-      } on FrameApplyException catch (error) {
-        if (error.code == FrameErrorCode.revisionMismatch ||
-            error.code == FrameErrorCode.epochMismatch) {
-          events.requestResync();
-          continue;
-        }
-        rethrow;
-      }
-      _dispatchHostOperations(frame);
-      await _acknowledgeAfterFrame(
-        runtime,
-        frame.runtimeEpoch,
-        frame.targetRevision,
-      );
-    }
-  }
-
-  void _dispatchHostOperations(Frame frame) {
-    final dispatcher = _hostEffects;
-    if (dispatcher == null) return;
-    unawaited(
-      dispatcher.dispatch(frame).catchError((
-        Object error,
-        StackTrace stackTrace,
-      ) {
-        _reportError(error, stackTrace);
-      }),
-    );
-  }
-
-  Future<void> _acknowledgeAfterFrame(
-    RuntimeSession runtime,
-    int runtimeEpoch,
-    int revision,
-  ) {
-    final completer = Completer<void>();
-    final presentation = Stopwatch()..start();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      try {
-        if (_disposed) {
-          completer.complete();
-          return;
-        }
-        presentation.stop();
-        final lifecycle = Stopwatch()..start();
-        _requireSuccess(await runtime.framePresented(revision));
-        lifecycle.stop();
-        DebugFrameRecorder.recordPresented(
-          runtimeEpoch,
-          revision,
-          latency: presentation.elapsed,
-          lifecycleDuration: lifecycle.elapsed,
-        );
-        completer.complete();
-      } catch (error, stackTrace) {
-        completer.completeError(error, stackTrace);
-      }
-    });
-    return completer.future;
   }
 
   void _recordFrameTimings(List<FrameTiming> timings) {
@@ -248,31 +332,9 @@ final class _BonsaiFlutterRootState extends State<BonsaiFlutterRoot> {
     );
   }
 
-  void _requireSuccess(RuntimeResponse response) {
-    if (response.status != RuntimeStatus.ok) {
-      throw BonsaiRuntimeException(
-        status: response.status,
-        code: response.errorCode,
-        message:
-            response.errorMessage ?? 'Runtime returned ${response.status.name}',
-      );
-    }
-  }
-
-  bool _isRecoverableStaleEvent(RuntimeResponse response) =>
-      response.status == RuntimeStatus.recoverableError &&
-      response.errorCode == RuntimeErrorCode.staleEvent;
-
-  void _reportError(Object error, StackTrace stackTrace) {
+  void _reportError(Object error, [StackTrace? stackTrace]) {
     if (_disposed || _error != null) return;
-    FlutterError.reportError(
-      FlutterErrorDetails(
-        exception: error,
-        stack: stackTrace,
-        library: 'bonsai_flutter',
-        context: ErrorDescription('while driving the OCaml runtime'),
-      ),
-    );
+    _frameLoop?.dispose();
     if (mounted) {
       setState(() => _error = error);
     } else {

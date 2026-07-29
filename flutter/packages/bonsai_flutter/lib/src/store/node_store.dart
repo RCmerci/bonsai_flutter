@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:collection';
 
 import '../debug/frame_stats.dart';
@@ -67,6 +69,40 @@ final class ApplyResult {
   final Set<int> droppedNodeIds;
 }
 
+final class PreparedNodeStoreFrame {
+  PreparedNodeStoreFrame._({
+    required NodeStore owner,
+    required Map<int, UiNode> baseNodes,
+    required int? baseRootId,
+    required int? baseRuntimeEpoch,
+    required int baseRevision,
+    required this.frame,
+    required Map<int, UiNode> nodes,
+    required this.rootId,
+    required this.resourceGeneration,
+    required this.result,
+    required this.prepareDuration,
+  }) : _owner = owner,
+       _baseNodes = baseNodes,
+       _baseRootId = baseRootId,
+       _baseRuntimeEpoch = baseRuntimeEpoch,
+       _baseRevision = baseRevision,
+       _nodes = nodes;
+
+  final NodeStore _owner;
+  final Map<int, UiNode> _baseNodes;
+  final int? _baseRootId;
+  final int? _baseRuntimeEpoch;
+  final int _baseRevision;
+  final Frame frame;
+  final Map<int, UiNode> _nodes;
+  final int? rootId;
+  final int resourceGeneration;
+  final ApplyResult result;
+  final Duration prepareDuration;
+  bool _committed = false;
+}
+
 typedef NodeListener = void Function();
 
 final class NodeStore {
@@ -111,8 +147,14 @@ final class NodeStore {
     return () => _storeListeners.remove(listener);
   }
 
-  ApplyResult apply(Frame frame) {
+  ApplyResult apply(Frame frame) => commit(prepare(frame));
+
+  PreparedNodeStoreFrame prepare(Frame frame) {
     final stopwatch = Stopwatch()..start();
+    final baseNodes = _nodes;
+    final baseRootId = _rootId;
+    final baseRuntimeEpoch = _runtimeEpoch;
+    final baseRevision = _revision;
     _validateRevision(frame);
 
     final isFullSnapshot = frame.kind == FrameKind.fullSnapshot;
@@ -182,15 +224,49 @@ final class NodeStore {
 
     _validateTree(shadow, shadowRoot);
 
-    _nodes = UnmodifiableMapView(shadow);
-    _rootId = shadowRoot;
-    _runtimeEpoch = frame.runtimeEpoch;
-    _revision = frame.targetRevision;
-    if (isFullSnapshot) {
-      _resourceGeneration += 1;
-    }
+    final result = ApplyResult(
+      dirtyNodeIds: Set.unmodifiable(dirty),
+      droppedNodeIds: Set.unmodifiable(dropped),
+    );
+    stopwatch.stop();
+    return PreparedNodeStoreFrame._(
+      owner: this,
+      baseNodes: baseNodes,
+      baseRootId: baseRootId,
+      baseRuntimeEpoch: baseRuntimeEpoch,
+      baseRevision: baseRevision,
+      frame: frame,
+      nodes: UnmodifiableMapView(shadow),
+      rootId: shadowRoot,
+      resourceGeneration: isFullSnapshot
+          ? _resourceGeneration + 1
+          : _resourceGeneration,
+      result: result,
+      prepareDuration: stopwatch.elapsed,
+    );
+  }
 
-    for (final nodeId in dirty) {
+  ApplyResult commit(PreparedNodeStoreFrame prepared) {
+    if (!identical(prepared._owner, this)) {
+      throw StateError('Prepared frame belongs to another NodeStore');
+    }
+    if (prepared._committed) {
+      throw StateError('Prepared frame was already committed');
+    }
+    if (!identical(_nodes, prepared._baseNodes) ||
+        _rootId != prepared._baseRootId ||
+        _runtimeEpoch != prepared._baseRuntimeEpoch ||
+        _revision != prepared._baseRevision) {
+      throw StateError('Prepared frame base is stale');
+    }
+    prepared._committed = true;
+    _nodes = prepared._nodes;
+    _rootId = prepared.rootId;
+    _runtimeEpoch = prepared.frame.runtimeEpoch;
+    _revision = prepared.frame.targetRevision;
+    _resourceGeneration = prepared.resourceGeneration;
+
+    for (final nodeId in prepared.result.dirtyNodeIds) {
       final listeners = _listeners[nodeId]?.toList(growable: false) ?? const [];
       for (final listener in listeners) {
         listener();
@@ -200,17 +276,12 @@ final class NodeStore {
       listener();
     }
 
-    final result = ApplyResult(
-      dirtyNodeIds: Set.unmodifiable(dirty),
-      droppedNodeIds: Set.unmodifiable(dropped),
-    );
-    stopwatch.stop();
     DebugFrameRecorder.recordApplied(
-      frame,
-      dirtyNodeCount: dirty.length,
-      duration: stopwatch.elapsed,
+      prepared.frame,
+      dirtyNodeCount: prepared.result.dirtyNodeIds.length,
+      duration: prepared.prepareDuration,
     );
-    return result;
+    return prepared.result;
   }
 
   void _validateRevision(Frame frame) {

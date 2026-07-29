@@ -10,7 +10,8 @@
 
 #define BF_PROTOCOL_MAJOR 1
 #define BF_PROTOCOL_MINOR 12
-#define BF_NO_WAKEUP ((int64_t)-1)
+#define BF_ABI_MAJOR 2
+#define BF_ABI_MINOR 0
 
 typedef struct bf_allocation {
   uint8_t *data;
@@ -62,8 +63,8 @@ static void bf_output_reset(bf_output_buffer *output,
   }
   output->data = NULL;
   output->length = 0;
+  output->presentation_id = 0;
   output->revision = 0;
-  output->next_wakeup_ns = BF_NO_WAKEUP;
   output->status = status;
   output->error_code = error_code;
 }
@@ -119,7 +120,7 @@ static bf_status bf_apply_ocaml_response(bf_runtime *runtime,
   if (response->error != NULL && response->error[0] != '\0') {
     bf_store_error(runtime, response->error_code, response->error);
   }
-  if (returned_status != BF_STATUS_OK) {
+  if (returned_status == BF_STATUS_FATAL_ERROR) {
     if (response->error == NULL || response->error[0] == '\0') {
       bf_store_error(runtime,
                      response->error_code,
@@ -152,12 +153,18 @@ static bf_status bf_apply_ocaml_response(bf_runtime *runtime,
   bf_output_reset(output, BF_STATUS_OK, BF_ERROR_NONE);
   output->data = data;
   output->length = response->length;
+  output->presentation_id = response->presentation_id;
   output->revision = response->revision;
-  output->next_wakeup_ns = response->next_wakeup_ns;
+  output->status = returned_status;
+  output->error_code = response->error_code;
   bf_ocaml_bridge_response_release(response);
-  return BF_STATUS_OK;
+  return returned_status;
 }
 #endif
+
+uint16_t bf_abi_version_major(void) { return BF_ABI_MAJOR; }
+
+uint16_t bf_abi_version_minor(void) { return BF_ABI_MINOR; }
 
 uint16_t bf_protocol_version_major(void) { return BF_PROTOCOL_MAJOR; }
 
@@ -202,7 +209,8 @@ bf_runtime *bf_runtime_create(const uint8_t *config, size_t config_length) {
   return runtime;
 }
 
-bf_status bf_runtime_step(bf_runtime *runtime,
+bf_status bf_runtime_pump(bf_runtime *runtime,
+                          int64_t monotonic_now_ns,
                           const uint8_t *input,
                           size_t input_length,
                           bf_output_buffer *output) {
@@ -216,11 +224,19 @@ bf_status bf_runtime_step(bf_runtime *runtime,
                         BF_ERROR_PROTOCOL,
                         "Input pointer is null for a nonempty batch");
   }
+  if (monotonic_now_ns < 0) {
+    return bf_set_error(runtime,
+                        output,
+                        BF_STATUS_RECOVERABLE_ERROR,
+                        BF_ERROR_INVALID_MONOTONIC_TIME,
+                        "Monotonic time must be nonnegative");
+  }
 #if defined(BF_WITH_OCAML)
   {
     bf_ocaml_response response = {0};
     bf_status status =
-        bf_ocaml_bridge_step(runtime->backend_handle,
+        bf_ocaml_bridge_pump(runtime->backend_handle,
+                             monotonic_now_ns,
                              input,
                              input_length,
                              &response);
@@ -236,23 +252,82 @@ bf_status bf_runtime_step(bf_runtime *runtime,
 #endif
 }
 
-bf_status bf_runtime_frame_presented(bf_runtime *runtime,
-                                     uint64_t revision,
-                                     bf_output_buffer *output) {
+bf_status bf_runtime_presentation_succeeded(bf_runtime *runtime,
+                                            uint64_t presentation_id,
+                                            uint64_t revision,
+                                            int64_t monotonic_now_ns,
+                                            bf_output_buffer *output) {
   if (runtime == NULL || output == NULL) {
     return BF_STATUS_FATAL_ERROR;
+  }
+  if (presentation_id == 0) {
+    return bf_set_error(runtime,
+                        output,
+                        BF_STATUS_RECOVERABLE_ERROR,
+                        BF_ERROR_INVALID_PRESENTATION,
+                        "Presentation ID must be positive");
+  }
+  if (monotonic_now_ns < 0) {
+    return bf_set_error(runtime,
+                        output,
+                        BF_STATUS_RECOVERABLE_ERROR,
+                        BF_ERROR_INVALID_MONOTONIC_TIME,
+                        "Monotonic time must be nonnegative");
   }
 #if defined(BF_WITH_OCAML)
   {
     bf_ocaml_response response = {0};
     bf_status status =
-        bf_ocaml_bridge_frame_presented(runtime->backend_handle,
-                                        revision,
-                                        &response);
+        bf_ocaml_bridge_presentation_succeeded(runtime->backend_handle,
+                                               presentation_id,
+                                               revision,
+                                               monotonic_now_ns,
+                                               &response);
     return bf_apply_ocaml_response(runtime, output, status, &response);
   }
 #else
+  (void)presentation_id;
   (void)revision;
+  (void)monotonic_now_ns;
+  return bf_set_error(runtime,
+                      output,
+                      BF_STATUS_FATAL_ERROR,
+                      BF_ERROR_NATIVE_LIBRARY_LOADING_ERROR,
+                      "OCaml runtime backend is not linked");
+#endif
+}
+
+bf_status bf_runtime_presentation_rejected(bf_runtime *runtime,
+                                           uint64_t presentation_id,
+                                           uint64_t revision,
+                                           int32_t rejection_reason,
+                                           bf_output_buffer *output) {
+  if (runtime == NULL || output == NULL) {
+    return BF_STATUS_FATAL_ERROR;
+  }
+  if (presentation_id == 0 || rejection_reason < BF_REJECTION_DECODE_FAILED ||
+      rejection_reason > BF_REJECTION_RENDERER_REVISION_MISMATCH) {
+    return bf_set_error(runtime,
+                        output,
+                        BF_STATUS_RECOVERABLE_ERROR,
+                        BF_ERROR_INVALID_PRESENTATION,
+                        "Invalid presentation rejection");
+  }
+#if defined(BF_WITH_OCAML)
+  {
+    bf_ocaml_response response = {0};
+    bf_status status = bf_ocaml_bridge_presentation_rejected(
+        runtime->backend_handle,
+        presentation_id,
+        revision,
+        rejection_reason,
+        &response);
+    return bf_apply_ocaml_response(runtime, output, status, &response);
+  }
+#else
+  (void)presentation_id;
+  (void)revision;
+  (void)rejection_reason;
   return bf_set_error(runtime,
                       output,
                       BF_STATUS_FATAL_ERROR,

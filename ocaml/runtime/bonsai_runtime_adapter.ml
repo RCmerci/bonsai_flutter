@@ -1,5 +1,6 @@
 type 'result t =
   { driver : 'result Bonsai_driver.t
+  ; time_source : Bonsai.Time_source.t
   ; mutable is_shutdown : bool
   }
 
@@ -19,7 +20,7 @@ let create ~time_source component =
   let driver =
     Bonsai_driver.create ~instrumentation:(instrumentation ()) ~time_source component
   in
-  { driver; is_shutdown = false }
+  { driver; time_source; is_shutdown = false }
 ;;
 
 let require_active operation t =
@@ -42,18 +43,13 @@ let schedule_event t scheduled_effect =
   Bonsai_driver.schedule_event t.driver scheduled_effect
 ;;
 
-let has_before_display_events t =
-  require_active "has_before_display_events" t;
-  Bonsai_driver.has_before_display_events t.driver
+let advance_clock t ~to_ =
+  require_active "advance_clock" t;
+  Bonsai.Time_source.advance_clock t.time_source ~to_
 ;;
 
-let has_after_display_events t =
-  require_active "has_after_display_events" t;
-  Bonsai_driver.has_after_display_events t.driver
-;;
-
-let frame_presented t =
-  require_active "frame_presented" t;
+let trigger_lifecycles t =
+  require_active "trigger_lifecycles" t;
   Bonsai_driver.trigger_lifecycles t.driver
 ;;
 

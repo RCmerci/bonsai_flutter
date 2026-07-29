@@ -53,7 +53,21 @@ val respond_to_host_effect
   -> bytes
   -> unit
 
-val trigger_frame_presented : t -> unit
+val present : t -> unit
+
+(** Runs one deterministic logical pump using runtime-relative monotonic time.
+    Unlike [present], these helpers expose the ABI v2 presentation transaction
+    directly. *)
+val pump
+  :  t
+  -> monotonic_now_ns:int64
+  -> ?events:Bonsai_flutter_protocol.Inbound_event.batch
+  -> unit
+  -> Driver.pump_result
+
+val presentation_succeeded : t -> monotonic_now_ns:int64 -> unit
+val presentation_rejected : t -> reason:Driver.rejection_reason -> unit
+val unresolved_presentation_id : t -> int64 option
 val last_frame : t -> Driver.frame option
 val revision : t -> int64
 val pending_host_effect_count : t -> int

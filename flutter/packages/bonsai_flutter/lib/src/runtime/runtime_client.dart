@@ -2,38 +2,12 @@ import 'dart:async';
 import 'dart:isolate';
 import 'dart:typed_data';
 
-import 'package:bonsai_flutter_native/bonsai_flutter_native.dart';
+import 'runtime_protocol.dart';
+import 'runtime_worker.dart';
 
-import '../protocol/event_batch.dart';
+export 'runtime_protocol.dart';
 
 enum RuntimeStatus { ok, recoverableError, fatalError }
-
-enum RuntimeErrorCode {
-  none(0),
-  protocolError(1),
-  revisionMismatch(2),
-  duplicateKey(3),
-  unsupportedNodeKind(4),
-  invalidProp(5),
-  handlerMissing(6),
-  staleEvent(7),
-  hostEffectFailure(8),
-  ocamlException(9),
-  dartRendererException(10),
-  lifecycleException(11),
-  nativeLibraryLoadingError(12);
-
-  const RuntimeErrorCode(this.wireId);
-
-  final int wireId;
-
-  static RuntimeErrorCode fromWireId(int value) {
-    for (final code in values) {
-      if (code.wireId == value) return code;
-    }
-    throw StateError('Unknown runtime error code $value');
-  }
-}
 
 final class BonsaiRuntimeException implements Exception {
   const BonsaiRuntimeException({
@@ -51,258 +25,241 @@ final class BonsaiRuntimeException implements Exception {
       'BonsaiRuntimeException(${status.name}, ${code.name}, $message)';
 }
 
-final class RuntimeResponse {
-  const RuntimeResponse({
-    required this.requestSequence,
-    required this.status,
-    required this.bytes,
-    required this.revision,
-    required this.nextWakeupNanoseconds,
-    required this.errorMessage,
-    this.errorCode = RuntimeErrorCode.none,
-    this.ffiDuration = Duration.zero,
-    this.isolateTransferDuration = Duration.zero,
+abstract interface class RuntimeSession {
+  Stream<RuntimeUpdate> get updates;
+
+  void grantVsync({required int generation});
+
+  void setFrameEligibility({required int generation, required bool eligible});
+
+  void presentationSucceeded({
+    required int generation,
+    required int presentationId,
+    required int revision,
+    required Uint8List eventBatch,
   });
 
-  final int requestSequence;
-  final RuntimeStatus status;
-  final Uint8List bytes;
-  final int revision;
-  final int nextWakeupNanoseconds;
-  final String? errorMessage;
-  final RuntimeErrorCode errorCode;
-  final Duration ffiDuration;
-  final Duration isolateTransferDuration;
-}
+  void presentationRejected({
+    required int generation,
+    required int presentationId,
+    required int revision,
+    required PresentationRejectionReason reason,
+  });
 
-abstract interface class RuntimeSession {
-  Future<RuntimeResponse> step(Uint8List input);
-  Future<RuntimeResponse> sendEventBatch(EventBatch batch);
-  Future<RuntimeResponse> framePresented(int revision);
+  Future<RuntimeDebugSnapshot> debugSnapshot();
   Future<void> dispose();
 }
 
 final class RuntimeClient implements RuntimeSession {
-  RuntimeClient._(this._commands, this._responses, this._worker) {
-    _responses.listen(_handleResponse);
+  RuntimeClient._(
+    this._commands,
+    this._updatesPort,
+    this._errorsPort,
+    this._exitPort,
+    this._worker,
+  ) {
+    _updatesSubscription = _updatesPort.listen(_handleUpdate);
+    _errorsSubscription = _errorsPort.listen(_handleIsolateError);
+    _exitSubscription = _exitPort.listen(_handleIsolateExit);
   }
 
   static Future<RuntimeClient> start({Uint8List? config}) async {
     final ready = ReceivePort();
-    final responses = ReceivePort();
-    final worker = await Isolate.spawn(_runtimeWorkerMain, <Object?>[
-      ready.sendPort,
-      responses.sendPort,
-      TransferableTypedData.fromList([config ?? Uint8List(0)]),
-    ], debugName: 'bonsai_flutter_runtime');
+    final updates = ReceivePort();
+    final errors = ReceivePort();
+    final exit = ReceivePort();
+    final worker = await Isolate.spawn(
+      runtimeWorkerMain,
+      <Object?>[
+        ready.sendPort,
+        updates.sendPort,
+        TransferableTypedData.fromList([config ?? Uint8List(0)]),
+      ],
+      debugName: 'bonsai_flutter_runtime',
+      onError: errors.sendPort,
+      onExit: exit.sendPort,
+      errorsAreFatal: true,
+    );
     final readyMessage = await ready.first;
     ready.close();
     if (readyMessage case SendPort commands) {
-      return RuntimeClient._(commands, responses, worker);
+      return RuntimeClient._(commands, updates, errors, exit, worker);
     }
-    responses.close();
+    updates.close();
+    errors.close();
+    exit.close();
     worker.kill(priority: Isolate.immediate);
     throw StateError('Runtime isolate failed to start: $readyMessage');
   }
 
   final SendPort _commands;
-  final ReceivePort _responses;
+  final ReceivePort _updatesPort;
+  final ReceivePort _errorsPort;
+  final ReceivePort _exitPort;
   final Isolate _worker;
-  final Map<int, Completer<RuntimeResponse>> _pending = {};
-  final Map<int, Stopwatch> _roundTrips = {};
-  var _nextSequence = 1;
+  final StreamController<RuntimeUpdate> _updates =
+      StreamController<RuntimeUpdate>.broadcast(sync: true);
+  final Map<int, Completer<RuntimeDebugSnapshot>> _debugRequests = {};
+  late final StreamSubscription<Object?> _updatesSubscription;
+  late final StreamSubscription<Object?> _errorsSubscription;
+  late final StreamSubscription<Object?> _exitSubscription;
+  Completer<void>? _disposeCompleter;
+  var _nextDebugRequestId = 1;
   bool _disposed = false;
-  Future<void>? _disposeFuture;
+  bool _closed = false;
 
   @override
-  Future<RuntimeResponse> step(Uint8List input) =>
-      _send(_Command.step, TransferableTypedData.fromList([input]));
+  Stream<RuntimeUpdate> get updates => _updates.stream;
 
   @override
-  Future<RuntimeResponse> sendEventBatch(EventBatch batch) =>
-      step(EventBatchCodec.encode(batch));
-
-  @override
-  Future<RuntimeResponse> framePresented(int revision) =>
-      _send(_Command.framePresented, revision);
-
-  Future<int> debugOutstandingBufferCount() async {
-    final response = await _send(_Command.debugOutstandingBuffers, null);
-    if (response.status != RuntimeStatus.ok) {
-      throw StateError(
-        response.errorMessage ?? 'Unable to query outstanding native buffers',
-      );
-    }
-    return response.revision;
+  void grantVsync({required int generation}) {
+    _send(VsyncGranted(generation));
   }
 
   @override
-  Future<void> dispose() {
-    final existing = _disposeFuture;
-    if (existing != null) return existing;
-    _disposed = true;
-    final completer = Completer<void>();
-    _disposeFuture = completer.future;
-    final sequence = _nextSequence++;
-    final response = Completer<RuntimeResponse>();
-    _pending[sequence] = response;
-    _roundTrips[sequence] = Stopwatch()..start();
-    _commands.send(<Object?>[sequence, _Command.dispose.index, null]);
-    response.future.then((_) {
-      _responses.close();
-      completer.complete();
-    }, onError: completer.completeError);
-    return completer.future;
+  void setFrameEligibility({required int generation, required bool eligible}) {
+    _send(VisibilityChanged(generation: generation, eligible: eligible));
   }
 
-  Future<RuntimeResponse> _send(_Command command, Object? payload) {
-    if (_disposed) {
-      throw StateError('RuntimeClient has been disposed');
-    }
-    final sequence = _nextSequence++;
-    final completer = Completer<RuntimeResponse>();
-    _pending[sequence] = completer;
-    _roundTrips[sequence] = Stopwatch()..start();
-    _commands.send(<Object?>[sequence, command.index, payload]);
-    return completer.future;
-  }
-
-  void _handleResponse(Object? message) {
-    if (message is! List<Object?> || message.length != 8) {
-      _failPending(StateError('Malformed runtime-isolate response'));
-      return;
-    }
-    final sequence = message[0]! as int;
-    final completer = _pending.remove(sequence);
-    final roundTrip = _roundTrips.remove(sequence)?..stop();
-    if (completer == null) {
-      _failPending(StateError('Unknown runtime response $sequence'));
-      return;
-    }
-    final transferable = message[2]! as TransferableTypedData;
-    final ffiDuration = Duration(microseconds: message[7]! as int);
-    final totalDuration = roundTrip?.elapsed ?? ffiDuration;
-    final transferMicroseconds =
-        totalDuration.inMicroseconds - ffiDuration.inMicroseconds;
-    completer.complete(
-      RuntimeResponse(
-        requestSequence: sequence,
-        status: RuntimeStatus.values[message[1]! as int],
-        bytes: transferable.materialize().asUint8List(),
-        revision: message[3]! as int,
-        nextWakeupNanoseconds: message[4]! as int,
-        errorMessage: message[5] as String?,
-        errorCode: RuntimeErrorCode.fromWireId(message[6]! as int),
-        ffiDuration: ffiDuration,
-        isolateTransferDuration: Duration(
-          microseconds: transferMicroseconds < 0 ? 0 : transferMicroseconds,
-        ),
+  @override
+  void presentationSucceeded({
+    required int generation,
+    required int presentationId,
+    required int revision,
+    required Uint8List eventBatch,
+  }) {
+    _send(
+      PresentationSucceeded(
+        generation: generation,
+        presentationId: presentationId,
+        revision: revision,
+        events: TransferableTypedData.fromList([eventBatch]),
       ),
     );
   }
 
-  void _failPending(Object error) {
-    for (final completer in _pending.values) {
-      completer.completeError(error);
+  @override
+  void presentationRejected({
+    required int generation,
+    required int presentationId,
+    required int revision,
+    required PresentationRejectionReason reason,
+  }) {
+    _send(
+      PresentationRejected(
+        generation: generation,
+        presentationId: presentationId,
+        revision: revision,
+        reason: reason,
+      ),
+    );
+  }
+
+  @override
+  Future<RuntimeDebugSnapshot> debugSnapshot() {
+    _checkLive();
+    final requestId = _nextDebugRequestId++;
+    final completer = Completer<RuntimeDebugSnapshot>();
+    _debugRequests[requestId] = completer;
+    _commands.send(DebugRuntime(requestId));
+    return completer.future;
+  }
+
+  @override
+  Future<void> dispose() {
+    final existing = _disposeCompleter;
+    if (existing != null) return existing.future;
+    _disposed = true;
+    final completer = Completer<void>();
+    _disposeCompleter = completer;
+    _commands.send(const DisposeRuntime());
+    return completer.future;
+  }
+
+  void _send(RuntimeCommand command) {
+    _checkLive();
+    _commands.send(command);
+  }
+
+  void _checkLive() {
+    if (_disposed || _closed) {
+      throw StateError('RuntimeClient has been disposed');
     }
-    _pending.clear();
-    _roundTrips.clear();
+  }
+
+  void _handleUpdate(Object? message) {
+    if (message is! RuntimeUpdate) {
+      _fail(StateError('Malformed runtime-isolate update'));
+      return;
+    }
+    if (message case RuntimeDebugSnapshot(:final requestId?)) {
+      final completer = _debugRequests.remove(requestId);
+      if (completer == null) {
+        _fail(StateError('Unknown runtime debug response $requestId'));
+      } else {
+        completer.complete(message);
+      }
+      return;
+    }
+    if (message is RuntimeDisposed) {
+      unawaited(_finishDispose());
+      return;
+    }
+    _updates.add(message);
+  }
+
+  Future<void> _finishDispose() async {
+    await Future<void>.value();
+    await _close();
+    final completer = _disposeCompleter;
+    if (completer != null && !completer.isCompleted) completer.complete();
+  }
+
+  void _handleIsolateError(Object? message) {
+    final error = switch (message) {
+      [final Object error, final Object stack] => '$error\n$stack',
+      _ => '$message',
+    };
+    _fail(StateError('Runtime isolate failed: $error'));
+  }
+
+  void _handleIsolateExit(Object? _) {
+    if (!_disposed) {
+      _fail(StateError('Runtime isolate exited unexpectedly'));
+    }
+  }
+
+  void _fail(Object error) {
+    if (_closed) return;
+    for (final completer in _debugRequests.values) {
+      if (!completer.isCompleted) completer.completeError(error);
+    }
+    _debugRequests.clear();
+    final disposeCompleter = _disposeCompleter;
+    if (disposeCompleter != null && !disposeCompleter.isCompleted) {
+      disposeCompleter.completeError(error);
+    }
+    _updates.add(
+      RuntimeFatalDiagnostic(
+        RuntimeDiagnostic(
+          code: RuntimeErrorCode.invalidSchedulerState,
+          message: error.toString(),
+        ),
+      ),
+    );
     _worker.kill(priority: Isolate.immediate);
+    unawaited(_close());
+  }
+
+  Future<void> _close() async {
+    if (_closed) return;
+    _closed = true;
+    _updatesPort.close();
+    _errorsPort.close();
+    _exitPort.close();
+    await _updatesSubscription.cancel();
+    await _errorsSubscription.cancel();
+    await _exitSubscription.cancel();
+    await _updates.close();
   }
 }
-
-enum _Command { step, framePresented, debugOutstandingBuffers, dispose }
-
-Future<void> _runtimeWorkerMain(List<Object?> startup) async {
-  final ready = startup[0]! as SendPort;
-  final responses = startup[1]! as SendPort;
-  final config = (startup[2]! as TransferableTypedData)
-      .materialize()
-      .asUint8List();
-  NativeRuntime runtime;
-  try {
-    runtime = NativeRuntime.create(config);
-  } catch (error) {
-    ready.send(error.toString());
-    return;
-  }
-
-  final commands = ReceivePort();
-  ready.send(commands.sendPort);
-  await for (final message in commands) {
-    final values = message! as List<Object?>;
-    final sequence = values[0]! as int;
-    final command = _Command.values[values[1]! as int];
-    if (command == _Command.dispose) {
-      runtime.dispose();
-      responses.send(_responseMessage(sequence, _emptySuccess(), 0));
-      commands.close();
-      break;
-    }
-    try {
-      final stopwatch = Stopwatch()..start();
-      final output = switch (command) {
-        _Command.step => runtime.step(
-          (values[2]! as TransferableTypedData).materialize().asUint8List(),
-        ),
-        _Command.framePresented => runtime.framePresented(values[2]! as int),
-        _Command.debugOutstandingBuffers => _outstandingBufferSuccess(
-          runtime.debugOutstandingBufferCount,
-        ),
-        _Command.dispose => _emptySuccess(),
-      };
-      stopwatch.stop();
-      responses.send(
-        _responseMessage(sequence, output, stopwatch.elapsedMicroseconds),
-      );
-    } catch (error) {
-      responses.send(<Object?>[
-        sequence,
-        RuntimeStatus.fatalError.index,
-        TransferableTypedData.fromList([Uint8List(0)]),
-        0,
-        -1,
-        error.toString(),
-        RuntimeErrorCode.nativeLibraryLoadingError.wireId,
-        0,
-      ]);
-    }
-  }
-}
-
-List<Object?> _responseMessage(
-  int sequence,
-  NativeOutput output,
-  int ffiMicroseconds,
-) => <Object?>[
-  sequence,
-  _runtimeStatus(output.status).index,
-  TransferableTypedData.fromList([output.bytes]),
-  output.revision,
-  output.nextWakeupNanoseconds,
-  output.errorMessage,
-  output.errorCode.wireId,
-  ffiMicroseconds,
-];
-
-NativeOutput _emptySuccess() => NativeOutput(
-  status: NativeStatus.ok,
-  bytes: Uint8List(0),
-  revision: 0,
-  nextWakeupNanoseconds: -1,
-  errorMessage: null,
-);
-
-NativeOutput _outstandingBufferSuccess(int count) => NativeOutput(
-  status: NativeStatus.ok,
-  bytes: Uint8List(0),
-  revision: count,
-  nextWakeupNanoseconds: -1,
-  errorMessage: null,
-);
-
-RuntimeStatus _runtimeStatus(NativeStatus status) => switch (status) {
-  NativeStatus.ok => RuntimeStatus.ok,
-  NativeStatus.recoverableError => RuntimeStatus.recoverableError,
-  NativeStatus.fatalError => RuntimeStatus.fatalError,
-};

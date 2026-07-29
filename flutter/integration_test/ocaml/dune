@@ -1,11 +1,14 @@
 (executable
  (name native_integration_embed)
- (modules native_integration_embed)
+ (modules autonomous_pump_fixture native_integration_embed)
  (enabled_if
   (= %{env:BONSAI_FLUTTER_EMBED_OCAML=disabled} enabled))
  (libraries
+  core
+  bonsai
   bonsai_flutter.native_backend
   bonsai_flutter.driver
+  bonsai_flutter.ui
   bonsai_flutter_counter_example
   bonsai_flutter_gallery
   bonsai_flutter_host_navigation_example

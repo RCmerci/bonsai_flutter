@@ -7,6 +7,8 @@ import 'package:bonsai_flutter_native/bonsai_flutter_native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/runtime_harness.dart';
+
 const _operationTimeout = Duration(seconds: 10);
 
 Future<T> _bounded<T>(Future<T> future, String operation) => future.timeout(
@@ -29,25 +31,17 @@ void main() {
         ),
       );
       expect(client, isNotNull);
-      final runtime = client!;
-      addTearDown(() => _bounded(runtime.dispose(), 'RuntimeClient.dispose'));
+      final harness = RuntimeHarness(client!);
+      addTearDown(() => _bounded(harness.dispose(), 'RuntimeHarness.dispose'));
 
-      final initialResponse = await tester.runAsync(
-        () => _bounded(runtime.step(Uint8List(0)), 'initial step'),
+      final initialCycle = await tester.runAsync(
+        () => _bounded(harness.grant(), 'initial frame grant'),
       );
-      expect(initialResponse, isNotNull);
-      expect(initialResponse!.status, RuntimeStatus.ok);
-      final initialFrame = FrameCodec.decode(initialResponse.bytes);
+      expect(initialCycle, isNotNull);
+      final initialFrame = FrameCodec.decode(initialCycle!.bytes);
       expect(initialFrame.kind, FrameKind.fullSnapshot);
       expect(initialFrame.targetRevision, 1);
-      expect(initialResponse.revision, 1);
-      final initialOutstandingBuffers = await tester.runAsync(
-        () => _bounded(
-          runtime.debugOutstandingBufferCount(),
-          'initial outstanding-buffer query',
-        ),
-      );
-      expect(initialOutstandingBuffers, 0);
+      expect(initialCycle.revision, 1);
 
       final store = NodeStore()..apply(initialFrame);
       final queue = EventBatchQueue(
@@ -78,27 +72,19 @@ void main() {
         find.byKey(ValueKey<int>(buttonNode.id)),
       );
 
-      final initialPresented = await tester.runAsync(
-        () => _bounded(
-          runtime.framePresented(initialFrame.targetRevision),
-          'initial frame presentation',
-        ),
-      );
-      expect(initialPresented, isNotNull);
-      expect(initialPresented!.status, RuntimeStatus.ok);
-
       await tester.tap(find.byType(ElevatedButton));
       await tester.pump();
       expect(rendererEventSeen, isTrue);
+      final batch = queue.takeBatch();
+      expect(batch, isNotNull);
       final response = await tester.runAsync(
         () => _bounded(
-          runtime.sendEventBatch(queue.takeBatch()!),
-          'button event step',
+          harness.advance(events: EventBatchCodec.encode(batch!)),
+          'button event pump',
         ),
       );
       expect(response, isNotNull);
-      expect(response!.status, RuntimeStatus.ok);
-      final incrementalFrame = FrameCodec.decode(response.bytes);
+      final incrementalFrame = FrameCodec.decode(response!.bytes);
       expect(incrementalFrame.kind, FrameKind.incremental);
       expect(incrementalFrame.baseRevision, 1);
       expect(incrementalFrame.targetRevision, 2);
@@ -136,21 +122,7 @@ void main() {
         isTrue,
       );
 
-      final finalPresented = await tester.runAsync(
-        () => _bounded(
-          runtime.framePresented(incrementalFrame.targetRevision),
-          'incremental frame presentation',
-        ),
-      );
-      expect(finalPresented, isNotNull);
-      expect(finalPresented!.status, RuntimeStatus.ok);
-      final finalOutstandingBuffers = await tester.runAsync(
-        () => _bounded(
-          runtime.debugOutstandingBufferCount(),
-          'final outstanding-buffer query',
-        ),
-      );
-      expect(finalOutstandingBuffers, 0);
+      harness.acknowledge();
     },
   );
 }

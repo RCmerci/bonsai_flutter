@@ -6,6 +6,8 @@ import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/runtime_harness.dart';
+
 const _operationTimeout = Duration(seconds: 10);
 
 Future<T> _bounded<T>(Future<T> future, String operation) => future.timeout(
@@ -29,15 +31,14 @@ void main() {
       ),
     );
     expect(client, isNotNull);
-    final runtime = client!;
-    addTearDown(() => _bounded(runtime.dispose(), 'RuntimeClient.dispose'));
+    final harness = RuntimeHarness(client!);
+    addTearDown(() => _bounded(harness.dispose(), 'RuntimeHarness.dispose'));
 
-    final initialResponse = await tester.runAsync(
-      () => _bounded(runtime.step(Uint8List(0)), 'initial mail step'),
+    final initialCycle = await tester.runAsync(
+      () => _bounded(harness.grant(), 'initial mail grant'),
     );
-    expect(initialResponse, isNotNull);
-    expect(initialResponse!.status, RuntimeStatus.ok);
-    final initial = FrameCodec.decode(initialResponse.bytes);
+    expect(initialCycle, isNotNull);
+    final initial = FrameCodec.decode(initialCycle!.bytes);
     final store = NodeStore()..apply(initial);
     final queue = EventBatchQueue(
       runtimeEpoch: initial.runtimeEpoch,
@@ -50,13 +51,6 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await _present(
-      tester,
-      runtime,
-      initial.targetRevision,
-      'initial mail frame',
-    );
-
     final followingElement = tester.element(find.text('River Tan'));
     final archiveGesture = await tester.startGesture(
       tester.getCenter(find.text('Mara Vale')),
@@ -95,18 +89,15 @@ void main() {
     expect(nativePayload.payload, [0]);
 
     final archiveResponse = await tester.runAsync(
-      () => _bounded(runtime.sendEventBatch(swipeBatch), 'archive swipe event'),
+      () => _bounded(
+        harness.advance(events: EventBatchCodec.encode(swipeBatch)),
+        'archive swipe pump',
+      ),
     );
     final archiveFrame = FrameCodec.decode(archiveResponse!.bytes);
     expect(archiveFrame.kind, FrameKind.incremental);
     store.apply(archiveFrame);
     await tester.pump();
-    await _present(
-      tester,
-      runtime,
-      archiveFrame.targetRevision,
-      'archive mail frame',
-    );
 
     expect(find.text('Mara Vale'), findsNothing);
     expect(
@@ -119,7 +110,10 @@ void main() {
     await tester.pump();
     final openBatch = queue.takeBatch()!;
     final openResponse = await tester.runAsync(
-      () => _bounded(runtime.sendEventBatch(openBatch), 'open mail detail'),
+      () => _bounded(
+        harness.advance(events: EventBatchCodec.encode(openBatch)),
+        'open mail detail pump',
+      ),
     );
     final openFrame = FrameCodec.decode(openResponse!.bytes);
     store.apply(openFrame);
@@ -138,12 +132,6 @@ void main() {
     final logicalWidth =
         tester.view.physicalSize.width / tester.view.devicePixelRatio;
     final navigator = tester.state<NavigatorState>(find.byType(Navigator).last);
-    await _present(
-      tester,
-      runtime,
-      openFrame.targetRevision,
-      'detail mail frame',
-    );
 
     final popGesture = await tester.startGesture(const Offset(5, 180));
     await popGesture.moveBy(const Offset(24, 0));
@@ -170,7 +158,10 @@ void main() {
       const RoutePopEventPayload(pageKey: 'mail-detail-4', result: null),
     );
     final popResponse = await tester.runAsync(
-      () => _bounded(runtime.sendEventBatch(popBatch), 'mail edge pop event'),
+      () => _bounded(
+        harness.advance(events: EventBatchCodec.encode(popBatch)),
+        'mail edge-pop pump',
+      ),
     );
     final popFrame = FrameCodec.decode(popResponse!.bytes);
     store.apply(popFrame);
@@ -181,18 +172,6 @@ void main() {
       find.bySemanticsLabel('Read message from Juniper Works'),
       findsOneWidget,
     );
+    harness.acknowledge();
   });
-}
-
-Future<void> _present(
-  WidgetTester tester,
-  RuntimeSession runtime,
-  int revision,
-  String operation,
-) async {
-  final response = await tester.runAsync(
-    () => _bounded(runtime.framePresented(revision), operation),
-  );
-  expect(response, isNotNull);
-  expect(response!.status, RuntimeStatus.ok);
 }

@@ -197,11 +197,11 @@ final class HostEffectDispatcher {
       if (pending.cancelled) {
         status = HostResponseStatus.cancelled;
         value = const [];
-      } else {
+      } else if (error is HostEffectException) {
         status = HostResponseStatus.error;
-        value = utf8.encode(
-          error is HostEffectException ? error.message : error.toString(),
-        );
+        value = utf8.encode(error.message);
+      } else {
+        rethrow;
       }
     } finally {
       _pending.remove(operation.requestId);

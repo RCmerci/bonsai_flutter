@@ -14,10 +14,7 @@ module Context : sig
     -> ?name:string
     -> equal:('dependencies -> 'dependencies -> bool)
     -> 'dependencies Bonsai.t
-    -> f:
-         ('dependencies
-          -> Bonsai_flutter_ui.Event.Payload.t
-          -> unit Bonsai.Effect.t)
+    -> f:('dependencies -> Bonsai_flutter_ui.Event.Payload.t -> unit Bonsai.Effect.t)
     -> Bonsai_flutter_ui.Event.Handler.t Bonsai.t
 
   val native_event_handler
@@ -34,7 +31,7 @@ type t
 
 val create
   :  ?name:string
-  (** [trace], when supplied, receives runtime diagnostic messages. Trace sink
+       (** [trace], when supplied, receives runtime diagnostic messages. Trace sink
       failures are ignored so diagnostics cannot interrupt rendering. *)
   -> ?trace:(string -> unit)
   -> (Context.t -> Bonsai.graph -> Bonsai_flutter_ui.Widget.t Bonsai.t)

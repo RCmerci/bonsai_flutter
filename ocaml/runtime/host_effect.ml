@@ -64,14 +64,28 @@ type pending =
       }
       -> pending
 
+type queued_operation =
+  { id : int64
+  ; operation : Protocol.Wire_frame.operation
+  }
+
 type t =
   { schedule : unit Effect.t -> unit
   ; pending : (int64, pending) Hashtbl.t
   ; cancelled : (int64, unit) Hashtbl.t
-  ; operations : Protocol.Wire_frame.operation Queue.t
+  ; operations : queued_operation Queue.t
   ; mutable next_request_id : int64
+  ; mutable next_operation_id : int64
   ; mutable shutdown : bool
   }
+
+let enqueue_operation t operation =
+  if Int64.equal t.next_operation_id Int64.max_int
+  then failwith "host operation ID space exhausted";
+  let id = t.next_operation_id in
+  t.next_operation_id <- Int64.succ id;
+  Queue.add { id; operation } t.operations
+;;
 
 let invalid_response message = Error (Invalid_response message)
 
@@ -236,7 +250,7 @@ let cancel_request t request_id =
   | Some (Pending pending) ->
     Hashtbl.remove t.pending request_id;
     Hashtbl.replace t.cancelled request_id ();
-    Queue.add (Protocol.Wire_frame.Cancel_host_request { request_id }) t.operations;
+    enqueue_operation t (Protocol.Wire_frame.Cancel_host_request { request_id });
     Option.iter
       (fun (cancellation : Cancellation.t) -> cancellation.cancel_active <- None)
       pending.cancellation;
@@ -262,9 +276,7 @@ let request ?cancellation t payload decode =
             (fun (cancellation : Cancellation.t) ->
                cancellation.cancel_active <- Some (fun () -> cancel_request t request_id))
             cancellation;
-          Queue.add
-            (Protocol.Wire_frame.Host_request { request_id; payload })
-            t.operations)))
+          enqueue_operation t (Protocol.Wire_frame.Host_request { request_id; payload }))))
 ;;
 
 module Clipboard = struct
@@ -363,6 +375,45 @@ let measure_layout ?cancellation t ~node_id =
   request ?cancellation t (Protocol.Wire_frame.Measure_layout { node_id }) decode_layout
 ;;
 
+module Prepared_operations = struct
+  type nonrec t =
+    { owner : t
+    ; entries : queued_operation list
+    ; mutable committed : bool
+    }
+
+  let operations t = List.map (fun entry -> entry.operation) t.entries
+end
+
+let prepare_operations t =
+  Prepared_operations.
+    { owner = t; entries = Queue.to_seq t.operations |> List.of_seq; committed = false }
+;;
+
+let commit_operations t (prepared : Prepared_operations.t) =
+  if prepared.committed
+  then Error "prepared host operations were already committed"
+  else if not (prepared.owner == t)
+  then Error "prepared host operations belong to another manager"
+  else (
+    let current = Queue.to_seq t.operations |> List.of_seq in
+    let rec validate_prefix expected actual =
+      match expected, actual with
+      | [], _ -> Ok ()
+      | _, [] -> Error "prepared host operation prefix is no longer available"
+      | expected :: expected_rest, actual :: actual_rest ->
+        if Int64.equal expected.id actual.id
+        then validate_prefix expected_rest actual_rest
+        else Error "prepared host operation prefix is stale"
+    in
+    match validate_prefix prepared.entries current with
+    | Error _ as error -> error
+    | Ok () ->
+      List.iter (fun _ -> ignore (Queue.take t.operations)) prepared.entries;
+      prepared.committed <- true;
+      Ok ())
+;;
+
 module Private = struct
   let create ~schedule =
     { schedule
@@ -370,32 +421,36 @@ module Private = struct
     ; cancelled = Hashtbl.create 16
     ; operations = Queue.create ()
     ; next_request_id = 1L
+    ; next_operation_id = 1L
     ; shutdown = false
     }
   ;;
 
-  let take_operations t =
-    let rec drain reversed =
-      if Queue.is_empty t.operations
-      then List.rev reversed
-      else drain (Queue.take t.operations :: reversed)
-    in
-    drain []
-  ;;
+  module Validated_response = struct
+    type nonrec t =
+      { owner : t
+      ; request_id : int64
+      ; pending_identity : pending option
+      ; apply : unit -> unit
+      }
 
-  let resolve t (response : Protocol.Inbound_event.host_response) =
+    let request_id t = t.request_id
+  end
+
+  let validate_response t (response : Protocol.Inbound_event.host_response) =
     match Hashtbl.find_opt t.pending response.request_id with
     | None ->
       if Hashtbl.mem t.cancelled response.request_id
-      then (
-        Hashtbl.remove t.cancelled response.request_id;
-        Ok ())
+      then
+        Ok
+          Validated_response.
+            { owner = t
+            ; request_id = response.request_id
+            ; pending_identity = None
+            ; apply = (fun () -> Hashtbl.remove t.cancelled response.request_id)
+            }
       else Error (Printf.sprintf "unknown host request ID %Ld" response.request_id)
-    | Some (Pending pending) ->
-      Hashtbl.remove t.pending response.request_id;
-      Option.iter
-        (fun (cancellation : Cancellation.t) -> cancellation.cancel_active <- None)
-        pending.cancellation;
+    | Some (Pending pending as pending_identity) ->
       let result =
         match response.status with
         | Protocol.Inbound_event.Host_ok -> pending.decode response.value
@@ -405,8 +460,45 @@ module Private = struct
            | Error error -> Error error)
         | Host_cancelled -> Error Cancelled
       in
-      respond t pending.callback result;
-      Ok ()
+      Ok
+        Validated_response.
+          { owner = t
+          ; request_id = response.request_id
+          ; pending_identity = Some pending_identity
+          ; apply =
+              (fun () ->
+                Hashtbl.remove t.pending response.request_id;
+                Option.iter
+                  (fun (cancellation : Cancellation.t) ->
+                     cancellation.cancel_active <- None)
+                  pending.cancellation;
+                respond t pending.callback result)
+          }
+  ;;
+
+  let resolve_validated t (validated : Validated_response.t) =
+    if not (validated.owner == t)
+    then Error "validated host response belongs to another manager"
+    else (
+      let still_current =
+        match validated.pending_identity with
+        | None -> Hashtbl.mem t.cancelled validated.request_id
+        | Some expected ->
+          (match Hashtbl.find_opt t.pending validated.request_id with
+           | Some actual -> actual == expected
+           | None -> false)
+      in
+      if not still_current
+      then Error (Printf.sprintf "stale host response ID %Ld" validated.request_id)
+      else (
+        validated.apply ();
+        Ok ()))
+  ;;
+
+  let resolve t response =
+    match validate_response t response with
+    | Error _ as error -> error
+    | Ok validated -> resolve_validated t validated
   ;;
 
   let shutdown t =

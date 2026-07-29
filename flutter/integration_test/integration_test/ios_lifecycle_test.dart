@@ -5,11 +5,13 @@ import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
+import '../test/support/runtime_harness.dart';
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-    'real OCaml runtime supports 100 create, step, present, and destroy cycles',
+    'real OCaml runtime supports 100 create, pump, present, and destroy cycles',
     (tester) async {
       for (var cycle = 0; cycle < 100; cycle += 1) {
         final runtime = await tester.runAsync(
@@ -19,30 +21,18 @@ void main() {
         );
         expect(runtime, isNotNull, reason: 'runtime creation failed at $cycle');
         final liveRuntime = runtime!;
+        final harness = RuntimeHarness(liveRuntime);
 
-        final initial = await tester.runAsync(
-          () => liveRuntime.step(Uint8List(0)),
-        );
+        final initial = await tester.runAsync(harness.grant);
         expect(initial, isNotNull);
-        expect(initial!.status, RuntimeStatus.ok);
-        final frame = FrameCodec.decode(initial.bytes);
+        final frame = FrameCodec.decode(initial!.bytes);
         expect(frame.kind, FrameKind.fullSnapshot);
 
-        final presented = await tester.runAsync(
-          () => liveRuntime.framePresented(frame.targetRevision),
-        );
+        harness.acknowledge();
+        final presented = await tester.runAsync(liveRuntime.debugSnapshot);
         expect(presented, isNotNull);
-        expect(presented!.status, RuntimeStatus.ok);
-
-        final outstandingBuffers = await tester.runAsync(
-          liveRuntime.debugOutstandingBufferCount,
-        );
-        expect(
-          outstandingBuffers,
-          0,
-          reason: 'native buffers leaked at cycle $cycle',
-        );
-        await tester.runAsync(liveRuntime.dispose);
+        expect(presented!.state, RuntimeWorkerState.ready);
+        await tester.runAsync(harness.dispose);
       }
     },
   );

@@ -12,26 +12,26 @@ let component handlers _graph =
       ~f:(fun () _ -> Bonsai.Effect.return ())
   in
   Bonsai.map noop ~f:(fun noop ->
-    (Ui.Widget.animated_opacity
-       ~animation:
-         (Ui.Animation.create
-            ~id:7001L
-            ~duration_ms:250
-            ~curve:Ui.Animation.Curve.Ease_in_out
-            ())
-       ~opacity:0.75
-       ~on_completed:noop
-       (Ui.Widget.Stack.create
-          [ Ui.Widget.Stack.child
-              (Ui.Widget.Flex.row
-                 [ Ui.Widget.Flex.expanded (Ui.Widget.text "Expanded")
-                 ; Ui.Widget.Flex.fixed (Ui.Widget.text "Fixed")
-                 ])
-          ; Ui.Widget.Stack.positioned
-              ~left:8.
-              ~top:12.
-              (Ui.Widget.button ~on_press:noop ~child:(Ui.Widget.text "Overlay") ())
-          ])))
+    Ui.Widget.animated_opacity
+      ~animation:
+        (Ui.Animation.create
+           ~id:7001L
+           ~duration_ms:250
+           ~curve:Ui.Animation.Curve.Ease_in_out
+           ())
+      ~opacity:0.75
+      ~on_completed:noop
+      (Ui.Widget.Stack.create
+         [ Ui.Widget.Stack.child
+             (Ui.Widget.Flex.row
+                [ Ui.Widget.Flex.expanded (Ui.Widget.text "Expanded")
+                ; Ui.Widget.Flex.fixed (Ui.Widget.text "Fixed")
+                ])
+         ; Ui.Widget.Stack.positioned
+             ~left:8.
+             ~top:12.
+             (Ui.Widget.button ~on_press:noop ~child:(Ui.Widget.text "Overlay") ())
+         ]))
 ;;
 
 let () =
@@ -42,9 +42,9 @@ let () =
       component
   in
   let frame =
-    match Driver.step driver () with
-    | Ok (Some frame) -> frame
-    | Ok None -> failwith "initial layout frame was empty"
+    match Driver.pump driver ~monotonic_now_ns:0L () with
+    | Ok { frame = Some frame; _ } -> frame
+    | Ok { frame = None; _ } -> failwith "initial layout frame was empty"
     | Error error -> failwith (Driver.error_to_string error)
   in
   let wire =

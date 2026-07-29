@@ -139,9 +139,30 @@ val measure_layout
   -> node_id:int64
   -> (layout, error) result Bonsai.Effect.t
 
+module Prepared_operations : sig
+  type t
+
+  val operations : t -> Bonsai_flutter_protocol.Wire_frame.operation list
+end
+
+val prepare_operations : t -> Prepared_operations.t
+val commit_operations : t -> Prepared_operations.t -> (unit, string) result
+
 module Private : sig
   val create : schedule:(unit Bonsai.Effect.t -> unit) -> t
-  val take_operations : t -> Bonsai_flutter_protocol.Wire_frame.operation list
+
+  module Validated_response : sig
+    type t
+
+    val request_id : t -> int64
+  end
+
+  val validate_response
+    :  t
+    -> Bonsai_flutter_protocol.Inbound_event.host_response
+    -> (Validated_response.t, string) result
+
+  val resolve_validated : t -> Validated_response.t -> (unit, string) result
 
   val resolve
     :  t

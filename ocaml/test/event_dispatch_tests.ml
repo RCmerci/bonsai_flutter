@@ -67,7 +67,7 @@ let test_counter_press_dispatch () =
   (match Runtime.Handler_registry.install registry frame with
    | Ok () -> ()
    | Error error -> fail "install failed: %s" (Runtime.Runtime_error.to_string error));
-  (match Runtime.Handler_registry.frame_presented registry ~revision:1L with
+  (match Runtime.Handler_registry.commit_displayed_revision registry ~revision:1L with
    | Ok () -> ()
    | Error error ->
      fail "frame presentation failed: %s" (Runtime.Runtime_error.to_string error));
@@ -98,7 +98,7 @@ let test_text_edit_dispatch () =
   (match Runtime.Handler_registry.install registry frame with
    | Ok () -> ()
    | Error error -> fail "install failed: %s" (Runtime.Runtime_error.to_string error));
-  (match Runtime.Handler_registry.frame_presented registry ~revision:2L with
+  (match Runtime.Handler_registry.commit_displayed_revision registry ~revision:2L with
    | Ok () -> ()
    | Error error ->
      fail "frame presentation failed: %s" (Runtime.Runtime_error.to_string error));
