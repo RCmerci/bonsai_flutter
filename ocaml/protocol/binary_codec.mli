@@ -23,5 +23,19 @@ type error =
   ; message : string
   }
 
+module Runtime_encoded_frame : sig
+  type t
+
+  val bytes : t -> bytes
+end
+
 val encode : Wire_frame.t -> (bytes, error) result
+val encode_runtime_frame : Wire_frame.t -> (Runtime_encoded_frame.t, error) result
+
+val patch_runtime_stats
+  :  Runtime_encoded_frame.t
+  -> encode_ns:int64
+  -> patch_bytes:int
+  -> (unit, error) result
+
 val decode : bytes -> (Wire_frame.t, error) result

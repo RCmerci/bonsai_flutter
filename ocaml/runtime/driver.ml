@@ -102,6 +102,7 @@ type t =
   ; host_effects : Host_effect.t
   ; environment : Environment.t
   ; mutable displayed_tree : Runtime.Mounted_tree.t option
+  ; mutable displayed_handler_frame : Runtime.Handler_registry.Frame.t option
   ; mutable displayed_revision : int64
   ; mutable last_monotonic_ns : int64
   ; mutable last_event_sequence : int64 option
@@ -147,6 +148,7 @@ let create ?trace ~runtime_epoch ~time_source component =
   ; host_effects = host_effect_manager
   ; environment = environment_input
   ; displayed_tree = None
+  ; displayed_handler_frame = None
   ; displayed_revision = 0L
   ; last_monotonic_ns = -1L
   ; last_event_sequence = None
@@ -163,11 +165,11 @@ let create ?trace ~runtime_epoch ~time_source component =
   }
 ;;
 
-let trace t message =
+let trace_lazy t make_message =
   match t.trace with
   | None -> ()
   | Some sink ->
-    (try sink message with
+    (try sink (make_message ()) with
      | _ -> ())
 ;;
 
@@ -770,25 +772,26 @@ let incremental_widget_diff ~old_tree ~new_tree operations =
 
 let trace_widget_diff t ~target_revision ~widget ~old_tree output =
   let frame_patch = output.Runtime.Reconciler.frame_patch in
-  if not (Runtime.Frame_patch.is_empty frame_patch)
-  then (
-    let frame_kind = Runtime.Frame_patch.kind frame_patch in
-    let diff =
-      match frame_kind with
-      | Runtime.Frame_patch.Full_snapshot -> Ui.Debug.dump_tree widget
-      | Incremental_frame ->
-        incremental_widget_diff
-          ~old_tree
-          ~new_tree:(Some output.mounted_tree)
-          (Runtime.Frame_patch.operations frame_patch)
-    in
-    trace
-      t
-      (Printf.sprintf
-         "[widget-diff] targetRevision=%Ld kind=%s\n%s"
-         target_revision
-         (frame_kind_name frame_kind)
-         diff))
+  match t.trace with
+  | None -> ()
+  | Some _ when Runtime.Frame_patch.is_empty frame_patch -> ()
+  | Some _ ->
+    trace_lazy t (fun () ->
+      let frame_kind = Runtime.Frame_patch.kind frame_patch in
+      let diff =
+        match frame_kind with
+        | Runtime.Frame_patch.Full_snapshot -> Ui.Debug.dump_tree widget
+        | Incremental_frame ->
+          incremental_widget_diff
+            ~old_tree
+            ~new_tree:(Some output.mounted_tree)
+            (Runtime.Frame_patch.operations frame_patch)
+      in
+      Printf.sprintf
+        "[widget-diff] targetRevision=%Ld kind=%s\n%s"
+        target_revision
+        (frame_kind_name frame_kind)
+        diff)
 ;;
 
 type produced_candidate =
@@ -814,6 +817,8 @@ let produce_candidate t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot 
         ~base_revision:t.displayed_revision
         ~target_revision
         ~old:(if force_full_snapshot then None else t.displayed_tree)
+        ~base_handler_frame:
+          (if force_full_snapshot then None else t.displayed_handler_frame)
         widget
     with
     | Error error -> Error (Runtime_error error)
@@ -826,7 +831,8 @@ let produce_candidate t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot 
       in
       if Runtime.Frame_patch.is_empty output.frame_patch && host_operations = []
       then (
-        trace t (Printf.sprintf "[outbound-no-frame] revision=%Ld" t.displayed_revision);
+        trace_lazy t (fun () ->
+          Printf.sprintf "[outbound-no-frame] revision=%Ld" t.displayed_revision);
         Ok
           { candidate_tree = output.mounted_tree
           ; candidate_handler_frame = None
@@ -871,18 +877,24 @@ let produce_candidate t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot 
               }
           in
           let encode_started = now_ns () in
-          (match Protocol.Binary_codec.encode (wire_frame stats) with
+          (match Protocol.Binary_codec.encode_runtime_frame (wire_frame stats) with
            | Error error -> Error (Codec_error error)
-           | Ok provisional_bytes ->
+           | Ok encoded ->
+             let bytes = Protocol.Binary_codec.Runtime_encoded_frame.bytes encoded in
              let stats =
                { stats with
                  encode_ns = elapsed_ns encode_started
-               ; patch_bytes = Bytes.length provisional_bytes
+               ; patch_bytes = Bytes.length bytes
                }
              in
-             (match Protocol.Binary_codec.encode (wire_frame stats) with
+             (match
+                Protocol.Binary_codec.patch_runtime_stats
+                  encoded
+                  ~encode_ns:stats.encode_ns
+                  ~patch_bytes:stats.patch_bytes
+              with
               | Error error -> Error (Codec_error error)
-              | Ok bytes ->
+              | Ok () ->
                 let frame =
                   { revision = target_revision
                   ; frame_patch = output.frame_patch
@@ -891,19 +903,18 @@ let produce_candidate t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot 
                   }
                 in
                 t.next_renderer_revision <- Int64.succ target_revision;
-                trace
-                  t
-                  (Printf.sprintf
-                     "[outbound-frame] direction=ocaml->flutter epoch=%Ld kind=%s \
-                      baseRevision=%Ld targetRevision=%Ld operations=%d bytes=%d\n\
-                     \  operationSummary=%s"
-                     t.runtime_epoch
-                     (frame_kind_name frame_kind)
-                     base_revision
-                     target_revision
-                     (List.length operations)
-                     (Bytes.length bytes)
-                     (operation_summary operations));
+                trace_lazy t (fun () ->
+                  Printf.sprintf
+                    "[outbound-frame] direction=ocaml->flutter epoch=%Ld kind=%s \
+                     baseRevision=%Ld targetRevision=%Ld operations=%d bytes=%d\n\
+                    \  operationSummary=%s"
+                    t.runtime_epoch
+                    (frame_kind_name frame_kind)
+                    base_revision
+                    target_revision
+                    (List.length operations)
+                    (Bytes.length bytes)
+                    (operation_summary operations));
                 Ok
                   { candidate_tree = output.mounted_tree
                   ; candidate_handler_frame = Some output.handler_frame
@@ -1008,25 +1019,26 @@ let payload_summary = function
 ;;
 
 let trace_inbound_event_batch t (batch : Protocol.Inbound_event.batch) =
-  let output = Buffer.create 256 in
-  Printf.bprintf
-    output
-    "[inbound-event-batch] direction=flutter->ocaml epoch=%Ld events=%d"
-    batch.runtime_epoch
-    (List.length batch.events);
-  List.iter
-    (fun (event : Protocol.Inbound_event.t) ->
-       Printf.bprintf
-         output
-         "\n  sequence=%Ld displayedRevision=%Ld node=%Ld handler=%Ld tag=%s payload=%s"
-         event.sequence
-         event.displayed_revision
-         event.node_id
-         event.handler_id
-         (event_tag_name event.event_tag)
-         (payload_summary event.payload))
-    batch.events;
-  trace t (Buffer.contents output)
+  trace_lazy t (fun () ->
+    let output = Buffer.create 256 in
+    Printf.bprintf
+      output
+      "[inbound-event-batch] direction=flutter->ocaml epoch=%Ld events=%d"
+      batch.runtime_epoch
+      (List.length batch.events);
+    List.iter
+      (fun (event : Protocol.Inbound_event.t) ->
+         Printf.bprintf
+           output
+           "\n  sequence=%Ld displayedRevision=%Ld node=%Ld handler=%Ld tag=%s payload=%s"
+           event.sequence
+           event.displayed_revision
+           event.node_id
+           event.handler_id
+           (event_tag_name event.event_tag)
+           (payload_summary event.payload))
+      batch.events;
+    Buffer.contents output)
 ;;
 
 let environment_of_protocol (environment : Protocol.Inbound_event.environment)
@@ -1372,23 +1384,21 @@ let presentation_succeeded t ~presentation_id ~renderer_revision ~monotonic_now_
        (match logical_time t monotonic_now_ns with
         | Error _ as error -> error
         | Ok logical_time ->
-          trace
-            t
-            (Printf.sprintf
-               "[presentation-ack] presentationId=%Ld revision=%Ld \
-                direction=flutter->ocaml"
-               presentation_id
-               renderer_revision);
+          trace_lazy t (fun () ->
+            Printf.sprintf
+              "[presentation-ack] presentationId=%Ld revision=%Ld \
+               direction=flutter->ocaml"
+              presentation_id
+              renderer_revision);
           let fail_fatal error = Error (terminal t error) in
           (match
              Host_effect.commit_operations t.host_effects pending.prepared_host_operations
            with
            | Error message -> fail_fatal (Invalid_state message)
            | Ok () ->
-             t.displayed_tree <- Some pending.candidate_tree;
              let commit_handler =
                match pending.emitted_frame, pending.candidate_handler_frame with
-               | None, None -> Ok ()
+               | None, None -> Ok (t.displayed_revision, t.displayed_handler_frame, false)
                | Some _, Some handler_frame ->
                  (match Runtime.Handler_registry.install t.handlers handler_frame with
                   | Error error -> Error (Runtime_error error)
@@ -1399,19 +1409,22 @@ let presentation_succeeded t ~presentation_id ~renderer_revision ~monotonic_now_
                          ~revision:renderer_revision
                      with
                      | Error error -> Error (Runtime_error error)
-                     | Ok () ->
-                       t.displayed_revision <- renderer_revision;
-                       Runtime.Handler_registry.retire_superseded
-                         t.handlers
-                         ~displayed_revision:renderer_revision;
-                       Ok ()))
+                     | Ok () -> Ok (renderer_revision, Some handler_frame, true)))
                | None, Some _ | Some _, None ->
                  Error
                    (Invalid_state "candidate frame and handler metadata are inconsistent")
              in
              (match commit_handler with
               | Error error -> fail_fatal error
-              | Ok () ->
+              | Ok (displayed_revision, displayed_handler_frame, retire_handlers) ->
+                t.displayed_tree <- Some pending.candidate_tree;
+                t.displayed_handler_frame <- displayed_handler_frame;
+                t.displayed_revision <- displayed_revision;
+                if retire_handlers
+                then
+                  Runtime.Handler_registry.retire_superseded
+                    t.handlers
+                    ~displayed_revision;
                 (try
                    Bonsai_runtime_adapter.advance_clock t.bonsai ~to_:logical_time;
                    ignore (Bonsai.Time_source.now t.time_source);
@@ -1434,12 +1447,11 @@ let presentation_rejected t ~presentation_id ~renderer_revision ~reason:_ =
     (match exact_pending t ~presentation_id ~renderer_revision with
      | Error _ as error -> error
      | Ok _ ->
-       trace
-         t
-         (Printf.sprintf
-            "[presentation-rejected] presentationId=%Ld revision=%Ld"
-            presentation_id
-            renderer_revision);
+       trace_lazy t (fun () ->
+         Printf.sprintf
+           "[presentation-rejected] presentationId=%Ld revision=%Ld"
+           presentation_id
+           renderer_revision);
        t.pending_presentation <- None;
        t.force_full_snapshot_next <- true;
        Ok ())
@@ -1453,6 +1465,7 @@ let shutdown t =
     Queue.clear t.pending_effects.pending_effects;
     Queue.clear t.pending_effects.pending_before_display;
     Runtime.Handler_registry.clear t.handlers;
+    t.displayed_handler_frame <- None;
     Bonsai_runtime_adapter.shutdown t.bonsai)
 ;;
 

@@ -31,6 +31,7 @@ let fail code format =
 
 module Writer = struct
   let create () = Buffer.create 128
+  let length = Buffer.length
   let u8 buffer value = Buffer.add_char buffer (Char.chr (value land 0xff))
 
   let u16 buffer value =
@@ -55,6 +56,20 @@ module Writer = struct
   let bytes buffer value = Buffer.add_bytes buffer value
   let string buffer value = Buffer.add_string buffer value
   let contents buffer = Buffer.to_bytes buffer
+end
+
+module Runtime_encoded_frame = struct
+  type stats_offsets =
+    { encode_ns : int
+    ; patch_bytes : int
+    }
+
+  type t =
+    { bytes : bytes
+    ; stats_offsets : stats_offsets
+    }
+
+  let bytes t = t.bytes
 end
 
 let check_u16 label value =
@@ -1185,7 +1200,7 @@ let write_empty_envelope payload opcode =
   Writer.u32 payload 0
 ;;
 
-let write_operation payload = function
+let write_operation ?(record_runtime_stats_offsets = fun _ -> ()) payload = function
   | Wire_frame.Create_node { node_id; kind; props; event_bindings; parent_data } ->
     check_u64 "node ID" node_id;
     let body = Writer.create () in
@@ -1256,50 +1271,120 @@ let write_operation payload = function
     Writer.u64 body stats.bonsai_flush_ns;
     Writer.u64 body stats.result_read_ns;
     Writer.u64 body stats.reconcile_ns;
+    let encode_ns = Writer.length body in
     Writer.u64 body stats.encode_ns;
     Writer.u32 body stats.patch_count;
+    let patch_bytes = Writer.length body in
     Writer.u32 body stats.patch_bytes;
     Writer.u64 body stats.lifecycle_ns;
     Writer.u32 body stats.full_snapshot_count;
     Writer.u32 body stats.resync_count;
-    envelope payload Generated_protocol.Operation.runtime_notification body
+    let body_start = Writer.length payload + 5 in
+    envelope payload Generated_protocol.Operation.runtime_notification body;
+    record_runtime_stats_offsets
+      Runtime_encoded_frame.
+        { encode_ns = body_start + encode_ns; patch_bytes = body_start + patch_bytes }
+;;
+
+let encode_bytes frame ~record_runtime_stats_offsets =
+  let operation_count = List.length frame.Wire_frame.operations + 2 in
+  if operation_count > Generated_protocol.Limits.max_operations
+  then fail Too_many_operations "frame has %d operations" operation_count;
+  check_u64 "runtime epoch" frame.runtime_epoch;
+  check_u64 "base revision" frame.base_revision;
+  check_u64 "target revision" frame.target_revision;
+  let payload = Writer.create () in
+  write_empty_envelope payload Generated_protocol.Operation.begin_frame;
+  List.iter (write_operation ~record_runtime_stats_offsets payload) frame.operations;
+  write_empty_envelope payload Generated_protocol.Operation.end_frame;
+  let payload = Writer.contents payload in
+  let total_length = Generated_protocol.Limits.header_bytes + Bytes.length payload in
+  if total_length > Generated_protocol.Limits.max_frame_bytes
+  then fail Frame_too_large "encoded frame is %d bytes" total_length;
+  let output = Writer.create () in
+  Writer.string output "BFFR";
+  Writer.u16 output Generated_protocol.protocol_major;
+  Writer.u16 output Generated_protocol.protocol_minor;
+  Writer.u16 output Generated_protocol.Limits.header_bytes;
+  Writer.u8
+    output
+    (match frame.kind with
+     | Wire_frame.Full_snapshot -> Generated_protocol.Frame_kind.full_snapshot
+     | Incremental_frame -> Generated_protocol.Frame_kind.incremental_frame);
+  Writer.u8 output 0;
+  Writer.u64 output frame.runtime_epoch;
+  Writer.u64 output frame.base_revision;
+  Writer.u64 output frame.target_revision;
+  Writer.u32 output (Bytes.length payload);
+  Writer.u32 output 0;
+  Writer.u32 output 0;
+  Writer.bytes output payload;
+  Writer.contents output
 ;;
 
 let encode frame =
+  try Ok (encode_bytes frame ~record_runtime_stats_offsets:(fun _ -> ())) with
+  | Codec_error error -> Error error
+;;
+
+let encode_runtime_frame frame =
   try
-    let operation_count = List.length frame.Wire_frame.operations + 2 in
-    if operation_count > Generated_protocol.Limits.max_operations
-    then fail Too_many_operations "frame has %d operations" operation_count;
-    check_u64 "runtime epoch" frame.runtime_epoch;
-    check_u64 "base revision" frame.base_revision;
-    check_u64 "target revision" frame.target_revision;
-    let payload = Writer.create () in
-    write_empty_envelope payload Generated_protocol.Operation.begin_frame;
-    List.iter (write_operation payload) frame.operations;
-    write_empty_envelope payload Generated_protocol.Operation.end_frame;
-    let payload = Writer.contents payload in
-    let total_length = Generated_protocol.Limits.header_bytes + Bytes.length payload in
-    if total_length > Generated_protocol.Limits.max_frame_bytes
-    then fail Frame_too_large "encoded frame is %d bytes" total_length;
-    let output = Writer.create () in
-    Writer.string output "BFFR";
-    Writer.u16 output Generated_protocol.protocol_major;
-    Writer.u16 output Generated_protocol.protocol_minor;
-    Writer.u16 output Generated_protocol.Limits.header_bytes;
-    Writer.u8
-      output
-      (match frame.kind with
-       | Wire_frame.Full_snapshot -> Generated_protocol.Frame_kind.full_snapshot
-       | Incremental_frame -> Generated_protocol.Frame_kind.incremental_frame);
-    Writer.u8 output 0;
-    Writer.u64 output frame.runtime_epoch;
-    Writer.u64 output frame.base_revision;
-    Writer.u64 output frame.target_revision;
-    Writer.u32 output (Bytes.length payload);
-    Writer.u32 output 0;
-    Writer.u32 output 0;
-    Writer.bytes output payload;
-    Ok (Writer.contents output)
+    let discovered_offsets = ref [] in
+    let encoded_bytes =
+      encode_bytes frame ~record_runtime_stats_offsets:(fun offsets ->
+        discovered_offsets := offsets :: !discovered_offsets)
+    in
+    match !discovered_offsets with
+    | [ payload_offsets ] ->
+      let translate offset = Generated_protocol.Limits.header_bytes + offset in
+      let stats_offsets =
+        Runtime_encoded_frame.
+          { encode_ns = translate payload_offsets.encode_ns
+          ; patch_bytes = translate payload_offsets.patch_bytes
+          }
+      in
+      Ok Runtime_encoded_frame.{ bytes = encoded_bytes; stats_offsets }
+    | [] ->
+      fail
+        Invalid_operation_order
+        "runtime frame must contain exactly one runtime stats operation"
+    | _ ->
+      fail
+        Invalid_operation_order
+        "runtime frame must contain exactly one runtime stats operation"
+  with
+  | Codec_error error -> Error error
+;;
+
+let require_patch_range bytes ~offset ~width ~label =
+  if offset < 0 || offset > Bytes.length bytes - width
+  then fail Invalid_props "%s patch offset is outside the encoded frame" label
+;;
+
+let patch_u32 bytes offset value =
+  for shift = 0 to 3 do
+    Bytes.set bytes (offset + shift) (Char.chr ((value lsr (shift * 8)) land 0xff))
+  done
+;;
+
+let patch_u64 bytes offset value =
+  for shift = 0 to 7 do
+    let byte = Int64.(shift_right_logical value (shift * 8) |> to_int) land 0xff in
+    Bytes.set bytes (offset + shift) (Char.chr byte)
+  done
+;;
+
+let patch_runtime_stats encoded ~encode_ns ~patch_bytes =
+  try
+    check_u64 "encode duration" encode_ns;
+    check_u32 "patch bytes" patch_bytes;
+    let bytes = Runtime_encoded_frame.bytes encoded in
+    let offsets = encoded.Runtime_encoded_frame.stats_offsets in
+    require_patch_range bytes ~offset:offsets.encode_ns ~width:8 ~label:"encode duration";
+    require_patch_range bytes ~offset:offsets.patch_bytes ~width:4 ~label:"patch bytes";
+    patch_u64 bytes offsets.encode_ns encode_ns;
+    patch_u32 bytes offsets.patch_bytes patch_bytes;
+    Ok ()
   with
   | Codec_error error -> Error error
 ;;

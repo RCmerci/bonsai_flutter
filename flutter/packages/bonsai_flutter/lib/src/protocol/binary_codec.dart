@@ -93,7 +93,7 @@ abstract final class FrameCodec {
       );
     }
 
-    final reader = _Reader(bytes);
+    final reader = _Reader.root(bytes);
     final magic = reader.bytes(4);
     if (!_bytesEqual(magic, const [0x42, 0x46, 0x46, 0x52])) {
       _fail(ProtocolErrorCode.invalidMagic, 'Invalid frame magic');
@@ -2206,10 +2206,16 @@ final class _Writer {
 }
 
 final class _Reader {
-  _Reader(this._bytes, [this._position = 0, int? limit])
-    : _limit = limit ?? _bytes.length;
+  _Reader.root(Uint8List bytes)
+    : _bytes = bytes,
+      _data = ByteData.sublistView(bytes),
+      _position = 0,
+      _limit = bytes.length;
+
+  _Reader._slice(this._bytes, this._data, this._position, this._limit);
 
   final Uint8List _bytes;
+  final ByteData _data;
   int _position;
   final int _limit;
 
@@ -2223,33 +2229,21 @@ final class _Reader {
 
   int uint16() {
     _require(2);
-    final result = ByteData.sublistView(
-      _bytes,
-      _position,
-      _position + 2,
-    ).getUint16(0, Endian.little);
+    final result = _data.getUint16(_position, Endian.little);
     _position += 2;
     return result;
   }
 
   int uint32() {
     _require(4);
-    final result = ByteData.sublistView(
-      _bytes,
-      _position,
-      _position + 4,
-    ).getUint32(0, Endian.little);
+    final result = _data.getUint32(_position, Endian.little);
     _position += 4;
     return result;
   }
 
   int uint64() {
     _require(8);
-    final result = ByteData.sublistView(
-      _bytes,
-      _position,
-      _position + 8,
-    ).getUint64(0, Endian.little);
+    final result = _data.getUint64(_position, Endian.little);
     _position += 8;
     if (result > 0x7fffffffffffffff) {
       _fail(
@@ -2262,11 +2256,7 @@ final class _Reader {
 
   double finiteFloat64() {
     _require(8);
-    final result = ByteData.sublistView(
-      _bytes,
-      _position,
-      _position + 8,
-    ).getFloat64(0, Endian.little);
+    final result = _data.getFloat64(_position, Endian.little);
     _position += 8;
     if (!result.isFinite) {
       _fail(ProtocolErrorCode.invalidProps, 'Float property must be finite');
@@ -2348,8 +2338,14 @@ final class _Reader {
     if (length > ProtocolLimits.maxStringBytes) {
       _fail(ProtocolErrorCode.stringTooLarge, 'String is $length bytes');
     }
+    _require(length);
+    final start = _position;
+    final end = start + length;
+    _position = end;
     try {
-      return utf8.decode(bytes(length), allowMalformed: false);
+      return const Utf8Decoder(
+        allowMalformed: false,
+      ).convert(_bytes, start, end);
     } on FormatException {
       _fail(ProtocolErrorCode.invalidUtf8, 'String is not valid UTF-8');
     }
@@ -2357,7 +2353,7 @@ final class _Reader {
 
   _Reader subReader(int length) {
     _require(length);
-    final result = _Reader(_bytes, _position, _position + length);
+    final result = _Reader._slice(_bytes, _data, _position, _position + length);
     _position += length;
     return result;
   }

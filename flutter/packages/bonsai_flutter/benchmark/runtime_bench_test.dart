@@ -95,18 +95,37 @@ void _benchmark(
   for (var warmup = 0; warmup < 10; warmup += 1) {
     operation(warmup);
   }
-  final stopwatch = Stopwatch()..start();
-  for (var iteration = 0; iteration < iterations; iteration += 1) {
-    operation(iteration);
+  const maximumSamples = 20;
+  final sampleCount = iterations < maximumSamples ? iterations : maximumSamples;
+  final samples = <double>[];
+  var completed = 0;
+  for (var sample = 0; sample < sampleCount; sample += 1) {
+    final sampleIterations =
+        iterations ~/ sampleCount + (sample < iterations % sampleCount ? 1 : 0);
+    final stopwatch = Stopwatch()..start();
+    for (
+      var sampleIteration = 0;
+      sampleIteration < sampleIterations;
+      sampleIteration += 1
+    ) {
+      operation(completed++);
+    }
+    stopwatch.stop();
+    samples.add(stopwatch.elapsedMicroseconds.toDouble() / sampleIterations);
   }
-  stopwatch.stop();
-  final microseconds = stopwatch.elapsedMicroseconds.toDouble() / iterations;
+  samples.sort();
+  final middle = sampleCount ~/ 2;
+  final median = sampleCount.isOdd
+      ? samples[middle]
+      : (samples[middle - 1] + samples[middle]) / 2;
+  final p95 = samples[(sampleCount * 0.95).ceil() - 1];
   // Benchmark output is intentionally parseable as one metric per line.
   // ignore: avoid_print
   print(
     '${name.padRight(40)} '
-    '${microseconds.toStringAsFixed(2).padLeft(10)} us/op '
-    '($iterations iterations)',
+    'median ${median.toStringAsFixed(2).padLeft(10)} us/op '
+    'p95 ${p95.toStringAsFixed(2).padLeft(10)} us/op '
+    '($iterations iterations, $sampleCount samples)',
   );
 }
 

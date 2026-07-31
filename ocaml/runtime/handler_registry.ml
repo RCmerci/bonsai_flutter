@@ -1,5 +1,17 @@
 module Ui = Bonsai_flutter_ui
 
+module Handler_map = Map.Make (struct
+    type t = Handler_id.t
+
+    let compare = Handler_id.compare
+  end)
+
+module Handler_set = Set.Make (struct
+    type t = Handler_id.t
+
+    let compare = Handler_id.compare
+  end)
+
 module Frame = struct
   type entry =
     { node_id : Node_id.t
@@ -10,21 +22,52 @@ module Frame = struct
 
   type t =
     { revision : int64
-    ; entries : (Handler_id.t, entry) Hashtbl.t
+    ; entries : entry Handler_map.t
     }
 
   let revision t = t.revision
+  let find t handler_id = Handler_map.find_opt handler_id t.entries
 
   module Private = struct
     let create ~revision entries =
-      let table = Hashtbl.create (List.length entries) in
-      List.iter
-        (fun entry ->
-           if Hashtbl.mem table entry.handler_id
-           then invalid_arg "Handler_registry.Frame: duplicate handler ID";
-           Hashtbl.add table entry.handler_id entry)
-        entries;
-      { revision; entries = table }
+      let entries =
+        List.fold_left
+          (fun entries entry ->
+             if Handler_map.mem entry.handler_id entries
+             then invalid_arg "Handler_registry.Frame: duplicate handler ID";
+             Handler_map.add entry.handler_id entry entries)
+          Handler_map.empty
+          entries
+      in
+      { revision; entries }
+    ;;
+
+    let empty ~revision = { revision; entries = Handler_map.empty }
+
+    let derive ~revision ~base_revision ~base ~removals ~additions =
+      if not (Int64.equal base.revision base_revision)
+      then invalid_arg "Handler_registry.Frame: base revision mismatch";
+      let entries, _ =
+        List.fold_left
+          (fun (entries, seen) handler_id ->
+             if Handler_set.mem handler_id seen
+             then invalid_arg "Handler_registry.Frame: duplicate handler removal";
+             if not (Handler_map.mem handler_id entries)
+             then invalid_arg "Handler_registry.Frame: missing handler removal";
+             Handler_map.remove handler_id entries, Handler_set.add handler_id seen)
+          (base.entries, Handler_set.empty)
+          removals
+      in
+      let entries =
+        List.fold_left
+          (fun entries entry ->
+             if Handler_map.mem entry.handler_id entries
+             then invalid_arg "Handler_registry.Frame: duplicate handler ID";
+             Handler_map.add entry.handler_id entry entries)
+          entries
+          additions
+      in
+      { revision; entries }
     ;;
   end
 end
@@ -125,7 +168,7 @@ let validate_event t ~last_event_sequence (event : event) =
           | None ->
             Error (Runtime_error.Stale_event { revision = event.displayed_revision })
           | Some frame ->
-            (match Hashtbl.find_opt frame.Frame.entries event.handler_id with
+            (match Frame.find frame event.handler_id with
              | None ->
                Error (Runtime_error.Handler_missing { handler_id = event.handler_id })
              | Some entry ->

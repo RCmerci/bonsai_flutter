@@ -395,6 +395,35 @@ void main() {
       );
     });
 
+    test('decodes a frame from a non-zero-offset Uint8List view', () {
+      final encoded = FrameCodec.encode(counterSnapshot(text: 'Offset 😀'));
+      final backing = Uint8List(encoded.length + 13);
+      backing.setRange(7, 7 + encoded.length, encoded);
+      final visible = Uint8List.sublistView(backing, 7, 7 + encoded.length);
+
+      final decoded = FrameCodec.decode(visible);
+
+      expect(
+        (decoded.operations[1] as CreateNode).props,
+        const TextProps('Offset 😀'),
+      );
+    });
+
+    test('preserves operation body trailing-byte checks', () {
+      final valid = FrameCodec.encode(counterSnapshot(text: 'Count: 0'));
+      const operationOffset = ProtocolLimits.headerBytes + 5;
+      final bodyLength = readUint32(valid, operationOffset + 1);
+      final bodyEnd = operationOffset + 5 + bodyLength;
+      final withTrailingByte = Uint8List(valid.length + 1)
+        ..setRange(0, bodyEnd, valid)
+        ..[bodyEnd] = 0
+        ..setRange(bodyEnd + 1, valid.length + 1, valid, bodyEnd);
+      writeUint32(withTrailingByte, operationOffset + 1, bodyLength + 1);
+      writeUint32(withTrailingByte, 36, readUint32(valid, 36) + 1);
+
+      expectDecodeError(withTrailingByte, ProtocolErrorCode.trailingBytes);
+    });
+
     test('rejects malformed headers and payloads deterministically', () {
       final valid = readHexFixture('counter_full.hex');
 
@@ -456,13 +485,12 @@ void main() {
   });
 }
 
+Matcher throwsProtocolCode(ProtocolErrorCode code) => throwsA(
+  isA<ProtocolException>().having((error) => error.code, 'code', code),
+);
+
 void expectDecodeError(Uint8List bytes, ProtocolErrorCode code) {
-  expect(
-    () => FrameCodec.decode(bytes),
-    throwsA(
-      isA<ProtocolException>().having((error) => error.code, 'code', code),
-    ),
-  );
+  expect(() => FrameCodec.decode(bytes), throwsProtocolCode(code));
 }
 
 Uint8List mutate(Uint8List source, int offset, int value) {

@@ -11,9 +11,19 @@ module Frame : sig
   type t
 
   val revision : t -> int64
+  val find : t -> Handler_id.t -> entry option
 
   module Private : sig
     val create : revision:int64 -> entry list -> t
+    val empty : revision:int64 -> t
+
+    val derive
+      :  revision:int64
+      -> base_revision:int64
+      -> base:t
+      -> removals:Handler_id.t list
+      -> additions:entry list
+      -> t
   end
 end
 

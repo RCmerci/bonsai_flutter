@@ -728,6 +728,202 @@ let test_runtime_stats_round_trip () =
     }
 ;;
 
+let zero_runtime_stats =
+  Wire_frame.
+    { event_batch_size = 0
+    ; bonsai_flush_ns = 0L
+    ; result_read_ns = 0L
+    ; reconcile_ns = 0L
+    ; encode_ns = 0L
+    ; patch_count = 0
+    ; patch_bytes = 0
+    ; lifecycle_ns = 0L
+    ; full_snapshot_count = 0
+    ; resync_count = 0
+    }
+;;
+
+let runtime_encode_exn frame =
+  match Binary_codec.encode_runtime_frame frame with
+  | Ok encoded -> encoded
+  | Error error -> fail "runtime encode failed: %s" error.message
+;;
+
+let patch_runtime_exn encoded ~encode_ns ~patch_bytes =
+  match Binary_codec.patch_runtime_stats encoded ~encode_ns ~patch_bytes with
+  | Ok () -> ()
+  | Error error -> fail "runtime stats patch failed: %s" error.message
+;;
+
+let replace_runtime_stats frame ~encode_ns ~patch_bytes =
+  let operations =
+    List.map
+      (function
+        | Wire_frame.Runtime_stats stats ->
+          Wire_frame.Runtime_stats { stats with encode_ns; patch_bytes }
+        | operation -> operation)
+      frame.Wire_frame.operations
+  in
+  { frame with operations }
+;;
+
+let runtime_stats_exn frame =
+  match
+    List.filter_map
+      (function
+        | Wire_frame.Runtime_stats stats -> Some stats
+        | _ -> None)
+      frame.Wire_frame.operations
+  with
+  | [ stats ] -> stats
+  | _ -> fail "decoded runtime frame did not contain exactly one stats operation"
+;;
+
+let test_runtime_stats_backpatch () =
+  let frame =
+    Wire_frame.
+      { runtime_epoch = 91L
+      ; base_revision = 0L
+      ; target_revision = 1L
+      ; kind = Full_snapshot
+      ; operations =
+          [ Create_node
+              { node_id = 1L
+              ; kind = Empty
+              ; props = Empty_props
+              ; event_bindings = []
+              ; parent_data = No_parent_data
+              }
+          ; Set_root 1L
+          ; Runtime_stats zero_runtime_stats
+          ]
+      }
+  in
+  let encoded = runtime_encode_exn frame in
+  let bytes = Binary_codec.Runtime_encoded_frame.bytes encoded in
+  let patch_bytes = Bytes.length bytes in
+  patch_runtime_exn encoded ~encode_ns:123_456L ~patch_bytes;
+  let decoded =
+    match Binary_codec.decode bytes with
+    | Ok frame -> frame
+    | Error error -> fail "backpatched frame did not decode: %s" error.message
+  in
+  let stats = runtime_stats_exn decoded in
+  expect (Int64.equal stats.encode_ns 123_456L) "backpatch changed encode_ns";
+  expect (stats.patch_bytes = patch_bytes) "backpatch did not write the final byte length";
+  let expected = replace_runtime_stats frame ~encode_ns:123_456L ~patch_bytes in
+  expect (decoded = expected) "backpatch changed fields outside runtime stats";
+  match Binary_codec.encode expected with
+  | Error error -> fail "ordinary comparison encode failed: %s" error.message
+  | Ok ordinary ->
+    expect
+      (Bytes.equal bytes ordinary)
+      "backpatched bytes differ from ordinary encoding of the same frame"
+;;
+
+let test_runtime_stats_backpatch_limits () =
+  let frame =
+    Wire_frame.
+      { runtime_epoch = 92L
+      ; base_revision = 1L
+      ; target_revision = 2L
+      ; kind = Incremental_frame
+      ; operations = [ Runtime_stats zero_runtime_stats ]
+      }
+  in
+  let encoded = runtime_encode_exn frame in
+  patch_runtime_exn encoded ~encode_ns:Int64.max_int ~patch_bytes:0xffffffff;
+  let decoded =
+    match Binary_codec.decode (Binary_codec.Runtime_encoded_frame.bytes encoded) with
+    | Ok frame -> frame
+    | Error error -> fail "maximum-value runtime frame did not decode: %s" error.message
+  in
+  let stats = runtime_stats_exn decoded in
+  expect (Int64.equal stats.encode_ns Int64.max_int) "maximum encode_ns changed";
+  expect (stats.patch_bytes = 0xffffffff) "maximum patch_bytes changed"
+;;
+
+let test_runtime_encode_requires_exactly_one_stats_operation () =
+  (match Binary_codec.encode_runtime_frame counter_frame with
+   | Error _ -> ()
+   | Ok _ -> fail "runtime encoder accepted a frame without runtime stats");
+  let duplicate =
+    Wire_frame.
+      { runtime_epoch = 93L
+      ; base_revision = 1L
+      ; target_revision = 2L
+      ; kind = Incremental_frame
+      ; operations =
+          [ Runtime_stats zero_runtime_stats; Runtime_stats zero_runtime_stats ]
+      }
+  in
+  match Binary_codec.encode_runtime_frame duplicate with
+  | Error _ -> ()
+  | Ok _ -> fail "runtime encoder accepted duplicate runtime stats"
+;;
+
+let test_runtime_stats_backpatch_variants () =
+  let frames =
+    Wire_frame.
+      [ { runtime_epoch = 95L
+        ; base_revision = 0L
+        ; target_revision = 1L
+        ; kind = Full_snapshot
+        ; operations =
+            [ Create_node
+                { node_id = 1L
+                ; kind = Empty
+                ; props = Empty_props
+                ; event_bindings = []
+                ; parent_data = No_parent_data
+                }
+            ; Set_root 1L
+            ; Runtime_stats zero_runtime_stats
+            ]
+        }
+      ; { runtime_epoch = 95L
+        ; base_revision = 1L
+        ; target_revision = 2L
+        ; kind = Incremental_frame
+        ; operations =
+            [ Update_props { node_id = 1L; props = Empty_props }
+            ; Runtime_stats zero_runtime_stats
+            ]
+        }
+      ; { runtime_epoch = 95L
+        ; base_revision = 2L
+        ; target_revision = 3L
+        ; kind = Incremental_frame
+        ; operations =
+            [ Host_request
+                { request_id = 7L; payload = Clipboard_write { text = "patched" } }
+            ; Runtime_stats zero_runtime_stats
+            ]
+        }
+      ; { runtime_epoch = 95L
+        ; base_revision = 3L
+        ; target_revision = 4L
+        ; kind = Incremental_frame
+        ; operations = [ Runtime_stats zero_runtime_stats ]
+        }
+      ]
+  in
+  List.iteri
+    (fun index frame ->
+       let encoded = runtime_encode_exn frame in
+       let bytes = Binary_codec.Runtime_encoded_frame.bytes encoded in
+       let encode_ns = Int64.of_int (index + 1) in
+       let patch_bytes = Bytes.length bytes in
+       patch_runtime_exn encoded ~encode_ns ~patch_bytes;
+       match Binary_codec.decode bytes with
+       | Error error -> fail "runtime variant did not decode: %s" error.message
+       | Ok decoded ->
+         expect
+           (decoded = replace_runtime_stats frame ~encode_ns ~patch_bytes)
+           "runtime backpatch changed a frame variant")
+    frames
+;;
+
 let () =
   test_golden_fixture ();
   test_round_trip ();
@@ -749,5 +945,9 @@ let () =
   test_native_widget_props_round_trip ();
   test_native_event_round_trip ();
   test_runtime_stats_round_trip ();
+  test_runtime_stats_backpatch ();
+  test_runtime_stats_backpatch_limits ();
+  test_runtime_encode_requires_exactly_one_stats_operation ();
+  test_runtime_stats_backpatch_variants ();
   print_endline "protocol tests passed"
 ;;

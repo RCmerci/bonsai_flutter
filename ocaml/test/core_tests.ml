@@ -28,8 +28,34 @@ let ok = function
   | Error error -> fail "unexpected error: %s" (Runtime_error.to_string error)
 ;;
 
+module Mounted_handler_frames = Hashtbl.Make (struct
+    type t = Mounted_tree.t
+
+    let equal = ( == )
+    let hash = Hashtbl.hash
+  end)
+
+let mounted_handler_frames = Mounted_handler_frames.create 128
+
 let reconcile_exn reconciler ~base_revision ~target_revision ~old widget =
-  Reconciler.reconcile reconciler ~base_revision ~target_revision ~old widget |> ok
+  let base_handler_frame =
+    Option.map (Mounted_handler_frames.find mounted_handler_frames) old
+  in
+  let output =
+    Reconciler.reconcile
+      reconciler
+      ~base_revision
+      ~target_revision
+      ~old
+      ~base_handler_frame
+      widget
+    |> ok
+  in
+  Mounted_handler_frames.replace
+    mounted_handler_frames
+    output.mounted_tree
+    output.handler_frame;
+  output
 ;;
 
 let count_operations patch predicate =
@@ -101,6 +127,13 @@ let binding_exn node tag =
 ;;
 
 let press_handler ?name callback = Event.Handler.create ?name (fun _ -> callback ())
+
+let expect_invalid_argument operation message =
+  match operation () with
+  | exception Invalid_argument _ -> ()
+  | exception exception_ -> fail "%s raised %s" message (Printexc.to_string exception_)
+  | _ -> fail "%s did not raise Invalid_argument" message
+;;
 
 let test_initial_mount_is_full_snapshot () =
   let reconciler = Reconciler.create ~runtime_epoch:41L in
@@ -289,6 +322,7 @@ let test_duplicate_keys_fail_without_consuming_ids () =
        ~base_revision:0L
        ~target_revision:1L
        ~old:None
+       ~base_handler_frame:None
        invalid
    with
    | Error (Runtime_error.Duplicate_key { key; _ }) ->
@@ -322,11 +356,134 @@ let test_nested_duplicate_keys_fail () =
       ~base_revision:0L
       ~target_revision:1L
       ~old:None
+      ~base_handler_frame:None
       invalid
   with
   | Error (Runtime_error.Duplicate_key _) -> ()
   | Error error -> fail "wrong nested duplicate error: %s" (Runtime_error.to_string error)
   | Ok _ -> fail "nested duplicate keys reconciled successfully"
+;;
+
+let test_mixed_siblings_detect_duplicates () =
+  let reconciler = Reconciler.create ~runtime_epoch:484L in
+  let key = Key.string "repeated" in
+  let widget =
+    Widget.column
+      [ Widget.text "unkeyed"
+      ; Widget.empty ~key ()
+      ; Widget.text "still unkeyed"
+      ; Widget.text ~key "duplicate"
+      ]
+  in
+  match
+    Reconciler.reconcile
+      reconciler
+      ~base_revision:0L
+      ~target_revision:1L
+      ~old:None
+      ~base_handler_frame:None
+      widget
+  with
+  | Error (Runtime_error.Duplicate_key { parent_kind; key = actual_key }) ->
+    check (String.equal parent_kind "Column") "duplicate reported the wrong parent kind";
+    check (Key.equal actual_key key) "duplicate reported the wrong key"
+  | Error error -> fail "wrong mixed-sibling error: %s" (Runtime_error.to_string error)
+  | Ok _ -> fail "mixed keyed siblings accepted a duplicate"
+;;
+
+let test_single_child_ancestor_still_validates_nested_duplicates () =
+  let reconciler = Reconciler.create ~runtime_epoch:485L in
+  let first = Key.string "first" in
+  let later = Key.string "later" in
+  let widget =
+    Widget.column
+      [ Widget.column
+          [ Widget.empty ~key:first ()
+          ; Widget.empty ~key:later ()
+          ; Widget.text ~key:first "first duplicate"
+          ; Widget.text ~key:later "later duplicate"
+          ]
+      ]
+  in
+  match
+    Reconciler.reconcile
+      reconciler
+      ~base_revision:0L
+      ~target_revision:1L
+      ~old:None
+      ~base_handler_frame:None
+      widget
+  with
+  | Error (Runtime_error.Duplicate_key { key; _ }) ->
+    check (Key.equal key first) "validator did not report the first duplicate"
+  | Error error -> fail "wrong nested error: %s" (Runtime_error.to_string error)
+  | Ok _ -> fail "single-child ancestor skipped nested duplicate validation"
+;;
+
+let reference_duplicate_key root =
+  let rec validate widget =
+    let children = Widget.For_testing.children widget in
+    let rec validate_children seen index =
+      if index = Array.length children
+      then None
+      else (
+        let child = children.(index) in
+        match Widget.For_testing.key child with
+        | Some key when List.exists (Key.equal key) seen ->
+          Some (Widget.For_testing.kind_name widget, key)
+        | key ->
+          let seen = Option.fold ~none:seen ~some:(fun key -> key :: seen) key in
+          (match validate child with
+           | Some _ as duplicate -> duplicate
+           | None -> validate_children seen (index + 1)))
+    in
+    validate_children [] 0
+  in
+  validate root
+;;
+
+let test_optimized_key_validation_matches_reference () =
+  let random = Random.State.make [| 8; 17; 23; 42 |] in
+  let rec generate depth =
+    let key =
+      if Random.State.int random 3 = 0
+      then Some (Key.int (Random.State.int random 4))
+      else None
+    in
+    if depth = 0
+    then Widget.text ?key (Printf.sprintf "leaf-%d" (Random.State.bits random))
+    else (
+      let child_count = Random.State.int random 5 in
+      let children = List.init child_count (fun _ -> generate (depth - 1)) in
+      Widget.column ?key children)
+  in
+  for case = 0 to 299 do
+    let widget = generate 4 in
+    let expected = reference_duplicate_key widget in
+    let reconciler = Reconciler.create ~runtime_epoch:(Int64.of_int (500 + case)) in
+    let actual =
+      match
+        Reconciler.reconcile
+          reconciler
+          ~base_revision:0L
+          ~target_revision:1L
+          ~old:None
+          ~base_handler_frame:None
+          widget
+      with
+      | Ok _ -> None
+      | Error (Runtime_error.Duplicate_key { parent_kind; key }) -> Some (parent_kind, key)
+      | Error error -> fail "reference case returned %s" (Runtime_error.to_string error)
+    in
+    match expected, actual with
+    | None, None -> ()
+    | Some (expected_parent, expected_key), Some (actual_parent, actual_key) ->
+      check
+        (String.equal expected_parent actual_parent && Key.equal expected_key actual_key)
+        "optimized validator disagreed with the reference duplicate"
+    | None, Some _ -> fail "optimized validator reported a reference-valid tree"
+    | Some _, None -> fail "optimized validator accepted a reference-invalid tree"
+  done
 ;;
 
 let test_mixed_keyed_and_unkeyed_match_by_index () =
@@ -385,6 +542,289 @@ let test_nested_removal_drops_complete_subtree () =
     ~actual:(count_operations second.frame_patch is_drop)
     "nested drops";
   apply_and_compare ~old_snapshot:(Some (Mounted_tree.snapshot first.mounted_tree)) second
+;;
+
+let test_persistent_handler_frame_derivation () =
+  let handler = press_handler (fun () -> ()) in
+  let entry handler_id =
+    Handler_registry.Frame.
+      { node_id = Int64.add handler_id 100L
+      ; event_tag = Event.Tag.Press
+      ; handler_id
+      ; handler
+      }
+  in
+  let first_entry = entry 1L in
+  let second_entry = entry 2L in
+  let third_entry = entry 3L in
+  let base =
+    Handler_registry.Frame.Private.create ~revision:1L [ first_entry; second_entry ]
+  in
+  check
+    (Option.is_some (Handler_registry.Frame.find base first_entry.handler_id))
+    "handler frame lookup missed an existing entry";
+  let unchanged =
+    Handler_registry.Frame.Private.derive
+      ~revision:2L
+      ~base_revision:1L
+      ~base
+      ~removals:[]
+      ~additions:[]
+  in
+  check_int64
+    ~expected:2L
+    ~actual:(Handler_registry.Frame.revision unchanged)
+    "derived handler frame revision";
+  let changed =
+    Handler_registry.Frame.Private.derive
+      ~revision:3L
+      ~base_revision:1L
+      ~base
+      ~removals:[ first_entry.handler_id ]
+      ~additions:[ third_entry ]
+  in
+  check
+    (Option.is_some (Handler_registry.Frame.find base first_entry.handler_id))
+    "derivation mutated the base frame removal";
+  check
+    (Option.is_none (Handler_registry.Frame.find base third_entry.handler_id))
+    "derivation mutated the base frame addition";
+  check
+    (Option.is_none (Handler_registry.Frame.find changed first_entry.handler_id))
+    "derived frame retained a removed handler";
+  check
+    (Option.is_some (Handler_registry.Frame.find changed third_entry.handler_id))
+    "derived frame omitted an added handler";
+  expect_invalid_argument
+    (fun () ->
+       Handler_registry.Frame.Private.derive
+         ~revision:4L
+         ~base_revision:0L
+         ~base
+         ~removals:[]
+         ~additions:[])
+    "mismatched handler base revision";
+  expect_invalid_argument
+    (fun () ->
+       Handler_registry.Frame.Private.derive
+         ~revision:4L
+         ~base_revision:1L
+         ~base
+         ~removals:[ first_entry.handler_id; first_entry.handler_id ]
+         ~additions:[])
+    "duplicate handler removal";
+  expect_invalid_argument
+    (fun () ->
+       Handler_registry.Frame.Private.derive
+         ~revision:4L
+         ~base_revision:1L
+         ~base
+         ~removals:[ 99L ]
+         ~additions:[])
+    "missing handler removal";
+  expect_invalid_argument
+    (fun () ->
+       Handler_registry.Frame.Private.derive
+         ~revision:4L
+         ~base_revision:1L
+         ~base
+         ~removals:[]
+         ~additions:[ second_entry ])
+    "colliding handler addition";
+  expect_invalid_argument
+    (fun () ->
+       let duplicate = entry 9L in
+       Handler_registry.Frame.Private.derive
+         ~revision:4L
+         ~base_revision:1L
+         ~base
+         ~removals:[]
+         ~additions:[ duplicate; duplicate ])
+    "duplicate handler addition";
+  let rebuilt =
+    Handler_registry.Frame.Private.create ~revision:5L [ first_entry; third_entry ]
+  in
+  let derived =
+    Handler_registry.Frame.Private.derive
+      ~revision:5L
+      ~base_revision:0L
+      ~base:(Handler_registry.Frame.Private.empty ~revision:0L)
+      ~removals:[]
+      ~additions:[ first_entry; third_entry ]
+  in
+  List.iter
+    (fun (entry : Handler_registry.Frame.entry) ->
+       check
+         (Option.is_some (Handler_registry.Frame.find rebuilt entry.handler_id)
+          && Option.is_some (Handler_registry.Frame.find derived entry.handler_id))
+         "full handler derivation lookup mismatch")
+    [ first_entry; third_entry ]
+;;
+
+let test_handler_deltas_avoid_full_tree_collection () =
+  let reconciler = Reconciler.create ~runtime_epoch:501L in
+  let handler = press_handler (fun () -> ()) in
+  let key = Key.string "stable-button" in
+  let view label = Widget.button ~key ~on_press:handler ~child:(Widget.text label) () in
+  let first =
+    reconcile_exn reconciler ~base_revision:0L ~target_revision:1L ~old:None (view "one")
+  in
+  let second =
+    Reconciler.reconcile
+      reconciler
+      ~base_revision:1L
+      ~target_revision:2L
+      ~old:(Some first.mounted_tree)
+      ~base_handler_frame:(Some first.handler_frame)
+      (view "two")
+    |> ok
+  in
+  let binding =
+    binding_exn
+      (node_by_key (Mounted_tree.snapshot second.mounted_tree) key)
+      Event.Tag.Press
+  in
+  check
+    (Option.is_some (Handler_registry.Frame.find second.handler_frame binding.handler_id))
+    "property-only update lost its reused handler";
+  let reorder_reconciler = Reconciler.create ~runtime_epoch:503L in
+  let first_handler = press_handler (fun () -> ()) in
+  let second_handler = press_handler (fun () -> ()) in
+  let keyed_button key handler =
+    Widget.button ~key:(Key.string key) ~on_press:handler ~child:(Widget.text key) ()
+  in
+  let ordered =
+    reconcile_exn
+      reorder_reconciler
+      ~base_revision:0L
+      ~target_revision:1L
+      ~old:None
+      (Widget.column
+         [ keyed_button "first" first_handler; keyed_button "second" second_handler ])
+  in
+  let reversed =
+    Reconciler.reconcile
+      reorder_reconciler
+      ~base_revision:1L
+      ~target_revision:2L
+      ~old:(Some ordered.mounted_tree)
+      ~base_handler_frame:(Some ordered.handler_frame)
+      (Widget.column
+         [ keyed_button "second" second_handler; keyed_button "first" first_handler ])
+    |> ok
+  in
+  List.iter
+    (fun key ->
+       let before =
+         binding_exn
+           (node_by_key (Mounted_tree.snapshot ordered.mounted_tree) (Key.string key))
+           Event.Tag.Press
+       in
+       let after =
+         binding_exn
+           (node_by_key (Mounted_tree.snapshot reversed.mounted_tree) (Key.string key))
+           Event.Tag.Press
+       in
+       check_int64
+         ~expected:before.handler_id
+         ~actual:after.handler_id
+         "keyed reorder changed a handler ID")
+    [ "first"; "second" ]
+;;
+
+let test_handler_delta_add_replace_remove_and_drop () =
+  let reconciler = Reconciler.create ~runtime_epoch:502L in
+  let old_tap = press_handler (fun () -> ()) in
+  let new_tap = press_handler (fun () -> ()) in
+  let double_tap = press_handler (fun () -> ()) in
+  let long_press = press_handler (fun () -> ()) in
+  let key = Key.string "gesture" in
+  let first =
+    reconcile_exn
+      reconciler
+      ~base_revision:0L
+      ~target_revision:1L
+      ~old:None
+      (Widget.column
+         [ Widget.gesture
+             ~key
+             ~on_tap:old_tap
+             ~on_double_tap:double_tap
+             (Widget.text "gesture")
+         ])
+  in
+  let first_node = node_by_key (Mounted_tree.snapshot first.mounted_tree) key in
+  let old_tap_binding = binding_exn first_node Event.Tag.Tap in
+  let old_double_binding = binding_exn first_node Event.Tag.Double_tap in
+  let second =
+    Reconciler.reconcile
+      reconciler
+      ~base_revision:1L
+      ~target_revision:2L
+      ~old:(Some first.mounted_tree)
+      ~base_handler_frame:(Some first.handler_frame)
+      (Widget.column
+         [ Widget.gesture
+             ~key
+             ~on_tap:new_tap
+             ~on_long_press:long_press
+             (Widget.text "gesture")
+         ])
+    |> ok
+  in
+  let second_node = node_by_key (Mounted_tree.snapshot second.mounted_tree) key in
+  let new_tap_binding = binding_exn second_node Event.Tag.Tap in
+  let long_binding = binding_exn second_node Event.Tag.Long_press in
+  List.iter
+    (fun handler_id ->
+       check
+         (Option.is_none (Handler_registry.Frame.find second.handler_frame handler_id))
+         "handler delta retained a replaced or removed handler")
+    [ old_tap_binding.handler_id; old_double_binding.handler_id ];
+  List.iter
+    (fun handler_id ->
+       check
+         (Option.is_some (Handler_registry.Frame.find second.handler_frame handler_id))
+         "handler delta omitted an added or replacement handler")
+    [ new_tap_binding.handler_id; long_binding.handler_id ];
+  check
+    (Option.is_some
+       (Handler_registry.Frame.find first.handler_frame old_tap_binding.handler_id))
+    "handler delta mutated the previous revision";
+  let third =
+    Reconciler.reconcile
+      reconciler
+      ~base_revision:2L
+      ~target_revision:3L
+      ~old:(Some second.mounted_tree)
+      ~base_handler_frame:(Some second.handler_frame)
+      (Widget.column [])
+    |> ok
+  in
+  List.iter
+    (fun handler_id ->
+       check
+         (Option.is_none (Handler_registry.Frame.find third.handler_frame handler_id))
+         "dropped subtree retained a handler entry")
+    [ new_tap_binding.handler_id; long_binding.handler_id ];
+  let fourth =
+    Reconciler.reconcile
+      reconciler
+      ~base_revision:3L
+      ~target_revision:4L
+      ~old:(Some third.mounted_tree)
+      ~base_handler_frame:(Some third.handler_frame)
+      (Widget.column [ Widget.gesture ~key ~on_tap:new_tap (Widget.text "gesture") ])
+    |> ok
+  in
+  let remounted =
+    binding_exn
+      (node_by_key (Mounted_tree.snapshot fourth.mounted_tree) key)
+      Event.Tag.Tap
+  in
+  check
+    (Int64.compare remounted.handler_id new_tap_binding.handler_id > 0)
+    "remounted handler did not receive a fresh monotonic ID"
 ;;
 
 let test_handler_change_gets_new_id_and_one_revision_grace () =
@@ -932,9 +1372,19 @@ let tests =
   ; ( "duplicate keys fail without consuming IDs"
     , test_duplicate_keys_fail_without_consuming_ids )
   ; "nested duplicate keys fail", test_nested_duplicate_keys_fail
+  ; "mixed siblings detect duplicates", test_mixed_siblings_detect_duplicates
+  ; ( "single-child ancestor still validates nested duplicates"
+    , test_single_child_ancestor_still_validates_nested_duplicates )
+  ; ( "optimized key validation matches reference"
+    , test_optimized_key_validation_matches_reference )
   ; ( "mixed keyed and unkeyed children match by index"
     , test_mixed_keyed_and_unkeyed_match_by_index )
   ; "nested removal drops complete subtree", test_nested_removal_drops_complete_subtree
+  ; "persistent handler frame derivation", test_persistent_handler_frame_derivation
+  ; ( "handler deltas avoid full-tree collection"
+    , test_handler_deltas_avoid_full_tree_collection )
+  ; ( "handler delta add replace remove and drop"
+    , test_handler_delta_add_replace_remove_and_drop )
   ; ( "handler change gets a new ID and one-revision grace"
     , test_handler_change_gets_new_id_and_one_revision_grace )
   ; "unchanged handler reuses ID", test_unchanged_handler_reuses_id

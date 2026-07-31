@@ -564,6 +564,44 @@ let test_changed_handler_identity_emits_binding_update () =
        operations)
     "changed handler identity did not emit UpdateEventBindings";
   present driver updated 1L;
+  let grace_events =
+    Protocol.Inbound_event.
+      { runtime_epoch
+      ; events =
+          [ { sequence = 2L
+            ; displayed_revision = initial.renderer_revision
+            ; node_id
+            ; handler_id
+            ; event_tag
+            ; payload = Unit
+            }
+          ]
+      }
+  in
+  let grace = ok (Driver.pump driver ~monotonic_now_ns:2L ~events:grace_events ()) in
+  require
+    (Option.is_none grace.recoverable_error)
+    "previous displayed handler revision failed during its grace period";
+  present driver grace 2L;
+  let stale_events =
+    Protocol.Inbound_event.
+      { runtime_epoch
+      ; events =
+          [ { sequence = 3L
+            ; displayed_revision = initial.renderer_revision
+            ; node_id
+            ; handler_id
+            ; event_tag
+            ; payload = Unit
+            }
+          ]
+      }
+  in
+  let stale = ok (Driver.pump driver ~monotonic_now_ns:3L ~events:stale_events ()) in
+  require
+    (Option.is_some stale.recoverable_error)
+    "retired handler revision was accepted after the grace period";
+  present driver stale 3L;
   Driver.shutdown driver
 ;;
 

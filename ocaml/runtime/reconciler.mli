@@ -15,5 +15,6 @@ val reconcile
   -> base_revision:int64
   -> target_revision:int64
   -> old:Mounted_tree.t option
+  -> base_handler_frame:Handler_registry.Frame.t option
   -> Bonsai_flutter_ui.Widget.t
   -> (output, Runtime_error.t) result
