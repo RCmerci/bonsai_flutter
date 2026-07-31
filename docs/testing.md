@@ -6,14 +6,14 @@ Testing is split by boundary.
 
 The repository has five required GitHub Actions workflows:
 
-- `ocaml.yml` runs the complete OCaml 5.3.0 build, test, formatting, generated
+- `ocaml.yml` runs the complete OCaml 5.1.1 build, test, formatting, generated
   protocol and OCaml-frame fixture checks, release benchmark compilation, and
   opam metadata gates on Linux.
 - `flutter.yml` runs renderer, native package, generated FFI binding, example,
   Dart-event fixture, malformed-input, and native sanitizer gates on Linux.
-- `macos.yml` applies the pinned upstream `basement` portability patch, links
-  the real OCaml object, builds the Counter application in Debug, Profile, and
-  Release modes, and runs the cross-language integration suite on macOS arm64.
+- `macos.yml` links the real OCaml object, builds the Counter application in
+  Debug, Profile, and Release modes, and runs the cross-language integration
+  suite on macOS arm64.
 - `ios.yml` reproduces the pinned cross toolchain and builds and audits
   unsigned iPhoneOS applications on a hosted macOS runner.
 - `ios-device.yml` is a serialized, protected-environment lane for one
@@ -35,7 +35,7 @@ make ci-ios-device IOS_DEVICE_ID=<physical-device-id>
 
 The equivalent `just ci-*` recipes delegate to these canonical Make targets.
 `ci-macos` includes `ci-ocaml`; it requires the Flutter SDK, Xcode, and an
-OCaml 5.3.0 switch prepared as described in the repository README.
+OCaml 5.1.1 switch prepared as described in the repository README.
 
 `ci-ios` builds and audits unsigned iPhoneOS Debug, Profile, and Release
 applications. It does not install or execute them on hardware.
@@ -243,7 +243,7 @@ The macOS integration command is:
 make integration-test
 ```
 
-This builds the linked OCaml object with the active OCaml 5.3.0 switch, resolves
+This builds the linked OCaml object with the active OCaml 5.1.1 switch, resolves
 the Flutter workspace, and runs its real FFI tests. Counter Debug, Profile, and
 Release packages have also built and launched on the recorded macOS arm64
 host. Lower macOS deployment targets and other platforms remain unclaimed.

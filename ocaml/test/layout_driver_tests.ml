@@ -8,10 +8,10 @@ let component handlers _graph =
       handlers
       ~name:"noop"
       ~equal:Unit.equal
-      (Bonsai.return ())
+      (Bonsai.Cont.return ())
       ~f:(fun () _ -> Bonsai.Effect.return ())
   in
-  Bonsai.map noop ~f:(fun noop ->
+  Bonsai.Cont.map noop ~f:(fun noop ->
     Ui.Widget.animated_opacity
       ~animation:
         (Ui.Animation.create

@@ -30,6 +30,7 @@ sdk_version=$(xcrun --sdk "$target" --show-sdk-version)
 
 targets=
 for example in \
+  clock \
   counter \
   gallery \
   host_effects \
@@ -46,7 +47,6 @@ targets="$targets flutter/integration_test/ocaml/native_integration_embed.exe.o"
 # BUILD_PATH_PREFIX_MAP removes checkout-specific paths from OCaml metadata.
 OPAMROOT="$opam_root" \
   BUILD_PATH_PREFIX_MAP="$repository_root=." \
-  OCAMLPARAM='_,keywords=4.14' \
   SDK="$sdk_version" \
   VER="$minimum_version" \
   BONSAI_FLUTTER_EMBED_OCAML=enabled \
@@ -60,6 +60,7 @@ OPAMROOT="$opam_root" \
     $targets
 
 for example in \
+  clock \
   counter \
   gallery \
   host_effects \

@@ -1,7 +1,7 @@
 module Ui = Bonsai_flutter_ui
 
 let component handlers graph =
-  let count, set_count = Bonsai.state' ~equal:Int.equal 0 graph in
+  let count, set_count = Bonsai_v017.state ~equal:Int.equal 0 graph in
   let increment =
     Driver.Handler.create
       handlers
@@ -12,7 +12,7 @@ let component handlers graph =
       | Ui.Event.Payload.Unit -> set_count (fun count -> count + 1)
       | _ -> Bonsai.Effect.Ignore)
   in
-  Bonsai.map2 count increment ~f:(fun count increment ->
+  Bonsai.Cont.map2 count increment ~f:(fun count increment ->
     Ui.Material.scaffold
       ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Counter") ())
       ~body:

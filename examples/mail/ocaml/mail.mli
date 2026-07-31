@@ -1,4 +1,8 @@
-val component : Driver.Handler.t -> Bonsai.graph -> Bonsai_flutter_ui.Widget.t Bonsai.t
+val component
+  :  Driver.Handler.t
+  -> Bonsai.Cont.graph
+  -> Bonsai_flutter_ui.Widget.t Bonsai.Cont.t
+
 val app : App.t
 
 module For_testing : sig

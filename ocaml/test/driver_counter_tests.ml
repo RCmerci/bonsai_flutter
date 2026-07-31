@@ -77,7 +77,7 @@ let semantic_operations (frame : Protocol.Wire_frame.t) =
 ;;
 
 let component ~activations ~after_displays handlers graph =
-  let count, increment = Bonsai.state' ~equal:Int.equal 0 graph in
+  let count, increment = Bonsai_v017.state ~equal:Int.equal 0 graph in
   let increment_handler =
     Driver.Handler.create
       handlers
@@ -89,13 +89,13 @@ let component ~activations ~after_displays handlers graph =
       | _ -> increment Fun.id)
   in
   let on_activate =
-    Bonsai.return (Bonsai.Effect.of_thunk (fun () -> Stdlib.incr activations))
+    Bonsai.Cont.return (Bonsai.Effect.of_thunk (fun () -> Stdlib.incr activations))
   in
   let after_display =
-    Bonsai.return (Bonsai.Effect.of_thunk (fun () -> Stdlib.incr after_displays))
+    Bonsai.Cont.return (Bonsai.Effect.of_thunk (fun () -> Stdlib.incr after_displays))
   in
-  Bonsai.Edge.lifecycle ~on_activate ~after_display graph;
-  Bonsai.map2 count increment_handler ~f:(fun count increment_handler ->
+  Bonsai.Cont.Edge.lifecycle ~on_activate ~after_display graph;
+  Bonsai.Cont.map2 count increment_handler ~f:(fun count increment_handler ->
     Ui.Widget.column
       [ Ui.Widget.text (Printf.sprintf "Count: %d" count)
       ; Ui.Widget.button
@@ -326,7 +326,7 @@ let () =
 ;;
 
 let host_effect_component ?cancellation host_ref handlers graph =
-  let text, set_text = Bonsai.state' ~equal:String.equal "Idle" graph in
+  let text, set_text = Bonsai_v017.state ~equal:String.equal "Idle" graph in
   let host_effects = Driver.Handler.host_effects handlers in
   host_ref := Some host_effects;
   let request_clipboard =
@@ -342,7 +342,7 @@ let host_effect_component ?cancellation host_ref handlers graph =
           | Ok clipboard -> set_text (fun _ -> clipboard)
           | Error _ -> set_text (fun _ -> "Host error")))
   in
-  Bonsai.map2 text request_clipboard ~f:(fun text request_clipboard ->
+  Bonsai.Cont.map2 text request_clipboard ~f:(fun text request_clipboard ->
     Ui.Widget.column
       [ Ui.Widget.text text
       ; Ui.Widget.button
@@ -522,7 +522,7 @@ let () = test_host_effect_cancellation ()
 
 let environment_component handlers _graph =
   Environment.value (Driver.Handler.environment handlers)
-  |> Bonsai.map ~f:(fun (environment : Environment.snapshot) ->
+  |> Bonsai.Cont.map ~f:(fun (environment : Environment.snapshot) ->
     Ui.Widget.text
       (Printf.sprintf
          "%.0fx%.0f %s"
@@ -624,7 +624,7 @@ let equal_handler_dependency_model left right =
 
 let handler_dependency_component handlers graph =
   let model, set_model =
-    Bonsai.state'
+    Bonsai_v017.state
       ~equal:equal_handler_dependency_model
       { mode = false; observed_mode = None }
       graph
@@ -639,7 +639,7 @@ let handler_dependency_component handlers graph =
         set_model (fun model -> { model with mode = not model.mode }))
   in
   let action_dependencies =
-    Bonsai.both set_model (Bonsai.map model ~f:(fun model -> model.mode))
+    Bonsai.Cont.both set_model (Bonsai.Cont.map model ~f:(fun model -> model.mode))
   in
   let observe_mode =
     Driver.Handler.create
@@ -651,21 +651,24 @@ let handler_dependency_component handlers graph =
       ~f:(fun (set_model, mode) _ ->
         set_model (fun model -> { model with observed_mode = Some mode }))
   in
-  Bonsai.map2 model (Bonsai.both toggle_mode observe_mode) ~f:(fun model handlers ->
-    let toggle_mode, observe_mode = handlers in
-    let observed_mode =
-      match model.observed_mode with
-      | None -> "none"
-      | Some value -> Bool.to_string value
-    in
-    Ui.Widget.column
-      [ Ui.Widget.text ("Observed: " ^ observed_mode)
-      ; Ui.Widget.button ~on_press:toggle_mode ~child:(Ui.Widget.text "Toggle mode") ()
-      ; Ui.Material.text_button
-          ~on_press:observe_mode
-          ~child:(Ui.Widget.text "Observe mode")
-          ()
-      ])
+  Bonsai.Cont.map2
+    model
+    (Bonsai.Cont.both toggle_mode observe_mode)
+    ~f:(fun model handlers ->
+      let toggle_mode, observe_mode = handlers in
+      let observed_mode =
+        match model.observed_mode with
+        | None -> "none"
+        | Some value -> Bool.to_string value
+      in
+      Ui.Widget.column
+        [ Ui.Widget.text ("Observed: " ^ observed_mode)
+        ; Ui.Widget.button ~on_press:toggle_mode ~child:(Ui.Widget.text "Toggle mode") ()
+        ; Ui.Material.text_button
+            ~on_press:observe_mode
+            ~child:(Ui.Widget.text "Observe mode")
+            ()
+        ])
 ;;
 
 let find_single_binding_for_kind (frame : Protocol.Wire_frame.t) kind =

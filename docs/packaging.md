@@ -65,9 +65,9 @@ make ios-toolchains
 make ios-device-native-objects
 ```
 
-`tool/ios/toolchain.lock` pins OCaml 5.3.0, opam-cross-ios, target triples,
-deployment settings, and Jane Street repository revisions.
-`vendor/opam-ios/runtime-closure.lock` pins the exact 55-package runtime
+`tool/ios/toolchain.lock` pins OCaml 5.1.1, opam-cross-ios, target triples,
+deployment settings, and the Jane Street v0.17 release line.
+`vendor/opam-ios/runtime-closure.lock` pins the exact 42-package runtime
 closure by source URL and SHA-256 digest. Host PPX executables and generators
 remain native macOS processes; only target metadata and selected target
 runtime components enter the iOS sysroot.
@@ -102,15 +102,16 @@ The linked OCaml closure imports file-metadata APIs and a monotonic clock API.
 Each iOS Runner therefore includes a minimal privacy manifest with
 `NSPrivacyAccessedAPICategoryFileTimestamp` reason `C617.1` and
 `NSPrivacyAccessedAPICategorySystemBootTime` reason `35F9.1`. The bundle
-verifier requires the corresponding linked symbols and rejects unrelated
-blanket reasons.
+verifier requires the corresponding linked symbols, including either
+`mach_absolute_time` or `clock_gettime_nsec_np`, and rejects unrelated blanket
+reasons.
 
 ## Current evidence boundary
 
-The repository contains eight standalone examples. The original seven and the
+The repository contains nine standalone examples. All nine examples and the
 aggregate integration application build as unsigned iPhoneOS arm64
-applications; Bonsai Mail awaits the next full hosted packaging run. Counter
-Debug, Profile, and Release frameworks pass the repository bundle audit.
+applications. Counter Debug, Profile, and Release frameworks pass the
+repository bundle audit.
 
 Development-signed installation and launch have been verified on a physical
 iPhone. Release archive export and distribution signing remain outside the

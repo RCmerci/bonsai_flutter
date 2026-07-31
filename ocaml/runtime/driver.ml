@@ -5,12 +5,13 @@ module Ui = Bonsai_flutter_ui
 module Handler = struct
   type t =
     { pending_effects : unit Bonsai.Effect.t Queue.t
+    ; pending_before_display : (unit, unit) Bonsai.Effect.Private.Callback.t Queue.t
     ; host_effects : Host_effect.t
     ; environment : Environment.t
     }
 
   let create_with_dependencies ~equal dependencies ~f =
-    dependencies |> Bonsai.cutoff ~equal |> Bonsai.map ~f
+    dependencies |> Bonsai.Cont.cutoff ~equal |> Bonsai.Cont.map ~f
   ;;
 
   let create t ?name ~equal dependencies ~f =
@@ -27,6 +28,11 @@ module Handler = struct
 
   let host_effects t = t.host_effects
   let environment t = t.environment
+
+  let wait_before_display t =
+    Bonsai.Effect.Private.make ~request:() ~evaluator:(fun callback ->
+      Queue.add callback t.pending_before_display)
+  ;;
 end
 
 type frame =
@@ -115,6 +121,7 @@ let create ?trace ~runtime_epoch ~time_source component =
   if Int64.compare runtime_epoch 0L <= 0
   then invalid_arg "Driver.create: runtime_epoch must be positive";
   let pending_queue = Queue.create () in
+  let pending_before_display = Queue.create () in
   let host_effect_manager =
     Host_effect.Private.create ~schedule:(fun scheduled_effect ->
       Queue.add scheduled_effect pending_queue)
@@ -123,6 +130,7 @@ let create ?trace ~runtime_epoch ~time_source component =
   let pending_effects =
     Handler.
       { pending_effects = pending_queue
+      ; pending_before_display
       ; host_effects = host_effect_manager
       ; environment = environment_input
       }
@@ -648,6 +656,22 @@ let drain_effects t =
       t.bonsai
       (Queue.take t.pending_effects.pending_effects)
   done
+;;
+
+let flush_before_display t =
+  let rec loop () =
+    if not (Queue.is_empty t.pending_effects.pending_before_display)
+    then (
+      while not (Queue.is_empty t.pending_effects.pending_before_display) do
+        let callback = Queue.take t.pending_effects.pending_before_display in
+        Bonsai_runtime_adapter.schedule_event
+          t.bonsai
+          (Bonsai.Effect.Private.Callback.respond_to callback ())
+      done;
+      Bonsai_runtime_adapter.flush t.bonsai;
+      loop ())
+  in
+  loop ()
 ;;
 
 let frame_kind_name = function
@@ -1290,6 +1314,7 @@ let pump t ~monotonic_now_ns ?events () =
              drain_effects t;
              let flush_started = now_ns () in
              Bonsai_runtime_adapter.flush t.bonsai;
+             flush_before_display t;
              let bonsai_flush_ns = elapsed_ns flush_started in
              let event_batch_size =
                match events with
@@ -1426,6 +1451,7 @@ let shutdown t =
     t.is_shutdown <- true;
     Host_effect.Private.shutdown t.host_effects;
     Queue.clear t.pending_effects.pending_effects;
+    Queue.clear t.pending_effects.pending_before_display;
     Runtime.Handler_registry.clear t.handlers;
     Bonsai_runtime_adapter.shutdown t.bonsai)
 ;;

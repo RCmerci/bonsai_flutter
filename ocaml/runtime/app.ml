@@ -10,7 +10,7 @@ end
 type t =
   { name : string option
   ; trace : (string -> unit) option
-  ; component : Context.t -> Bonsai.graph -> Bonsai_flutter_ui.Widget.t Bonsai.t
+  ; component : Context.t -> Bonsai.Cont.graph -> Bonsai_flutter_ui.Widget.t Bonsai.Cont.t
   }
 
 let validate_name = function

@@ -88,7 +88,7 @@ case "$package_role" in
   *) fail "invalid package role for $package_name: $package_role" ;;
 esac
 
-work_root="$package_root/$target/$package_name"
+work_root="$package_root/$target/$package_name/$package_version/recipe-$OCAML_IOS_RECIPE_REVISION"
 source_archive="$work_root/source.archive"
 partial_archive="$work_root/source.archive.partial"
 source_directory="$work_root/source"
@@ -126,11 +126,11 @@ if test ! -f "$source_marker"; then
     fail "source directory exists without a preparation marker: $source_directory"
   mkdir -p "$source_directory"
   tar -xf "$source_archive" -C "$source_directory" --strip-components=1
-  if test "$package_name" = basement; then
+  if test "$package_name" = base; then
     patch \
       -d "$source_directory" \
       -p1 \
-      <"$repository_root/vendor/patches/basement-macos.patch"
+      <"$repository_root/vendor/patches/ios/base-host-generator.patch"
   fi
   if test "$package_name" = jst-config; then
     patch \
@@ -247,7 +247,6 @@ printf '%s\n' "$package_components" |
         fi
 
         OPAMROOT="$opam_root" \
-          OCAMLPARAM='_,keywords=4.14' \
           SDK="$sdk_version" \
           VER="$IOS_DEPLOYMENT_TARGET" \
           opam exec --switch="$switch" -- \
@@ -261,7 +260,6 @@ printf '%s\n' "$package_components" |
 
         if test "$package_name" = jst-config; then
           OPAMROOT="$opam_root" \
-            OCAMLPARAM='_,keywords=4.14' \
             SDK="$sdk_version" \
             VER="$IOS_DEPLOYMENT_TARGET" \
             opam exec --switch="$switch" -- \
@@ -298,7 +296,6 @@ printf '%s\n' "$package_components" |
                 static_archive_target="$source_component_relative/$static_archive"
               fi
               OPAMROOT="$opam_root" \
-                OCAMLPARAM='_,keywords=4.14' \
                 SDK="$sdk_version" \
                 VER="$IOS_DEPLOYMENT_TARGET" \
                 opam exec --switch="$switch" -- \

@@ -1,9 +1,11 @@
 module Ui = Bonsai_flutter_ui
 
 let component handlers graph =
-  let settings_open, set_settings_open = Bonsai.state' ~equal:Bool.equal false graph in
+  let settings_open, set_settings_open =
+    Bonsai_v017.state ~equal:Bool.equal false graph
+  in
   let clipboard, set_clipboard =
-    Bonsai.state' ~equal:String.equal "Clipboard not read" graph
+    Bonsai_v017.state ~equal:String.equal "Clipboard not read" graph
   in
   let open_settings =
     Driver.Handler.create
@@ -37,21 +39,21 @@ let component handlers graph =
           | Error _ -> set_clipboard (fun _ -> "Clipboard request failed")))
   in
   let state =
-    Bonsai.map2 settings_open clipboard ~f:(fun settings_open clipboard ->
+    Bonsai.Cont.map2 settings_open clipboard ~f:(fun settings_open clipboard ->
       settings_open, clipboard)
   in
   let navigation_handlers =
-    Bonsai.map2 open_settings close_settings ~f:(fun open_settings close_settings ->
+    Bonsai.Cont.map2 open_settings close_settings ~f:(fun open_settings close_settings ->
       open_settings, close_settings)
   in
   let handlers =
-    Bonsai.map2
+    Bonsai.Cont.map2
       navigation_handlers
       read_clipboard
       ~f:(fun (open_settings, close_settings) read_clipboard ->
         open_settings, close_settings, read_clipboard)
   in
-  Bonsai.map2
+  Bonsai.Cont.map2
     state
     handlers
     ~f:(fun (settings_open, clipboard) (open_settings, close_settings, read_clipboard) ->

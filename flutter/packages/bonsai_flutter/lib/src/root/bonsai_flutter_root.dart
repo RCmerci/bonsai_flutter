@@ -287,7 +287,9 @@ final class _BonsaiFlutterRootState extends State<BonsaiFlutterRoot> {
         try {
           final runtime = _runtime;
           if (runtime == null) return;
-          final events = _events?.prepareBatch();
+          final events = _events?.prepareBatch(
+            runtimeControlRevision: pending.revision,
+          );
           final eventBatch = events?.encodedBytes ?? Uint8List(0);
           _displayedRevision = pending.revision;
           runtime.presentationSucceeded(

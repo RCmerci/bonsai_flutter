@@ -57,7 +57,7 @@ let update_item state id update =
 ;;
 
 let component handlers graph =
-  let state, set_state = Bonsai.state' ~equal initial graph in
+  let state, set_state = Bonsai_v017.state ~equal initial graph in
   let add =
     Driver.Handler.create
       handlers
@@ -93,18 +93,18 @@ let component handlers graph =
       handlers
       ~name:"todo-scroll"
       ~equal:Unit.equal
-      (Bonsai.return ())
+      (Bonsai.Cont.return ())
       ~f:(fun () _ -> Bonsai.Effect.Ignore)
   in
-  let items = Bonsai.map state ~f:(fun state -> state.items) in
-  let selected = Bonsai.map state ~f:(fun state -> state.selected) in
+  let items = Bonsai.Cont.map state ~f:(fun state -> state.items) in
+  let selected = Bonsai.Cont.map state ~f:(fun state -> state.selected) in
   let rows =
-    Bonsai.assoc_list
+    Bonsai.Cont.assoc_list
       (module Core.Int)
       items
       ~get_key:(fun item -> item.id)
       ~f:(fun item_id item _graph ->
-        let dependencies = Bonsai.both set_state item_id in
+        let dependencies = Bonsai.Cont.both set_state item_id in
         let equal_dependencies (left_set_state, left_id) (right_set_state, right_id) =
           left_set_state == right_set_state && Int.equal left_id right_id
         in
@@ -166,7 +166,7 @@ let component handlers graph =
             handlers
             ~name:"todo-submit"
             ~equal:Unit.equal
-            (Bonsai.return ())
+            (Bonsai.Cont.return ())
             ~f:(fun () _ -> Bonsai.Effect.Ignore)
         in
         let focus =
@@ -181,23 +181,23 @@ let component handlers graph =
             | Ui.Event.Payload.Bool false | _ -> Bonsai.Effect.Ignore)
         in
         let primary_handlers =
-          Bonsai.map2 select toggle ~f:(fun select toggle -> select, toggle)
+          Bonsai.Cont.map2 select toggle ~f:(fun select toggle -> select, toggle)
         in
         let edit_handlers =
-          Bonsai.map2 delete edit ~f:(fun delete edit -> delete, edit)
+          Bonsai.Cont.map2 delete edit ~f:(fun delete edit -> delete, edit)
         in
         let input_handlers =
-          Bonsai.map2 submit focus ~f:(fun submit focus -> submit, focus)
+          Bonsai.Cont.map2 submit focus ~f:(fun submit focus -> submit, focus)
         in
         let row_handlers =
-          Bonsai.map2
+          Bonsai.Cont.map2
             primary_handlers
-            (Bonsai.both edit_handlers input_handlers)
+            (Bonsai.Cont.both edit_handlers input_handlers)
             ~f:(fun (select, toggle) ((delete, edit), (submit, focus)) ->
               select, toggle, delete, edit, submit, focus)
         in
-        Bonsai.map2
-          (Bonsai.both item selected)
+        Bonsai.Cont.map2
+          (Bonsai.Cont.both item selected)
           row_handlers
           ~f:(fun (item, selected) (select, toggle, delete, edit, submit, focus) ->
             let key = Ui.Key.int item.id in
@@ -239,10 +239,12 @@ let component handlers graph =
       graph
   in
   let static_handlers =
-    Bonsai.map2 (Bonsai.both add reverse) scroll ~f:(fun (add, reverse) scroll ->
-      add, reverse, scroll)
+    Bonsai.Cont.map2
+      (Bonsai.Cont.both add reverse)
+      scroll
+      ~f:(fun (add, reverse) scroll -> add, reverse, scroll)
   in
-  Bonsai.map2 rows static_handlers ~f:(fun rows (add, reverse, scroll) ->
+  Bonsai.Cont.map2 rows static_handlers ~f:(fun rows (add, reverse, scroll) ->
     let rows =
       match rows with
       | `Ok rows -> rows

@@ -22,15 +22,14 @@ protocol, or application-specific state in Dart.
 
 The locked OCaml stack is:
 
-- OCaml 5.3.0;
+- OCaml 5.1.1;
 - Dune 3.17 or newer;
-- Bonsai and Core `v0.18~preview.130.106+341`;
+- Jane Street packages from the `v0.17.x` release line;
 - `ppxlib` 0.35.0.
 
-OCaml 5.3.0 is the newest stable compiler accepted by the complete selected
-dependency graph. The compiler is pinned consistently in `.ocaml-version`,
-`dune-project`, and the opam manifests. There is no separate compiler or
-reduced-feature build path.
+OCaml 5.1.1 is pinned consistently in `.ocaml-version`, `dune-project`, and
+the opam manifests. Host and iPhoneOS builds use the same compiler version and
+the same Jane Street release line.
 
 The measured Flutter stack is Flutter 3.44.8 with Dart 3.12.2 and the current
 `package_ffi` build-hook model.
@@ -40,41 +39,23 @@ The measured Flutter stack is Flutter 3.44.8 with Dart 3.12.2 and the current
 From the repository root:
 
 ```sh
-opam switch create . ocaml-base-compiler.5.3.0 --no-install
-opam repository add --switch=. janestreet-bleeding \
-  git+https://github.com/janestreet/opam-repository.git#6789b91abef324f0f9dc2a07332afc4843c7dbe5 \
-  --rank=2
-opam repository add --switch=. janestreet-bleeding-external \
-  git+https://github.com/janestreet/opam-repository.git#a577fc24cba311814e5088a0f6851c65b5cf8dc1 \
-  --rank=1
-
-repository_root="$PWD"
-basement_source="$(opam var --switch=. prefix)/.bonsai-flutter/basement"
-mkdir -p "$(dirname "$basement_source")"
-git clone https://github.com/janestreet/basement.git "$basement_source"
-git -C "$basement_source" checkout 5c640c230a3989f8e505cda7aa6aca9925a23a5b
-git -C "$basement_source" apply \
-  "$repository_root/vendor/patches/basement-macos.patch"
-opam pin add --switch=. basement "file://$basement_source" \
-  --with-version=v0.18~preview.130.106+341 --yes
-
-OCAMLPARAM='_,keywords=4.14' \
-  opam install --switch=. . --deps-only --with-test --yes
+opam switch create . ocaml-base-compiler.5.1.1 --no-install
+opam install --switch=. . --deps-only --with-test --yes
 eval "$(opam env --switch=. --set-switch)"
 ```
 
-The `OCAMLPARAM` setting is needed only while compiling an upstream source
-that uses `effect` as an identifier. Normal project builds do not require it.
-The small macOS `basement` patch is documented in
-[`vendor/patches`](vendor/patches/README.md).
+The opam constraints keep Bonsai, Core, and their Jane Street dependency
+closure below `v0.18`.
 
 ## Minimal Counter
 
 The Counter model, handler, and view all live in OCaml:
 
 ```ocaml
+module Ui = Bonsai_flutter_ui
+
 let component handlers graph =
-  let count, set_count = Bonsai.state' ~equal:Int.equal 0 graph in
+  let count, set_count = Bonsai_v017.state ~equal:Int.equal 0 graph in
   let increment =
     Driver.Handler.create
       handlers
@@ -85,16 +66,16 @@ let component handlers graph =
         | Event.Payload.Unit -> set_count (fun count -> count + 1)
         | _ -> Bonsai.Effect.Ignore)
   in
-  Bonsai.map2 count increment ~f:(fun count increment ->
-    Material.scaffold
-      ~app_bar:(Material.app_bar ~title:(Widget.text "Counter") ())
+  Bonsai.Cont.map2 count increment ~f:(fun count increment ->
+    Ui.Material.scaffold
+      ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Counter") ())
       ~body:
-        (Widget.center
-           (Widget.column
-              [ Widget.text (Printf.sprintf "Count: %d" count)
-              ; Material.elevated_button
+        (Ui.Widget.center
+           (Ui.Widget.column
+              [ Ui.Widget.text (Printf.sprintf "Count: %d" count)
+              ; Ui.Material.elevated_button
                   ~on_press:increment
-                  ~child:(Widget.text "Increment")
+                  ~child:(Ui.Widget.text "Increment")
                   ()
               ]))
       ())
@@ -119,9 +100,14 @@ under `_build/native-artifacts/counter/`, where the package build hook links it
 into the application. No dylib is copied manually. Run `make native-objects` to
 build and stage every standalone example object.
 
+The [`Clock`](examples/clock/README.md) example demonstrates exact,
+approximate, and manually sampled logical time, one-shot timers, all four
+`Bonsai.Clock.every` policies, and presentation-aware frame waits. Its Dart
+shell remains mechanical; OCaml owns the schedules, statuses, history, and UI.
+
 ## Testing
 
-Run the complete OCaml 5.3.0 gate:
+Run the complete OCaml 5.1.1 gate:
 
 ```sh
 make ci-ocaml
@@ -180,15 +166,18 @@ without rewriting the controller. See
 
 ## Platform status
 
-macOS arm64 is the only tested platform. On the recorded macOS 26.5.2 arm64
-host, the Counter built and launched in Debug, Profile, and Release, the
-native symbols and signatures were verified, and real FFI integration tests
-passed. A lower macOS deployment target is not claimed because the measured
-upstream objects were compiled on macOS 26.
+macOS arm64 is tested end to end. On the recorded macOS 26.5.2 arm64 host,
+the Counter builds in Debug, Profile, and Release, native symbols and
+signatures are verified, and the cross-language integration suite passes.
 
-Linux, Windows, Android, and iOS are architectural targets only. They are not
-marked supported until their native builds and integration suites pass.
-Flutter Web is out of scope.
+iPhoneOS arm64 is supported for unsigned packaging with a minimum iOS 13.0.
+The locked OCaml 5.1.1 cross compiler builds every standalone example and the
+aggregate integration entrypoint, and the resulting complete objects are
+audited as platform `IOS`. Signed physical-device execution still requires
+repository-external Apple signing material. iOS Simulator is unsupported.
+
+Linux, Windows, and Android remain architectural targets. Flutter Web is out
+of scope.
 
 ## Examples
 
@@ -199,8 +188,7 @@ renderer registration, and native-library initialization.
 
 ## Current limitations and roadmap
 
-- Only the recorded macOS arm64 host is tested.
-- The selected upstream `basement` revision needs the documented macOS patch.
+- macOS arm64 and unsigned iPhoneOS arm64 packaging are the validated targets.
 - The generic virtual-list prototype is intended for cached visible windows,
   not synchronous per-row FFI calls.
 - Platform packaging and integration coverage will expand to Linux, Windows,

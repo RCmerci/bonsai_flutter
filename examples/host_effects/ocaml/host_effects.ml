@@ -2,7 +2,7 @@ module Ui = Bonsai_flutter_ui
 
 let component handlers graph =
   let status, set_status =
-    Bonsai.state' ~equal:String.equal "No host request has run" graph
+    Bonsai_v017.state ~equal:String.equal "No host request has run" graph
   in
   let host = Driver.Handler.host_effects handlers in
   let read_clipboard =
@@ -30,9 +30,9 @@ let component handlers graph =
           | Error _ -> set_status (fun _ -> "Clipboard write failed")))
   in
   let handlers =
-    Bonsai.map2 read_clipboard write_clipboard ~f:(fun read write -> read, write)
+    Bonsai.Cont.map2 read_clipboard write_clipboard ~f:(fun read write -> read, write)
   in
-  Bonsai.map2 status handlers ~f:(fun status (read_clipboard, write_clipboard) ->
+  Bonsai.Cont.map2 status handlers ~f:(fun status (read_clipboard, write_clipboard) ->
     Ui.Material.scaffold
       ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Host effects") ())
       ~body:

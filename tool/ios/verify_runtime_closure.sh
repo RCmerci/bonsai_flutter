@@ -29,7 +29,7 @@ require_command wc
 
 host_switch=${HOST_OCAML_SWITCH:-}
 test -n "$host_switch" ||
-  fail "HOST_OCAML_SWITCH must name the pinned native OCaml 5.3.0 switch"
+  fail "HOST_OCAML_SWITCH must name the pinned native OCaml 5.1.1 switch"
 test -f "$closure_lock" || fail "missing closure lock: $closure_lock"
 
 temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/bonsai-flutter-ios-closure.XXXXXX")
@@ -70,18 +70,20 @@ awk -F '|' '
 ' components_file="$locked_components" "$closure_lock" >"$locked_packages" ||
   fail "closure lock has an invalid row"
 
-test "$(wc -l <"$locked_packages" | tr -d ' ')" = 56 ||
-  fail "closure lock must contain 55 runtime and one target-build package"
-test "$(sort -u "$locked_packages" | wc -l | tr -d ' ')" = 56 ||
+test "$(wc -l <"$locked_packages" | tr -d ' ')" = 43 ||
+  fail "closure lock must contain 42 runtime and one target-build package"
+test "$(sort -u "$locked_packages" | wc -l | tr -d ' ')" = 43 ||
   fail "closure lock contains a duplicate source package"
-test "$(sort -u "$locked_components" | wc -l | tr -d ' ')" = 100 ||
-  fail "closure lock must contain exactly 100 package findlib components"
+test "$(sort -u "$locked_components" | wc -l | tr -d ' ')" = 70 ||
+  fail "closure lock must contain exactly 70 package findlib components"
 
 opam exec --switch="$host_switch" -- \
   ocamlfind query -recursive -p-format \
   bonsai \
   bonsai.driver \
-  bonsai_concrete.ui_incr \
+  incr_dom.ui_incr \
+  incr_dom.ui_time_source \
+  virtual_dom.ui_effect \
   core \
   threads \
   unix |
@@ -116,4 +118,4 @@ cmp -s "$locked_packages" "$resolved_packages" ||
   fail "locked package versions differ from the host switch"
 
 printf '%s\n' \
-  "iOS runtime closure verification passed: 55 runtime packages, 102 components, 1 target-build package"
+  "iOS runtime closure verification passed: 42 runtime packages, 72 components, 1 target-build package"

@@ -9,7 +9,7 @@ type 'result t
 (** [create ~time_source component] owns a new upstream driver for [component]. *)
 val create
   :  time_source:Bonsai.Time_source.t
-  -> (Bonsai.graph -> 'result Bonsai.t)
+  -> (Bonsai.Cont.graph -> 'result Bonsai.Cont.t)
   -> 'result t
 
 (** Applies pending effects, stabilizes Bonsai, and runs before-display work. *)

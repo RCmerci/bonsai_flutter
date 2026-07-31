@@ -47,7 +47,7 @@ let initial_state =
 ;;
 
 let component handlers graph =
-  let state, set_state = Bonsai.state' ~equal initial_state graph in
+  let state, set_state = Bonsai_v017.state ~equal initial_state graph in
   let edit_handler =
     Driver.Handler.create
       handlers
@@ -76,7 +76,7 @@ let component handlers graph =
       handlers
       ~name:"text-input-submit"
       ~equal:Unit.equal
-      (Bonsai.return ())
+      (Bonsai.Cont.return ())
       ~f:(fun () _ -> Bonsai.Effect.Ignore)
   in
   let focus_handler =
@@ -84,17 +84,17 @@ let component handlers graph =
       handlers
       ~name:"text-input-focus"
       ~equal:Unit.equal
-      (Bonsai.return ())
+      (Bonsai.Cont.return ())
       ~f:(fun () _ -> Bonsai.Effect.Ignore)
   in
   let text_input_handlers =
-    Bonsai.map2
+    Bonsai.Cont.map2
       edit_handler
-      (Bonsai.both submit_handler focus_handler)
+      (Bonsai.Cont.both submit_handler focus_handler)
       ~f:(fun edit_handler (submit_handler, focus_handler) ->
         edit_handler, submit_handler, focus_handler)
   in
-  Bonsai.map2
+  Bonsai.Cont.map2
     state
     text_input_handlers
     ~f:(fun state (edit_handler, submit_handler, focus_handler) ->

@@ -95,7 +95,7 @@ printf '%s\n' "$undefined_symbols" |
   grep -E '^_(fstat|lstat|stat)$' >/dev/null ||
   fail "file-timestamp reason is declared without a matching linked API"
 printf '%s\n' "$undefined_symbols" |
-  grep -Fx '_clock_gettime_nsec_np' >/dev/null ||
+  grep -E '^_(clock_gettime_nsec_np|mach_absolute_time)$' >/dev/null ||
   fail "system-boot-time reason is declared without a matching linked API"
 
 plutil -lint "$privacy_manifest" >/dev/null ||

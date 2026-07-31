@@ -3,6 +3,7 @@
 EXAMPLE ?= counter
 NATIVE_OBJECT_TARGET = examples/$(EXAMPLE)/ocaml/native_embed.exe.o
 NATIVE_OBJECT_TARGETS = \
+	examples/clock/ocaml/native_embed.exe.o \
 	examples/counter/ocaml/native_embed.exe.o \
 	examples/gallery/ocaml/native_embed.exe.o \
 	examples/host_effects/ocaml/native_embed.exe.o \
@@ -79,7 +80,7 @@ ci-contract:
 	tool/test_ci_contract.sh
 
 ci-ocaml:
-	OCAMLPARAM='_,keywords=4.14' opam install . --deps-only --with-test --yes
+	opam install . --deps-only --with-test --yes
 	dune build @all
 	dune runtest
 	dune build @fmt
@@ -103,8 +104,17 @@ ci-flutter:
 	cd flutter/integration_test && flutter pub get
 	cd flutter/integration_test && dart format --output=none --set-exit-if-changed benchmark integration_test lib test test_driver
 	cd flutter/integration_test && flutter analyze
-	@set -e; for example in counter todo text_input host_effects navigation gallery host_navigation mail; do \
-	  (cd "examples/$$example/flutter" && flutter pub get && dart format --output=none --set-exit-if-changed lib && flutter analyze); \
+	@set -e; for example in clock counter todo text_input host_effects navigation gallery host_navigation mail; do \
+	  (cd "examples/$$example/flutter" && \
+	    flutter pub get && \
+	    dart format --output=none --set-exit-if-changed lib && \
+	    if test -d test; then \
+	      dart format --output=none --set-exit-if-changed test; \
+	    fi && \
+	    flutter analyze && \
+	    if test -d test && find test -type f -name '*_test.dart' | grep -q .; then \
+	      NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost flutter test; \
+	    fi); \
 	done
 
 ci-macos: ci-ocaml

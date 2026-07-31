@@ -50,6 +50,7 @@ void main(List<String> args) async {
           '-Wl,-dead_strip',
           '-Wl,-exported_symbols_list,${exportList.toFilePath()}',
         ],
+        if (input.config.code.targetOS == OS.iOS) ...['-framework', 'Security'],
       ],
     );
     await cbuilder.run(

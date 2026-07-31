@@ -51,54 +51,92 @@
 (test
  (name public_api_tests)
  (modules public_api_tests)
- (libraries core bonsai bonsai_flutter bonsai_flutter.driver))
+ (libraries
+  base
+  core
+  bonsai
+  bonsai_flutter
+  bonsai_flutter.ui
+  bonsai_flutter.driver
+  incr_dom.ui_incr
+  incr_dom.ui_time_source
+  virtual_dom.ui_effect))
 
 (test
  (name layout_driver_tests)
  (modules layout_driver_tests)
  (libraries
+  base
   core
   bonsai
   bonsai_flutter.ui
   bonsai_flutter.protocol
-  bonsai_flutter.driver))
+  bonsai_flutter.driver
+  incr_dom.ui_incr
+  incr_dom.ui_time_source
+  virtual_dom.ui_effect))
 
 (test
  (name bonsai_runtime_adapter_tests)
  (modules bonsai_runtime_adapter_tests)
- (libraries core bonsai bonsai_flutter.runtime_adapter))
+ (libraries
+  base
+  core
+  bonsai
+  bonsai_flutter.runtime_adapter
+  incr_dom.ui_incr
+  incr_dom.ui_time_source
+  virtual_dom.ui_effect))
 
 (test
  (name frame_driven_pump_tests)
  (modules frame_driven_pump_tests)
  (libraries
+  base
   core
   bonsai
   bonsai_flutter.ui
   bonsai_flutter.protocol
   bonsai_flutter.runtime
-  bonsai_flutter.driver))
+  bonsai_flutter.driver
+  incr_dom.ui_incr
+  incr_dom.ui_time_source
+  virtual_dom.ui_effect))
 
 (test
  (name driver_counter_tests)
  (modules driver_counter_tests)
  (libraries
+  base
   core
   bonsai
   bonsai_flutter.ui
   bonsai_flutter.protocol
   bonsai_flutter.runtime
-  bonsai_flutter.driver))
+  bonsai_flutter.driver
+  incr_dom.ui_incr
+  incr_dom.ui_time_source
+  virtual_dom.ui_effect))
 
 (test
  (name test_handle_tests)
  (modules test_handle_tests)
- (libraries core bonsai bonsai_flutter.ui bonsai_flutter_test))
+ (libraries
+  base
+  core
+  bonsai
+  bonsai_flutter.ui
+  bonsai_flutter.driver
+  bonsai_flutter_test
+  incr_dom.ui_incr
+  incr_dom.ui_time_source
+  virtual_dom.ui_effect))
 
 (test
  (name native_backend_tests)
  (modules native_backend_tests)
  (libraries
+  base
   core
   bonsai
   bonsai_flutter.ui
@@ -106,15 +144,23 @@
   bonsai_flutter.driver
   bonsai_flutter.native_backend
   bonsai_flutter_mail_example
+  incr_dom.ui_incr
+  incr_dom.ui_time_source
+  virtual_dom.ui_effect
   unix))
 
 (test
  (name mail_example_tests)
  (modules mail_example_tests)
  (libraries
+  base
   core
   bonsai
   bonsai_flutter.ui
   bonsai_flutter.runtime
+  bonsai_flutter.driver
   bonsai_flutter_test
-  bonsai_flutter_mail_example))
+  bonsai_flutter_mail_example
+  incr_dom.ui_incr
+  incr_dom.ui_time_source
+  virtual_dom.ui_effect))

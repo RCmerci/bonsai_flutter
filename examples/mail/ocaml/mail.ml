@@ -302,7 +302,7 @@ let inert_handler handlers name =
     handlers
     ~name
     ~equal:Unit.equal
-    (Bonsai.return ())
+    (Bonsai.Cont.return ())
     ~f:(fun () _ -> Bonsai.Effect.Ignore)
 ;;
 
@@ -504,7 +504,7 @@ let render_mail_row ~toggle_star ~open_message ~swipe_action message =
 ;;
 
 let mail_row handlers set_state message_id message _graph =
-  let dependencies = Bonsai.both set_state message_id in
+  let dependencies = Bonsai.Cont.both set_state message_id in
   let equal_dependencies (left_set_state, left_id) (right_set_state, right_id) =
     left_set_state == right_set_state && Int.equal left_id right_id
   in
@@ -549,19 +549,22 @@ let mail_row handlers set_state message_id message _graph =
               { message with read = not message.read })))
   in
   let events =
-    Bonsai.map2
-      (Bonsai.both toggle_star open_message)
+    Bonsai.Cont.map2
+      (Bonsai.Cont.both toggle_star open_message)
       swipe_action
       ~f:(fun (toggle_star, open_message) swipe_action ->
         toggle_star, open_message, swipe_action)
   in
-  Bonsai.map2 message events ~f:(fun message (toggle_star, open_message, swipe_action) ->
-    render_mail_row ~toggle_star ~open_message ~swipe_action message)
+  Bonsai.Cont.map2
+    message
+    events
+    ~f:(fun message (toggle_star, open_message, swipe_action) ->
+      render_mail_row ~toggle_star ~open_message ~swipe_action message)
 ;;
 
 let inbox_page handlers rows =
   let scroll = inert_handler handlers "mail-list-scroll" in
-  Bonsai.map2 rows scroll ~f:(fun rows scroll ->
+  Bonsai.Cont.map2 rows scroll ~f:(fun rows scroll ->
     let rows =
       match rows with
       | `Ok rows -> rows
@@ -830,7 +833,7 @@ let render_detail_page
 ;;
 
 let detail_page handlers set_state message_id detail _graph =
-  let dependencies = Bonsai.both set_state message_id in
+  let dependencies = Bonsai.Cont.both set_state message_id in
   let equal_dependencies (left_set_state, left_id) (right_set_state, right_id) =
     left_set_state == right_set_state && Int.equal left_id right_id
   in
@@ -889,22 +892,22 @@ let detail_page handlers set_state message_id detail _graph =
   in
   let scroll = inert_handler handlers "mail-detail-scroll" in
   let toolbar_handlers =
-    Bonsai.map2
-      (Bonsai.both back archive)
-      (Bonsai.both delete mark_unread)
+    Bonsai.Cont.map2
+      (Bonsai.Cont.both back archive)
+      (Bonsai.Cont.both delete mark_unread)
       ~f:(fun (back, archive) (delete, mark_unread) -> back, archive, delete, mark_unread)
   in
   let message_actions =
-    Bonsai.map2 toggle_star reply ~f:(fun toggle_star reply -> toggle_star, reply)
+    Bonsai.Cont.map2 toggle_star reply ~f:(fun toggle_star reply -> toggle_star, reply)
   in
   let page_events =
-    Bonsai.map2
+    Bonsai.Cont.map2
       toolbar_handlers
-      (Bonsai.both message_actions scroll)
+      (Bonsai.Cont.both message_actions scroll)
       ~f:(fun (back, archive, delete, mark_unread) ((toggle_star, reply), scroll) ->
         back, archive, delete, mark_unread, toggle_star, reply, scroll)
   in
-  Bonsai.map2
+  Bonsai.Cont.map2
     detail
     page_events
     ~f:
@@ -923,15 +926,14 @@ let detail_page handlers set_state message_id detail _graph =
         ~notice
         message)
 ;;
-
 let component handlers graph =
-  let state, set_state = Bonsai.state' ~equal:equal_state initial graph in
+  let state, set_state = Bonsai_v017.state ~equal:equal_state initial graph in
   let visible_messages =
-    Bonsai.map state ~f:(fun state ->
+    Bonsai.Cont.map state ~f:(fun state ->
       List.filter (fun message -> message.mailbox = Inbox) state.messages)
   in
   let rows =
-    Bonsai.assoc_list
+    Bonsai.Cont.assoc_list
       (module Core.Int)
       visible_messages
       ~get_key:(fun message -> message.id)
@@ -940,7 +942,7 @@ let component handlers graph =
   in
   let inbox = inbox_page handlers rows in
   let selected_details =
-    Bonsai.map state ~f:(fun state ->
+    Bonsai.Cont.map state ~f:(fun state ->
       match state.selected_id with
       | None -> []
       | Some message_id ->
@@ -949,7 +951,7 @@ let component handlers graph =
          | Some message -> [ message, state.notice ]))
   in
   let detail_pages =
-    Bonsai.assoc_list
+    Bonsai.Cont.assoc_list
       (module Core.Int)
       selected_details
       ~get_key:(fun (message, _) -> message.id)
@@ -972,13 +974,13 @@ let component handlers graph =
       | _ -> Bonsai.Effect.Ignore)
   in
   let pages =
-    Bonsai.map2 inbox detail_pages ~f:(fun inbox detail_pages ->
+    Bonsai.Cont.map2 inbox detail_pages ~f:(fun inbox detail_pages ->
       match detail_pages with
       | `Ok detail_pages -> inbox :: detail_pages
       | `Duplicate_key message_id ->
         invalid_arg (Printf.sprintf "Mail: duplicate selected message ID %d" message_id))
   in
-  Bonsai.map2 pages on_pop ~f:(fun pages on_pop ->
+  Bonsai.Cont.map2 pages on_pop ~f:(fun pages on_pop ->
     Ui.Widget.navigator ~restoration_scope_id:"bonsai-mail" ~on_pop pages
     |> Ui.Widget.constrained_box
          ~constraints:(Ui.Layout.Box_constraints.create ~max_width:720. ())

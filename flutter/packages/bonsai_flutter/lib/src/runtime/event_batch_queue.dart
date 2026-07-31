@@ -126,8 +126,21 @@ final class EventBatchQueue {
     return batch;
   }
 
-  PreparedEventBatch prepareBatch() {
-    final events = List<UiEvent>.of(_pending);
+  PreparedEventBatch prepareBatch({int? runtimeControlRevision}) {
+    final events = [
+      for (final event in _pending)
+        if (runtimeControlRevision != null && _isRuntimeControl(event.eventTag))
+          UiEvent(
+            sequence: event.sequence,
+            displayedRevision: runtimeControlRevision,
+            nodeId: event.nodeId,
+            handlerId: event.handlerId,
+            eventTag: event.eventTag,
+            payload: event.payload,
+          )
+        else
+          event,
+    ];
     final batch = EventBatch(runtimeEpoch: runtimeEpoch, events: events);
     return PreparedEventBatch._(
       owner: this,
@@ -172,3 +185,8 @@ final class EventBatchQueue {
 bool _isCoalescible(int eventTag) =>
     eventTag == EventTagId.scrollNotification ||
     eventTag == EventTagId.visibleRangeChanged;
+
+bool _isRuntimeControl(int eventTag) =>
+    eventTag == EventTagId.hostResponse ||
+    eventTag == EventTagId.environmentChanged ||
+    eventTag == EventTagId.resyncRequested;

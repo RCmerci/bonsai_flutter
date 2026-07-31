@@ -49,15 +49,14 @@ require_exact_installed_version() {
     fail "$package version is $actual, expected $expected"
 }
 
-require_opam_source_revision() {
+require_opam_release_source() {
   package=$1
   version=$2
-  revision=$3
   metadata=$(opam show --raw "$package.$version" 2>/dev/null) ||
     fail "unable to read opam metadata for $package.$version"
   require_text \
     "$metadata" \
-    "$package/archive/$revision.tar.gz" \
+    "https://github.com/janestreet/$package/archive/refs/tags/$version.tar.gz" \
     "$package source metadata"
 }
 
@@ -69,22 +68,31 @@ require_sha256() {
     fail "$path SHA-256 is $actual, expected $expected"
 }
 
-upstream_version='v0.18~preview.130.106+341'
-require_exact_installed_version bonsai "$upstream_version"
-require_exact_installed_version bonsai_concrete "$upstream_version"
-require_exact_installed_version incremental "$upstream_version"
-require_opam_source_revision \
-  bonsai \
-  "$upstream_version" \
-  f31661450eb133fe89564219d97669c2735c6622
-require_opam_source_revision \
-  bonsai_concrete \
-  "$upstream_version" \
-  10601f857306e691462fa049cb8b58c162d86cca
-require_opam_source_revision \
-  incremental \
-  "$upstream_version" \
-  98b5750ec3c006641351bfd858a89136a5dbc52c
+test "$(ocamlc -version)" = "5.1.1" ||
+  fail "OCaml version is $(ocamlc -version), expected 5.1.1"
+
+require_exact_installed_version base v0.17.3
+require_exact_installed_version bonsai v0.17.0
+require_exact_installed_version core v0.17.2
+require_exact_installed_version incr_dom v0.17.0
+require_exact_installed_version incremental v0.17.0
+require_exact_installed_version virtual_dom v0.17.0
+for package in bonsai incr_dom incremental virtual_dom; do
+  require_opam_release_source "$package" v0.17.0
+done
+require_opam_release_source core v0.17.2
+require_opam_release_source base v0.17.3
+
+unexpected_release_train_versions=$(
+  opam list --installed --short --columns=name,version |
+    awk \
+      '$2 ~ /^v0[.]/ &&
+       $1 != "ocaml-compiler-libs" &&
+       $2 !~ /^v0[.]17([.-]|$)/ { print }'
+)
+test -z "$unexpected_release_train_versions" ||
+  fail "installed Jane Street release-train packages are not v0.17.x:
+$unexpected_release_train_versions"
 
 flutter_metadata=$(flutter --version --machine)
 require_text "$flutter_metadata" '"frameworkVersion": "3.44.8"' "Flutter metadata"
@@ -94,30 +102,40 @@ require_text \
   "Flutter metadata"
 
 upstream_baseline=$(cat docs/upstream-baseline.md)
-for revision in \
-  f31661450eb133fe89564219d97669c2735c6622 \
-  10601f857306e691462fa049cb8b58c162d86cca \
-  98b5750ec3c006641351bfd858a89136a5dbc52c \
+for version in \
+  "OCaml | 5.1.1" \
+  "Bonsai | v0.17.0" \
+  "Core | v0.17.2" \
+  "Base | v0.17.3" \
   058e0af2c2b57e369d905a03ac9748b0ebf543c6
 do
-  require_text "$upstream_baseline" "$revision" "upstream baseline"
+  require_text "$upstream_baseline" "$version" "upstream baseline"
 done
 
 patch_files=$(
   find . \
     -path './.git' -prune -o \
     -path './_build' -prune -o \
+    -path './_build-v017' -prune -o \
     -type f \( -name '*.patch' -o -name '*.diff' \) -print |
     LC_ALL=C sort
 )
-expected_patch_files='./vendor/patches/basement-macos.patch
+expected_patch_files='./vendor/opam-ios/ocaml-ios64.5.1.1/files/ocamlmklib-failsafe.patch
+./vendor/patches/basement-macos.patch
+./vendor/patches/ios/base-host-generator.patch
 ./vendor/patches/ios/jst-config-host-discover.patch'
 test "$patch_files" = "$expected_patch_files" ||
   fail "upstream patch allowlist changed:
 $patch_files"
 require_sha256 \
+  vendor/opam-ios/ocaml-ios64.5.1.1/files/ocamlmklib-failsafe.patch \
+  2e087a1cccc6514af07559a688ffc17c651a2bb5b2a67d115cc28051f2e89767
+require_sha256 \
   vendor/patches/basement-macos.patch \
   1c97bd1e3ad6eeefe30fce6a81a06ed4685fdef95efb53e67cd9389b6201327b
+require_sha256 \
+  vendor/patches/ios/base-host-generator.patch \
+  e919f3c5ec1e6a546a6e499ed262d309055fd0c856d7c216d3609b7d64ca47b5
 require_sha256 \
   vendor/patches/ios/jst-config-host-discover.patch \
   d1d9fbbf8df8f8e315fad1a834352a5a80e948e62012a104d5362461f195df78
@@ -126,7 +144,6 @@ if find vendor \
   -type d \
   \( \
     -name bonsai -o \
-    -name bonsai_concrete -o \
     -name incremental -o \
     -name incr_dom -o \
     -name flutter \
@@ -145,11 +162,11 @@ dependency_control_text=$(cat \
   tool/macos/*.sh)
 reject_pattern \
   "$dependency_control_text" \
-  'opam[[:space:]]+pin[[:space:]]+add[[:space:]]+(bonsai|bonsai_concrete|incremental|incr_dom)' \
+  'opam[[:space:]]+pin[[:space:]]+add[[:space:]]+(bonsai|incremental|incr_dom)' \
   "dependency controls"
 reject_pattern \
   "$dependency_control_text" \
-  'file://[^[:space:]]*(bonsai|bonsai_concrete|incremental|incr_dom)' \
+  'file://[^[:space:]]*(bonsai|incremental|incr_dom)' \
   "dependency controls"
 
 runtime_source=$(cat \
@@ -190,6 +207,10 @@ flutter_commands=$(dry_run_target ci-flutter)
 require_text "$flutter_commands" "dart format --output=none --set-exit-if-changed" "ci-flutter"
 require_text "$flutter_commands" "flutter analyze" "ci-flutter"
 require_text "$flutter_commands" "flutter test" "ci-flutter"
+require_text \
+  "$flutter_commands" \
+  "find test -type f -name '*_test.dart'" \
+  "ci-flutter example test discovery"
 require_text "$flutter_commands" "dart run tool/generate_input_fixtures.dart --check" "ci-flutter"
 require_text "$flutter_commands" "dart run ffigen --config ffigen.yaml" "ci-flutter"
 require_text "$flutter_commands" "git diff --exit-code" "ci-flutter"
@@ -224,6 +245,16 @@ require_text "$ios_commands" "flutter build ios --release --no-codesign" "ci-ios
 require_text "$ios_commands" "tool/ios/verify_app_bundle.sh" "ci-ios"
 reject_text "$ios_commands" "simulator" "ci-ios"
 
+native_hook_source=$(tr -d '[:space:]' < flutter/packages/bonsai_flutter_native/hook/build.dart)
+require_text "$native_hook_source" "'-framework','Security'" "iOS native hook"
+ios_probe_source=$(cat tool/ios/build_probe.sh)
+require_text "$ios_probe_source" "-framework Security" "iOS cross probe"
+ios_bundle_verifier_source=$(cat tool/ios/verify_app_bundle.sh)
+require_text \
+  "$ios_bundle_verifier_source" \
+  "mach_absolute_time" \
+  "iOS app-bundle privacy verifier"
+
 ios_device_commands=$(dry_run_target ci-ios-device)
 require_text "$ios_device_commands" "IOS_DEVICE_ID" "ci-ios-device"
 require_text "$ios_device_commands" "tool/ios/run_device_tests.sh" "ci-ios-device"
@@ -246,7 +277,14 @@ require_text \
   "$single_native_object_commands" \
   "tool/macos/stage_native_objects.sh example mail" \
   "native-object"
-for example in counter gallery host_effects host_navigation mail navigation text_input todo; do
+require_file examples/clock/README.md
+require_file examples/clock/ocaml/clock.ml
+require_file examples/clock/ocaml/clock.mli
+require_file examples/clock/ocaml/dune
+require_file examples/clock/ocaml/native_embed.ml
+require_file examples/clock/flutter/lib/main.dart
+require_file examples/clock/flutter/pubspec.yaml
+for example in clock counter gallery host_effects host_navigation mail navigation text_input todo; do
   require_file "examples/$example/ocaml/native_embed.ml"
   require_text \
     "$native_object_commands" \
@@ -298,6 +336,7 @@ require_text \
 
 ffi_dune=$(cat ocaml/ffi/dune)
 for example_library in \
+  bonsai_flutter_clock_example \
   bonsai_flutter_counter_example \
   bonsai_flutter_gallery \
   bonsai_flutter_host_effects_example \
@@ -368,7 +407,7 @@ ios_workflow_text=$(cat \
 ios_hosted_workflow_text=$(cat .github/workflows/ios.yml)
 ios_device_workflow_text=$(cat .github/workflows/ios-device.yml)
 
-require_text "$workflow_text" "ocaml-compiler: 5.3.0" "workflows"
+require_text "$workflow_text" "ocaml-compiler: 5.1.1" "workflows"
 require_text "$workflow_text" "make ci-ocaml" "workflows"
 require_text "$workflow_text" "make ci-flutter" "workflows"
 require_text "$workflow_text" "make ci-macos" "workflows"
@@ -397,6 +436,9 @@ require_text \
   "if: always()" \
   "physical-device workflow"
 reject_text "$workflow_text" "continue-on-error: true" "workflows"
+reject_text "$workflow_text" "OCAMLPARAM" "workflows"
+reject_text "$workflow_text" "janestreet-bleeding" "workflows"
+reject_text "$workflow_text" "ocaml-compiler: 5.3.0" "workflows"
 reject_text "$ios_workflow_text" "_build/default" "iOS workflows"
 reject_text "$ios_device_workflow_text" "pull_request_target" "physical-device workflow"
 reject_text "$ios_device_workflow_text" "pull_request:" "physical-device workflow"

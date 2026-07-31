@@ -4,7 +4,7 @@ let require condition message = if not condition then failwith message
 
 let component context _graph =
   let environment = Ui.App.Context.environment context in
-  Bonsai.map environment ~f:(fun environment ->
+  Bonsai.Cont.map environment ~f:(fun environment ->
     Ui.Widget.text
       (Printf.sprintf
          "%.0fx%.0f"

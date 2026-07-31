@@ -72,6 +72,7 @@ clang=$(xcrun --sdk "$sdk" --find clang)
   "$object" \
   -framework Foundation \
   -framework UIKit \
+  -framework Security \
   -o "$executable"
 
 "$script_directory/verify_macho.sh" \

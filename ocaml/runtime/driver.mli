@@ -21,21 +21,25 @@ module Handler : sig
     :  t
     -> ?name:string
     -> equal:('dependencies -> 'dependencies -> bool)
-    -> 'dependencies Bonsai.t
+    -> 'dependencies Bonsai.Cont.t
     -> f:('dependencies -> Bonsai_flutter_ui.Event.Payload.t -> unit Bonsai.Effect.t)
-    -> Bonsai_flutter_ui.Event.Handler.t Bonsai.t
+    -> Bonsai_flutter_ui.Event.Handler.t Bonsai.Cont.t
 
   val create_native
     :  t
     -> ?name:string
     -> ('props, 'event) Bonsai_flutter_ui.Native_widget.Extension.t
     -> equal:('dependencies -> 'dependencies -> bool)
-    -> 'dependencies Bonsai.t
+    -> 'dependencies Bonsai.Cont.t
     -> f:('dependencies -> 'event -> unit Bonsai.Effect.t)
-    -> Bonsai_flutter_ui.Event.Handler.t Bonsai.t
+    -> Bonsai_flutter_ui.Event.Handler.t Bonsai.Cont.t
 
   val host_effects : t -> Host_effect.t
   val environment : t -> Environment.t
+
+  (** Returns an effect that completes during the next pump after Bonsai has
+      applied input actions and before the candidate frame is reconciled. *)
+  val wait_before_display : t -> unit Bonsai.Effect.t
 end
 
 type frame =
@@ -76,7 +80,7 @@ val create
   :  ?trace:(string -> unit)
   -> runtime_epoch:int64
   -> time_source:Bonsai.Time_source.t
-  -> (Handler.t -> Bonsai.graph -> Bonsai_flutter_ui.Widget.t Bonsai.t)
+  -> (Handler.t -> Bonsai.Cont.graph -> Bonsai_flutter_ui.Widget.t Bonsai.Cont.t)
   -> t
 
 (** Advances logical time, consumes at most one atomic input batch, flushes

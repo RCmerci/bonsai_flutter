@@ -37,7 +37,7 @@ type snapshot =
 
 type t
 
-val value : t -> snapshot Bonsai.t
+val value : t -> snapshot Bonsai.Cont.t
 
 module Private : sig
   val create : unit -> t

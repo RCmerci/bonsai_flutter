@@ -1,12 +1,12 @@
 module Ui = Bonsai_flutter_ui
 
 let component _handlers graph =
-  let phase, set_phase = Bonsai.state' ~equal:Int.equal 0 graph in
-  let sleep = Bonsai.Clock.sleep graph in
+  let phase, set_phase = Bonsai_v017.state ~equal:Int.equal 0 graph in
+  let sleep = Bonsai.Cont.Clock.sleep graph in
   let after_display =
-    Bonsai.map2
+    Bonsai.Cont.map2
       phase
-      (Bonsai.map2 set_phase sleep ~f:(fun set_phase sleep -> set_phase, sleep))
+      (Bonsai.Cont.map2 set_phase sleep ~f:(fun set_phase sleep -> set_phase, sleep))
       ~f:(fun phase (set_phase, sleep) ->
         if phase = 0
         then
@@ -18,7 +18,7 @@ let component _handlers graph =
             ]
         else Bonsai.Effect.Ignore)
   in
-  Bonsai.Edge.lifecycle ~after_display graph;
-  Bonsai.map phase ~f:(fun phase ->
+  Bonsai.Cont.Edge.lifecycle ~after_display graph;
+  Bonsai.Cont.map phase ~f:(fun phase ->
     Ui.Widget.text (Printf.sprintf "Autonomous phase %d" phase))
 ;;

@@ -4,22 +4,8 @@ type 'result t =
   ; mutable is_shutdown : bool
   }
 
-let instrumentation () =
-  { Bonsai.Private.Instrumentation.Config.instrument_for_computation_watcher =
-      Ui_incr.Incr.return Bonsai.Private.Instrumentation.Watching.Not_watching
-  ; instrument_for_profiling =
-      Ui_incr.Incr.return Bonsai.Private.Instrumentation.Profiling.Not_profiling
-  ; set_latest_graph_info = (fun _ -> ())
-  ; computation_watcher_queue = Core.Queue.create ()
-  ; start_timer = (fun _ -> ())
-  ; stop_timer = (fun () -> ())
-  }
-;;
-
 let create ~time_source component =
-  let driver =
-    Bonsai_driver.create ~instrumentation:(instrumentation ()) ~time_source component
-  in
+  let driver = Bonsai_driver.create ~clock:time_source component in
   { driver; time_source; is_shutdown = false }
 ;;
 

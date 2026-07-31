@@ -2,7 +2,13 @@
  (name bonsai_flutter_host_effects_example)
  (wrapped false)
  (modules host_effects)
- (libraries bonsai bonsai_flutter.ui bonsai_flutter.driver))
+ (libraries
+  base
+  bonsai
+  bonsai_flutter.ui
+  bonsai_flutter.driver
+  incr_dom.ui_incr
+  virtual_dom.ui_effect))
 
 (executable
  (name native_embed)

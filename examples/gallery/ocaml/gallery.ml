@@ -135,28 +135,33 @@ let make_handlers registry set_model =
         { model with interaction_status = Printf.sprintf "Scroll offset: %.0f" pixels }
       | _ -> model)
   in
-  let first_pair = Bonsai.map2 press toggle ~f:(fun press toggle -> press, toggle) in
+  let first_pair = Bonsai.Cont.map2 press toggle ~f:(fun press toggle -> press, toggle) in
   let second_pair =
-    Bonsai.map2 text_edit text_submit ~f:(fun text_edit text_submit ->
+    Bonsai.Cont.map2 text_edit text_submit ~f:(fun text_edit text_submit ->
       text_edit, text_submit)
   in
   let third_pair =
-    Bonsai.map2 focus_changed interaction ~f:(fun focus_changed interaction ->
+    Bonsai.Cont.map2 focus_changed interaction ~f:(fun focus_changed interaction ->
       focus_changed, interaction)
   in
-  let fourth_pair = Bonsai.map2 native scroll ~f:(fun native scroll -> native, scroll) in
+  let fourth_pair =
+    Bonsai.Cont.map2 native scroll ~f:(fun native scroll -> native, scroll)
+  in
   let first_half =
-    Bonsai.map2 first_pair second_pair ~f:(fun (press, toggle) (text_edit, text_submit) ->
-      press, toggle, text_edit, text_submit)
+    Bonsai.Cont.map2
+      first_pair
+      second_pair
+      ~f:(fun (press, toggle) (text_edit, text_submit) ->
+        press, toggle, text_edit, text_submit)
   in
   let second_half =
-    Bonsai.map2
+    Bonsai.Cont.map2
       third_pair
       fourth_pair
       ~f:(fun (focus_changed, interaction) (native, scroll) ->
         focus_changed, interaction, native, scroll)
   in
-  Bonsai.map2
+  Bonsai.Cont.map2
     first_half
     second_half
     ~f:
@@ -384,7 +389,7 @@ let view model handlers =
 ;;
 
 let component registry graph =
-  let model, set_model = Bonsai.state' ~equal:equal_model initial_model graph in
+  let model, set_model = Bonsai_v017.state ~equal:equal_model initial_model graph in
   let handlers = make_handlers registry set_model in
-  Bonsai.map2 model handlers ~f:view
+  Bonsai.Cont.map2 model handlers ~f:view
 ;;

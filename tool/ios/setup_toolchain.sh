@@ -12,6 +12,7 @@ opam_root="$repository_root/_build/ios/opam-root"
 switch_root="$repository_root/_build/ios/switches"
 source_root="$repository_root/_build/ios/sources"
 cross_repository="$source_root/opam-cross-ios"
+overlay_repository="$source_root/opam-ios-overlay"
 
 fail() {
   printf '%s\n' "iOS toolchain setup failure: $1" >&2
@@ -54,6 +55,10 @@ ensure_cross_repository() {
   resolved_commit=$(git -C "$cross_repository" rev-parse HEAD)
   test "$resolved_commit" = "$OPAM_CROSS_IOS_COMMIT" ||
     fail "opam-cross-ios checkout does not match the lock file"
+
+  "$script_directory/prepare_cross_overlay.sh" \
+    "$cross_repository" \
+    "$overlay_repository"
 }
 
 ensure_opam_root() {
@@ -75,9 +80,10 @@ create_switch() {
 
   if switch_exists "$logical_name"; then
     installed_version=$(opam_command exec --switch="$switch" -- ocamlc -version)
-    test "$installed_version" = "$OCAML_VERSION" ||
-      fail "$logical_name switch uses OCaml $installed_version, expected $OCAML_VERSION"
-    return
+    if test "$installed_version" = "$OCAML_VERSION"; then
+      return
+    fi
+    opam_command switch remove "$switch" --yes
   fi
 
   mkdir -p "$switch"
@@ -85,7 +91,7 @@ create_switch() {
     "ocaml-base-compiler.$OCAML_VERSION" \
     --no-install \
     --no-switch \
-    --repositories="ios=file://$cross_repository,janestreet-bleeding=$JANE_STREET_BLEEDING_REPOSITORY,janestreet-bleeding-external=$JANE_STREET_EXTERNAL_REPOSITORY,default=$OPAM_DEFAULT_REPOSITORY" \
+    --repositories="overlay=file://$overlay_repository,ios=file://$cross_repository,default=$OPAM_DEFAULT_REPOSITORY" \
     --yes
 }
 
@@ -97,17 +103,42 @@ install_iphoneos() {
   create_switch iphoneos
   switch=$(switch_path iphoneos)
   sdk_version=$(xcrun --sdk iphoneos --show-sdk-version)
+  recipe_marker="$switch/_opam/.bonsai-flutter-ios-recipe"
 
-  ARCH="$IPHONEOS_ARCH" \
-    SUBARCH="$IPHONEOS_SUBARCH" \
-    PLATFORM="$IPHONEOS_PLATFORM" \
-    SDK="$sdk_version" \
-    VER="$IOS_DEPLOYMENT_TARGET" \
-    opam_command install \
-      --switch="$switch" \
-      conf-ios.4 \
-      "$OCAML_IOS_PACKAGE" \
-      --yes
+  opam_command update overlay
+
+  if opam_command list \
+    --switch="$switch" \
+    --installed \
+    --short \
+    "$OCAML_IOS_PACKAGE" |
+    grep -Fx ocaml-ios64 >/dev/null 2>&1; then
+    installed_recipe_revision=$(cat "$recipe_marker" 2>/dev/null || true)
+    if test "$installed_recipe_revision" != "$OCAML_IOS_RECIPE_REVISION"; then
+      ARCH="$IPHONEOS_ARCH" \
+        SUBARCH="$IPHONEOS_SUBARCH" \
+        PLATFORM="$IPHONEOS_PLATFORM" \
+        SDK="$sdk_version" \
+        VER="$IOS_DEPLOYMENT_TARGET" \
+        opam_command reinstall \
+          --switch="$switch" \
+          "$OCAML_IOS_PACKAGE" \
+          --yes
+    fi
+  else
+    ARCH="$IPHONEOS_ARCH" \
+      SUBARCH="$IPHONEOS_SUBARCH" \
+      PLATFORM="$IPHONEOS_PLATFORM" \
+      SDK="$sdk_version" \
+      VER="$IOS_DEPLOYMENT_TARGET" \
+      opam_command install \
+        --switch="$switch" \
+        conf-ios.4 \
+        "$OCAML_IOS_PACKAGE" \
+        --yes
+  fi
+
+  printf '%s\n' "$OCAML_IOS_RECIPE_REVISION" >"$recipe_marker"
 }
 
 verify_switch() {

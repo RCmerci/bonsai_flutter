@@ -7,8 +7,8 @@ cross-machine performance guarantee.
 
 - Machine: Apple Mac Studio, Apple M4 Max, 64 GiB RAM, arm64
 - OS: macOS / Darwin 25.5.0
-- OCaml: 5.3.0
-- Dune: 3.24.0
+- OCaml: 5.1.1
+- Dune: 3.23.1
 - Flutter: 3.44.8 stable, revision `058e0af2c2`
 - Dart: 3.12.2
 - OCaml mode: Dune `release`

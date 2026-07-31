@@ -86,21 +86,21 @@ let reject driver result reason =
        ~reason)
 ;;
 
-let static_component _handlers _graph = Bonsai.return (Ui.Widget.text "static")
+let static_component _handlers _graph = Bonsai.Cont.return (Ui.Widget.text "static")
 
 let clock_component _handlers graph =
-  let deadline = Bonsai.return (at_ms 50) in
-  let before_or_after = Bonsai.Clock.at deadline graph in
-  let approx_now = Bonsai.Clock.approx_now ~tick_every:(span_ms 10) graph in
-  let exact_now = Bonsai.Clock.Expert.now graph in
+  let deadline = Bonsai.Cont.return (at_ms 50) in
+  let before_or_after = Bonsai.Cont.Clock.at deadline graph in
+  let approx_now = Bonsai.Cont.Clock.approx_now ~tick_every:(span_ms 10) graph in
+  let exact_now = Bonsai.Cont.Clock.now graph in
   let clock_values =
-    Bonsai.map2 approx_now exact_now ~f:(fun approx_now exact_now ->
+    Bonsai.Cont.map2 approx_now exact_now ~f:(fun approx_now exact_now ->
       approx_now, exact_now)
   in
-  Bonsai.map2 before_or_after clock_values ~f:(fun before_or_after (approx, exact) ->
+  Bonsai.Cont.map2 before_or_after clock_values ~f:(fun before_or_after (approx, exact) ->
     let phase =
       match before_or_after with
-      | Bonsai.Clock.Before_or_after.Before -> "before"
+      | Bonsai.Cont.Clock.Before_or_after.Before -> "before"
       | After -> "after"
     in
     Ui.Widget.text
@@ -134,10 +134,10 @@ let timer_component
       _handlers
       graph
   =
-  let clock_sleep = Bonsai.Clock.sleep graph in
-  let clock_until = Bonsai.Clock.until graph in
+  let clock_sleep = Bonsai.Cont.Clock.sleep graph in
+  let clock_until = Bonsai.Cont.Clock.until graph in
   let on_activate =
-    Bonsai.map2 clock_sleep clock_until ~f:(fun clock_sleep clock_until ->
+    Bonsai.Cont.map2 clock_sleep clock_until ~f:(fun clock_sleep clock_until ->
       let record_after pending_effect fired =
         Bonsai.Effect.bind pending_effect ~f:(fun () ->
           Bonsai.Effect.of_thunk (fun () -> Stdlib.incr fired))
@@ -153,8 +153,8 @@ let timer_component
             source_until_fired
         ])
   in
-  Bonsai.Edge.lifecycle ~on_activate graph;
-  Bonsai.return (Ui.Widget.text "timers")
+  Bonsai.Cont.Edge.lifecycle ~on_activate graph;
+  Bonsai.Cont.return (Ui.Widget.text "timers")
 ;;
 
 let test_sleep_and_until_without_input () =
@@ -192,16 +192,16 @@ let test_sleep_and_until_without_input () =
 ;;
 
 let every_component ~ticks _handlers graph =
-  Bonsai.Clock.every
+  Bonsai.Cont.Clock.every
     ~when_to_start_next_effect:`Every_multiple_of_period_non_blocking
     ~trigger_on_activate:true
-    (Bonsai.return (span_ms 10))
-    (Bonsai.return (Bonsai.Effect.of_thunk (fun () -> Stdlib.incr ticks)))
+    (span_ms 10)
+    (Bonsai.Cont.return (Bonsai.Effect.of_thunk (fun () -> Stdlib.incr ticks)))
     graph;
-  Bonsai.return (Ui.Widget.text "every")
+  Bonsai.Cont.return (Ui.Widget.text "every")
 ;;
 
-let test_every_catches_up_after_large_jump () =
+let test_every_bounds_overdue_work_and_resumes () =
   let ticks = ref 0 in
   let _, driver = create ~runtime_epoch:43L (every_component ~ticks) in
   let initial = pump driver 0L in
@@ -211,38 +211,44 @@ let test_every_catches_up_after_large_jump () =
   require
     (!ticks = 1)
     (Printf.sprintf "Clock.every did not run its activation tick (ticks=%d)" !ticks);
-  let jumped = pump driver 55_000_000L in
+  for offset = 0 to 3 do
+    let monotonic_now_ns = Int64.add 55_000_000L (Int64.of_int offset) in
+    let result = pump driver monotonic_now_ns in
+    present driver result monotonic_now_ns
+  done;
   require
     (!ticks = 2)
     (Printf.sprintf
-       "Clock.every did not run exactly once on the overdue pump (ticks=%d)"
+       "Clock.every did not bound overdue work to one tick (ticks=%d)"
        !ticks);
-  present driver jumped 55_000_000L;
-  let follow_up = pump driver 56_000_000L in
-  present driver follow_up 56_000_000L;
+  for offset = 0 to 3 do
+    let monotonic_now_ns = Int64.add 70_000_000L (Int64.of_int offset) in
+    let result = pump driver monotonic_now_ns in
+    present driver result monotonic_now_ns
+  done;
   require
-    (!ticks > 2)
-    (Printf.sprintf "Clock.every did not continue overdue catch-up (ticks=%d)" !ticks);
+    (!ticks = 3)
+    (Printf.sprintf "Clock.every did not resume on the next grid beat (ticks=%d)" !ticks);
   Driver.shutdown driver
 ;;
 
 let after_display_component ~after_displays ~wait_completions _handlers graph =
-  let phase, set_phase = Bonsai.state' ~equal:Int.equal 0 graph in
-  let wait_after_display = Bonsai.Edge.wait_after_display graph in
+  let phase, set_phase = Bonsai_v017.state ~equal:Int.equal 0 graph in
+  let wait_after_display = Bonsai.Cont.Edge.wait_after_display graph in
   let on_activate =
-    Bonsai.map wait_after_display ~f:(fun wait_after_display ->
+    Bonsai.Cont.map wait_after_display ~f:(fun wait_after_display ->
       Bonsai.Effect.bind wait_after_display ~f:(fun () ->
         Bonsai.Effect.of_thunk (fun () -> Stdlib.incr wait_completions)))
   in
   let after_display =
-    Bonsai.map set_phase ~f:(fun set_phase ->
+    Bonsai.Cont.map set_phase ~f:(fun set_phase ->
       Bonsai.Effect.Many
         [ Bonsai.Effect.of_thunk (fun () -> Stdlib.incr after_displays)
         ; set_phase (fun current -> Int.min 1 (current + 1))
         ])
   in
-  Bonsai.Edge.lifecycle ~on_activate ~after_display graph;
-  Bonsai.map phase ~f:(fun phase -> Ui.Widget.text (Printf.sprintf "phase-%d" phase))
+  Bonsai.Cont.Edge.lifecycle ~on_activate ~after_display graph;
+  Bonsai.Cont.map phase ~f:(fun phase -> Ui.Widget.text (Printf.sprintf "phase-%d" phase))
 ;;
 
 let test_after_display_and_wait_follow_up_without_input () =
@@ -271,12 +277,12 @@ let test_after_display_and_wait_follow_up_without_input () =
 ;;
 
 let relative_timer_after_display_component ~timer_fired _handlers graph =
-  let phase, set_phase = Bonsai.state' ~equal:Int.equal 0 graph in
-  let sleep = Bonsai.Clock.sleep graph in
+  let phase, set_phase = Bonsai_v017.state ~equal:Int.equal 0 graph in
+  let sleep = Bonsai.Cont.Clock.sleep graph in
   let after_display =
-    Bonsai.map2
+    Bonsai.Cont.map2
       phase
-      (Bonsai.map2 set_phase sleep ~f:(fun set_phase sleep -> set_phase, sleep))
+      (Bonsai.Cont.map2 set_phase sleep ~f:(fun set_phase sleep -> set_phase, sleep))
       ~f:(fun phase (set_phase, sleep) ->
         if phase = 0
         then
@@ -288,8 +294,8 @@ let relative_timer_after_display_component ~timer_fired _handlers graph =
             ]
         else Bonsai.Effect.Ignore)
   in
-  Bonsai.Edge.lifecycle ~after_display graph;
-  Bonsai.return (Ui.Widget.text "relative-timer")
+  Bonsai.Cont.Edge.lifecycle ~after_display graph;
+  Bonsai.Cont.return (Ui.Widget.text "relative-timer")
 ;;
 
 let test_retained_token_starts_relative_timer_at_resume_acknowledgment () =
@@ -316,15 +322,15 @@ let test_retained_token_starts_relative_timer_at_resume_acknowledgment () =
 ;;
 
 let lifecycle_only_component ~activations ~deactivations ~after_displays _handlers graph =
-  Bonsai.Edge.lifecycle
+  Bonsai.Cont.Edge.lifecycle
     ~on_activate:
-      (Bonsai.return (Bonsai.Effect.of_thunk (fun () -> Stdlib.incr activations)))
+      (Bonsai.Cont.return (Bonsai.Effect.of_thunk (fun () -> Stdlib.incr activations)))
     ~on_deactivate:
-      (Bonsai.return (Bonsai.Effect.of_thunk (fun () -> Stdlib.incr deactivations)))
+      (Bonsai.Cont.return (Bonsai.Effect.of_thunk (fun () -> Stdlib.incr deactivations)))
     ~after_display:
-      (Bonsai.return (Bonsai.Effect.of_thunk (fun () -> Stdlib.incr after_displays)))
+      (Bonsai.Cont.return (Bonsai.Effect.of_thunk (fun () -> Stdlib.incr after_displays)))
     graph;
-  Bonsai.return (Ui.Widget.text "unchanged")
+  Bonsai.Cont.return (Ui.Widget.text "unchanged")
 ;;
 
 let test_no_diff_tokens_and_lifecycle_only_presentations () =
@@ -449,17 +455,17 @@ let atomic_input_component ~handled ~timer_fired ~time_source handlers graph =
     Driver.Handler.create
       handlers
       ~equal:(fun () () -> true)
-      (Bonsai.return ())
+      (Bonsai.Cont.return ())
       ~f:(fun () _ -> Bonsai.Effect.of_thunk (fun () -> Stdlib.incr handled))
   in
   let on_activate =
-    Bonsai.return
+    Bonsai.Cont.return
       (Bonsai.Effect.bind
          (Bonsai.Time_source.sleep time_source (span_ms 50))
          ~f:(fun () -> Bonsai.Effect.of_thunk (fun () -> Stdlib.incr timer_fired)))
   in
-  Bonsai.Edge.lifecycle ~on_activate graph;
-  Bonsai.map callback ~f:(fun callback ->
+  Bonsai.Cont.Edge.lifecycle ~on_activate graph;
+  Bonsai.Cont.map callback ~f:(fun callback ->
     Ui.Widget.button ~on_press:callback ~child:(Ui.Widget.text "atomic") ())
 ;;
 
@@ -508,9 +514,9 @@ let test_invalid_input_is_atomic_and_does_not_starve_due_timer () =
 ;;
 
 let handler_identity_component handlers graph =
-  let enabled, toggle = Bonsai.toggle ~default_model:false graph in
+  let enabled, toggle = Bonsai.Cont.toggle ~default_model:false graph in
   let dependencies =
-    Bonsai.map2 enabled toggle ~f:(fun enabled toggle -> enabled, toggle)
+    Bonsai.Cont.map2 enabled toggle ~f:(fun enabled toggle -> enabled, toggle)
   in
   let callback =
     Driver.Handler.create
@@ -519,7 +525,7 @@ let handler_identity_component handlers graph =
       dependencies
       ~f:(fun (_, toggle) _ -> toggle)
   in
-  Bonsai.map callback ~f:(fun callback ->
+  Bonsai.Cont.map callback ~f:(fun callback ->
     Ui.Widget.button ~on_press:callback ~child:(Ui.Widget.text "identity") ())
 ;;
 
@@ -567,11 +573,11 @@ let host_effect_component handlers _graph =
     Driver.Handler.create
       handlers
       ~equal:(fun () () -> true)
-      (Bonsai.return ())
+      (Bonsai.Cont.return ())
       ~f:(fun () _ ->
         Bonsai.Effect.map (Host_effect.Clipboard.read host_effects ()) ~f:(fun _ -> ()))
   in
-  Bonsai.map callback ~f:(fun callback ->
+  Bonsai.Cont.map callback ~f:(fun callback ->
     Ui.Widget.button ~on_press:callback ~child:(Ui.Widget.text "host") ())
 ;;
 
@@ -625,27 +631,22 @@ let test_host_operation_replays_after_rejection_and_commits_once () =
   Driver.shutdown driver
 ;;
 
-let before_display_fixed_point_component ~observed handlers graph =
-  let shown, set_shown = Bonsai.state' ~equal:Bool.equal false graph in
-  let reveal = Bonsai.map set_shown ~f:(fun set_shown -> set_shown (fun _ -> true)) in
-  Bonsai.Edge.lifecycle ~before_display:reveal graph;
-  let dynamic_lifecycle =
-    Bonsai.enum
-      (module Core.Bool)
-      ~match_:shown
-      ~with_:(fun shown graph ->
-        if shown
-        then
-          Bonsai.Edge.lifecycle
-            ~before_display:
-              (Bonsai.return
-                 (Bonsai.Effect.of_thunk (fun () -> observed := 1 :: !observed)))
-            graph;
-        Bonsai.return ())
-      graph
+let before_display_fixed_point_component ~observed handlers _graph =
+  let wait_twice =
+    Bonsai.Effect.bind (Driver.Handler.wait_before_display handlers) ~f:(fun () ->
+      observed := 1 :: !observed;
+      Bonsai.Effect.bind (Driver.Handler.wait_before_display handlers) ~f:(fun () ->
+        Bonsai.Effect.of_thunk (fun () -> observed := 2 :: !observed)))
   in
-  ignore handlers;
-  Bonsai.map dynamic_lifecycle ~f:(fun () -> Ui.Widget.text "before-display")
+  let callback =
+    Driver.Handler.create
+      handlers
+      ~equal:(fun () () -> true)
+      (Bonsai.Cont.return ())
+      ~f:(fun () _ -> wait_twice)
+  in
+  Bonsai.Cont.map callback ~f:(fun callback ->
+    Ui.Widget.button ~on_press:callback ~child:(Ui.Widget.text "before-display") ())
 ;;
 
 let test_lifecycle_before_display_reaches_fixed_point () =
@@ -653,96 +654,84 @@ let test_lifecycle_before_display_reaches_fixed_point () =
   let _, driver =
     create ~runtime_epoch:53L (before_display_fixed_point_component ~observed)
   in
-  let initial =
-    match Driver.pump driver ~monotonic_now_ns:0L () with
-    | Ok result -> result
-    | Error error ->
-      fail "initial fixed-point pump failed: %s" (Driver.error_to_string error)
-  in
-  require
-    (List.mem 1 !observed)
-    "before-display action did not trigger dependent before-display work in one pump";
+  let initial = pump driver 0L in
+  let node_id, event_tag, handler_id = find_button_binding (Option.get initial.frame) in
   present driver initial 0L;
+  let events =
+    Protocol.Inbound_event.
+      { runtime_epoch = 53L
+      ; events =
+          [ { sequence = 1L
+            ; displayed_revision = initial.renderer_revision
+            ; node_id
+            ; handler_id
+            ; event_tag
+            ; payload = Unit
+            }
+          ]
+      }
+  in
+  let result = ok (Driver.pump driver ~monotonic_now_ns:1L ~events ()) in
+  require
+    (!observed = [ 2; 1 ])
+    (Printf.sprintf
+       "before-display callbacks did not reach a fixed point in one pump (%s)"
+       (String.concat "," (List.map string_of_int !observed)));
+  present driver result 1L;
   Driver.shutdown driver
 ;;
 
-let wait_before_display_component ~time_source ~observed _handlers graph =
-  let shown, set_shown = Bonsai.state' ~equal:Bool.equal false graph in
+let wait_before_display_component handlers graph =
+  let shown, set_shown = Bonsai_v017.state ~equal:Bool.equal false graph in
   let on_activate =
-    Bonsai.map set_shown ~f:(fun set_shown ->
-      Bonsai.Effect.bind
-        (Bonsai.Time_source.wait_before_display time_source)
-        ~f:(fun () -> set_shown (fun _ -> true)))
+    Bonsai.Cont.map set_shown ~f:(fun set_shown ->
+      Bonsai.Effect.bind (Driver.Handler.wait_before_display handlers) ~f:(fun () ->
+        set_shown (fun _ -> true)))
   in
-  Bonsai.Edge.lifecycle ~on_activate graph;
-  let dynamic_lifecycle =
-    Bonsai.enum
-      (module Core.Bool)
-      ~match_:shown
-      ~with_:(fun shown graph ->
-        if shown
-        then
-          Bonsai.Edge.lifecycle
-            ~before_display:
-              (Bonsai.return
-                 (Bonsai.Effect.of_thunk (fun () -> observed := 1 :: !observed)))
-            graph;
-        Bonsai.return ())
-      graph
-  in
-  Bonsai.map dynamic_lifecycle ~f:(fun () -> Ui.Widget.text "wait-before-display")
+  Bonsai.Cont.Edge.lifecycle ~on_activate graph;
+  Bonsai.Cont.map shown ~f:(fun shown ->
+    Ui.Widget.text (if shown then "revealed" else "hidden"))
 ;;
 
-let test_time_source_wait_before_display_defers_new_lifecycle_work () =
-  let observed = ref [] in
+let test_wait_before_display_updates_initial_candidate () =
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   let driver =
-    Driver.create
-      ~runtime_epoch:54L
-      ~time_source
-      (wait_before_display_component ~time_source ~observed)
+    Driver.create ~runtime_epoch:54L ~time_source wait_before_display_component
   in
   let initial = pump driver 0L in
+  require_text initial "hidden";
   present driver initial 0L;
-  observed := [];
-  let trigger_waiter = pump driver 1L in
-  require
-    (not (List.mem 1 !observed))
-    "time-source waiter ran newly installed lifecycle work in the same pump";
-  present driver trigger_waiter 1L;
-  let follow_up = pump driver 2L in
-  require
-    (List.mem 1 !observed)
-    (Printf.sprintf
-       "next pump did not run lifecycle work created by wait_before_display (%s)"
-       (String.concat "," (List.map string_of_int !observed)));
-  present driver follow_up 2L;
+  let revealed = pump driver 1L in
+  require_text revealed "revealed";
+  present driver revealed 1L;
   Driver.shutdown driver
 ;;
 
 let lifecycle_replacement_component ~input_var ~first ~replacement _handlers graph =
-  let inputs = Bonsai.Expert.Var.value input_var in
+  let inputs = Bonsai.Cont.Expert.Var.value input_var in
   let dynamic_lifecycle =
-    Bonsai.assoc
+    Bonsai.Cont.assoc
       (module Core.Int)
       inputs
       ~f:(fun _key callback_version graph ->
         let on_deactivate =
-          Bonsai.map callback_version ~f:(function
+          Bonsai.Cont.map callback_version ~f:(function
             | 0 -> Bonsai.Effect.of_thunk (fun () -> Stdlib.incr first)
             | _ -> Bonsai.Effect.of_thunk (fun () -> Stdlib.incr replacement))
         in
-        Bonsai.Edge.lifecycle ~on_deactivate graph;
-        Bonsai.return ())
+        Bonsai.Cont.Edge.lifecycle ~on_deactivate graph;
+        Bonsai.Cont.return ())
       graph
   in
-  Bonsai.map dynamic_lifecycle ~f:(fun _ -> Ui.Widget.text "lifecycle")
+  Bonsai.Cont.map dynamic_lifecycle ~f:(fun _ -> Ui.Widget.text "lifecycle")
 ;;
 
 let test_same_path_lifecycle_replacement_runs_replacement_on_removal () =
   let first = ref 0 in
   let replacement = ref 0 in
-  let input_var = Bonsai.Expert.Var.create (Core.Map.singleton (module Core.Int) 0 0) in
+  let input_var =
+    Bonsai.Cont.Expert.Var.create (Core.Map.singleton (module Core.Int) 0 0)
+  in
   let _, driver =
     create
       ~runtime_epoch:55L
@@ -751,10 +740,10 @@ let test_same_path_lifecycle_replacement_runs_replacement_on_removal () =
   let initial = pump driver 0L in
   require_text initial "lifecycle";
   present driver initial 0L;
-  Bonsai.Expert.Var.set input_var (Core.Map.singleton (module Core.Int) 0 1);
+  Bonsai.Cont.Expert.Var.set input_var (Core.Map.singleton (module Core.Int) 0 1);
   let replace = pump driver 1L in
   present driver replace 1L;
-  Bonsai.Expert.Var.set input_var (Core.Map.empty (module Core.Int));
+  Bonsai.Cont.Expert.Var.set input_var (Core.Map.empty (module Core.Int));
   let remove = pump driver 2L in
   present driver remove 2L;
   let settle = pump driver 3L in
@@ -827,11 +816,13 @@ let () =
     test_host_operation_replays_after_rejection_and_commits_once;
   run "before-display fixed point" test_lifecycle_before_display_reaches_fixed_point;
   run
-    "time-source before-display staging"
-    test_time_source_wait_before_display_defers_new_lifecycle_work;
+    "before-display updates initial candidate"
+    test_wait_before_display_updates_initial_candidate;
   run
     "same-path lifecycle replacement"
     test_same_path_lifecycle_replacement_runs_replacement_on_removal;
   run "sequence overflow" test_presentation_and_renderer_sequence_overflow_are_fatal;
-  run "Clock.every catches up after a large jump" test_every_catches_up_after_large_jump
+  run
+    "Clock.every bounds overdue work and resumes"
+    test_every_bounds_overdue_work_and_resumes
 ;;

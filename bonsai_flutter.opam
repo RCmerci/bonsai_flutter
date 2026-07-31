@@ -15,10 +15,13 @@ homepage: "https://github.com/rcmerci/bonsai_flutter"
 bug-reports: "https://github.com/rcmerci/bonsai_flutter/issues"
 dev-repo: "git+https://github.com/rcmerci/bonsai_flutter.git"
 depends: [
-  "ocaml" {= "5.3.0"}
+  "ocaml" {= "5.1.1"}
   "dune" {>= "3.17"}
-  "bonsai" {= "v0.18~preview.130.106+341"}
-  "core" {= "v0.18~preview.130.106+341"}
+  "base" {>= "v0.17" & < "v0.18~"}
+  "bonsai" {>= "v0.17" & < "v0.18~"}
+  "core" {>= "v0.17" & < "v0.18~"}
+  "incr_dom" {>= "v0.17" & < "v0.18~"}
+  "virtual_dom" {>= "v0.17" & < "v0.18~"}
 ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]

@@ -1,0 +1,25 @@
+(library
+ (name bonsai_flutter_clock_example)
+ (wrapped false)
+ (modules clock)
+ (libraries
+  base
+  core
+  bonsai
+  bonsai_flutter.ui
+  bonsai_flutter.driver
+  incr_dom.ui_incr
+  incr_dom.ui_time_source
+  virtual_dom.ui_effect))
+
+(executable
+ (name native_embed)
+ (modules native_embed)
+ (enabled_if
+  (= %{env:BONSAI_FLUTTER_EMBED_OCAML=disabled} enabled))
+ (libraries
+  bonsai_flutter_clock_example
+  bonsai_flutter.driver
+  bonsai_flutter.native_backend)
+ (modes
+  (native object)))

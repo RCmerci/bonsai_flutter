@@ -12,10 +12,13 @@
  (description
   "An OCaml-first UI framework that reconciles Bonsai views into atomic binary patches rendered by Flutter.")
  (depends
-  (ocaml (= 5.3.0))
+  (ocaml (= 5.1.1))
   (dune (>= 3.17))
-  (bonsai (= v0.18~preview.130.106+341))
-  (core (= v0.18~preview.130.106+341))))
+  (base (and (>= v0.17) (< v0.18~)))
+  (bonsai (and (>= v0.17) (< v0.18~)))
+  (core (and (>= v0.17) (< v0.18~)))
+  (incr_dom (and (>= v0.17) (< v0.18~)))
+  (virtual_dom (and (>= v0.17) (< v0.18~)))))
 
 (package
  (name bonsai_flutter_test)
@@ -23,8 +26,11 @@
  (description
   "Renderer-independent queries and interactions for testing Bonsai Flutter applications.")
  (depends
-  (ocaml (= 5.3.0))
+  (ocaml (= 5.1.1))
   (dune (>= 3.17))
   (bonsai_flutter (= :version))
-  (bonsai (= v0.18~preview.130.106+341))
-  (core (= v0.18~preview.130.106+341))))
+  (base (and (>= v0.17) (< v0.18~)))
+  (bonsai (and (>= v0.17) (< v0.18~)))
+  (core (and (>= v0.17) (< v0.18~)))
+  (incr_dom (and (>= v0.17) (< v0.18~)))
+  (virtual_dom (and (>= v0.17) (< v0.18~)))))

@@ -5,7 +5,7 @@ let fail format = Printf.ksprintf failwith format
 let require condition message = if not condition then fail "%s" message
 
 let component handlers graph =
-  let count, increment = Bonsai.state' ~equal:Int.equal 0 graph in
+  let count, increment = Bonsai_v017.state ~equal:Int.equal 0 graph in
   let increment =
     Test.Driver.Handler.create
       handlers
@@ -14,7 +14,7 @@ let component handlers graph =
       increment
       ~f:(fun set_count _ -> set_count (fun count -> count + 1))
   in
-  Bonsai.map2 count increment ~f:(fun count increment ->
+  Bonsai.Cont.map2 count increment ~f:(fun count increment ->
     Ui.Widget.column
       ~key:(Ui.Key.string "main")
       [ Ui.Widget.text (Printf.sprintf "Count: %d" count)

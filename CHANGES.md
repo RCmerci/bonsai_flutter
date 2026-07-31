@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Migrated the host and iPhoneOS build graphs to OCaml 5.1.1 and the Jane
+  Street v0.17.x release line, removed bleeding-repository and keyword-mode
+  requirements from CI, and regenerated the locked iOS runtime closure.
+- Added the OCaml-owned Clock example for exact and approximate time, relative
+  sleep, and recurring schedules.
+- Rebased queued runtime-control events at presentation handoff so a
+  continuously updating Clock cannot atomically lose a valid previous-frame
+  button event behind an older environment event.
+- Linked iPhoneOS native assets and probes against Security.framework, updated
+  the privacy audit for OCaml 5.1's `mach_absolute_time` import, repaired the
+  Mail trace event fixture, and made CI run every discovered example test.
 - Replaced command-driven wakeups with a foreground-vsync pump. Visible idle
   runtimes advance public Bonsai clock and lifecycle semantics once per
   backpressured eligible Flutter frame; hidden, paused, and detached runtimes

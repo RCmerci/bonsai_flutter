@@ -33,7 +33,7 @@ type snapshot =
   ; pointer_kinds : int
   }
 
-type t = snapshot Bonsai.Expert.Var.t
+type t = snapshot Bonsai.Cont.Expert.Var.t
 
 let zero_insets = { left = 0.; top = 0.; right = 0.; bottom = 0. }
 
@@ -58,18 +58,18 @@ let default =
   }
 ;;
 
-let value t = Bonsai.Expert.Var.value t
+let value t = Bonsai.Cont.Expert.Var.value t
 
 module Private = struct
-  let create () = Bonsai.Expert.Var.create default
+  let create () = Bonsai.Cont.Expert.Var.create default
 
   let update t snapshot =
-    if Bonsai.Expert.Var.get t = snapshot
+    if Bonsai.Cont.Expert.Var.get t = snapshot
     then false
     else (
-      Bonsai.Expert.Var.set t snapshot;
+      Bonsai.Cont.Expert.Var.set t snapshot;
       true)
   ;;
 
-  let current = Bonsai.Expert.Var.get
+  let current = Bonsai.Cont.Expert.Var.get
 end

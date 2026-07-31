@@ -6,7 +6,7 @@ Distribution-signed Release export is outside the current support boundary.
 
 ## Prerequisites
 
-Use the pinned Flutter 3.44.8, Dart 3.12.2, OCaml 5.3.0, and Xcode toolchains.
+Use the pinned Flutter 3.44.8, Dart 3.12.2, OCaml 5.1.1, and Xcode toolchains.
 The Mac must have an arm64 physical iPhone that is:
 
 - explicitly selected by CoreDevice identifier;

@@ -1,15 +1,16 @@
 let require condition message = if not condition then failwith message
 
 let component ~activations ~after_displays graph =
-  let state, toggle_effect = Bonsai.toggle ~default_model:false graph in
+  let state, toggle_effect = Bonsai.Cont.toggle ~default_model:false graph in
   let on_activate =
-    Bonsai.return (Bonsai.Effect.of_thunk (fun () -> Stdlib.incr activations))
+    Bonsai.Cont.return (Bonsai.Effect.of_thunk (fun () -> Stdlib.incr activations))
   in
   let after_display =
-    Bonsai.return (Bonsai.Effect.of_thunk (fun () -> Stdlib.incr after_displays))
+    Bonsai.Cont.return (Bonsai.Effect.of_thunk (fun () -> Stdlib.incr after_displays))
   in
-  Bonsai.Edge.lifecycle ~on_activate ~after_display graph;
-  Bonsai.map2 state toggle_effect ~f:(fun state toggle_effect -> state, toggle_effect)
+  Bonsai.Cont.Edge.lifecycle ~on_activate ~after_display graph;
+  Bonsai.Cont.map2 state toggle_effect ~f:(fun state toggle_effect ->
+    state, toggle_effect)
 ;;
 
 let () =

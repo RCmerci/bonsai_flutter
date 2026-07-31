@@ -5,12 +5,16 @@
  (modules native_backend)
  (libraries
   bonsai
+  base
   core
   bonsai_flutter.ui
   bonsai_flutter.protocol
   bonsai_flutter.runtime
   bonsai_flutter.driver
-  threads)
+  incr_dom.ui_incr
+  incr_dom.ui_time_source
+  threads
+  virtual_dom.ui_effect)
  (foreign_stubs
   (language c)
   (names bonsai_flutter_native_embed)

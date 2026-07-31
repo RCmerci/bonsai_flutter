@@ -28,7 +28,7 @@ minimum version, Bitcode, missing backend, or backend that does not expose the
 exact bridge contract.
 
 The repository integration workspace uses this route to run a real Bonsai
-Counter through Flutter on the project OCaml 5.3.0 baseline. iPhoneOS unsigned
+Counter through Flutter on the project OCaml 5.1.1 baseline. iPhoneOS unsigned
 packaging and development-signed device launch are verified as documented in
 `docs/ios-device-testing.md`. iOS Simulator is unsupported. The public
 platform scope remains defined by the repository README.

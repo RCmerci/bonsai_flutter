@@ -4,50 +4,46 @@ This directory locks the target-side OCaml package closure used by every
 `native_embed` complete object and by the aggregate integration complete
 object.
 
-`runtime-closure.lock` was derived from these findlib roots in the pinned
-OCaml 5.3.0 host switch:
+`runtime-closure.lock` was generated from these findlib roots in the pinned
+OCaml 5.1.1 host switch:
 
 ```text
 bonsai
 bonsai.driver
-bonsai_concrete.ui_incr
+incr_dom.ui_incr
+incr_dom.ui_time_source
+virtual_dom.ui_effect
 core
 threads
 unix
 ```
 
-The closure contains 55 runtime opam source packages and 102 target findlib
-components. The lock lists 100 package components; the compiler supplies
-`threads` and `unix`, so they do not have separate source-package rows. The
-additional `jst-config` row is a `target-build` dependency whose generated
-`config.h` must describe the Apple target rather than the macOS host. A
-`dual` package provides both a native host PPX or generator and one or more
-target runtime components. Only the components listed in the final column
-may be staged in the iOS sysroot.
+The closure contains 42 runtime opam source packages and 70 locked findlib
+components. The compiler supplies `threads` and `unix`, bringing the verified
+root count to 72. The additional `jst-config` row is a `target-build`
+dependency whose generated `config.h` must describe iPhoneOS rather than the
+macOS host.
 
-The source URL and SHA-256 digest in every row are immutable. The Basement
-row records the unmodified upstream archive. The build applies
-`vendor/patches/basement-macos.patch` after verifying that archive and before
-compiling it for either Apple target.
+Every source URL and SHA-256 digest is immutable. Package ordering is
+topological with respect to the selected runtime components. Host-only PPX
+executables, generators, test libraries, and unrelated sublibraries are not
+staged in the target sysroot.
 
-Package ordering is topological with respect to the selected findlib runtime
-components. It is not the larger opam package-level dependency closure:
-package-level metadata includes host-only PPX executables, generators, test
-libraries, JavaScript libraries, and unrelated sublibraries that are not
-linked into a native embed object.
+The host and target use OCaml 5.1.1 and the same Jane Street v0.17.x release
+line. Host executables are never copied into the iOS sysroot or executed as
+target programs. Target C and OCaml compilation always runs through the
+`ios` findlib toolchain.
 
-The host context uses the same package versions and pinned Jane Street opam
-repositories as `tool/ios/toolchain.lock`. Host executables are never copied
-to the iOS sysroot or executed as target programs. Target C and OCaml
-compilation must always run through the `ios` findlib toolchain with an
-explicit `VER`; the pinned cross wrapper otherwise defaults to iOS 15.0.
+Dune resolves installed PPX packages in both its host and cross contexts.
+`tool/ios/stage_host_metadata.sh` copies only `META`, `dune-package`, and
+`opam` descriptions into the iOS sysroot so that resolution succeeds. It does
+not copy host archives, objects, plugins, or executables.
 
-Dune resolves an installed PPX in both its host and cross contexts before it
-selects the native host executable. `tool/ios/stage_host_metadata.sh` copies
-only `META`, `dune-package`, and `opam` descriptions into the iOS sysroot so
-that resolution succeeds. It does not copy any host archive, object, plugin,
-or executable. The PPX driver itself therefore remains a macOS host process,
-while generated OCaml is compiled only by the target compiler.
+`ocaml-ios64.5.1.1` is the repository-owned opam overlay for the cross
+compiler recipe. `tool/ios/prepare_cross_overlay.sh` verifies the template
+checksums and derives the full package from the locked opam-cross-ios source.
+The installed `ios-cc` wrapper preserves iPhoneOS architecture, sysroot, and
+minimum-version metadata for foreign C stubs.
 
-The target closure is built only for iPhoneOS. iOS Simulator is intentionally
-outside the repository support boundary.
+The target closure is built only for iPhoneOS arm64. iOS Simulator is outside
+the repository support boundary.

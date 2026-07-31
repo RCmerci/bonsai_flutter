@@ -219,8 +219,8 @@ typed parent data; mounted node and handler identity; full and incremental logic
 expected-linear keyed child matching; atomic in-memory patch replay; and
 revision-scoped handler dispatch.
 
-The complete OCaml build graph targets OCaml 5.3.0, the newest stable compiler
-accepted by the selected dependency set. The Bonsai driver adapter, public
+The complete OCaml build graph targets OCaml 5.1.1 with the Jane Street
+v0.17.x release line. The Bonsai driver adapter, public
 library, examples, native backend, and their tests are unconditional members
 of that graph. The exact constraints are recorded in `upstream-baseline.md`.
 
@@ -359,7 +359,7 @@ executes the clipboard request and route animation, emits typed HostResponse
 and RoutePop events, and contains no application reducer. Its real FFI test
 exercises both directions and verifies the system-pop round trip.
 
-This full vertical slice uses the project OCaml 5.3.0 baseline. Counter
+This full vertical slice uses the project OCaml 5.1.1 baseline. Counter
 packages have built, launched, and passed code-signing checks in Debug,
 Profile, and Release on the recorded macOS arm64 host. The dependency objects
 inherit that macOS 26 build host, so lower deployment targets remain

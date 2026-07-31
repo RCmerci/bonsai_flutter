@@ -46,15 +46,21 @@ void main() {
           nodeId: 100,
           handlerId: 200,
           eventTag: EventTagId.tap,
-          payload: UnitEventPayload(),
+          payload: TapEventPayload(
+            localX: 1,
+            localY: 2,
+            globalX: 3,
+            globalY: 4,
+            pointerKind: PointerKindValue.touch,
+          ),
         ),
         UiEvent(
           sequence: 13,
           displayedRevision: 9,
           nodeId: 101,
           handlerId: 201,
-          eventTag: 999,
-          payload: UnitEventPayload(),
+          eventTag: EventTagId.textSubmit,
+          payload: TextEventPayload('private message text must not be logged'),
         ),
       ],
     );
@@ -70,11 +76,12 @@ void main() {
       messages,
       containsAllInOrder([
         '[Bonsai Mail][event-batch] epoch=41 events=2 sequences=12..13 '
-            'displayedRevision=9 tags=tap,unknown(999)',
+            'displayedRevision=9 tags=tap,text_submit',
         '[Bonsai Mail][presentation] succeeded generation=2 presentation=8 '
             'revision=9 eventBytes=${EventBatchCodec.encode(batch).length}',
       ]),
     );
+    expect(messages.join('\n'), isNot(contains('private message text')));
   });
 
   test('logs visibility, rejection, command failure, and disposal', () async {

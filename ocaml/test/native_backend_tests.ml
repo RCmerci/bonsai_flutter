@@ -33,7 +33,7 @@ let capture_stderr run =
 ;;
 
 let counter handlers graph =
-  let count, increment = Bonsai.state' ~equal:Int.equal 0 graph in
+  let count, increment = Bonsai_v017.state ~equal:Int.equal 0 graph in
   let increment_handler =
     Driver.Handler.create
       handlers
@@ -44,7 +44,7 @@ let counter handlers graph =
       | Ui.Event.Payload.Unit -> increment (fun value -> value + 1)
       | _ -> increment Fun.id)
   in
-  Bonsai.map2 count increment_handler ~f:(fun count increment_handler ->
+  Bonsai.Cont.map2 count increment_handler ~f:(fun count increment_handler ->
     Ui.Widget.column
       [ Ui.Widget.text (Printf.sprintf "Count: %d" count)
       ; Ui.Widget.button

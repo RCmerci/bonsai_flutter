@@ -37,6 +37,7 @@ case "$1" in
     test "$#" -eq 1 ||
       fail "examples does not accept an additional argument"
     for example in \
+      clock \
       counter \
       gallery \
       host_effects \
@@ -62,7 +63,7 @@ case "$1" in
     test "$#" -eq 2 ||
       fail "example requires an example name"
     case "$2" in
-      counter | gallery | host_effects | host_navigation | mail | navigation | text_input | todo)
+      clock | counter | gallery | host_effects | host_navigation | mail | navigation | text_input | todo)
         stage_object \
           "$2" \
           "$source_root/examples/$2/ocaml/native_embed.exe.o"

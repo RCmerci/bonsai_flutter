@@ -5,7 +5,7 @@ type t
 val create
   :  runtime_epoch:int64
   -> time_source:Bonsai.Time_source.t
-  -> (Driver.Handler.t -> Bonsai.graph -> Bonsai_flutter_ui.Widget.t Bonsai.t)
+  -> (Driver.Handler.t -> Bonsai.Cont.graph -> Bonsai_flutter_ui.Widget.t Bonsai.Cont.t)
   -> t
 
 val show : t -> string

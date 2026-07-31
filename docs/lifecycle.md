@@ -102,8 +102,11 @@ Flutter frame timestamps and wall-clock time are not clock authority.
 
 OCaml maps elapsed nanoseconds onto the retained `Bonsai.Time_source`.
 `Bonsai.Clock.at`, `every`, `sleep`, `until`, `approx_now`,
-`Bonsai.Clock.Expert.now`, and the corresponding public time-source operations
-advance during foreground logical pumps without external input.
+`get_current_time`, `Bonsai.Clock.Expert.now`, and the corresponding public
+time-source operations advance during foreground logical pumps without
+external input. The [`Clock` example](../examples/clock/README.md) presents
+their distinct reactive, sampled, one-shot, recurring, and frame-boundary
+semantics in one OCaml-owned application.
 
 There is no deadline query or timer registry at the native boundary.
 Background suspension performs no logical pumping and promises no background

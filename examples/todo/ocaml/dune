@@ -2,7 +2,14 @@
  (name bonsai_flutter_todo_example)
  (wrapped false)
  (modules todo)
- (libraries core bonsai bonsai_flutter.ui bonsai_flutter.driver))
+ (libraries
+  base
+  core
+  bonsai
+  bonsai_flutter.ui
+  bonsai_flutter.driver
+  incr_dom.ui_incr
+  virtual_dom.ui_effect))
 
 (executable
  (name native_embed)
