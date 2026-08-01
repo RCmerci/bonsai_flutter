@@ -100,6 +100,7 @@ end
 
 module Virtual_list = struct
   let kind_id = 1
+  let version = 1
   let visible_range_event_id = 1
 
   type props =
@@ -187,7 +188,7 @@ module Virtual_list = struct
   let extension =
     Extension.create
       ~kind_id
-      ~version:1
+      ~version
       ~capabilities:[ Capability.Stateful; Resource; Semantics; Virtualized ]
       ~encode_props
       ~decode_event
@@ -208,6 +209,35 @@ module Virtual_list = struct
     let props = { total_count; first_index; item_extent; overscan; axis } in
     validate props (List.length items);
     widget extension ?key ~props ~on_event:on_visible_range ~children:items ()
+  ;;
+
+  let visible_range_of_payload = function
+    | Event.Payload.Native_event event
+      when event.kind_id = kind_id && event.version = version ->
+      Result.to_option (decode_event ~event_id:event.event_id event.payload)
+    | _ -> None
+  ;;
+
+  let create_with_handler
+        ?key
+        ~total_count
+        ~first_index
+        ~item_extent
+        ?(overscan = 2)
+        ?(axis = Layout.Axis.Vertical)
+        ~items
+        ~on_visible_range
+        ()
+    =
+    let props = { total_count; first_index; item_extent; overscan; axis } in
+    validate props (List.length items);
+    widget_with_handler
+      extension
+      ?key
+      ~props
+      ~on_event:on_visible_range
+      ~children:items
+      ()
   ;;
 
   module For_testing = struct
@@ -377,4 +407,301 @@ module Swipe_action = struct
       ~children:(children start_action end_action content)
       ()
   ;;
+end
+
+module Navigation_shell = struct
+  let kind_id = 3
+  let version = 1
+  let drawer_state_changed_event_id = 1
+
+  type drawer_state =
+    | Closed
+    | Open
+
+  type props =
+    { selected_index : int
+    ; destination_count : int
+    ; drawer_open : bool
+    ; drawer_enabled : bool
+    }
+
+  let validate props =
+    if props.destination_count <= 0
+    then invalid_arg "Native_widget.Navigation_shell: at least one body is required";
+    if props.selected_index < 0 || props.selected_index >= props.destination_count
+    then invalid_arg "Native_widget.Navigation_shell: selected index is outside bodies"
+  ;;
+
+  let encode_props props =
+    let payload = Bytes.make 12 '\000' in
+    let flags =
+      (if props.drawer_open then 1 else 0) lor if props.drawer_enabled then 2 else 0
+    in
+    Bytes.set payload 0 (Char.chr flags);
+    Little_endian.set_u32 payload 4 props.selected_index;
+    Little_endian.set_u32 payload 8 props.destination_count;
+    payload
+  ;;
+
+  let decode_props payload =
+    if Bytes.length payload <> 12
+    then Error "navigation shell props must be exactly 12 bytes"
+    else if
+      Bytes.get payload 1 <> '\000'
+      || Bytes.get payload 2 <> '\000'
+      || Bytes.get payload 3 <> '\000'
+    then Error "navigation shell reserved bytes must be zero"
+    else (
+      let flags = Char.code (Bytes.get payload 0) in
+      if flags land lnot 3 <> 0
+      then Error "navigation shell flags contain unknown bits"
+      else (
+        let props =
+          { selected_index = Little_endian.get_u32 payload 4
+          ; destination_count = Little_endian.get_u32 payload 8
+          ; drawer_open = flags land 1 <> 0
+          ; drawer_enabled = flags land 2 <> 0
+          }
+        in
+        try
+          validate props;
+          Ok props
+        with
+        | Invalid_argument message -> Error message))
+  ;;
+
+  let decode_event ~event_id payload =
+    if event_id <> drawer_state_changed_event_id
+    then Error "unknown navigation shell event"
+    else if Bytes.length payload <> 1
+    then Error "drawer state payload must be exactly one byte"
+    else (
+      match Char.code (Bytes.get payload 0) with
+      | 0 -> Ok Closed
+      | 1 -> Ok Open
+      | _ -> Error "unknown drawer state")
+  ;;
+
+  let extension =
+    Extension.create
+      ~kind_id
+      ~version
+      ~capabilities:[ Capability.Stateful; Resource; Semantics ]
+      ~encode_props
+      ~decode_event
+      ()
+  ;;
+
+  let props ~selected_index ~drawer_open ~drawer_enabled bodies =
+    let props =
+      { selected_index
+      ; destination_count = List.length bodies
+      ; drawer_open
+      ; drawer_enabled
+      }
+    in
+    validate props;
+    props
+  ;;
+
+  let children bodies drawer bottom_navigation = bodies @ [ drawer; bottom_navigation ]
+
+  let drawer_state_of_payload = function
+    | Event.Payload.Native_event event
+      when event.kind_id = kind_id && event.version = version ->
+      Result.to_option (decode_event ~event_id:event.event_id event.payload)
+    | _ -> None
+  ;;
+
+  let create
+        ?key
+        ~selected_index
+        ~drawer_open
+        ~drawer_enabled
+        ~bodies
+        ~drawer
+        ~bottom_navigation
+        ~on_drawer_state_changed
+        ()
+    =
+    widget
+      extension
+      ?key
+      ~props:(props ~selected_index ~drawer_open ~drawer_enabled bodies)
+      ~on_event:on_drawer_state_changed
+      ~children:(children bodies drawer bottom_navigation)
+      ()
+  ;;
+
+  let create_with_handler
+        ?key
+        ~selected_index
+        ~drawer_open
+        ~drawer_enabled
+        ~bodies
+        ~drawer
+        ~bottom_navigation
+        ~on_drawer_state_changed
+        ()
+    =
+    widget_with_handler
+      extension
+      ?key
+      ~props:(props ~selected_index ~drawer_open ~drawer_enabled bodies)
+      ~on_event:on_drawer_state_changed
+      ~children:(children bodies drawer bottom_navigation)
+      ()
+  ;;
+
+  module For_testing = struct
+    type nonrec props = props =
+      { selected_index : int
+      ; destination_count : int
+      ; drawer_open : bool
+      ; drawer_enabled : bool
+      }
+
+    let decode_props_exn payload =
+      match decode_props payload with
+      | Ok props -> props
+      | Error message -> invalid_arg message
+    ;;
+
+    let encode_drawer_state = function
+      | Closed -> Bytes.of_string "\000"
+      | Open -> Bytes.of_string "\001"
+    ;;
+  end
+end
+
+module Pressable = struct
+  let kind_id = 4
+  let version = 1
+  let activate_event_id = 1
+
+  type event = Activate
+
+  type props =
+    { overlay_color : Style.Color.t
+    ; release_delay_ms : int
+    }
+
+  let default_overlay_color = Style.Color.argb ~alpha:24 ~red:28 ~green:32 ~blue:38
+
+  let validate props =
+    if props.release_delay_ms < 0 || props.release_delay_ms > 100
+    then invalid_arg "Native_widget.Pressable: release delay must be in 0..100ms"
+  ;;
+
+  let encode_props props =
+    let payload = Bytes.make 8 '\000' in
+    Bytes.set_int32_le payload 0 (Style.Color.Private.to_argb32 props.overlay_color);
+    Bytes.set_int16_le payload 4 props.release_delay_ms;
+    payload
+  ;;
+
+  let color_of_argb32 value =
+    let channel shift = Int32.(to_int (logand (shift_right_logical value shift) 0xffl)) in
+    Style.Color.argb
+      ~alpha:(channel 24)
+      ~red:(channel 16)
+      ~green:(channel 8)
+      ~blue:(channel 0)
+  ;;
+
+  let decode_props payload =
+    if Bytes.length payload <> 8
+    then Error "pressable props must be exactly 8 bytes"
+    else if Bytes.get payload 6 <> '\000' || Bytes.get payload 7 <> '\000'
+    then Error "pressable reserved bytes must be zero"
+    else (
+      let props =
+        { overlay_color = color_of_argb32 (Bytes.get_int32_le payload 0)
+        ; release_delay_ms = Bytes.get_uint16_le payload 4
+        }
+      in
+      try
+        validate props;
+        Ok props
+      with
+      | Invalid_argument message -> Error message)
+  ;;
+
+  let decode_event ~event_id payload =
+    if event_id <> activate_event_id
+    then Error "unknown pressable event"
+    else if Bytes.length payload <> 0
+    then Error "pressable activation payload must be empty"
+    else Ok Activate
+  ;;
+
+  let extension =
+    Extension.create
+      ~kind_id
+      ~version
+      ~capabilities:[ Capability.Stateful; Semantics ]
+      ~encode_props
+      ~decode_event
+      ()
+  ;;
+
+  let props overlay_color release_delay_ms =
+    let props = { overlay_color; release_delay_ms } in
+    validate props;
+    props
+  ;;
+
+  let activation_of_payload = function
+    | Event.Payload.Native_event event
+      when event.kind_id = kind_id && event.version = version ->
+      Result.is_ok (decode_event ~event_id:event.event_id event.payload)
+    | _ -> false
+  ;;
+
+  let create
+        ?key
+        ?(overlay_color = default_overlay_color)
+        ?(release_delay_ms = 80)
+        ~child
+        ~on_activate
+        ()
+    =
+    widget
+      extension
+      ?key
+      ~props:(props overlay_color release_delay_ms)
+      ~on_event:(fun Activate -> on_activate ())
+      ~children:[ child ]
+      ()
+  ;;
+
+  let create_with_handler
+        ?key
+        ?(overlay_color = default_overlay_color)
+        ?(release_delay_ms = 80)
+        ~child
+        ~on_activate
+        ()
+    =
+    widget_with_handler
+      extension
+      ?key
+      ~props:(props overlay_color release_delay_ms)
+      ~on_event:on_activate
+      ~children:[ child ]
+      ()
+  ;;
+
+  module For_testing = struct
+    type nonrec props = props =
+      { overlay_color : Style.Color.t
+      ; release_delay_ms : int
+      }
+
+    let decode_props_exn payload =
+      match decode_props payload with
+      | Ok props -> props
+      | Error message -> invalid_arg message
+    ;;
+  end
 end

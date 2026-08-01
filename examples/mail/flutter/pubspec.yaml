@@ -12,6 +12,7 @@ hooks:
     bonsai_flutter_native:
       native_artifact_root: ../../../_build/native-artifacts/mail/
       require_ocaml_backend: true
+      mode_specific_ocaml_artifacts: true
 
 dependencies:
   bonsai_flutter:

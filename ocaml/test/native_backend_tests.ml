@@ -8,6 +8,10 @@ let require_substring output substring message =
   require (Core.String.is_substring output ~substring) message
 ;;
 
+let require_no_substring output substring message =
+  require (not (Core.String.is_substring output ~substring)) message
+;;
+
 let capture_stderr run =
   let path = Filename.temp_file "bonsai_flutter_native_trace" ".log" in
   let saved_stderr = Unix.dup Unix.stderr in
@@ -54,6 +58,17 @@ let counter handlers graph =
       ])
 ;;
 
+let trace_fixture _handlers _graph =
+  Bonsai.Cont.return
+    (Ui.Widget.column
+       [ Ui.Widget.text "First item"
+         |> Ui.Widget.with_test_id (Ui.Test_id.string "trace-item-1")
+       ; Ui.Widget.text "Second item"
+         |> Ui.Widget.with_test_id (Ui.Test_id.string "trace-item-2")
+       ]
+     |> Ui.Widget.with_test_id (Ui.Test_id.string "trace-root"))
+;;
+
 let () =
   Entrypoint.For_testing.clear ();
   Entrypoint.register ~name:"counter" (App.create counter);
@@ -98,13 +113,16 @@ let () =
     "runtime destroy retained native backend handles";
   let missing = Native_backend.create (Bytes.of_string "missing") in
   require (missing.status = Native_backend.Fatal_error) "unknown entrypoint was accepted";
-  Entrypoint.register ~name:"mail" Mail.app;
+  let trace_message message = Printf.eprintf "[Trace Fixture][ocaml]%s\n%!" message in
+  Entrypoint.register
+    ~name:"trace-fixture"
+    (App.create ~name:"Trace Fixture" ~trace:trace_message trace_fixture);
   let trace =
     capture_stderr (fun () ->
-      let runtime = Native_backend.create (Bytes.of_string "mail") in
-      require (runtime.status = Native_backend.Ok) "traced mail runtime did not create";
+      let runtime = Native_backend.create (Bytes.of_string "trace-fixture") in
+      require (runtime.status = Native_backend.Ok) "traced runtime did not create";
       let initial = Native_backend.pump runtime.handle 0L Bytes.empty in
-      require (initial.status = Native_backend.Ok) "traced mail initial pump failed";
+      require (initial.status = Native_backend.Ok) "traced initial pump failed";
       let presented =
         Native_backend.presentation_succeeded
           runtime.handle
@@ -112,7 +130,20 @@ let () =
           initial.revision
           0L
       in
-      require (presented.status = Native_backend.Ok) "traced mail presentation failed";
+      require (presented.status = Native_backend.Ok) "traced presentation failed";
+      let idle = Native_backend.pump runtime.handle 1L Bytes.empty in
+      require (idle.status = Native_backend.Ok) "traced idle pump failed";
+      require (Bytes.length idle.bytes = 0) "traced idle pump emitted a frame";
+      let idle_presented =
+        Native_backend.presentation_succeeded
+          runtime.handle
+          idle.presentation_id
+          idle.revision
+          1L
+      in
+      require
+        (idle_presented.status = Native_backend.Ok)
+        "traced idle presentation failed";
       let resync =
         Protocol.Inbound_event.
           { runtime_epoch = runtime.handle
@@ -133,19 +164,19 @@ let () =
         | Error error -> fail "resync batch did not encode: %s" error.message
       in
       let resynced = Native_backend.pump runtime.handle 1L encoded_resync in
-      require (resynced.status = Native_backend.Ok) "traced mail resync failed";
+      require (resynced.status = Native_backend.Ok) "traced resync failed";
       Native_backend.destroy runtime.handle)
   in
   require_substring
     trace
-    "[Bonsai Mail][ocaml][widget-diff] targetRevision=1 kind=full_snapshot"
+    "[Trace Fixture][ocaml][widget-diff] targetRevision=1 kind=full_snapshot"
     "trace did not include the logical widget tree";
-  require_substring trace "Theme" "trace did not include the widget root";
-  require_substring trace "test_id=mail-list-page" "trace omitted the mail list page";
-  require_substring trace "test_id=mail-row-1" "trace omitted the first mail row";
+  require_substring trace "Column" "trace did not include the widget root";
+  require_substring trace "test_id=trace-root" "trace omitted the fixture root";
+  require_substring trace "test_id=trace-item-1" "trace omitted the first fixture item";
   require_substring
     trace
-    "[Bonsai Mail][ocaml][outbound-frame]"
+    "[Trace Fixture][ocaml][outbound-frame]"
     "trace did not include the outbound frame";
   require_substring
     trace
@@ -153,11 +184,19 @@ let () =
     "trace omitted outbound frame revisions";
   require_substring
     trace
-    "[Bonsai Mail][ocaml][presentation-ack] presentationId=1 revision=1"
+    "[Trace Fixture][ocaml][presentation-ack] presentationId=1 revision=1"
     "trace did not include the presentation acknowledgment";
+  require_no_substring
+    trace
+    "[Trace Fixture][ocaml][outbound-no-frame]"
+    "trace included an idle no-frame message";
+  require_no_substring
+    trace
+    "[Trace Fixture][ocaml][presentation-ack] presentationId=2 revision=1"
+    "trace included an idle presentation acknowledgment";
   require_substring
     trace
-    "[Bonsai Mail][ocaml][inbound-event-batch]"
+    "[Trace Fixture][ocaml][inbound-event-batch]"
     "trace did not include the inbound event batch";
   require_substring
     trace

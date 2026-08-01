@@ -6,6 +6,8 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
 import '../native_widget/native_widget_registry.dart';
+import '../native_widget/navigation_shell.dart';
+import '../native_widget/pressable.dart';
 import '../native_widget/swipe_action.dart';
 import '../native_widget/virtual_list.dart';
 import '../protocol/event_batch.dart';
@@ -50,6 +52,8 @@ final class WidgetRegistry {
     if (nativeWidgets == null) {
       registerVirtualList(extensions);
       registerSwipeAction(extensions);
+      registerNavigationShell(extensions);
+      registerPressable(extensions);
     }
     return WidgetRegistry({
       NodeKind.empty: _buildEmpty,

@@ -11,6 +11,10 @@ const _reportKeys = [
   'mail_edge_pop_commit',
   'mail_row_swipe_cancel',
   'mail_row_swipe_commit',
+  'mail_drawer_cancel',
+  'mail_drawer_commit',
+  'mail_bottom_switch',
+  'mail_virtual_append',
 ];
 
 Future<void> main() => integrationDriver(

@@ -8,6 +8,14 @@ enum OcamlAppleSdk { macOS, iPhoneOS }
 
 enum OcamlMachOPlatform { macOS, iOS }
 
+enum OcamlArtifactVariant {
+  debug,
+  release;
+
+  static OcamlArtifactVariant fromLinkingEnabled(bool linkingEnabled) =>
+      linkingEnabled ? release : debug;
+}
+
 final class OcamlArtifactTarget {
   final OcamlTargetOperatingSystem operatingSystem;
   final OcamlTargetArchitecture architecture;
@@ -22,11 +30,19 @@ final class OcamlArtifactTarget {
   });
 
   String get artifactPath {
+    return artifactPathFor();
+  }
+
+  String artifactPathFor({OcamlArtifactVariant? variant}) {
     final architectureDirectory = architecture.name;
+    final variantDirectory = variant == null ? '' : '${variant.name}/';
     return switch (appleSdk) {
-      OcamlAppleSdk.macOS => 'macos/$architectureDirectory/native_embed.exe.o',
+      OcamlAppleSdk.macOS =>
+        'macos/$architectureDirectory/'
+            '${variantDirectory}native_embed.exe.o',
       OcamlAppleSdk.iPhoneOS =>
-        'ios/iphoneos/$architectureDirectory/native_embed.exe.o',
+        'ios/iphoneos/$architectureDirectory/'
+            '${variantDirectory}native_embed.exe.o',
     };
   }
 
@@ -62,6 +78,7 @@ final class OcamlArtifactResolver {
     required Uri? nativeArtifactRoot,
     required bool requireOcamlBackend,
     required OcamlArtifactTarget target,
+    OcamlArtifactVariant? variant,
   }) async {
     if (nativeArtifactRoot == null) {
       if (requireOcamlBackend) {
@@ -74,7 +91,7 @@ final class OcamlArtifactResolver {
     }
 
     final object = File.fromUri(
-      nativeArtifactRoot.resolve(target.artifactPath),
+      nativeArtifactRoot.resolve(target.artifactPathFor(variant: variant)),
     );
     if (!object.existsSync()) {
       throw StateError(

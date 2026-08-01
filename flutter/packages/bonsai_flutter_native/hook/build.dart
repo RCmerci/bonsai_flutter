@@ -14,6 +14,7 @@ void main(List<String> args) async {
     }
     final packageName = input.packageName;
     final requireOcamlBackend = _requireOcamlBackend(input);
+    final modeSpecificOcamlArtifacts = _modeSpecificOcamlArtifacts(input);
     final target = _ocamlTarget(input);
     File? ocamlObject;
     if (target == null) {
@@ -28,6 +29,11 @@ void main(List<String> args) async {
         nativeArtifactRoot: input.userDefines.path('native_artifact_root'),
         requireOcamlBackend: requireOcamlBackend,
         target: target,
+        variant: modeSpecificOcamlArtifacts
+            ? OcamlArtifactVariant.fromLinkingEnabled(
+                input.config.linkingEnabled,
+              )
+            : null,
       );
     }
     final embedOcaml = ocamlObject != null;
@@ -65,14 +71,20 @@ void main(List<String> args) async {
 }
 
 bool _requireOcamlBackend(BuildInput input) {
-  final value = input.userDefines['require_ocaml_backend'];
+  return _booleanUserDefine(input, 'require_ocaml_backend');
+}
+
+bool _modeSpecificOcamlArtifacts(BuildInput input) {
+  return _booleanUserDefine(input, 'mode_specific_ocaml_artifacts');
+}
+
+bool _booleanUserDefine(BuildInput input, String name) {
+  final value = input.userDefines[name];
   return switch (value) {
     null => false,
     true || 'true' => true,
     false || 'false' => false,
-    _ => throw FormatException(
-      'require_ocaml_backend must be true or false, found $value.',
-    ),
+    _ => throw FormatException('$name must be true or false, found $value.'),
   };
 }
 

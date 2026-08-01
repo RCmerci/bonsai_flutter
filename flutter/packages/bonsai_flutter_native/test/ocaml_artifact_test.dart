@@ -31,6 +31,17 @@ void main() {
     temporaryDirectory.deleteSync(recursive: true);
   });
 
+  test('maps Flutter linking mode to the OCaml artifact variant', () {
+    expect(
+      OcamlArtifactVariant.fromLinkingEnabled(false),
+      OcamlArtifactVariant.debug,
+    );
+    expect(
+      OcamlArtifactVariant.fromLinkingEnabled(true),
+      OcamlArtifactVariant.release,
+    );
+  });
+
   group('target-specific selection', () {
     test('selects the macOS arm64 object', () async {
       final object = _createObject(
@@ -74,6 +85,46 @@ void main() {
             requireOcamlBackend: true,
             target: _iPhoneOSTarget,
           );
+
+      expect(selected?.path, object.path);
+    });
+
+    test('selects the debug artifact variant', () async {
+      final object = _createObject(
+        temporaryDirectory,
+        'macos/arm64/debug/native_embed.exe.o',
+      );
+
+      final selected =
+          await _resolverFor(
+            const OcamlArtifactMetadata(
+              platform: OcamlMachOPlatform.macOS,
+              architecture: OcamlTargetArchitecture.arm64,
+              appleSdk: OcamlAppleSdk.macOS,
+              minimumVersion: '26.0',
+            ),
+          ).resolve(
+            nativeArtifactRoot: temporaryDirectory.uri,
+            requireOcamlBackend: true,
+            target: _macOSTarget,
+            variant: OcamlArtifactVariant.debug,
+          );
+
+      expect(selected?.path, object.path);
+    });
+
+    test('selects the release artifact variant', () async {
+      final object = _createObject(
+        temporaryDirectory,
+        'ios/iphoneos/arm64/release/native_embed.exe.o',
+      );
+
+      final selected = await _resolverFor(_deviceMetadata).resolve(
+        nativeArtifactRoot: temporaryDirectory.uri,
+        requireOcamlBackend: true,
+        target: _iPhoneOSTarget,
+        variant: OcamlArtifactVariant.release,
+      );
 
       expect(selected?.path, object.path);
     });

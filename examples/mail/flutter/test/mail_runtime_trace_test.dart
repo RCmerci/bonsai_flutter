@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:bonsai_flutter_mail_example/mail_runtime_trace.dart';
+import 'package:bonsai_flutter_mail_example/main.dart' as mail_app;
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -11,10 +13,10 @@ void main() {
     final messages = <String>[];
     final runtime = _FakeRuntimeSession();
     final traced = await startTracedMailRuntime(
-      Uint8List.fromList('mail'.codeUnits),
+      Uint8List.fromList('mail-debug'.codeUnits),
       trace: messages.add,
       runtimeStarter: (config) async {
-        expect(String.fromCharCodes(config), 'mail');
+        expect(String.fromCharCodes(config), 'mail-debug');
         return runtime;
       },
     );
@@ -23,17 +25,85 @@ void main() {
     await update;
 
     expect(messages, [
-      '[Bonsai Mail][runtime] start entrypoint=mail configBytes=4',
+      '[Bonsai Mail][runtime] start entrypoint=mail-debug configBytes=10',
       '[Bonsai Mail][runtime] ready',
       '[Bonsai Mail][cycle] presentation=7 revision=3 frameBytes=144 '
           'recoverable=none',
     ]);
   });
 
+  test('does not attach tracing to the non-debug entrypoint', () async {
+    final messages = <String>[];
+    final runtime = _FakeRuntimeSession();
+
+    final session = await startTracedMailRuntime(
+      Uint8List.fromList('mail'.codeUnits),
+      trace: messages.add,
+      runtimeStarter: (_) async => runtime,
+    );
+
+    expect(session, same(runtime));
+    expect(messages, isEmpty);
+    await session.dispose();
+  });
+
+  test('suppresses successful idle pump traces', () async {
+    final messages = <String>[];
+    final runtime = _FakeRuntimeSession();
+    final traced = await startTracedMailRuntime(
+      Uint8List.fromList('mail-debug'.codeUnits),
+      trace: messages.add,
+      runtimeStarter: (_) async => runtime,
+    );
+    messages.clear();
+
+    final update = traced.updates.first;
+    runtime.emitCycle(presentationId: 8, revision: 3, frameBytes: 0);
+    await update;
+    traced.grantVsync(generation: 2);
+    traced.presentationSucceeded(
+      generation: 2,
+      presentationId: 8,
+      revision: 3,
+      eventBatch: Uint8List(0),
+    );
+
+    expect(messages, isEmpty);
+  });
+
+  test('logs a recoverable diagnostic without a renderer frame', () async {
+    final messages = <String>[];
+    final runtime = _FakeRuntimeSession();
+    final traced = await startTracedMailRuntime(
+      Uint8List.fromList('mail-debug'.codeUnits),
+      trace: messages.add,
+      runtimeStarter: (_) async => runtime,
+    );
+    messages.clear();
+
+    final update = traced.updates.first;
+    runtime.emitCycle(
+      presentationId: 9,
+      revision: 3,
+      frameBytes: 0,
+      recoverableDiagnostic: const RuntimeDiagnostic(
+        code: RuntimeErrorCode.staleEvent,
+        message: 'sensitive diagnostic detail',
+      ),
+    );
+    await update;
+
+    expect(messages, [
+      '[Bonsai Mail][cycle] presentation=9 revision=3 frameBytes=0 '
+          'recoverable=staleEvent',
+    ]);
+    expect(messages.join('\n'), isNot(contains('sensitive diagnostic detail')));
+  });
+
   test('logs ordered event metadata without payload contents', () async {
     final messages = <String>[];
     final traced = await startTracedMailRuntime(
-      Uint8List.fromList('mail'.codeUnits),
+      Uint8List.fromList('mail-debug'.codeUnits),
       trace: messages.add,
       runtimeStarter: (_) async => _FakeRuntimeSession(),
     );
@@ -88,7 +158,7 @@ void main() {
     final messages = <String>[];
     final runtime = _FakeRuntimeSession()..throwOnGrant = true;
     final traced = await startTracedMailRuntime(
-      Uint8List.fromList('mail'.codeUnits),
+      Uint8List.fromList('mail-debug'.codeUnits),
       trace: messages.add,
       runtimeStarter: (_) async => runtime,
     );
@@ -107,7 +177,6 @@ void main() {
       messages,
       containsAllInOrder([
         '[Bonsai Mail][visibility] generation=3 eligible=true',
-        '[Bonsai Mail][command] grantVsync generation=3',
         '[Bonsai Mail][error] command=grantVsync type=StateError',
         '[Bonsai Mail][presentation] rejected generation=3 presentation=9 '
             'revision=4 reason=decodeFailed',
@@ -124,7 +193,7 @@ void main() {
 
     await expectLater(
       startTracedMailRuntime(
-        Uint8List.fromList('mail'.codeUnits),
+        Uint8List.fromList('mail-debug'.codeUnits),
         trace: messages.add,
         runtimeStarter: (_) async => throw StateError('private startup detail'),
       ),
@@ -132,10 +201,28 @@ void main() {
     );
 
     expect(messages, [
-      '[Bonsai Mail][runtime] start entrypoint=mail configBytes=4',
+      '[Bonsai Mail][runtime] start entrypoint=mail-debug configBytes=10',
       '[Bonsai Mail][error] command=start type=StateError',
     ]);
     expect(messages.join('\n'), isNot(contains('private startup detail')));
+  });
+
+  testWidgets('debug build selects the traced native entrypoint', (
+    tester,
+  ) async {
+    late Widget built;
+    await tester.pumpWidget(
+      Builder(
+        builder: (context) {
+          built = const mail_app.MailExampleApp().build(context);
+          return const SizedBox.shrink();
+        },
+      ),
+    );
+
+    final materialApp = built as MaterialApp;
+    final root = materialApp.home! as BonsaiFlutterRoot;
+    expect(String.fromCharCodes(root.config), 'mail-debug');
   });
 }
 
@@ -152,13 +239,14 @@ final class _FakeRuntimeSession implements RuntimeSession {
     required int presentationId,
     required int revision,
     required int frameBytes,
+    RuntimeDiagnostic? recoverableDiagnostic,
   }) {
     _updates.add(
       CycleReady(
         presentationId: presentationId,
         revision: revision,
         bytes: TransferableTypedData.fromList([Uint8List(frameBytes)]),
-        recoverableDiagnostic: null,
+        recoverableDiagnostic: recoverableDiagnostic,
       ),
     );
   }

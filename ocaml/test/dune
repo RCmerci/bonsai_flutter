@@ -4,6 +4,16 @@
  (libraries bonsai_flutter.ui bonsai_flutter.runtime))
 
 (test
+ (name trace_debug_tests)
+ (modules trace_debug_tests)
+ (libraries bonsai_flutter_trace bonsai_flutter_trace_debug))
+
+(test
+ (name trace_release_tests)
+ (modules trace_release_tests)
+ (libraries bonsai_flutter_trace bonsai_flutter_trace_release))
+
+(test
  (name protocol_tests)
  (modules protocol_tests)
  (deps
@@ -143,7 +153,6 @@
   bonsai_flutter.protocol
   bonsai_flutter.driver
   bonsai_flutter.native_backend
-  bonsai_flutter_mail_example
   incr_dom.ui_incr
   incr_dom.ui_time_source
   virtual_dom.ui_effect

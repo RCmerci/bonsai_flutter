@@ -14,6 +14,9 @@ Future<RuntimeSession> startTracedMailRuntime(
   final start =
       runtimeStarter ??
       (config) => RuntimeClient.start(config: Uint8List.fromList(config));
+  if (String.fromCharCodes(configCopy) != 'mail-debug') {
+    return start(configCopy);
+  }
   trace(
     '[Bonsai Mail][runtime] start '
     'entrypoint=${String.fromCharCodes(configCopy)} '
@@ -41,13 +44,15 @@ final class _TracedRuntimeSession implements RuntimeSession {
     switch (update) {
       case CycleReady():
         final bytes = update.bytes.materialize().asUint8List();
-        _trace(
-          '[Bonsai Mail][cycle] '
-          'presentation=${update.presentationId} '
-          'revision=${update.revision} '
-          'frameBytes=${bytes.length} '
-          'recoverable=${update.recoverableDiagnostic?.code.name ?? 'none'}',
-        );
+        if (bytes.isNotEmpty || update.recoverableDiagnostic != null) {
+          _trace(
+            '[Bonsai Mail][cycle] '
+            'presentation=${update.presentationId} '
+            'revision=${update.revision} '
+            'frameBytes=${bytes.length} '
+            'recoverable=${update.recoverableDiagnostic?.code.name ?? 'none'}',
+          );
+        }
         forwarded = CycleReady(
           presentationId: update.presentationId,
           revision: update.revision,
@@ -64,7 +69,6 @@ final class _TracedRuntimeSession implements RuntimeSession {
 
   @override
   void grantVsync({required int generation}) {
-    _trace('[Bonsai Mail][command] grantVsync generation=$generation');
     _runSync('grantVsync', () => _runtime.grantVsync(generation: generation));
   }
 
@@ -91,11 +95,13 @@ final class _TracedRuntimeSession implements RuntimeSession {
     required Uint8List eventBatch,
   }) {
     _traceEventBatch(eventBatch);
-    _trace(
-      '[Bonsai Mail][presentation] succeeded '
-      'generation=$generation presentation=$presentationId '
-      'revision=$revision eventBytes=${eventBatch.length}',
-    );
+    if (eventBatch.isNotEmpty) {
+      _trace(
+        '[Bonsai Mail][presentation] succeeded '
+        'generation=$generation presentation=$presentationId '
+        'revision=$revision eventBytes=${eventBatch.length}',
+      );
+    }
     _runSync(
       'presentationSucceeded',
       () => _runtime.presentationSucceeded(

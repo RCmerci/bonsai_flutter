@@ -111,7 +111,38 @@ typed extension decoder runs. Revision-scoped handler rules still reject stale
 or replaced handlers.
 
 The Gallery contains the complete custom card example and its real FFI test.
-The built-in virtual list uses the same extension boundary.
+The built-in virtual list, navigation shell, swipe action, and pressable use the
+same extension boundary.
+
+## Built-in navigation shell
+
+`Native_widget.Navigation_shell` is built-in extension kind `3`, schema
+version `1`. Its children are retained destination bodies followed by one
+drawer child and one bottom-navigation child. The fixed 12-byte payload carries
+the selected destination, destination count, requested drawer state, and
+whether the drawer is enabled. Both sides reject reserved flags, invalid
+indexes, and mismatched child counts.
+
+Flutter uses a real `Scaffold`, `Drawer`, and retained `IndexedStack`. Drawer
+drag progress, scrim animation, edge arbitration, Back handling, and settle
+stay local. Native event `1` carries one settled state byte (`0` closed, `1`
+open), and the host suppresses that event until the active pointer interaction
+has finished. OCaml uses `drawer_state_of_payload` before committing state.
+Dropping an open shell cancels pending post-frame work.
+
+## Built-in pressable
+
+`Native_widget.Pressable` is built-in extension kind `4`, schema version `1`.
+It receives exactly one child and stores an ARGB overlay color plus a release
+delay from 0 to 100 ms in its fixed eight-byte payload. The default neutral
+overlay uses an 80 ms release delay.
+
+Flutter owns pointer-down feedback, drag and nested-control cancellation,
+rapid-tap suppression, clipping, reduced-motion behavior, and disposal guards.
+It emits native event `1` with an empty payload only after a completed
+activation. The host contributes one tap action while retaining descriptive
+child semantics and independent nested-button semantics. OCaml validates the
+raw event with `activation_of_payload` before opening a route.
 
 ## Built-in swipe action
 

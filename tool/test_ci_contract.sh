@@ -284,12 +284,56 @@ require_file examples/clock/ocaml/dune
 require_file examples/clock/ocaml/native_embed.ml
 require_file examples/clock/flutter/lib/main.dart
 require_file examples/clock/flutter/pubspec.yaml
+require_file ocaml/trace/trace.mli
+require_file ocaml/trace/debug/trace.ml
+require_file ocaml/trace/release/trace.ml
+trace_library_dune=$(cat ocaml/trace/dune)
+trace_debug_library_dune=$(cat ocaml/trace/debug/dune)
+trace_release_library_dune=$(cat ocaml/trace/release/dune)
+reject_text "$trace_library_dune" "(public_name" "internal trace virtual library"
+reject_text "$trace_debug_library_dune" "(public_name" "internal trace debug library"
+reject_text "$trace_release_library_dune" "(public_name" "internal trace release library"
+native_backend_test_source=$(cat ocaml/test/native_backend_tests.ml)
+for example_marker in \
+  "Mail.component" \
+  "mail-debug" \
+  "Bonsai Mail" \
+  "mail-list-page" \
+  "mail-row-1"
+do
+  reject_text \
+    "$native_backend_test_source" \
+    "$example_marker" \
+    "generic native backend test"
+done
+reject_pattern \
+  "$native_backend_test_source" \
+  '(^|[^[:alnum:]_])mail([^[:alnum:]_]|$)' \
+  "generic native backend test"
+native_backend_test_dune=$(
+  sed -n '/(name native_backend_tests)/,/(name mail_example_tests)/p' ocaml/test/dune
+)
+reject_text \
+  "$native_backend_test_dune" \
+  "bonsai_flutter_mail_example" \
+  "generic native backend test dependencies"
 for example in clock counter gallery host_effects host_navigation mail navigation text_input todo; do
   require_file "examples/$example/ocaml/native_embed.ml"
-  require_text \
-    "$native_object_commands" \
-    "examples/$example/ocaml/native_embed.exe.o" \
-    "native-objects"
+  if test "$example" = mail; then
+    require_text \
+      "$native_object_commands" \
+      "examples/mail/ocaml/native_embed_debug.exe.o" \
+      "native-objects"
+    require_text \
+      "$native_object_commands" \
+      "examples/mail/ocaml/native_embed_release.exe.o" \
+      "native-objects"
+  else
+    require_text \
+      "$native_object_commands" \
+      "examples/$example/ocaml/native_embed.exe.o" \
+      "native-objects"
+  fi
   example_pubspec=$(cat "examples/$example/flutter/pubspec.yaml")
   require_text \
     "$example_pubspec" \
@@ -299,6 +343,12 @@ for example in clock counter gallery host_effects host_navigation mail navigatio
     "$example_pubspec" \
     "require_ocaml_backend: true" \
     "$example Flutter build hook"
+  if test "$example" = mail; then
+    require_text \
+      "$example_pubspec" \
+      "mode_specific_ocaml_artifacts: true" \
+      "$example Flutter build hook"
+  fi
   macos_debug_config=$(cat "examples/$example/flutter/macos/Runner/Configs/Debug.xcconfig")
   macos_release_config=$(cat "examples/$example/flutter/macos/Runner/Configs/Release.xcconfig")
   require_text "$macos_debug_config" "ARCHS = arm64" "$example macOS Debug configuration"

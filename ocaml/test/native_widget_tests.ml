@@ -99,6 +99,46 @@ let test_virtual_list_window () =
   | None -> failwith "visible range callback"
 ;;
 
+let test_virtual_list_handler_path_and_payload_filtering () =
+  let received = ref None in
+  let handler =
+    Ui.Event.Handler.create ~name:"virtual-range" (fun payload ->
+      received := Ui.Native_widget.Virtual_list.visible_range_of_payload payload)
+  in
+  let widget =
+    Ui.Native_widget.Virtual_list.create_with_handler
+      ~total_count:40
+      ~first_index:8
+      ~item_extent:88.
+      ~overscan:4
+      ~items:(List.init 24 (fun index -> Ui.Widget.text (string_of_int index)))
+      ~on_visible_range:handler
+      ()
+  in
+  let binding = (Ui.Widget.Private.view widget).event_bindings.(0) in
+  let invoke kind_id version event_id payload =
+    Ui.Event.Handler.Private.invoke
+      binding.handler
+      (Native_event { kind_id; version; event_id; payload })
+  in
+  let valid =
+    Ui.Native_widget.Virtual_list.For_testing.encode_visible_range
+      ~first_index:12
+      ~last_exclusive:20
+  in
+  invoke 99 1 1 valid;
+  invoke Ui.Native_widget.Virtual_list.kind_id 2 1 valid;
+  invoke Ui.Native_widget.Virtual_list.kind_id 1 2 valid;
+  invoke Ui.Native_widget.Virtual_list.kind_id 1 1 Bytes.empty;
+  check (!received = None) "malformed virtual-list event was accepted";
+  invoke Ui.Native_widget.Virtual_list.kind_id 1 1 valid;
+  match !received with
+  | Some { Ui.Event.Payload.first_index; last_exclusive } ->
+    check (Int64.equal first_index 12L) "handler visible first index";
+    check (Int64.equal last_exclusive 20L) "handler visible last index"
+  | None -> failwith "valid virtual-list handler event was filtered"
+;;
+
 let swipe_action
       ?(label = "Archive")
       ?(background = Ui.Style.Color.argb ~alpha:255 ~red:80 ~green:125 ~blue:88)
@@ -234,10 +274,158 @@ let test_swipe_action_event_filtering () =
     "valid swipe event was filtered"
 ;;
 
+let test_navigation_shell_contract_and_events () =
+  let received = ref None in
+  let widget =
+    Ui.Native_widget.Navigation_shell.create
+      ~key:(Ui.Key.string "shell")
+      ~selected_index:1
+      ~drawer_open:true
+      ~drawer_enabled:false
+      ~bodies:[ Ui.Widget.text "Primary"; Ui.Widget.text "Secondary" ]
+      ~drawer:(Ui.Widget.text "Drawer")
+      ~bottom_navigation:(Ui.Widget.text "Bottom")
+      ~on_drawer_state_changed:(fun state -> received := Some state)
+      ()
+  in
+  let view = Ui.Widget.Private.view widget in
+  check (Array.length view.children = 4) "navigation shell child shape";
+  (match view.props with
+   | Native_widget_props { kind_id; version; capabilities; payload } ->
+     check (kind_id = 3) "navigation shell kind ID";
+     check (version = 1) "navigation shell schema version";
+     check (Int64.equal capabilities 7L) "navigation shell capabilities";
+     let props = Ui.Native_widget.Navigation_shell.For_testing.decode_props_exn payload in
+     check (props.destination_count = 2) "navigation destination count";
+     check (props.selected_index = 1) "navigation selected index";
+     check props.drawer_open "navigation requested drawer state";
+     check (not props.drawer_enabled) "navigation drawer enabled state"
+   | _ -> failwith "navigation shell native props");
+  let binding = view.event_bindings.(0) in
+  Ui.Event.Handler.Private.invoke
+    binding.handler
+    (Native_event
+       { kind_id = 3
+       ; version = 1
+       ; event_id = 1
+       ; payload = Ui.Native_widget.Navigation_shell.For_testing.encode_drawer_state Open
+       });
+  check
+    (!received = Some Ui.Native_widget.Navigation_shell.Open)
+    "navigation shell open event";
+  received := None;
+  List.iter
+    (fun (kind_id, version, event_id, payload) ->
+       Ui.Event.Handler.Private.invoke
+         binding.handler
+         (Native_event { kind_id; version; event_id; payload }))
+    [ 99, 1, 1, Bytes.of_string "\000"
+    ; 3, 2, 1, Bytes.of_string "\000"
+    ; 3, 1, 2, Bytes.of_string "\000"
+    ; 3, 1, 1, Bytes.empty
+    ; 3, 1, 1, Bytes.of_string "\002"
+    ];
+  check (!received = None) "malformed navigation-shell event was accepted";
+  expect_invalid_argument
+    (fun () ->
+       ignore
+         (Ui.Native_widget.Navigation_shell.create
+            ~selected_index:0
+            ~drawer_open:false
+            ~drawer_enabled:true
+            ~bodies:[]
+            ~drawer:(Ui.Widget.empty ())
+            ~bottom_navigation:(Ui.Widget.empty ())
+            ~on_drawer_state_changed:(fun _ -> ())
+            ()))
+    "navigation shell accepted no destination bodies";
+  expect_invalid_argument
+    (fun () ->
+       ignore
+         (Ui.Native_widget.Navigation_shell.create
+            ~selected_index:2
+            ~drawer_open:false
+            ~drawer_enabled:true
+            ~bodies:[ Ui.Widget.empty (); Ui.Widget.empty () ]
+            ~drawer:(Ui.Widget.empty ())
+            ~bottom_navigation:(Ui.Widget.empty ())
+            ~on_drawer_state_changed:(fun _ -> ())
+            ()))
+    "navigation shell accepted an invalid selected index"
+;;
+
+let test_pressable_contract_handler_and_validation () =
+  let activations = ref 0 in
+  let handler =
+    Ui.Event.Handler.create ~name:"activate" (fun payload ->
+      if Ui.Native_widget.Pressable.activation_of_payload payload
+      then Stdlib.incr activations)
+  in
+  let overlay = Ui.Style.Color.argb ~alpha:24 ~red:28 ~green:32 ~blue:38 in
+  let widget =
+    Ui.Native_widget.Pressable.create_with_handler
+      ~key:(Ui.Key.string "pressable")
+      ~overlay_color:overlay
+      ~release_delay_ms:80
+      ~child:(Ui.Widget.text "Message")
+      ~on_activate:handler
+      ()
+  in
+  let view = Ui.Widget.Private.view widget in
+  check (Array.length view.children = 1) "pressable child shape";
+  (match view.props with
+   | Native_widget_props { kind_id; version; capabilities; payload } ->
+     check (kind_id = 4) "pressable kind ID";
+     check (version = 1) "pressable schema version";
+     check (Int64.equal capabilities 5L) "pressable capabilities";
+     let props = Ui.Native_widget.Pressable.For_testing.decode_props_exn payload in
+     check
+       (Int32.equal
+          (Ui.Style.Color.Private.to_argb32 props.overlay_color)
+          (Ui.Style.Color.Private.to_argb32 overlay))
+       "pressable overlay color";
+     check (props.release_delay_ms = 80) "pressable release delay"
+   | _ -> failwith "pressable native props");
+  let binding = view.event_bindings.(0) in
+  let invoke kind_id version event_id payload =
+    Ui.Event.Handler.Private.invoke
+      binding.handler
+      (Native_event { kind_id; version; event_id; payload })
+  in
+  invoke 99 1 1 Bytes.empty;
+  invoke 4 2 1 Bytes.empty;
+  invoke 4 1 2 Bytes.empty;
+  invoke 4 1 1 (Bytes.of_string "\000");
+  check (!activations = 0) "malformed pressable event was accepted";
+  invoke 4 1 1 Bytes.empty;
+  check (!activations = 1) "valid pressable activation was filtered";
+  expect_invalid_argument
+    (fun () ->
+       ignore
+         (Ui.Native_widget.Pressable.create
+            ~release_delay_ms:(-1)
+            ~child:(Ui.Widget.empty ())
+            ~on_activate:(fun () -> ())
+            ()))
+    "pressable accepted a negative release delay";
+  expect_invalid_argument
+    (fun () ->
+       ignore
+         (Ui.Native_widget.Pressable.create
+            ~release_delay_ms:101
+            ~child:(Ui.Widget.empty ())
+            ~on_activate:(fun () -> ())
+            ()))
+    "pressable accepted a release delay above the product cap"
+;;
+
 let () =
   test_typed_native_widget ();
   test_virtual_list_window ();
+  test_virtual_list_handler_path_and_payload_filtering ();
   test_swipe_action_props_contract ();
   test_swipe_action_omitted_direction_and_validation ();
-  test_swipe_action_event_filtering ()
+  test_swipe_action_event_filtering ();
+  test_navigation_shell_contract_and_events ();
+  test_pressable_contract_handler_and_validation ()
 ;;

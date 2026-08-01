@@ -31,10 +31,37 @@ type message =
   ; attachment : attachment option
   }
 
+type app_destination =
+  | Mail
+  | Chat
+  | Spaces
+  | Meet
+
+type mail_destination =
+  | Inbox_view
+  | Starred_view
+  | Archived_view
+  | Trash_view
+  | Settings_view
+
+type load_state =
+  | Idle
+  | Loading_more of
+      { generation : int
+      ; cursor : int
+      }
+
 type state =
   { messages : message list
   ; selected_id : int option
   ; notice : string option
+  ; selected_app_destination : app_destination
+  ; selected_mail_destination : mail_destination
+  ; drawer_open : bool
+  ; next_cursor : int
+  ; next_generation : int
+  ; load_state : load_state
+  ; window_first : int
   }
 
 let message
@@ -66,7 +93,7 @@ let message
   }
 ;;
 
-let initial_messages =
+let curated_messages =
   [ message
       1
       "Mara Vale"
@@ -232,7 +259,55 @@ let initial_messages =
   ]
 ;;
 
-let initial = { messages = initial_messages; selected_id = None; notice = None }
+let generated_message id =
+  message
+    id
+    (Printf.sprintf "Field Correspondent %d" id)
+    (Printf.sprintf "dispatch-%d@fieldnotes.example" id)
+    (Printf.sprintf "Field Dispatch %d" id)
+    (Printf.sprintf "A concise update from field station %d." id)
+    (Printf.sprintf
+       "Hello,\n\n\
+        This is the deterministic field dispatch for station %d. The notes are ready for \
+        the next local review.\n\n\
+        Field Correspondent %d"
+       id
+       id)
+    "Earlier"
+    ~read:(id mod 2 = 0)
+    ~starred:(id mod 7 = 0)
+    ~category:
+      (match id mod 3 with
+       | 0 -> Primary
+       | 1 -> Promotions
+       | _ -> Updates)
+    ()
+;;
+
+let generated_messages ~first_id ~count =
+  List.init count (fun offset -> generated_message (first_id + offset))
+;;
+
+let initial_messages = curated_messages @ generated_messages ~first_id:13 ~count:8
+
+let messages_for_cursor cursor =
+  generated_messages ~first_id:((cursor * 20) + 1) ~count:20
+;;
+
+let initial =
+  { messages = initial_messages
+  ; selected_id = None
+  ; notice = None
+  ; selected_app_destination = Mail
+  ; selected_mail_destination = Inbox_view
+  ; drawer_open = false
+  ; next_cursor = 1
+  ; next_generation = 0
+  ; load_state = Idle
+  ; window_first = 0
+  }
+;;
+
 let equal_state = ( = )
 
 let update_message state id update =
@@ -360,7 +435,7 @@ let star_control on_press message ~detail =
     ~color:(if message.starred then star_color else text_secondary)
 ;;
 
-let search_header =
+let search_header on_menu =
   Ui.Widget.sized_box
     ~height:56.
     (Ui.Widget.decorated_box
@@ -368,7 +443,13 @@ let search_header =
          (Ui.Style.Decoration.create ~background:search_surface ~border_radius:28. ())
        (Ui.Widget.Flex.row
           [ Ui.Widget.Flex.fixed
-              (padding ~horizontal:16. (icon ~size:22. ~color:primary 0xe3c3))
+              (semantic_icon_button
+                 ~test_id:"mail-menu"
+                 ~label:"Menu"
+                 ~selected:false
+                 ~on_press:on_menu
+                 ~code_point:0xe5d2
+                 ~color:primary)
           ; Ui.Widget.Flex.expanded
               (styled_text ~size:16. ~color:text_secondary "Search in mail")
           ; Ui.Widget.Flex.fixed
@@ -431,23 +512,21 @@ let render_mail_row ~toggle_star ~open_message ~swipe_action message =
       ]
   in
   let content =
-    Ui.Widget.gesture
-      ~on_tap:open_message
-      (Ui.Widget.decorated_box
-         ~decoration:
-           (Ui.Style.Decoration.create
-              ~background:(if message.read then surface else unread_surface)
-              ())
-         (Ui.Widget.sized_box
-            ~height:88.
-            (padding
-               ~horizontal:16.
-               ~vertical:8.
-               (Ui.Widget.Flex.row
-                  [ Ui.Widget.Flex.fixed (avatar message)
-                  ; Ui.Widget.Flex.expanded (padding ~horizontal:12. text_column)
-                  ; Ui.Widget.Flex.fixed trailing
-                  ]))))
+    Ui.Widget.decorated_box
+      ~decoration:
+        (Ui.Style.Decoration.create
+           ~background:(if message.read then surface else unread_surface)
+           ())
+      (Ui.Widget.sized_box
+         ~height:88.
+         (padding
+            ~horizontal:16.
+            ~vertical:8.
+            (Ui.Widget.Flex.row
+               [ Ui.Widget.Flex.fixed (avatar message)
+               ; Ui.Widget.Flex.expanded (padding ~horizontal:12. text_column)
+               ; Ui.Widget.Flex.fixed trailing
+               ])))
     |> Ui.Widget.with_test_id
          (Ui.Test_id.string (Printf.sprintf "mail-row-%d" message.id))
     |> Ui.Widget.semantics
@@ -460,9 +539,16 @@ let render_mail_row ~toggle_star ~open_message ~swipe_action message =
                    message.sender)
               ~hint:message.subject
               ~value:(category_label message.category)
-              ~role:Ui.Semantics.Role.Button
-              ~enabled:true
+              ~role:Ui.Semantics.Role.Generic
               ())
+    |> fun child ->
+    Ui.Native_widget.Pressable.create_with_handler
+      ~key:(Ui.Key.int message.id)
+      ~child
+      ~on_activate:open_message
+      ()
+    |> Ui.Widget.with_test_id
+         (Ui.Test_id.string (Printf.sprintf "mail-pressable-%d" message.id))
   in
   let archive_icon =
     icon ~size:24. ~color:surface 0xe091
@@ -525,10 +611,13 @@ let mail_row handlers set_state message_id message _graph =
       ~name:"mail-open-message"
       ~equal:equal_dependencies
       dependencies
-      ~f:(fun (set_state, message_id) _ ->
-        set_state (fun state ->
-          update_message state message_id (fun message -> { message with read = true })
-          |> fun state -> { state with selected_id = Some message_id; notice = None }))
+      ~f:(fun (set_state, message_id) payload ->
+        if Ui.Native_widget.Pressable.activation_of_payload payload
+        then
+          set_state (fun state ->
+            update_message state message_id (fun message -> { message with read = true })
+            |> fun state -> { state with selected_id = Some message_id; notice = None })
+        else Bonsai.Effect.Ignore)
   in
   let swipe_action =
     Driver.Handler.create
@@ -562,54 +651,239 @@ let mail_row handlers set_state message_id message _graph =
       render_mail_row ~toggle_star ~open_message ~swipe_action message)
 ;;
 
-let inbox_page handlers rows =
-  let scroll = inert_handler handlers "mail-list-scroll" in
-  Bonsai.Cont.map2 rows scroll ~f:(fun rows scroll ->
+let mail_destination_title = function
+  | Inbox_view -> "Inbox"
+  | Starred_view -> "Starred"
+  | Archived_view -> "Archived"
+  | Trash_view -> "Trash"
+  | Settings_view -> "Settings"
+;;
+
+let placeholder destination =
+  let verb = if String.equal destination "Settings" then "are" else "is" in
+  Ui.Widget.center
+    (padding
+       ~horizontal:24.
+       (styled_text
+          ~size:17.
+          ~color:text_secondary
+          (Printf.sprintf
+             "%s %s outside the scope of this local mail demo."
+             destination
+             verb)
+        |> Ui.Widget.semantics
+             ~properties:(Ui.Semantics.create ~label:(destination ^ " placeholder") ())))
+;;
+
+let loading_more_row =
+  Ui.Widget.sized_box
+    ~height:88.
+    (Ui.Widget.center
+       (Ui.Material.circular_progress_indicator ()
+        |> Ui.Widget.sized_box ~width:24. ~height:24.))
+  |> Ui.Widget.with_test_id (Ui.Test_id.string "mail-loading-more")
+  |> Ui.Widget.semantics
+       ~properties:
+         (Ui.Semantics.create ~label:"Loading more messages" ~live_region:true ())
+;;
+
+let render_mail_body ~state ~rows ~open_menu ~on_visible_range =
+  match state.selected_mail_destination with
+  | Settings_view -> placeholder "Settings"
+  | (Inbox_view | Starred_view | Archived_view | Trash_view) as destination ->
     let rows =
       match rows with
       | `Ok rows -> rows
       | `Duplicate_key message_id ->
         invalid_arg (Printf.sprintf "Mail: duplicate message ID %d" message_id)
     in
+    let rows =
+      match state.load_state, destination with
+      | Loading_more _, Inbox_view -> rows @ [ loading_more_row ]
+      | Idle, Inbox_view -> rows
+      | (Idle | Loading_more _), (Starred_view | Archived_view | Trash_view) -> rows
+      | _, Settings_view -> assert false
+    in
+    let total_count =
+      let messages =
+        List.filter
+          (fun message ->
+             match destination with
+             | Inbox_view -> message.mailbox = Inbox
+             | Starred_view -> message.starred
+             | Archived_view -> message.mailbox = Archived
+             | Trash_view -> message.mailbox = Trash
+             | Settings_view -> false)
+          state.messages
+      in
+      List.length messages
+      +
+      match state.load_state, destination with
+      | Loading_more _, Inbox_view -> 1
+      | Idle, Inbox_view -> 0
+      | (Idle | Loading_more _), (Starred_view | Archived_view | Trash_view) -> 0
+      | _, Settings_view -> 0
+    in
     let list =
-      Ui.Widget.list_view ~on_scroll:scroll rows ()
+      Ui.Native_widget.Virtual_list.create_with_handler
+        ~total_count
+        ~first_index:state.window_first
+        ~item_extent:88.
+        ~overscan:4
+        ~items:rows
+        ~on_visible_range
+        ()
+      |> Ui.Widget.with_test_id (Ui.Test_id.string "mail-virtual-list")
       |> Ui.Widget.decorated_box
            ~decoration:
              (Ui.Style.Decoration.create ~background:surface ~border_radius:26. ())
     in
-    let content =
-      Ui.Widget.Flex.column
-        [ Ui.Widget.Flex.fixed (padding ~horizontal:16. ~vertical:10. search_header)
-        ; Ui.Widget.Flex.fixed
-            (padding
-               ~horizontal:20.
-               ~vertical:8.
-               (styled_text
-                  ~size:15.
+    let title = mail_destination_title destination in
+    Ui.Widget.Flex.column
+      [ Ui.Widget.Flex.fixed
+          (padding ~horizontal:16. ~vertical:10. (search_header open_menu))
+      ; Ui.Widget.Flex.fixed
+          (padding
+             ~horizontal:20.
+             ~vertical:8.
+             (styled_text
+                ~size:15.
+                ~weight:Ui.Style.Font_weight.Semi_bold
+                ~color:text_primary
+                title
+              |> Ui.Widget.semantics
+                   ~properties:
+                     (Ui.Semantics.create
+                        ~label:title
+                        ~role:Ui.Semantics.Role.Header
+                        ~heading_level:1
+                        ())))
+      ; Ui.Widget.Flex.expanded list
+      ]
+;;
+
+let drawer_item ~test_id ~label ~selected ~on_press ~code_point =
+  Ui.Material.text_button
+    ~on_press
+    ~child:
+      (Ui.Widget.Flex.row
+         [ Ui.Widget.Flex.fixed (icon ~size:21. ~color:primary code_point)
+         ; Ui.Widget.Flex.expanded
+             (padding
+                ~horizontal:16.
+                (styled_text
+                   ~size:15.
+                   ~weight:
+                     (if selected
+                      then Ui.Style.Font_weight.Semi_bold
+                      else Ui.Style.Font_weight.Normal)
+                   ~color:text_primary
+                   label))
+         ])
+    ()
+  |> Ui.Widget.with_test_id (Ui.Test_id.string test_id)
+  |> Ui.Widget.semantics
+       ~properties:
+         (Ui.Semantics.create
+            ~label
+            ~role:Ui.Semantics.Role.Button
+            ~enabled:true
+            ~selected
+            ())
+;;
+
+let render_drawer state ~inbox ~starred ~archived ~trash ~settings =
+  let item destination test_id label handler code_point =
+    drawer_item
+      ~test_id
+      ~label
+      ~selected:(state.selected_mail_destination = destination)
+      ~on_press:handler
+      ~code_point
+  in
+  Ui.Widget.safe_area
+    (Ui.Widget.column
+       [ padding
+           ~horizontal:20.
+           ~vertical:20.
+           (Ui.Widget.column
+              [ styled_text
+                  ~size:22.
                   ~weight:Ui.Style.Font_weight.Semi_bold
-                  ~color:text_primary
-                  "Inbox"
-                |> Ui.Widget.semantics
-                     ~properties:
-                       (Ui.Semantics.create
-                          ~label:"Inbox"
-                          ~role:Ui.Semantics.Role.Header
-                          ~heading_level:1
-                          ())))
-        ; Ui.Widget.Flex.expanded list
-        ]
-    in
-    Ui.Widget.page
-      ~key:(Ui.Key.string "mail-list")
-      ~page_key:"mail-list"
-      ~can_pop:false
-      (Ui.Material.scaffold
-         ~body:
-           (Ui.Widget.decorated_box
-              ~decoration:(Ui.Style.Decoration.create ~background ())
-              (Ui.Widget.safe_area content))
-         ())
-    |> Ui.Widget.with_test_id (Ui.Test_id.string "mail-list-page"))
+                  ~color:primary
+                  "Bonsai Mail"
+              ; styled_text ~size:13. ~color:text_secondary "BM • local@example.test"
+              ])
+       ; item Inbox_view "mail-drawer-inbox" "Inbox" inbox 0xe158
+       ; item Starred_view "mail-drawer-starred" "Starred" starred 0xe5f9
+       ; item Archived_view "mail-drawer-archived" "Archived" archived 0xe091
+       ; item Trash_view "mail-drawer-trash" "Trash" trash 0xe1b9
+       ; item Settings_view "mail-drawer-settings" "Settings" settings 0xe57f
+       ])
+;;
+
+let bottom_destination ~test_id ~label ~selected ~on_press ~code_point =
+  let icon =
+    Ui.Widget.center
+      (icon ~size:22. ~color:(if selected then primary else text_secondary) code_point)
+  in
+  let icon =
+    if selected
+    then
+      Ui.Widget.decorated_box
+        ~decoration:
+          (Ui.Style.Decoration.create ~background:primary_container ~border_radius:14. ())
+        icon
+    else icon
+  in
+  Ui.Material.text_button
+    ~on_press
+    ~child:
+      (Ui.Widget.column
+         [ Ui.Widget.sized_box ~width:52. ~height:28. icon
+         ; styled_text
+             ~size:11.
+             ~weight:
+               (if selected
+                then Ui.Style.Font_weight.Semi_bold
+                else Ui.Style.Font_weight.Normal)
+             ~color:(if selected then primary else text_secondary)
+             label
+         ])
+    ()
+  |> Ui.Widget.with_test_id (Ui.Test_id.string test_id)
+  |> Ui.Widget.semantics
+       ~properties:
+         (Ui.Semantics.create
+            ~label
+            ~role:Ui.Semantics.Role.Button
+            ~enabled:true
+            ~selected
+            ())
+;;
+
+let render_bottom_navigation state ~mail ~chat ~spaces ~meet =
+  let item destination test_id label handler code_point =
+    Ui.Widget.Flex.expanded
+      (bottom_destination
+         ~test_id
+         ~label
+         ~selected:(state.selected_app_destination = destination)
+         ~on_press:handler
+         ~code_point)
+  in
+  Ui.Widget.sized_box
+    ~height:64.
+    (Ui.Widget.Flex.row
+       [ item Mail "mail-destination-mail" "Mail" mail 0xe158
+       ; item Chat "mail-destination-chat" "Chat" chat 0xe0b7
+       ; item Spaces "mail-destination-spaces" "Spaces" spaces 0xf233
+       ; item Meet "mail-destination-meet" "Meet" meet 0xe04b
+       ])
+  |> Ui.Widget.safe_area ~top:false
+  |> Ui.Widget.decorated_box
+       ~decoration:(Ui.Style.Decoration.create ~background:surface ())
+  |> Ui.Widget.with_test_id (Ui.Test_id.string "mail-bottom-navigation")
 ;;
 
 let toolbar_action ~test_id ~label ~on_press code_point =
@@ -926,12 +1200,107 @@ let detail_page handlers set_state message_id detail _graph =
         ~notice
         message)
 ;;
+
+let messages_for_destination state =
+  List.filter
+    (fun message ->
+       match state.selected_mail_destination with
+       | Inbox_view -> message.mailbox = Inbox
+       | Starred_view -> message.starred
+       | Archived_view -> message.mailbox = Archived
+       | Trash_view -> message.mailbox = Trash
+       | Settings_view -> false)
+    state.messages
+;;
+
+let clamp_window_first state message_count =
+  min state.window_first (max 0 (message_count - 1))
+;;
+
+let rec drop count values =
+  if count <= 0
+  then values
+  else (
+    match values with
+    | [] -> []
+    | _ :: tail -> drop (count - 1) tail)
+;;
+
+let rec take count values =
+  if count <= 0
+  then []
+  else (
+    match values with
+    | [] -> []
+    | head :: tail -> head :: take (count - 1) tail)
+;;
+
+let window_messages state =
+  let messages = messages_for_destination state in
+  let first_index = clamp_window_first state (List.length messages) in
+  let capacity =
+    match state.load_state, state.selected_mail_destination with
+    | Loading_more _, Inbox_view -> 23
+    | Idle, Inbox_view -> 24
+    | (Idle | Loading_more _), (Starred_view | Archived_view | Trash_view | Settings_view)
+      -> 24
+  in
+  messages |> drop first_index |> take capacity
+;;
+
+let selected_app_index = function
+  | Mail -> 0
+  | Chat -> 1
+  | Spaces -> 2
+  | Meet -> 3
+;;
+
+let render_mail_page
+      state
+      rows
+      ~visible_range
+      ~open_menu
+      ~drawer_settled
+      ~inbox
+      ~starred
+      ~archived
+      ~trash
+      ~settings
+      ~mail
+      ~chat
+      ~spaces
+      ~meet
+  =
+  let mail_body =
+    render_mail_body ~state ~rows ~open_menu ~on_visible_range:visible_range
+    |> Ui.Widget.decorated_box ~decoration:(Ui.Style.Decoration.create ~background ())
+    |> Ui.Widget.safe_area ~bottom:false
+    |> Ui.Widget.with_test_id (Ui.Test_id.string "mail-content-safe-area")
+  in
+  let bodies =
+    [ mail_body; placeholder "Chat"; placeholder "Spaces"; placeholder "Meet" ]
+  in
+  let drawer = render_drawer state ~inbox ~starred ~archived ~trash ~settings in
+  let bottom_navigation = render_bottom_navigation state ~mail ~chat ~spaces ~meet in
+  Ui.Native_widget.Navigation_shell.create_with_handler
+    ~key:(Ui.Key.string "mail-navigation-shell")
+    ~selected_index:(selected_app_index state.selected_app_destination)
+    ~drawer_open:state.drawer_open
+    ~drawer_enabled:(state.selected_app_destination = Mail)
+    ~bodies
+    ~drawer
+    ~bottom_navigation
+    ~on_drawer_state_changed:drawer_settled
+    ()
+  |> Ui.Widget.with_test_id (Ui.Test_id.string "mail-navigation-shell")
+  |> Ui.Widget.page ~key:(Ui.Key.string "mail-list") ~page_key:"mail-list" ~can_pop:false
+  |> Ui.Widget.with_test_id (Ui.Test_id.string "mail-list-page")
+;;
+
 let component handlers graph =
   let state, set_state = Bonsai_v017.state ~equal:equal_state initial graph in
-  let visible_messages =
-    Bonsai.Cont.map state ~f:(fun state ->
-      List.filter (fun message -> message.mailbox = Inbox) state.messages)
-  in
+  let sleep = Bonsai.Cont.Clock.sleep graph in
+  let visible_messages = Bonsai.Cont.map state ~f:window_messages in
   let rows =
     Bonsai.Cont.assoc_list
       (module Core.Int)
@@ -940,7 +1309,200 @@ let component handlers graph =
       ~f:(mail_row handlers set_state)
       graph
   in
-  let inbox = inbox_page handlers rows in
+  let visible_range_dependencies =
+    Bonsai.Cont.map2
+      state
+      (Bonsai.Cont.both set_state sleep)
+      ~f:(fun state (set_state, sleep) -> state, set_state, sleep)
+  in
+  let visible_range =
+    Driver.Handler.create
+      handlers
+      ~name:"mail-visible-range"
+      ~equal:(fun (left, left_set, left_sleep) (right, right_set, right_sleep) ->
+        equal_state left right && left_set == right_set && left_sleep == right_sleep)
+      visible_range_dependencies
+      ~f:(fun (snapshot, set_state, sleep) payload ->
+        match Ui.Native_widget.Virtual_list.visible_range_of_payload payload with
+        | None -> Bonsai.Effect.Ignore
+        | Some { first_index; last_exclusive } ->
+          let count = List.length (messages_for_destination snapshot) in
+          let bounded value = Int64.to_int (Int64.min value (Int64.of_int count)) in
+          let first_index = bounded first_index in
+          let last_exclusive = bounded last_exclusive in
+          let window_first = min (max 0 (first_index - 12)) (max 0 (count - 1)) in
+          let should_load =
+            snapshot.selected_mail_destination = Inbox_view
+            && snapshot.load_state = Idle
+            && last_exclusive >= max 0 (count - 8)
+          in
+          if should_load
+          then (
+            let generation = snapshot.next_generation in
+            let cursor = snapshot.next_cursor in
+            Bonsai.Effect.Many
+              [ set_state (fun state ->
+                  if
+                    state.load_state = Idle
+                    && state.selected_mail_destination = Inbox_view
+                    && Int.equal state.next_cursor cursor
+                  then
+                    { state with
+                      window_first
+                    ; load_state = Loading_more { generation; cursor }
+                    ; next_generation = generation + 1
+                    }
+                  else state)
+              ; Bonsai.Effect.bind
+                  (sleep (Core.Time_ns.Span.of_ms 750.))
+                  ~f:(fun () ->
+                    set_state (fun state ->
+                      match state.load_state with
+                      | Loading_more loading
+                        when Int.equal loading.generation generation
+                             && Int.equal loading.cursor cursor ->
+                        { state with
+                          messages = state.messages @ messages_for_cursor cursor
+                        ; next_cursor = cursor + 1
+                        ; load_state = Idle
+                        }
+                      | Idle | Loading_more _ -> state))
+              ])
+          else set_state (fun state -> { state with window_first }))
+  in
+  let open_menu =
+    Driver.Handler.create
+      handlers
+      ~name:"mail-open-drawer"
+      ~equal:( == )
+      set_state
+      ~f:(fun set_state _ ->
+        set_state (fun state ->
+          if state.selected_app_destination = Mail
+          then { state with drawer_open = true }
+          else state))
+  in
+  let drawer_settled =
+    Driver.Handler.create
+      handlers
+      ~name:"mail-drawer-settled"
+      ~equal:( == )
+      set_state
+      ~f:(fun set_state payload ->
+        match Ui.Native_widget.Navigation_shell.drawer_state_of_payload payload with
+        | None -> Bonsai.Effect.Ignore
+        | Some drawer_state ->
+          set_state (fun state ->
+            { state with
+              drawer_open =
+                (match drawer_state with
+                 | Ui.Native_widget.Navigation_shell.Open -> true
+                 | Closed -> false)
+            }))
+  in
+  let mailbox_handler name destination =
+    Driver.Handler.create handlers ~name ~equal:( == ) set_state ~f:(fun set_state _ ->
+      set_state (fun state ->
+        let next_generation, load_state =
+          match state.load_state with
+          | Idle -> state.next_generation, Idle
+          | Loading_more _ -> state.next_generation + 1, Idle
+        in
+        { state with
+          selected_mail_destination = destination
+        ; drawer_open = false
+        ; window_first = 0
+        ; next_generation
+        ; load_state
+        }))
+  in
+  let inbox = mailbox_handler "mail-drawer-inbox" Inbox_view in
+  let starred = mailbox_handler "mail-drawer-starred" Starred_view in
+  let archived = mailbox_handler "mail-drawer-archived" Archived_view in
+  let trash = mailbox_handler "mail-drawer-trash" Trash_view in
+  let settings = mailbox_handler "mail-drawer-settings" Settings_view in
+  let app_handler name destination =
+    Driver.Handler.create handlers ~name ~equal:( == ) set_state ~f:(fun set_state _ ->
+      set_state (fun state ->
+        { state with selected_app_destination = destination; drawer_open = false }))
+  in
+  let mail = app_handler "mail-destination-mail" Mail in
+  let chat = app_handler "mail-destination-chat" Chat in
+  let spaces = app_handler "mail-destination-spaces" Spaces in
+  let meet = app_handler "mail-destination-meet" Meet in
+  let mailbox_handlers =
+    Bonsai.Cont.map2
+      (Bonsai.Cont.both inbox starred)
+      (Bonsai.Cont.map2
+         (Bonsai.Cont.both archived trash)
+         settings
+         ~f:(fun (archived, trash) settings -> archived, trash, settings))
+      ~f:(fun (inbox, starred) (archived, trash, settings) ->
+        inbox, starred, archived, trash, settings)
+  in
+  let app_handlers =
+    Bonsai.Cont.map2
+      (Bonsai.Cont.both mail chat)
+      (Bonsai.Cont.both spaces meet)
+      ~f:(fun (mail, chat) (spaces, meet) -> mail, chat, spaces, meet)
+  in
+  let shell_handlers =
+    Bonsai.Cont.map2
+      (Bonsai.Cont.both open_menu drawer_settled)
+      (Bonsai.Cont.both mailbox_handlers app_handlers)
+      ~f:
+        (fun
+          (open_menu, drawer_settled)
+          ((inbox, starred, archived, trash, settings), (mail, chat, spaces, meet))
+        ->
+        ( open_menu
+        , drawer_settled
+        , inbox
+        , starred
+        , archived
+        , trash
+        , settings
+        , mail
+        , chat
+        , spaces
+        , meet ))
+  in
+  let inbox =
+    Bonsai.Cont.map2
+      (Bonsai.Cont.both state rows)
+      (Bonsai.Cont.both visible_range shell_handlers)
+      ~f:
+        (fun
+          (state, rows)
+          ( visible_range
+          , ( open_menu
+            , drawer_settled
+            , inbox
+            , starred
+            , archived
+            , trash
+            , settings
+            , mail
+            , chat
+            , spaces
+            , meet ) )
+        ->
+        render_mail_page
+          state
+          rows
+          ~visible_range
+          ~open_menu
+          ~drawer_settled
+          ~inbox
+          ~starred
+          ~archived
+          ~trash
+          ~settings
+          ~mail
+          ~chat
+          ~spaces
+          ~meet)
+  in
   let selected_details =
     Bonsai.Cont.map state ~f:(fun state ->
       match state.selected_id with
@@ -993,8 +1555,7 @@ let component handlers graph =
               ()))
 ;;
 
-let trace message = Printf.eprintf "[Bonsai Mail][ocaml]%s\n%!" message
-let app = App.create ~name:"Bonsai Mail" ~trace component
+let app = App.create ~name:"Bonsai Mail" component
 
 module For_testing = struct
   let initial_inbox_ids = List.map (fun message -> message.id) initial_messages

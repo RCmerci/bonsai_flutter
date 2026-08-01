@@ -61,6 +61,30 @@ void main() {
         await _commitRowSwipe(tester);
       }
     }, reportKey: 'mail_row_swipe_commit');
+
+    await binding.traceAction(() async {
+      for (var index = 0; index < _iterations; index += 1) {
+        await _cancelDrawer(tester);
+      }
+    }, reportKey: 'mail_drawer_cancel');
+
+    await binding.traceAction(() async {
+      for (var index = 0; index < _iterations; index += 1) {
+        await _openAndCloseDrawer(tester);
+      }
+    }, reportKey: 'mail_drawer_commit');
+
+    await binding.traceAction(() async {
+      for (var index = 0; index < _iterations; index += 1) {
+        await _switchBottomDestination(tester);
+      }
+    }, reportKey: 'mail_bottom_switch');
+
+    await binding.traceAction(() async {
+      for (var index = 0; index < 3; index += 1) {
+        await _loadNextPage(tester);
+      }
+    }, reportKey: 'mail_virtual_append');
   });
 }
 
@@ -84,6 +108,9 @@ Future<void> _warmInteractions(WidgetTester tester) async {
   for (var index = 0; index < 2; index += 1) {
     await _cancelRowSwipe(tester);
     await _commitRowSwipe(tester);
+    await _cancelDrawer(tester);
+    await _openAndCloseDrawer(tester);
+    await _switchBottomDestination(tester);
   }
 }
 
@@ -146,6 +173,52 @@ Future<void> _commitRowSwipe(WidgetTester tester) async {
   await tester.pump();
   await gesture.up();
   await _waitForPresent(tester, find.text('Juniper Works'));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _cancelDrawer(WidgetTester tester) async {
+  final gesture = await tester.startGesture(const Offset(5, _interactionY));
+  await gesture.moveBy(const Offset(80, 0));
+  await tester.pump();
+  await gesture.moveBy(const Offset(-60, 0));
+  await gesture.up();
+  await tester.pumpAndSettle();
+  expect(find.byType(ModalBarrier), findsNothing);
+}
+
+Future<void> _openAndCloseDrawer(WidgetTester tester) async {
+  final gesture = await tester.startGesture(const Offset(5, _interactionY));
+  await gesture.moveBy(const Offset(300, 0));
+  await gesture.up();
+  await _waitForPresent(tester, find.byType(ModalBarrier));
+  await tester.tapAt(const Offset(385, _interactionY));
+  await _waitForAbsent(tester, find.byType(ModalBarrier));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _switchBottomDestination(WidgetTester tester) async {
+  await tester.tap(find.bySemanticsLabel('Chat'));
+  await _waitForPresent(
+    tester,
+    find.text('Chat is outside the scope of this local mail demo.'),
+  );
+  await tester.tap(find.bySemanticsLabel('Mail'));
+  await _waitForPresent(tester, find.text('Juniper Works'));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _loadNextPage(WidgetTester tester) async {
+  final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+  final previousMaxExtent = scrollable.position.maxScrollExtent;
+  scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+  for (var attempt = 0; attempt < 20; attempt += 1) {
+    await tester.pump(const Duration(milliseconds: 25));
+    if (scrollable.position.maxScrollExtent > previousMaxExtent) break;
+  }
+  scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+  final loadingMore = find.bySemanticsLabel(RegExp(r'^Loading more messages'));
+  await _waitForPresent(tester, loadingMore);
+  await _waitForAbsent(tester, loadingMore);
   await tester.pumpAndSettle();
 }
 

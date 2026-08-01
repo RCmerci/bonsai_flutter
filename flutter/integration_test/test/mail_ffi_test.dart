@@ -51,6 +51,18 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    final initialRangeBatch = queue.takeBatch();
+    expect(initialRangeBatch, isNotNull);
+    final initialRangeResponse = await tester.runAsync(
+      () => _bounded(
+        harness.advance(events: EventBatchCodec.encode(initialRangeBatch!)),
+        'initial visible-range pump',
+      ),
+    );
+    if (initialRangeResponse!.bytes.isNotEmpty) {
+      store.apply(FrameCodec.decode(initialRangeResponse.bytes));
+    }
+    await tester.pump();
     final followingElement = tester.element(find.text('River Tan'));
     final archiveGesture = await tester.startGesture(
       tester.getCenter(find.text('Mara Vale')),
@@ -107,7 +119,7 @@ void main() {
     expect(find.text('The field notes are ready'), findsNothing);
 
     await tester.tap(find.text('Juniper Works'));
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
     final openBatch = queue.takeBatch()!;
     final openResponse = await tester.runAsync(
       () => _bounded(
@@ -169,7 +181,7 @@ void main() {
 
     expect(detailBody, findsNothing);
     expect(
-      find.bySemanticsLabel('Read message from Juniper Works'),
+      find.bySemanticsLabel(RegExp(r'^Read message from Juniper Works')),
       findsOneWidget,
     );
     harness.acknowledge();

@@ -2,13 +2,19 @@
 
 EXAMPLE ?= counter
 NATIVE_OBJECT_TARGET = examples/$(EXAMPLE)/ocaml/native_embed.exe.o
+ifeq ($(EXAMPLE),mail)
+NATIVE_OBJECT_TARGET = \
+	examples/mail/ocaml/native_embed_debug.exe.o \
+	examples/mail/ocaml/native_embed_release.exe.o
+endif
 NATIVE_OBJECT_TARGETS = \
 	examples/clock/ocaml/native_embed.exe.o \
 	examples/counter/ocaml/native_embed.exe.o \
 	examples/gallery/ocaml/native_embed.exe.o \
 	examples/host_effects/ocaml/native_embed.exe.o \
 	examples/host_navigation/ocaml/native_embed.exe.o \
-	examples/mail/ocaml/native_embed.exe.o \
+	examples/mail/ocaml/native_embed_debug.exe.o \
+	examples/mail/ocaml/native_embed_release.exe.o \
 	examples/navigation/ocaml/native_embed.exe.o \
 	examples/text_input/ocaml/native_embed.exe.o \
 	examples/todo/ocaml/native_embed.exe.o

@@ -68,6 +68,20 @@ module Virtual_list : sig
     -> unit
     -> Widget.t
 
+  val visible_range_of_payload : Event.Payload.t -> Event.Payload.visible_range option
+
+  val create_with_handler
+    :  ?key:Key.t
+    -> total_count:int
+    -> first_index:int
+    -> item_extent:float
+    -> ?overscan:int
+    -> ?axis:Layout.Axis.t
+    -> items:Widget.t list
+    -> on_visible_range:Event.Handler.t
+    -> unit
+    -> Widget.t
+
   module For_testing : sig
     type props =
       { total_count : int
@@ -119,4 +133,85 @@ module Swipe_action : sig
     -> on_commit:Event.Handler.t
     -> unit
     -> Widget.t
+end
+
+module Navigation_shell : sig
+  type drawer_state =
+    | Closed
+    | Open
+
+  val kind_id : int
+  val drawer_state_changed_event_id : int
+
+  val create
+    :  ?key:Key.t
+    -> selected_index:int
+    -> drawer_open:bool
+    -> drawer_enabled:bool
+    -> bodies:Widget.t list
+    -> drawer:Widget.t
+    -> bottom_navigation:Widget.t
+    -> on_drawer_state_changed:(drawer_state -> unit)
+    -> unit
+    -> Widget.t
+
+  val drawer_state_of_payload : Event.Payload.t -> drawer_state option
+
+  val create_with_handler
+    :  ?key:Key.t
+    -> selected_index:int
+    -> drawer_open:bool
+    -> drawer_enabled:bool
+    -> bodies:Widget.t list
+    -> drawer:Widget.t
+    -> bottom_navigation:Widget.t
+    -> on_drawer_state_changed:Event.Handler.t
+    -> unit
+    -> Widget.t
+
+  module For_testing : sig
+    type props =
+      { selected_index : int
+      ; destination_count : int
+      ; drawer_open : bool
+      ; drawer_enabled : bool
+      }
+
+    val decode_props_exn : bytes -> props
+    val encode_drawer_state : drawer_state -> bytes
+  end
+end
+
+module Pressable : sig
+  val kind_id : int
+  val activate_event_id : int
+
+  val create
+    :  ?key:Key.t
+    -> ?overlay_color:Style.Color.t
+    -> ?release_delay_ms:int
+    -> child:Widget.t
+    -> on_activate:(unit -> unit)
+    -> unit
+    -> Widget.t
+
+  val activation_of_payload : Event.Payload.t -> bool
+
+  val create_with_handler
+    :  ?key:Key.t
+    -> ?overlay_color:Style.Color.t
+    -> ?release_delay_ms:int
+    -> child:Widget.t
+    -> on_activate:Event.Handler.t
+    -> unit
+    -> Widget.t
+
+  module For_testing : sig
+    type props =
+      { overlay_color : Style.Color.t
+      ; release_delay_ms : int
+      }
+
+    val decode_props_exn : bytes -> props
+  end
 end

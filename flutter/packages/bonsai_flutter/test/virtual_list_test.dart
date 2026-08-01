@@ -129,4 +129,182 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  testWidgets(
+    'fast scroll reports the logical range beyond the supplied window',
+    (tester) async {
+      final children = List.generate(
+        24,
+        (index) => CreateNode(
+          nodeId: index + 2,
+          kind: NodeKind.text,
+          props: TextProps('Item $index'),
+          eventBindings: const [],
+        ),
+      );
+      final store = NodeStore()
+        ..apply(
+          Frame(
+            runtimeEpoch: 2,
+            baseRevision: 0,
+            targetRevision: 1,
+            kind: FrameKind.fullSnapshot,
+            operations: [
+              CreateNode(
+                nodeId: 1,
+                kind: NodeKind.nativeWidget,
+                props: VirtualListProps(
+                  totalCount: 100,
+                  firstIndex: 0,
+                  itemExtent: 48,
+                  overscan: 4,
+                  axis: ScrollAxis.vertical,
+                ).toNativeWidgetProps(),
+                eventBindings: const [
+                  EventBinding(eventTag: EventTagId.nativeEvent, handlerId: 12),
+                ],
+              ),
+              ...children,
+              SetChildren(
+                nodeId: 1,
+                children: List.generate(24, (index) => index + 2),
+              ),
+              const SetRoot(1),
+            ],
+          ),
+        );
+      final events = <RendererEvent>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            height: 240,
+            child: BonsaiFlutterView(store: store, onEvent: events.add),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+      scrollable.position.jumpTo(48 * 36);
+      await tester.pump();
+      final range = VirtualListEvent.decodeVisibleRange(
+        (events.last.payload as NativeEventPayload).payload,
+      );
+
+      expect(range.firstIndex, greaterThanOrEqualTo(36));
+      expect(range.lastExclusive, greaterThan(range.firstIndex));
+    },
+  );
+
+  testWidgets(
+    'window catch-up fills fast-scroll viewport without offset jump',
+    (tester) async {
+      List<CreateNode> children(int first, int nodeBase) => List.generate(
+        24,
+        (index) => CreateNode(
+          nodeId: nodeBase + index,
+          kind: NodeKind.text,
+          props: TextProps('Item ${first + index}'),
+          eventBindings: const [],
+        ),
+      );
+      final initialChildren = children(0, 2);
+      final store = NodeStore()
+        ..apply(
+          Frame(
+            runtimeEpoch: 3,
+            baseRevision: 0,
+            targetRevision: 1,
+            kind: FrameKind.fullSnapshot,
+            operations: [
+              CreateNode(
+                nodeId: 1,
+                kind: NodeKind.nativeWidget,
+                props: VirtualListProps(
+                  totalCount: 100,
+                  firstIndex: 0,
+                  itemExtent: 48,
+                  overscan: 4,
+                  axis: ScrollAxis.vertical,
+                ).toNativeWidgetProps(),
+                eventBindings: const [],
+              ),
+              ...initialChildren,
+              SetChildren(
+                nodeId: 1,
+                children: List.generate(24, (index) => index + 2),
+              ),
+              const SetRoot(1),
+            ],
+          ),
+        );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(height: 240, child: BonsaiFlutterView(store: store)),
+        ),
+      );
+      final position = tester
+          .state<ScrollableState>(find.byType(Scrollable))
+          .position;
+      position.jumpTo(48 * 36);
+      await tester.pump();
+      final offsetBefore = position.pixels;
+
+      final nextChildren = children(32, 26);
+      store.apply(
+        Frame(
+          runtimeEpoch: 3,
+          baseRevision: 1,
+          targetRevision: 2,
+          kind: FrameKind.incremental,
+          operations: [
+            UpdateProps(
+              nodeId: 1,
+              props: VirtualListProps(
+                totalCount: 100,
+                firstIndex: 32,
+                itemExtent: 48,
+                overscan: 4,
+                axis: ScrollAxis.vertical,
+              ).toNativeWidgetProps(),
+            ),
+            ...nextChildren,
+            SetChildren(
+              nodeId: 1,
+              children: List.generate(24, (index) => index + 26),
+            ),
+            for (var nodeId = 2; nodeId < 26; nodeId += 1) DropNode(nodeId),
+          ],
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Item 36'), findsOneWidget);
+      expect(position.pixels, offsetBefore);
+
+      store.apply(
+        Frame(
+          runtimeEpoch: 3,
+          baseRevision: 2,
+          targetRevision: 3,
+          kind: FrameKind.incremental,
+          operations: [
+            UpdateProps(
+              nodeId: 1,
+              props: VirtualListProps(
+                totalCount: 100,
+                firstIndex: 32,
+                itemExtent: 48,
+                overscan: 4,
+                axis: ScrollAxis.vertical,
+              ).toNativeWidgetProps(),
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
+      expect(position.pixels, offsetBefore);
+      expect(find.text('Item 36'), findsOneWidget);
+    },
+  );
 }

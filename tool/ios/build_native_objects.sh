@@ -35,13 +35,14 @@ for example in \
   gallery \
   host_effects \
   host_navigation \
-  mail \
   navigation \
   text_input \
   todo
 do
   targets="$targets examples/$example/ocaml/native_embed.exe.o"
 done
+targets="$targets examples/mail/ocaml/native_embed_debug.exe.o"
+targets="$targets examples/mail/ocaml/native_embed_release.exe.o"
 targets="$targets flutter/integration_test/ocaml/native_integration_embed.exe.o"
 
 # BUILD_PATH_PREFIX_MAP removes checkout-specific paths from OCaml metadata.
@@ -65,13 +66,25 @@ for example in \
   gallery \
   host_effects \
   host_navigation \
-  mail \
   navigation \
   text_input \
   todo
 do
   source_object="$build_directory/default.ios/examples/$example/ocaml/native_embed.exe.o"
   destination_directory="$artifact_root/$example/ios/$target/arm64"
+  destination_object="$destination_directory/native_embed.exe.o"
+  mkdir -p "$destination_directory"
+  cp -f "$source_object" "$destination_object"
+  "$script_directory/verify_complete_object.sh" \
+    "$destination_object" \
+    "$expected_platform" \
+    "$minimum_version" \
+    arm64
+done
+
+for variant in debug release; do
+  source_object="$build_directory/default.ios/examples/mail/ocaml/native_embed_$variant.exe.o"
+  destination_directory="$artifact_root/mail/ios/$target/arm64/$variant"
   destination_object="$destination_directory/native_embed.exe.o"
   mkdir -p "$destination_directory"
   cp -f "$source_object" "$destination_object"

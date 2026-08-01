@@ -9,6 +9,8 @@ import 'native_widget_registry.dart';
 abstract final class NativeWidgetKind {
   static const int virtualList = 1;
   static const int swipeAction = 2;
+  static const int navigationShell = 3;
+  static const int pressable = 4;
 }
 
 abstract final class VirtualListEvent {
@@ -208,11 +210,9 @@ final class _VirtualListHostState extends State<_VirtualListHost> {
     final logicalFirst = (offset / widget.props.itemExtent).floor();
     final logicalLast = ((offset + _viewportExtent) / widget.props.itemExtent)
         .ceil();
-    final windowFirst = widget.props.firstIndex;
-    final windowLast = windowFirst + widget.children.length;
     final range = (
-      firstIndex: logicalFirst.clamp(windowFirst, windowLast),
-      lastExclusive: logicalLast.clamp(windowFirst, windowLast),
+      firstIndex: logicalFirst.clamp(0, widget.props.totalCount),
+      lastExclusive: logicalLast.clamp(0, widget.props.totalCount),
     );
     if (range == _lastRange) return;
     _lastRange = range;
@@ -244,6 +244,14 @@ final class _VirtualListHostState extends State<_VirtualListHost> {
         scrollCacheExtent: ScrollCacheExtent.pixels(
           widget.props.overscan * widget.props.itemExtent,
         ),
+        findChildIndexCallback: (key) {
+          for (var index = 0; index < widget.children.length; index += 1) {
+            if (widget.children[index].key == key) {
+              return widget.props.firstIndex + index;
+            }
+          }
+          return null;
+        },
         itemBuilder: (context, index) {
           final windowIndex = index - widget.props.firstIndex;
           if (windowIndex >= 0 && windowIndex < widget.children.length) {

@@ -22,7 +22,9 @@ final class MailExampleApp extends StatelessWidget {
     title: 'Bonsai Mail',
     debugShowCheckedModeBanner: false,
     home: BonsaiFlutterRoot(
-      config: Uint8List.fromList(utf8.encode('mail')),
+      config: Uint8List.fromList(
+        utf8.encode(kDebugMode ? 'mail-debug' : 'mail'),
+      ),
       runtimeStarter: (config) =>
           startTracedMailRuntime(config, trace: _writeRuntimeTrace),
     ),

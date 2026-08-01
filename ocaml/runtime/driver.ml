@@ -830,16 +830,14 @@ let produce_candidate t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot 
         Host_effect.Prepared_operations.operations prepared_host_operations
       in
       if Runtime.Frame_patch.is_empty output.frame_patch && host_operations = []
-      then (
-        trace_lazy t (fun () ->
-          Printf.sprintf "[outbound-no-frame] revision=%Ld" t.displayed_revision);
+      then
         Ok
           { candidate_tree = output.mounted_tree
           ; candidate_handler_frame = None
           ; prepared_host_operations
           ; renderer_revision = t.displayed_revision
           ; emitted_frame = None
-          })
+          }
       else (
         match wire_operations (Runtime.Frame_patch.operations output.frame_patch) with
         | Error _ as error -> error
@@ -1384,12 +1382,15 @@ let presentation_succeeded t ~presentation_id ~renderer_revision ~monotonic_now_
        (match logical_time t monotonic_now_ns with
         | Error _ as error -> error
         | Ok logical_time ->
-          trace_lazy t (fun () ->
-            Printf.sprintf
-              "[presentation-ack] presentationId=%Ld revision=%Ld \
-               direction=flutter->ocaml"
-              presentation_id
-              renderer_revision);
+          Option.iter
+            (fun _ ->
+               trace_lazy t (fun () ->
+                 Printf.sprintf
+                   "[presentation-ack] presentationId=%Ld revision=%Ld \
+                    direction=flutter->ocaml"
+                   presentation_id
+                   renderer_revision))
+            pending.emitted_frame;
           let fail_fatal error = Error (terminal t error) in
           (match
              Host_effect.commit_operations t.host_effects pending.prepared_host_operations

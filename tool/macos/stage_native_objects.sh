@@ -15,7 +15,11 @@ fail() {
 stage_object() {
   artifact_name=$1
   source_object=$2
+  variant=${3:-}
   destination_directory="$artifact_root/$artifact_name/macos/arm64"
+  if test -n "$variant"; then
+    destination_directory="$destination_directory/$variant"
+  fi
   destination_object="$destination_directory/native_embed.exe.o"
 
   test -f "$source_object" ||
@@ -47,9 +51,20 @@ case "$1" in
       text_input \
       todo
     do
-      stage_object \
-        "$example" \
-        "$source_root/examples/$example/ocaml/native_embed.exe.o"
+      if test "$example" = mail; then
+        stage_object \
+          mail \
+          "$source_root/examples/mail/ocaml/native_embed_debug.exe.o" \
+          debug
+        stage_object \
+          mail \
+          "$source_root/examples/mail/ocaml/native_embed_release.exe.o" \
+          release
+      else
+        stage_object \
+          "$example" \
+          "$source_root/examples/$example/ocaml/native_embed.exe.o"
+      fi
     done
     ;;
   integration)
@@ -63,7 +78,17 @@ case "$1" in
     test "$#" -eq 2 ||
       fail "example requires an example name"
     case "$2" in
-      clock | counter | gallery | host_effects | host_navigation | mail | navigation | text_input | todo)
+      mail)
+        stage_object \
+          mail \
+          "$source_root/examples/mail/ocaml/native_embed_debug.exe.o" \
+          debug
+        stage_object \
+          mail \
+          "$source_root/examples/mail/ocaml/native_embed_release.exe.o" \
+          release
+        ;;
+      clock | counter | gallery | host_effects | host_navigation | navigation | text_input | todo)
         stage_object \
           "$2" \
           "$source_root/examples/$2/ocaml/native_embed.exe.o"
