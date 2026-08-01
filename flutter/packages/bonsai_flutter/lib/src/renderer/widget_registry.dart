@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 
 import '../native_widget/native_widget_registry.dart';
 import '../native_widget/navigation_shell.dart';
-import '../native_widget/pressable.dart';
 import '../native_widget/swipe_action.dart';
 import '../native_widget/virtual_list.dart';
 import '../protocol/event_batch.dart';
@@ -17,6 +16,7 @@ import '../store/node_store.dart';
 import '../text_input/text_input_host.dart';
 import 'animated_opacity_host.dart';
 import 'node_host.dart';
+import 'pressable_host.dart';
 import 'renderer_event.dart';
 import 'renderer_resource_store.dart';
 
@@ -53,7 +53,6 @@ final class WidgetRegistry {
       registerVirtualList(extensions);
       registerSwipeAction(extensions);
       registerNavigationShell(extensions);
-      registerPressable(extensions);
     }
     return WidgetRegistry({
       NodeKind.empty: _buildEmpty,
@@ -65,6 +64,7 @@ final class WidgetRegistry {
       NodeKind.column: _buildColumn,
       NodeKind.stack: _buildStack,
       NodeKind.button: _buildButton,
+      NodeKind.pressable: _buildPressable,
       NodeKind.padding: _buildPadding,
       NodeKind.align: _buildAlign,
       NodeKind.center: _buildCenter,
@@ -160,6 +160,36 @@ Widget _buildEmpty(
   _expectChildCount(node, children, 0);
   _expectProps<EmptyProps>(node);
   return const SizedBox.shrink();
+}
+
+Widget _buildPressable(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  _expectChildCount(node, children, 1);
+  final props = _expectProps<PressableProps>(node);
+  if (props.releaseDelayMs < 0 || props.releaseDelayMs > 100) {
+    throw const RendererBuildException(
+      'Pressable release delay must be in 0..100ms',
+    );
+  }
+  final binding = _binding(node, EventTagId.press);
+  return PressableHost(
+    props: props,
+    onPress: binding == null || onEvent == null
+        ? null
+        : () => onEvent(
+            RendererEvent(
+              nodeId: node.id,
+              eventTag: binding.eventTag,
+              handlerId: binding.handlerId,
+              payload: const UnitEventPayload(),
+            ),
+          ),
+    child: children.single,
+  );
 }
 
 Widget _buildText(

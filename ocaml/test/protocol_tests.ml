@@ -672,6 +672,30 @@ let test_native_widget_props_round_trip () =
     }
 ;;
 
+let test_pressable_props_round_trip () =
+  let open Wire_frame in
+  expect_frame_round_trip
+    "pressable props"
+    { runtime_epoch = 7L
+    ; base_revision = 0L
+    ; target_revision = 1L
+    ; kind = Full_snapshot
+    ; operations =
+        [ Create_node
+            { node_id = 1L
+            ; kind = Pressable
+            ; props =
+                Pressable_props
+                  { overlay_color_argb = 0x181c2026l; release_delay_ms = 80 }
+            ; event_bindings =
+                [ { event_tag = Generated_protocol.Event_tag.press; handler_id = 9L } ]
+            ; parent_data = No_parent_data
+            }
+        ; Set_root 1L
+        ]
+    }
+;;
+
 let test_native_event_round_trip () =
   let open Inbound_event in
   expect_event_batch_round_trip
@@ -942,6 +966,7 @@ let () =
   test_host_requests_round_trip ();
   test_host_response_events_round_trip ();
   test_environment_event_round_trip ();
+  test_pressable_props_round_trip ();
   test_native_widget_props_round_trip ();
   test_native_event_round_trip ();
   test_runtime_stats_round_trip ();

@@ -185,6 +185,15 @@ val button
   -> unit
   -> t
 
+val pressable
+  :  ?key:Key.t
+  -> ?overlay_color:Style.Color.t
+  -> ?release_delay_ms:int
+  -> on_press:Event.Handler.t
+  -> child:t
+  -> unit
+  -> t
+
 module Flex : sig
   type child
 
@@ -249,6 +258,7 @@ module Private : sig
       | Focus_scope
       | Mouse_region
       | Keyboard_listener
+      | Pressable
       | Semantics
       | Theme
       | Material_scaffold
@@ -329,6 +339,10 @@ module Private : sig
     | Linear_props
     | Stack_props
     | Button_props of { enabled : bool }
+    | Pressable_props of
+        { overlay_color : Style.Color.t
+        ; release_delay_ms : int
+        }
     | Padding_props of
         { left : float
         ; top : float

@@ -27,7 +27,7 @@ The current decoder rejects a wrong magic, unsupported major or newer minor
 version, short or noncanonical header, nonzero flags, nonzero checksum or
 reserved fields, an inconsistent payload length, truncated input, trailing
 operation bytes, and frames above the configured maximum. CRC32C negotiation
-is reserved for a later compatible protocol minor version; version 1.13
+is reserved for a later compatible protocol minor version; version 1.14
 requires the flags and checksum fields to be zero.
 
 ## Frame kinds
@@ -43,7 +43,7 @@ Payload operations have a one-byte opcode, a four-byte byte length, and a
 kind-specific generated body. A decoder validates the body length before
 allocating.
 
-Version 1.13 uses these primitive encodings:
+Version 1.14 uses these primitive encodings:
 
 - integers are unsigned little-endian values of their declared width;
 - runtime IDs and revisions are restricted to the positive `int64` range;
@@ -116,6 +116,7 @@ implemented kind-specific property layouts are:
 | Navigator | `restoration_scope_id:optional string` |
 | Page | `page_key:string`, transition `u8`, `can_pop:bool`, `restoration_id:optional string` |
 | MaterialDialog | `barrier_dismissible:bool` |
+| Pressable | `overlay_color:u32 ARGB`, `release_delay_ms:u16` |
 
 `Update_props` carries the exact generated field mask expected for its full
 typed property value. Empty and linear values use mask zero; multi-property
@@ -129,7 +130,7 @@ selection offsets, and an optional ordered pair of `u32` composing offsets.
 Every offset is a UTF-16 code-unit boundary. Keyboard type, input action, and
 update mode are bounded `u8` enums.
 
-Version 1.13 decoders continue to accept earlier 1.x frames whose operations
+Version 1.14 decoders continue to accept earlier 1.x frames whose operations
 use layouts defined by that earlier minor version. In particular, the protocol
 test suite decodes the value-only Text layout from 1.12 and the unchanged
 `Opacity` layout from 1.11.

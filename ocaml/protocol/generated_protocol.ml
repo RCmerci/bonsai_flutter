@@ -1,7 +1,7 @@
 (* Generated from [protocol/schema.sexp]. Do not edit. *)
 
 let protocol_major = 1
-let protocol_minor = 13
+let protocol_minor = 14
 
 module Limits = struct
   let header_bytes = 48
@@ -83,6 +83,7 @@ module Node_kind = struct
   let focus_scope = 51
   let mouse_region = 52
   let keyboard_listener = 53
+  let pressable = 54
   let semantics = 64
   let overlay = 65
   let navigator = 66
@@ -136,6 +137,7 @@ module Node_kind = struct
     | 51 -> Some "focus_scope"
     | 52 -> Some "mouse_region"
     | 53 -> Some "keyboard_listener"
+    | 54 -> Some "pressable"
     | 64 -> Some "semantics"
     | 65 -> Some "overlay"
     | 66 -> Some "navigator"
@@ -815,6 +817,17 @@ module Material_dialog_prop = struct
 
   let debug_name = function
     | 1 -> Some "barrier_dismissible"
+    | _ -> None
+  ;;
+end
+
+module Pressable_prop = struct
+  let overlay_color = 1
+  let release_delay_ms = 2
+
+  let debug_name = function
+    | 1 -> Some "overlay_color"
+    | 2 -> Some "release_delay_ms"
     | _ -> None
   ;;
 end

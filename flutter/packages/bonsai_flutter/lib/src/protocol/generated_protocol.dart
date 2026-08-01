@@ -2,7 +2,7 @@
 
 abstract final class ProtocolVersion {
   static const int protocolMajor = 1;
-  static const int protocolMinor = 13;
+  static const int protocolMinor = 14;
 }
 
 abstract final class ProtocolLimits {
@@ -85,6 +85,7 @@ abstract final class NodeKindId {
   static const int focusScope = 51;
   static const int mouseRegion = 52;
   static const int keyboardListener = 53;
+  static const int pressable = 54;
   static const int semantics = 64;
   static const int overlay = 65;
   static const int navigator = 66;
@@ -138,6 +139,7 @@ abstract final class NodeKindId {
     51 => 'focus_scope',
     52 => 'mouse_region',
     53 => 'keyboard_listener',
+    54 => 'pressable',
     64 => 'semantics',
     65 => 'overlay',
     66 => 'navigator',
@@ -817,6 +819,17 @@ abstract final class MaterialDialogPropId {
 
   static String? debugName(int id) => switch (id) {
     1 => 'barrier_dismissible',
+    _ => null,
+  };
+}
+
+abstract final class PressablePropId {
+  static const int overlayColor = 1;
+  static const int releaseDelayMs = 2;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'overlay_color',
+    2 => 'release_delay_ms',
     _ => null,
   };
 }

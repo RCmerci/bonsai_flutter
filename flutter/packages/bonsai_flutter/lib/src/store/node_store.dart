@@ -424,6 +424,7 @@ final class NodeStore {
       NodeKind.focusScope => props is FocusScopeProps,
       NodeKind.mouseRegion => props is MouseRegionProps,
       NodeKind.keyboardListener => props is KeyboardListenerProps,
+      NodeKind.pressable => props is PressableProps,
       NodeKind.semantics => props is SemanticsProps,
       NodeKind.theme => props is ThemeProps,
       NodeKind.materialScaffold => props is MaterialScaffoldProps,

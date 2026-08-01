@@ -542,11 +542,7 @@ let render_mail_row ~toggle_star ~open_message ~swipe_action message =
               ~role:Ui.Semantics.Role.Generic
               ())
     |> fun child ->
-    Ui.Native_widget.Pressable.create_with_handler
-      ~key:(Ui.Key.int message.id)
-      ~child
-      ~on_activate:open_message
-      ()
+    Ui.Widget.pressable ~key:(Ui.Key.int message.id) ~child ~on_press:open_message ()
     |> Ui.Widget.with_test_id
          (Ui.Test_id.string (Printf.sprintf "mail-pressable-%d" message.id))
   in
@@ -612,12 +608,12 @@ let mail_row handlers set_state message_id message _graph =
       ~equal:equal_dependencies
       dependencies
       ~f:(fun (set_state, message_id) payload ->
-        if Ui.Native_widget.Pressable.activation_of_payload payload
-        then
+        match payload with
+        | Ui.Event.Payload.Unit ->
           set_state (fun state ->
             update_message state message_id (fun message -> { message with read = true })
             |> fun state -> { state with selected_id = Some message_id; notice = None })
-        else Bonsai.Effect.Ignore)
+        | _ -> Bonsai.Effect.Ignore)
   in
   let swipe_action =
     Driver.Handler.create

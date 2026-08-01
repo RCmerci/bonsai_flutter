@@ -62,6 +62,7 @@ module Node_kind : sig
   val focus_scope : int
   val mouse_region : int
   val keyboard_listener : int
+  val pressable : int
   val semantics : int
   val overlay : int
   val navigator : int
@@ -437,6 +438,12 @@ end
 
 module Material_dialog_prop : sig
   val barrier_dismissible : int
+  val debug_name : int -> string option
+end
+
+module Pressable_prop : sig
+  val overlay_color : int
+  val release_delay_ms : int
   val debug_name : int -> string option
 end
 

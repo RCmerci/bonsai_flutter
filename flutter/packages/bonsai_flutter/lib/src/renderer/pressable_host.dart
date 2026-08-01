@@ -1,83 +1,19 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
-import 'native_widget_registry.dart';
-import 'virtual_list.dart';
-
-abstract final class PressableEvent {
-  static const int activate = 1;
-}
-
-final class PressableProps {
-  const PressableProps({
-    required this.overlayColor,
-    required this.releaseDelay,
-  });
-
-  final Color overlayColor;
-  final Duration releaseDelay;
-
-  void validateChildCount(int childCount) {
-    if (childCount != 1) {
-      throw const FormatException('Pressable requires exactly one child');
-    }
-    if (releaseDelay.isNegative ||
-        releaseDelay > const Duration(milliseconds: 100)) {
-      throw const FormatException(
-        'Pressable release delay must be in 0..100ms',
-      );
-    }
-  }
-
-  static PressableProps decode(Uint8List payload) {
-    if (payload.length != 8) {
-      throw const FormatException('Pressable props must be exactly 8 bytes');
-    }
-    final data = ByteData.sublistView(payload);
-    if (data.getUint8(6) != 0 || data.getUint8(7) != 0) {
-      throw const FormatException('Pressable reserved bytes must be zero');
-    }
-    final props = PressableProps(
-      overlayColor: Color(data.getUint32(0, Endian.little)),
-      releaseDelay: Duration(milliseconds: data.getUint16(4, Endian.little)),
-    );
-    props.validateChildCount(1);
-    return props;
-  }
-}
-
-void registerPressable(NativeWidgetRegistry registry) {
-  registry.register<PressableProps>(
-    NativeWidgetRegistration(
-      kindId: NativeWidgetKind.pressable,
-      minVersion: 1,
-      maxVersion: 1,
-      capabilityBits: NativeCapability.stateful | NativeCapability.semantics,
-      decodeProps: PressableProps.decode,
-      factory: (context) {
-        context.props.validateChildCount(context.children.length);
-        return PressableHost(
-          props: context.props,
-          emit: context.emit,
-          child: context.children.single,
-        );
-      },
-    ),
-  );
-}
+import '../protocol/frame.dart';
 
 final class PressableHost extends StatefulWidget {
   const PressableHost({
     required this.props,
-    required this.emit,
+    required this.onPress,
     required this.child,
     super.key,
   });
 
   final PressableProps props;
-  final NativeEventEmitter? emit;
+  final VoidCallback? onPress;
   final Widget child;
 
   @override
@@ -121,7 +57,7 @@ final class _PressableHostState extends State<PressableHost> {
     final generation = ++_generation;
     final delay = MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
-        : widget.props.releaseDelay;
+        : Duration(milliseconds: widget.props.releaseDelayMs);
     if (delay == Duration.zero) {
       _emitActivation(generation);
     } else {
@@ -136,7 +72,7 @@ final class _PressableHostState extends State<PressableHost> {
 
   void _emitActivation(int generation) {
     if (_disposed || !mounted || generation != _generation) return;
-    widget.emit?.call(PressableEvent.activate, Uint8List(0));
+    widget.onPress?.call();
     if (!mounted) return;
     setState(() {
       _pressed = false;
@@ -162,7 +98,9 @@ final class _PressableHostState extends State<PressableHost> {
             if (_pressed)
               Positioned.fill(
                 child: IgnorePointer(
-                  child: ColoredBox(color: widget.props.overlayColor),
+                  child: ColoredBox(
+                    color: Color(widget.props.overlayColorArgb),
+                  ),
                 ),
               ),
           ],

@@ -2,7 +2,7 @@
 
 # Protocol IDs
 
-Protocol version: `1.13`
+Protocol version: `1.14`
 
 ## Frame kind
 
@@ -60,6 +60,7 @@ Protocol version: `1.13`
 | `focus_scope` | 51 |
 | `mouse_region` | 52 |
 | `keyboard_listener` | 53 |
+| `pressable` | 54 |
 | `semantics` | 64 |
 | `overlay` | 65 |
 | `navigator` | 66 |
@@ -482,6 +483,13 @@ Protocol version: `1.13`
 | Name | ID | Encoding |
 |---|---:|---|
 | `barrier_dismissible` | 1 | `bool` |
+
+## Pressable properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `overlay_color` | 1 | `argb32` |
+| `release_delay_ms` | 2 | `u16` |
 
 ## Native widget properties
 

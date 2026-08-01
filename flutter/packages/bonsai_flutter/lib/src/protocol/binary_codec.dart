@@ -393,6 +393,8 @@ abstract final class FrameCodec {
           ..optionalFloat64(height);
       case (NodeKind.button, ButtonProps(:final enabled)):
         writer.uint8(enabled ? 1 : 0);
+      case (NodeKind.pressable, final PressableProps props):
+        _writePressableProps(writer, props);
       case (NodeKind.padding, PaddingProps(:final insets)):
         _writeInsets(writer, insets);
       case (NodeKind.align, AlignProps(:final alignment)):
@@ -646,6 +648,11 @@ abstract final class FrameCodec {
           ..uint16(NodeKindId.button)
           ..uint64(1)
           ..uint8(enabled ? 1 : 0);
+      case final PressableProps props:
+        writer
+          ..uint16(NodeKindId.pressable)
+          ..uint64(_changedFields(props));
+        _writePressableProps(writer, props);
       case PaddingProps(:final insets):
         writer
           ..uint16(NodeKindId.padding)
@@ -973,6 +980,20 @@ abstract final class FrameCodec {
     ),
     NodeKind.row || NodeKind.column => const LinearProps(),
     NodeKind.button => ButtonProps(enabled: reader.boolean()),
+    NodeKind.pressable => () {
+      final overlayColorArgb = reader.uint32();
+      final releaseDelayMs = reader.uint16();
+      if (releaseDelayMs > 100) {
+        _fail(
+          ProtocolErrorCode.invalidProps,
+          'Pressable release delay must be in 0..100ms',
+        );
+      }
+      return PressableProps(
+        overlayColorArgb: overlayColorArgb,
+        releaseDelayMs: releaseDelayMs,
+      );
+    }(),
     NodeKind.padding => PaddingProps(
       EdgeInsetsValue(
         left: reader.finiteFloat64(),
@@ -1204,6 +1225,7 @@ abstract final class FrameCodec {
     NodeKind.focusScope => NodeKindId.focusScope,
     NodeKind.mouseRegion => NodeKindId.mouseRegion,
     NodeKind.keyboardListener => NodeKindId.keyboardListener,
+    NodeKind.pressable => NodeKindId.pressable,
     NodeKind.semantics => NodeKindId.semantics,
     NodeKind.theme => NodeKindId.theme,
     NodeKind.materialScaffold => NodeKindId.materialScaffold,
@@ -1261,6 +1283,7 @@ abstract final class FrameCodec {
     if (value == NodeKindId.keyboardListener) {
       return NodeKind.keyboardListener;
     }
+    if (value == NodeKindId.pressable) return NodeKind.pressable;
     if (value == NodeKindId.semantics) return NodeKind.semantics;
     if (value == NodeKindId.theme) return NodeKind.theme;
     if (value == NodeKindId.materialScaffold) {
@@ -1448,6 +1471,9 @@ int _changedFields(UiProps props) => switch (props) {
         _fieldMask(ImagePropId.width) |
         _fieldMask(ImagePropId.height),
   ButtonProps() => _fieldMask(ButtonPropId.enabled),
+  PressableProps() =>
+    _fieldMask(PressablePropId.overlayColor) |
+        _fieldMask(PressablePropId.releaseDelayMs),
   PaddingProps() => _fieldMask(PaddingPropId.insets),
   AlignProps() => _fieldMask(AlignPropId.alignment),
   CenterProps() =>
@@ -1602,6 +1628,18 @@ NativeWidgetProps _readNativeWidgetProps(_Reader reader) {
     capabilityBits: capabilityBits,
     payload: reader.bytes(reader.uint32()),
   );
+}
+
+void _writePressableProps(_Writer writer, PressableProps props) {
+  if (props.releaseDelayMs < 0 || props.releaseDelayMs > 100) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Pressable release delay must be in 0..100ms',
+    );
+  }
+  writer
+    ..uint32(props.overlayColorArgb)
+    ..uint16(props.releaseDelayMs);
 }
 
 void _writeRuntimeStats(_Writer writer, RuntimeStatsOperation stats) {

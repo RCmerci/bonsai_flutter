@@ -181,37 +181,3 @@ module Navigation_shell : sig
     val encode_drawer_state : drawer_state -> bytes
   end
 end
-
-module Pressable : sig
-  val kind_id : int
-  val activate_event_id : int
-
-  val create
-    :  ?key:Key.t
-    -> ?overlay_color:Style.Color.t
-    -> ?release_delay_ms:int
-    -> child:Widget.t
-    -> on_activate:(unit -> unit)
-    -> unit
-    -> Widget.t
-
-  val activation_of_payload : Event.Payload.t -> bool
-
-  val create_with_handler
-    :  ?key:Key.t
-    -> ?overlay_color:Style.Color.t
-    -> ?release_delay_ms:int
-    -> child:Widget.t
-    -> on_activate:Event.Handler.t
-    -> unit
-    -> Widget.t
-
-  module For_testing : sig
-    type props =
-      { overlay_color : Style.Color.t
-      ; release_delay_ms : int
-      }
-
-    val decode_props_exn : bytes -> props
-  end
-end

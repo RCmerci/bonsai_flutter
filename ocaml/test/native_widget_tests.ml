@@ -354,71 +354,6 @@ let test_navigation_shell_contract_and_events () =
     "navigation shell accepted an invalid selected index"
 ;;
 
-let test_pressable_contract_handler_and_validation () =
-  let activations = ref 0 in
-  let handler =
-    Ui.Event.Handler.create ~name:"activate" (fun payload ->
-      if Ui.Native_widget.Pressable.activation_of_payload payload
-      then Stdlib.incr activations)
-  in
-  let overlay = Ui.Style.Color.argb ~alpha:24 ~red:28 ~green:32 ~blue:38 in
-  let widget =
-    Ui.Native_widget.Pressable.create_with_handler
-      ~key:(Ui.Key.string "pressable")
-      ~overlay_color:overlay
-      ~release_delay_ms:80
-      ~child:(Ui.Widget.text "Message")
-      ~on_activate:handler
-      ()
-  in
-  let view = Ui.Widget.Private.view widget in
-  check (Array.length view.children = 1) "pressable child shape";
-  (match view.props with
-   | Native_widget_props { kind_id; version; capabilities; payload } ->
-     check (kind_id = 4) "pressable kind ID";
-     check (version = 1) "pressable schema version";
-     check (Int64.equal capabilities 5L) "pressable capabilities";
-     let props = Ui.Native_widget.Pressable.For_testing.decode_props_exn payload in
-     check
-       (Int32.equal
-          (Ui.Style.Color.Private.to_argb32 props.overlay_color)
-          (Ui.Style.Color.Private.to_argb32 overlay))
-       "pressable overlay color";
-     check (props.release_delay_ms = 80) "pressable release delay"
-   | _ -> failwith "pressable native props");
-  let binding = view.event_bindings.(0) in
-  let invoke kind_id version event_id payload =
-    Ui.Event.Handler.Private.invoke
-      binding.handler
-      (Native_event { kind_id; version; event_id; payload })
-  in
-  invoke 99 1 1 Bytes.empty;
-  invoke 4 2 1 Bytes.empty;
-  invoke 4 1 2 Bytes.empty;
-  invoke 4 1 1 (Bytes.of_string "\000");
-  check (!activations = 0) "malformed pressable event was accepted";
-  invoke 4 1 1 Bytes.empty;
-  check (!activations = 1) "valid pressable activation was filtered";
-  expect_invalid_argument
-    (fun () ->
-       ignore
-         (Ui.Native_widget.Pressable.create
-            ~release_delay_ms:(-1)
-            ~child:(Ui.Widget.empty ())
-            ~on_activate:(fun () -> ())
-            ()))
-    "pressable accepted a negative release delay";
-  expect_invalid_argument
-    (fun () ->
-       ignore
-         (Ui.Native_widget.Pressable.create
-            ~release_delay_ms:101
-            ~child:(Ui.Widget.empty ())
-            ~on_activate:(fun () -> ())
-            ()))
-    "pressable accepted a release delay above the product cap"
-;;
-
 let () =
   test_typed_native_widget ();
   test_virtual_list_window ();
@@ -426,6 +361,5 @@ let () =
   test_swipe_action_props_contract ();
   test_swipe_action_omitted_direction_and_validation ();
   test_swipe_action_event_filtering ();
-  test_navigation_shell_contract_and_events ();
-  test_pressable_contract_handler_and_validation ()
+  test_navigation_shell_contract_and_events ()
 ;;

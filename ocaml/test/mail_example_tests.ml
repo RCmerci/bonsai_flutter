@@ -89,15 +89,9 @@ let native_swipe handle id direction =
     ~payload:(Bytes.make 1 (Char.chr direction))
 ;;
 
-let native_press handle id =
+let press handle id =
   Test.Handle.present handle;
-  Test.Handle.native_event
-    handle
-    (Test.Query.test_id (Printf.sprintf "mail-pressable-%d" id))
-    ~kind_id:4
-    ~version:1
-    ~event_id:1
-    ~payload:Bytes.empty
+  Test.Handle.click handle (Test.Query.test_id (Printf.sprintf "mail-pressable-%d" id))
 ;;
 
 let native_visible_range handle ~first_index ~last_exclusive =
@@ -244,7 +238,7 @@ let test_open_marks_read_and_platform_pop_preserves_state () =
         (Test.Query.test_id "mail-swipe-1")
         "mail swipe host 1 is missing before open"
     in
-    native_press handle 1;
+    press handle 1;
     let swipe_while_open =
       require_node
         handle
@@ -398,7 +392,7 @@ let test_swipe_event_filtering_and_nested_action_isolation () =
 
 let test_stale_route_pop_is_ignored () =
   with_handle (fun handle ->
-    native_press handle 1;
+    press handle 1;
     Test.Handle.present handle;
     Test.Handle.route_pop
       handle
@@ -424,7 +418,7 @@ let test_stale_route_pop_is_ignored () =
 let test_archive_delete_and_mark_unread () =
   let expect_removed action_id message_id =
     with_handle (fun handle ->
-      native_press handle message_id;
+      press handle message_id;
       Test.Handle.present handle;
       Test.Handle.click handle (Test.Query.test_id action_id);
       require_absent
@@ -442,7 +436,7 @@ let test_archive_delete_and_mark_unread () =
   expect_removed "mail-archive" 1;
   expect_removed "mail-delete" 2;
   with_handle (fun handle ->
-    native_press handle 3;
+    press handle 3;
     Test.Handle.present handle;
     Test.Handle.click handle (Test.Query.test_id "mail-mark-unread");
     require_absent
@@ -457,7 +451,7 @@ let test_archive_delete_and_mark_unread () =
 
 let test_detail_star_attachment_and_reply_notice () =
   with_handle (fun handle ->
-    native_press handle 4;
+    press handle 4;
     require_present
       handle
       (Test.Query.test_id "mail-attachment")
@@ -665,7 +659,7 @@ let test_drawer_archived_trash_and_inbox_views_are_functional () =
     Test.Handle.click handle (Test.Query.test_id "mail-menu");
     Test.Handle.present handle;
     Test.Handle.click handle (Test.Query.test_id "mail-drawer-inbox");
-    native_press handle 2;
+    press handle 2;
     Test.Handle.present handle;
     Test.Handle.click handle (Test.Query.test_id "mail-delete");
     Test.Handle.present handle;
@@ -726,26 +720,15 @@ let test_bottom_destinations_are_explicit_and_restore_mail_state () =
       "returning to Mail lost loaded messages")
 ;;
 
-let test_pressable_activation_is_typed_and_does_not_duplicate_detail () =
+let test_pressable_activation_does_not_duplicate_detail () =
   with_handle (fun handle ->
     Test.Handle.present handle;
-    Test.Handle.native_event
-      handle
-      (Test.Query.test_id "mail-pressable-1")
-      ~kind_id:4
-      ~version:2
-      ~event_id:1
-      ~payload:Bytes.empty;
-    require_absent
-      handle
-      (Test.Query.test_id "mail-detail-page")
-      "wrong-version pressable event opened detail";
-    native_press handle 1;
+    press handle 1;
     require_present
       handle
       (Test.Query.test_id "mail-detail-page")
       "valid pressable activation did not open detail";
-    native_press handle 1;
+    press handle 1;
     require
       (List.length (Test.Handle.find_all handle (Test.Query.test_id "mail-detail-page"))
        = 1)
@@ -770,5 +753,5 @@ let () =
   test_only_selected_bottom_destination_has_an_icon_indicator ();
   test_navigation_shell_owns_one_colored_bottom_safe_area ();
   test_bottom_destinations_are_explicit_and_restore_mail_state ();
-  test_pressable_activation_is_typed_and_does_not_duplicate_detail ()
+  test_pressable_activation_does_not_duplicate_detail ()
 ;;

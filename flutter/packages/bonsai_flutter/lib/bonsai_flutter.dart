@@ -6,7 +6,6 @@ export 'src/environment/environment_reporter.dart';
 export 'src/host_effects/host_effect_dispatcher.dart';
 export 'src/native_widget/native_widget_registry.dart';
 export 'src/native_widget/navigation_shell.dart';
-export 'src/native_widget/pressable.dart';
 export 'src/native_widget/swipe_action.dart';
 export 'src/native_widget/virtual_list.dart';
 export 'src/protocol/binary_codec.dart';

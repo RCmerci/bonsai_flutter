@@ -18,7 +18,7 @@ void main() {
       expect(encoded.length, 148);
       expect(encoded.sublist(0, 4), [0x42, 0x46, 0x46, 0x52]);
       expect(readUint16(encoded, 4), 1);
-      expect(readUint16(encoded, 6), 13);
+      expect(readUint16(encoded, 6), ProtocolVersion.protocolMinor);
       expect(readUint16(encoded, 8), 48);
       expect(encoded[10], 2);
       expect(readUint64(encoded, 12), 7);

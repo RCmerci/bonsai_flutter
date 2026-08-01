@@ -111,8 +111,8 @@ typed extension decoder runs. Revision-scoped handler rules still reject stale
 or replaced handlers.
 
 The Gallery contains the complete custom card example and its real FFI test.
-The built-in virtual list, navigation shell, swipe action, and pressable use the
-same extension boundary.
+The built-in virtual list, navigation shell, and swipe action use the same
+extension boundary. Pressable is a core protocol node described below.
 
 ## Built-in navigation shell
 
@@ -130,19 +130,17 @@ open), and the host suppresses that event until the active pointer interaction
 has finished. OCaml uses `drawer_state_of_payload` before committing state.
 Dropping an open shell cancels pending post-frame work.
 
-## Built-in pressable
+## Core pressable
 
-`Native_widget.Pressable` is built-in extension kind `4`, schema version `1`.
-It receives exactly one child and stores an ARGB overlay color plus a release
-delay from 0 to 100 ms in its fixed eight-byte payload. The default neutral
-overlay uses an 80 ms release delay.
+`Widget.pressable` is a core protocol node. It receives exactly one child and
+stores an ARGB overlay color plus a release delay from 0 to 100 ms in typed
+`Pressable_props`. The default neutral overlay uses an 80 ms release delay.
 
 Flutter owns pointer-down feedback, drag and nested-control cancellation,
 rapid-tap suppression, clipping, reduced-motion behavior, and disposal guards.
-It emits native event `1` with an empty payload only after a completed
-activation. The host contributes one tap action while retaining descriptive
-child semantics and independent nested-button semantics. OCaml validates the
-raw event with `activation_of_payload` before opening a route.
+It emits the standard `Press` event with `Event.Payload.Unit` only after a
+completed activation. The host contributes one tap action while retaining
+descriptive child semantics and independent nested-button semantics.
 
 ## Built-in swipe action
 

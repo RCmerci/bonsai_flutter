@@ -1,7 +1,7 @@
 ((protocol
   (name bonsai_flutter)
   (major 1)
-  (minor 13)
+  (minor 14)
   (endianness little)
   (header_bytes 48)
   (max_frame_bytes 16777216)
@@ -56,6 +56,7 @@
    (focus_scope 51)
    (mouse_region 52)
    (keyboard_listener 53)
+   (pressable 54)
    (semantics 64)
    (overlay 65)
    (navigator 66)
@@ -241,6 +242,9 @@
      (minimum 5 edge_insets)))
    (material_dialog
     ((barrier_dismissible 1 bool)))
+   (pressable
+    ((overlay_color 1 argb32)
+     (release_delay_ms 2 u16)))
    (native_widget
     ((kind_id 1 u32)
      (version 2 u16)

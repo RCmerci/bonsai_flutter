@@ -28,6 +28,7 @@ type node_kind =
   | Focus_scope
   | Mouse_region
   | Keyboard_listener
+  | Pressable
   | Semantics
   | Theme
   | Material_scaffold
@@ -235,6 +236,10 @@ type props =
       }
   | Linear_props
   | Button_props of { enabled : bool }
+  | Pressable_props of
+      { overlay_color_argb : int32
+      ; release_delay_ms : int
+      }
   | Padding_props of
       { left : float
       ; top : float

@@ -81,6 +81,11 @@ let check_u32 label value =
   then fail Invalid_props "%s is outside u32" label
 ;;
 
+let check_pressable_release_delay value =
+  check_u16 "pressable release delay" value;
+  if value > 100 then fail Invalid_props "pressable release delay must be in 0..100ms"
+;;
+
 let check_u64 label value =
   if Int64.compare value 0L < 0 then fail Invalid_props "%s must be non-negative" label
 ;;
@@ -358,6 +363,7 @@ let node_kind_id = function
   | Focus_scope -> Generated_protocol.Node_kind.focus_scope
   | Mouse_region -> Generated_protocol.Node_kind.mouse_region
   | Keyboard_listener -> Generated_protocol.Node_kind.keyboard_listener
+  | Pressable -> Generated_protocol.Node_kind.pressable
   | Semantics -> Generated_protocol.Node_kind.semantics
   | Theme -> Generated_protocol.Node_kind.theme
   | Material_scaffold -> Generated_protocol.Node_kind.material_scaffold
@@ -407,6 +413,10 @@ let write_props writer kind props =
     write_optional_f64 writer width;
     write_optional_f64 writer height
   | Button, Button_props { enabled } -> write_bool writer enabled
+  | Pressable, Pressable_props { overlay_color_argb; release_delay_ms } ->
+    check_pressable_release_delay release_delay_ms;
+    Writer.u32 writer (Int32.to_int overlay_color_argb);
+    Writer.u16 writer release_delay_ms
   | Padding, Padding_props { left; top; right; bottom } ->
     Writer.f64 writer left;
     Writer.f64 writer top;
@@ -607,6 +617,7 @@ let props_kind_id = function
   | Image_props _ -> Generated_protocol.Node_kind.image
   | Linear_props -> Generated_protocol.Node_kind.row
   | Button_props _ -> Generated_protocol.Node_kind.button
+  | Pressable_props _ -> Generated_protocol.Node_kind.pressable
   | Padding_props _ -> Generated_protocol.Node_kind.padding
   | Align_props _ -> Generated_protocol.Node_kind.align
   | Center_props _ -> Generated_protocol.Node_kind.center
@@ -686,6 +697,10 @@ let changed_fields = function
       ; field_mask Generated_protocol.Image_prop.height
       ]
   | Button_props _ -> field_mask Generated_protocol.Button_prop.enabled
+  | Pressable_props _ ->
+    Int64.logor
+      (field_mask Generated_protocol.Pressable_prop.overlay_color)
+      (field_mask Generated_protocol.Pressable_prop.release_delay_ms)
   | Padding_props _ -> field_mask Generated_protocol.Padding_prop.insets
   | Align_props _ -> field_mask Generated_protocol.Align_prop.alignment
   | Center_props _ ->
@@ -880,6 +895,10 @@ let write_update_props writer props =
     write_optional_f64 writer width;
     write_optional_f64 writer height
   | Button_props { enabled } -> write_bool writer enabled
+  | Pressable_props { overlay_color_argb; release_delay_ms } ->
+    check_pressable_release_delay release_delay_ms;
+    Writer.u32 writer (Int32.to_int overlay_color_argb);
+    Writer.u16 writer release_delay_ms
   | Padding_props { left; top; right; bottom } ->
     Writer.f64 writer left;
     Writer.f64 writer top;
@@ -1722,6 +1741,7 @@ let read_node_kind reader =
   | value when value = Generated_protocol.Node_kind.focus_scope -> Focus_scope
   | value when value = Generated_protocol.Node_kind.mouse_region -> Mouse_region
   | value when value = Generated_protocol.Node_kind.keyboard_listener -> Keyboard_listener
+  | value when value = Generated_protocol.Node_kind.pressable -> Pressable
   | value when value = Generated_protocol.Node_kind.semantics -> Semantics
   | value when value = Generated_protocol.Node_kind.theme -> Theme
   | value when value = Generated_protocol.Node_kind.material_scaffold -> Material_scaffold
@@ -1789,6 +1809,12 @@ let read_props reader kind ~protocol_minor =
     Image_props { uri; fit; width; height }
   | Row | Column -> Linear_props
   | Button -> Button_props { enabled = read_bool reader }
+  | Pressable ->
+    let overlay_color_argb = Int32.of_int (Reader.u32 reader) in
+    let release_delay_ms = Reader.u16 reader in
+    if release_delay_ms > 100
+    then fail Invalid_props "pressable release delay must be in 0..100ms";
+    Pressable_props { overlay_color_argb; release_delay_ms }
   | Padding ->
     let left = read_finite_f64 reader in
     let top = read_finite_f64 reader in

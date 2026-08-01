@@ -1,11 +1,8 @@
-import 'dart:typed_data';
-
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const _pressableKind = 4;
 const _overlayColor = Color(0x181c2026);
 
 void main() {
@@ -107,26 +104,43 @@ void main() {
     expect(_pressedOverlay, findsNothing);
   });
 
-  testWidgets('rejects malformed props, delay, and child counts', (
-    tester,
-  ) async {
-    for (final payload in <Uint8List>[
-      Uint8List(7),
-      _pressablePayload()..[6] = 1,
-      _pressablePayload(releaseDelayMs: 101),
-    ]) {
-      final fixture = _PressableFixture(payload: payload, childCount: 1);
-      await tester.pumpWidget(fixture.widget());
-      expect(find.byType(UnsupportedNativeWidget), findsOneWidget);
-    }
+  testWidgets('rejects invalid delay and child counts', (tester) async {
+    final invalidDelay = _PressableFixture(
+      props: const PressableProps(
+        overlayColorArgb: 0x181c2026,
+        releaseDelayMs: 101,
+      ),
+      childCount: 1,
+    );
+    await tester.pumpWidget(invalidDelay.widget());
+    expect(tester.takeException(), isA<RendererBoundaryError>());
+    expect(find.byType(BonsaiRendererErrorWidget), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+
     for (final childCount in [0, 2]) {
       final fixture = _PressableFixture(
-        payload: _pressablePayload(),
+        props: _pressableProps(),
         childCount: childCount,
       );
       await tester.pumpWidget(fixture.widget());
-      expect(find.byType(UnsupportedNativeWidget), findsOneWidget);
+      expect(tester.takeException(), isA<RendererBoundaryError>());
+      expect(find.byType(BonsaiRendererErrorWidget), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
     }
+  });
+
+  testWidgets('renders without a native widget registration', (tester) async {
+    final fixture = _PressableFixture(props: _pressableProps(), childCount: 1);
+    await tester.pumpWidget(
+      fixture.widget(
+        registry: WidgetRegistry.standard(
+          nativeWidgets: NativeWidgetRegistry(capabilityBits: 0),
+        ),
+      ),
+    );
+
+    expect(find.text('Pressable item'), findsOneWidget);
+    expect(find.byType(UnsupportedNativeWidget), findsNothing);
   });
 
   testWidgets('drop while release is pending emits nothing late', (
@@ -149,48 +163,36 @@ Finder get _pressedOverlay => find.byWidgetPredicate(
 
 List<RendererEvent> _activationEvents(List<RendererEvent> events) => [
   for (final event in events)
-    if (event.payload case final NativeEventPayload payload)
-      if (payload.kindId == _pressableKind &&
-          payload.eventId == 1 &&
-          payload.payload.isEmpty)
-        event,
+    if (event.eventTag == EventTagId.press &&
+        event.handlerId == 100 &&
+        event.payload is UnitEventPayload)
+      event,
 ];
 
 Future<_PressableFixture> _pumpPressable(
   WidgetTester tester, {
   bool disableAnimations = false,
 }) async {
-  final fixture = _PressableFixture(
-    payload: _pressablePayload(),
-    childCount: 1,
-  );
+  final fixture = _PressableFixture(props: _pressableProps(), childCount: 1);
   await tester.pumpWidget(fixture.widget(disableAnimations: disableAnimations));
   await tester.pump();
   return fixture;
 }
 
-Uint8List _pressablePayload({int releaseDelayMs = 80}) {
-  final data = ByteData(8)
-    ..setUint32(0, _overlayColor.toARGB32(), Endian.little)
-    ..setUint16(4, releaseDelayMs, Endian.little);
-  return data.buffer.asUint8List();
-}
+PressableProps _pressableProps({int releaseDelayMs = 80}) => PressableProps(
+  overlayColorArgb: _overlayColor.toARGB32(),
+  releaseDelayMs: releaseDelayMs,
+);
 
 final class _PressableFixture {
-  _PressableFixture({required this.payload, required this.childCount}) {
+  _PressableFixture({required this.props, required this.childCount}) {
     final operations = <FrameOperation>[
       CreateNode(
         nodeId: 1,
-        kind: NodeKind.nativeWidget,
-        props: NativeWidgetProps(
-          kindId: _pressableKind,
-          version: 1,
-          capabilityBits:
-              NativeCapability.stateful | NativeCapability.semantics,
-          payload: payload,
-        ),
+        kind: NodeKind.pressable,
+        props: props,
         eventBindings: const [
-          EventBinding(eventTag: EventTagId.nativeEvent, handlerId: 100),
+          EventBinding(eventTag: EventTagId.press, handlerId: 100),
         ],
       ),
       if (childCount > 0) ...[
@@ -290,17 +292,22 @@ final class _PressableFixture {
       );
   }
 
-  final Uint8List payload;
+  final PressableProps props;
   final int childCount;
   final events = <RendererEvent>[];
   late final NodeStore store;
 
-  Widget widget({bool disableAnimations = false}) => MaterialApp(
-    home: MediaQuery(
-      data: MediaQueryData(disableAnimations: disableAnimations),
-      child: Center(
-        child: BonsaiFlutterView(store: store, onEvent: events.add),
-      ),
-    ),
-  );
+  Widget widget({bool disableAnimations = false, WidgetRegistry? registry}) =>
+      MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(disableAnimations: disableAnimations),
+          child: Center(
+            child: BonsaiFlutterView(
+              store: store,
+              registry: registry,
+              onEvent: events.add,
+            ),
+          ),
+        ),
+      );
 }

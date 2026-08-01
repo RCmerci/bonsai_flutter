@@ -135,6 +135,59 @@ let expect_invalid_argument operation message =
   | _ -> fail "%s did not raise Invalid_argument" message
 ;;
 
+let test_pressable_is_a_typed_core_widget () =
+  let activations = ref 0 in
+  let handler = press_handler (fun () -> Stdlib.incr activations) in
+  let overlay = Ui.Style.Color.argb ~alpha:24 ~red:28 ~green:32 ~blue:38 in
+  let widget =
+    Widget.pressable
+      ~key:(Key.string "pressable")
+      ~overlay_color:overlay
+      ~release_delay_ms:80
+      ~on_press:handler
+      ~child:(Widget.text "Message")
+      ()
+  in
+  let view = Widget.Private.view widget in
+  check
+    (Widget.Private.Kind.equal view.kind Widget.Private.Kind.Pressable)
+    "pressable must be a core widget kind";
+  check_int ~expected:1 ~actual:(Array.length view.children) "pressable child count";
+  (match view.props with
+   | Widget.Private.Pressable_props { overlay_color; release_delay_ms } ->
+     check
+       (Int32.equal
+          (Ui.Style.Color.Private.to_argb32 overlay_color)
+          (Ui.Style.Color.Private.to_argb32 overlay))
+       "pressable overlay color";
+     check_int ~expected:80 ~actual:release_delay_ms "pressable release delay"
+   | _ -> fail "pressable must expose typed core props");
+  let binding = view.event_bindings.(0) in
+  check
+    (Event.Tag.equal binding.tag Event.Tag.Press)
+    "pressable must use the core press event";
+  Event.Handler.Private.invoke binding.handler Event.Payload.Unit;
+  check_int ~expected:1 ~actual:!activations "pressable activation count";
+  expect_invalid_argument
+    (fun () ->
+       ignore
+         (Widget.pressable
+            ~release_delay_ms:(-1)
+            ~on_press:handler
+            ~child:(Widget.empty ())
+            ()))
+    "pressable accepted a negative release delay";
+  expect_invalid_argument
+    (fun () ->
+       ignore
+         (Widget.pressable
+            ~release_delay_ms:101
+            ~on_press:handler
+            ~child:(Widget.empty ())
+            ()))
+    "pressable accepted a release delay above the product cap"
+;;
+
 let test_initial_mount_is_full_snapshot () =
   let reconciler = Reconciler.create ~runtime_epoch:41L in
   let widget = Widget.column [ Widget.text "hello"; Widget.text "world" ] in
@@ -1362,7 +1415,8 @@ let test_text_input_props_and_typed_edit_are_incremental () =
 ;;
 
 let tests =
-  [ "initial mount is a full snapshot", test_initial_mount_is_full_snapshot
+  [ "pressable is a typed core widget", test_pressable_is_a_typed_core_widget
+  ; "initial mount is a full snapshot", test_initial_mount_is_full_snapshot
   ; "physical equality emits no patch", test_physical_equality_emits_no_patch
   ; "one text change is one prop update", test_one_text_change_is_one_prop_update
   ; "keyed reorder preserves identity", test_keyed_reorder_preserves_identity

@@ -62,6 +62,7 @@ String _kindName(NodeKind kind) => switch (kind) {
   NodeKind.focusScope => 'FocusScope',
   NodeKind.mouseRegion => 'MouseRegion',
   NodeKind.keyboardListener => 'KeyboardListener',
+  NodeKind.pressable => 'Pressable',
   NodeKind.semantics => 'Semantics',
   NodeKind.theme => 'Theme',
   NodeKind.materialScaffold => 'MaterialScaffold',

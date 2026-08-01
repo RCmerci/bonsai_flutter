@@ -209,6 +209,7 @@ let wire_node_kind = function
   | Focus_scope -> Ok Focus_scope
   | Mouse_region -> Ok Mouse_region
   | Keyboard_listener -> Ok Keyboard_listener
+  | Pressable -> Ok Pressable
   | Semantics -> Ok Semantics
   | Theme -> Ok Theme
   | Material_scaffold -> Ok Material_scaffold
@@ -289,6 +290,12 @@ let wire_props = function
     Ok (Image_props { uri; fit; width; height })
   | Linear_props -> Ok Linear_props
   | Button_props { enabled } -> Ok (Button_props { enabled })
+  | Pressable_props { overlay_color; release_delay_ms } ->
+    Ok
+      (Pressable_props
+         { overlay_color_argb = Ui.Style.Color.Private.to_argb32 overlay_color
+         ; release_delay_ms
+         })
   | Padding_props { left; top; right; bottom } ->
     Ok (Padding_props { left; top; right; bottom })
   | Align_props { alignment } ->

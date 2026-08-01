@@ -27,6 +27,7 @@ module Kind = struct
     | Focus_scope
     | Mouse_region
     | Keyboard_listener
+    | Pressable
     | Semantics
     | Theme
     | Material_scaffold
@@ -82,6 +83,7 @@ module Kind = struct
     | Focus_scope -> "Focus_scope"
     | Mouse_region -> "Mouse_region"
     | Keyboard_listener -> "Keyboard_listener"
+    | Pressable -> "Pressable"
     | Semantics -> "Semantics"
     | Theme -> "Theme"
     | Material_scaffold -> "Material_scaffold"
@@ -159,6 +161,10 @@ type props =
   | Linear_props
   | Stack_props
   | Button_props of { enabled : bool }
+  | Pressable_props of
+      { overlay_color : Style.Color.t
+      ; release_delay_ms : int
+      }
   | Padding_props of
       { left : float
       ; top : float
@@ -346,6 +352,11 @@ let props_equal left right =
     && Option.equal Float.equal left.width right.width
     && Option.equal Float.equal left.height right.height
   | Button_props left, Button_props right -> Bool.equal left.enabled right.enabled
+  | Pressable_props left, Pressable_props right ->
+    Int32.equal
+      (Style.Color.Private.to_argb32 left.overlay_color)
+      (Style.Color.Private.to_argb32 right.overlay_color)
+    && left.release_delay_ms = right.release_delay_ms
   | Padding_props left, Padding_props right ->
     Float.equal left.left right.left
     && Float.equal left.top right.top
@@ -639,6 +650,28 @@ let button ?key ?(enabled = true) ~on_press ~child () =
     ~key
     ~kind:Kind.Button
     ~props:(Button_props { enabled })
+    ~event_bindings:[| { tag = Event.Tag.Press; handler = on_press } |]
+    ~children:(plain_children [ child ])
+;;
+
+let default_pressable_overlay_color =
+  Style.Color.argb ~alpha:24 ~red:28 ~green:32 ~blue:38
+;;
+
+let pressable
+      ?key
+      ?(overlay_color = default_pressable_overlay_color)
+      ?(release_delay_ms = 80)
+      ~on_press
+      ~child
+      ()
+  =
+  if release_delay_ms < 0 || release_delay_ms > 100
+  then invalid_arg "Widget.pressable: release delay must be in 0..100ms";
+  create
+    ~key
+    ~kind:Kind.Pressable
+    ~props:(Pressable_props { overlay_color; release_delay_ms })
     ~event_bindings:[| { tag = Event.Tag.Press; handler = on_press } |]
     ~children:(plain_children [ child ])
 ;;
@@ -1314,6 +1347,10 @@ module Private = struct
     | Linear_props
     | Stack_props
     | Button_props of { enabled : bool }
+    | Pressable_props of
+        { overlay_color : Style.Color.t
+        ; release_delay_ms : int
+        }
     | Padding_props of
         { left : float
         ; top : float

@@ -28,6 +28,7 @@ enum NodeKind {
   focusScope,
   mouseRegion,
   keyboardListener,
+  pressable,
   semantics,
   theme,
   materialScaffold,
@@ -298,6 +299,26 @@ final class ButtonProps extends UiProps {
 
   @override
   int get hashCode => Object.hash(ButtonProps, enabled);
+}
+
+final class PressableProps extends UiProps {
+  const PressableProps({
+    required this.overlayColorArgb,
+    required this.releaseDelayMs,
+  });
+
+  final int overlayColorArgb;
+  final int releaseDelayMs;
+
+  @override
+  bool operator ==(Object other) =>
+      other is PressableProps &&
+      other.overlayColorArgb == overlayColorArgb &&
+      other.releaseDelayMs == releaseDelayMs;
+
+  @override
+  int get hashCode =>
+      Object.hash(PressableProps, overlayColorArgb, releaseDelayMs);
 }
 
 final class EdgeInsetsValue {
