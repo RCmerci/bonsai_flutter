@@ -12,6 +12,7 @@ int64_t bf_mock_last_monotonic_now_ns(void);
 uint64_t bf_mock_last_presentation_id(void);
 uint64_t bf_mock_last_revision(void);
 int32_t bf_mock_last_rejection_reason(void);
+uint64_t bf_mock_last_destroyed_handle(void);
 
 int main(void) {
   const uint8_t config[] = "counter";
@@ -103,7 +104,31 @@ int main(void) {
          BF_STATUS_RECOVERABLE_ERROR);
   assert(output.error_code == BF_ERROR_INVALID_PRESENTATION);
 
+  assert(bf_runtime_pump(runtime, 50, NULL, 0, &output) == BF_STATUS_OK);
+  assert(output.length == 5);
+  assert(bf_runtime_outstanding_buffers(runtime) == 1);
+  const uint8_t *stale_buffer = output.data;
+
+  const uint8_t replacement_config[] = "replacement";
+  bf_runtime *replacement =
+      bf_runtime_create(replacement_config, sizeof(replacement_config) - 1);
+  assert(replacement != NULL);
+
+  assert(bf_runtime_pump(runtime, 60, NULL, 0, &output) ==
+         BF_STATUS_FATAL_ERROR);
+  assert(output.status == BF_STATUS_FATAL_ERROR);
+  bf_buffer_free(runtime, stale_buffer);
+  assert(bf_runtime_outstanding_buffers(runtime) == 0);
+
   bf_runtime_destroy(runtime);
   assert(bf_mock_destroy_count() == 1);
+  assert(bf_mock_last_destroyed_handle() == 42);
+
+  assert(bf_runtime_pump(replacement, 70, NULL, 0, &output) == BF_STATUS_OK);
+  assert(output.length == 5);
+  bf_buffer_free(replacement, output.data);
+  bf_runtime_destroy(replacement);
+  assert(bf_mock_destroy_count() == 2);
+  assert(bf_mock_last_destroyed_handle() == 43);
   return 0;
 }

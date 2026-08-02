@@ -1,0 +1,114 @@
+type todo =
+  { id : int64
+  ; title : string
+  ; completed : bool
+  }
+
+type snapshot =
+  { todos : todo list
+  ; database_revision : int64
+  }
+
+type mutation_status =
+  [ `Applied
+  | `Duplicate
+  ]
+
+type mutation_result =
+  { status : mutation_status
+  ; database_revision : int64
+  }
+
+type error =
+  | Invalid_title
+  | Title_too_long
+  | Invalid_path of string
+  | Unsupported_schema of int
+  | Busy
+  | Full
+  | Read_only
+  | Cannot_open of string
+  | Corrupt of string
+  | Todo_not_found of int64
+  | Migration_failed of string
+  | Storage_error of string
+
+let error_to_string = function
+  | Invalid_title -> "Todo title must not be empty"
+  | Title_too_long -> "Todo title must not exceed 512 UTF-8 bytes"
+  | Invalid_path path -> Printf.sprintf "Invalid database path: %S" path
+  | Unsupported_schema version ->
+    Printf.sprintf "Unsupported database schema version: %d" version
+  | Busy -> "Database is busy"
+  | Full -> "Database is full"
+  | Read_only -> "Database is read-only"
+  | Cannot_open message -> Printf.sprintf "Cannot open database: %s" message
+  | Corrupt message -> Printf.sprintf "Database is corrupt: %s" message
+  | Todo_not_found todo_id -> Printf.sprintf "Todo %Ld does not exist" todo_id
+  | Migration_failed message -> Printf.sprintf "Database migration failed: %s" message
+  | Storage_error message -> Printf.sprintf "Database error: %s" message
+;;
+
+type operation =
+  | List_todos
+  | Create_todo of
+      { mutation_id : string
+      ; title : string
+      }
+  | Set_completed of
+      { mutation_id : string
+      ; todo_id : int64
+      ; completed : bool
+      }
+
+type request =
+  { query_generation : int64
+  ; operation : operation
+  }
+
+type response_payload =
+  | Snapshot of snapshot
+  | Mutation of mutation_result
+
+type response =
+  | Completed of
+      { query_generation : int64
+      ; database_revision : int64
+      ; payload : response_payload
+      }
+  | Failed of
+      { query_generation : int64
+      ; error : error
+      }
+
+type summary =
+  { database_revision : int64
+  ; open_count : int
+  ; completed_count : int
+  }
+
+type startup_timing =
+  { sqlite_open_us : int64
+  ; initial_list_us : int64
+  ; total_us : int64
+  }
+
+type push =
+  | Ready of
+      { schema_version : int
+      ; database_revision : int64
+      ; sqlite_open_us : int64
+      }
+  | Store_changed of snapshot
+  | Summary_changed of summary
+  | Startup_timing of startup_timing
+  | Fatal of error
+
+module Topic = struct
+  let ready = 0
+  let store = 1
+  let summary = 2
+  let fatal = 3
+  let startup_timing = 4
+  let count = 5
+end

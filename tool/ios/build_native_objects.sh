@@ -23,6 +23,7 @@ opam_root="$repository_root/_build/ios/opam-root"
 build_directory="$repository_root/_build/ios/app/$target-$minimum_version"
 artifact_root="$repository_root/_build/native-artifacts"
 sdk_version=$(xcrun --sdk "$target" --show-sdk-version)
+sdk_root=$(xcrun --sdk "$target" --show-sdk-path)
 
 "$script_directory/setup_toolchain.sh" "$target"
 "$script_directory/setup_host_dependencies.sh" "$target"
@@ -36,6 +37,7 @@ for example in \
   host_effects \
   host_navigation \
   navigation \
+  sqlite_worker \
   text_input \
   todo
 do
@@ -48,6 +50,7 @@ targets="$targets flutter/integration_test/ocaml/native_integration_embed.exe.o"
 # BUILD_PATH_PREFIX_MAP removes checkout-specific paths from OCaml metadata.
 OPAMROOT="$opam_root" \
   BUILD_PATH_PREFIX_MAP="$repository_root=." \
+  BONSAI_FLUTTER_APPLE_SDK_ROOT="$sdk_root" \
   SDK="$sdk_version" \
   VER="$minimum_version" \
   BONSAI_FLUTTER_EMBED_OCAML=enabled \
@@ -67,6 +70,7 @@ for example in \
   host_effects \
   host_navigation \
   navigation \
+  sqlite_worker \
   text_input \
   todo
 do

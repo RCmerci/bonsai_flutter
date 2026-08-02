@@ -4,6 +4,25 @@ Flutter presentation is the commit point for Bonsai after-display lifecycle
 effects. Decoding bytes or committing a `NodeStore` transaction is not
 equivalent to presentation.
 
+## Singleton startup and replacement
+
+Domain 0 serializes runtime ownership through
+`Empty | Creating | Active | Destroying | Finalized`. A versioned startup
+envelope selects `Fresh` or `Replace_existing`. `Fresh` rejects an occupied
+slot before allocating a Driver or attaching a worker session. Explicit
+replacement completes this sequence synchronously:
+
+```text
+Active(old) -> Destroying(old) -> Empty -> Creating(new) -> Active(new)
+```
+
+The old worker session closes its resources and is removed before its Driver
+is shut down and before any replacement Driver or session exists. Its handle
+is tombstoned, so stale pump, presentation, destroy, and buffer-release calls
+cannot address the replacement. The UI-isolate coordinator lease is acquired
+before `Isolate.spawn` and is released only by its matching startup failure,
+isolate exit, or completed disposal.
+
 ## Foreground pump loop
 
 `BonsaiFlutterRoot` owns a recursive
@@ -59,6 +78,14 @@ One accepted pump performs this order:
 9. If renderer state changed, reserve a new renderer revision and encode one
    full snapshot or incremental frame.
 10. Retain the complete candidate behind the presentation barrier.
+
+For a worker-backed application, validated Flutter input precedes a bounded
+snapshot of worker responses and coalesced pushes. Stale epoch, worker
+generation, request, push sequence, query generation, and database revision
+messages are rejected. Accepted worker events become domain-0 Bonsai effects;
+the complete effect queue is then drained before the single Bonsai flush and
+single reconcile. Output arriving after the snapshot waits for a later pump.
+Normal pumps never block on the Worker Domain.
 
 Every successful logical pump produces a presentation token, including a
 no-diff pump and a recoverable dropped-input pump. Renderer revision advances
@@ -124,6 +151,20 @@ renderer resources.
 The selected public `Bonsai_driver` has no dedicated destroy operation.
 `Bonsai_driver.Expert.invalidate_observers` remains isolated in
 `Bonsai_runtime_adapter` as the release mechanism.
+
+Destroying a worker-backed runtime first tombstones its lease and rejects new
+requests, then completes pending requests as shutdown and sends out-of-band
+Stop. The Worker Domain cooperatively cancels bounded work, finalizes SQLite
+statements, closes the connection, removes the session, and returns to
+`Idle`. Only then does domain 0 shut down the Driver and clear the singleton
+slot. Ordinary destroy and replacement never call `Domain.join`; later
+sessions reuse the same Worker Domain.
+
+Controlled tests and embedders may invoke final runtime shutdown. It destroys
+an active runtime if necessary, moves the backend slot to the absorbing
+`Finalized` state, and joins a successfully spawned Worker Domain exactly
+once. Shutdown from `Not_started` joins zero Domains, repeated final shutdown
+is idempotent, and every later create fails.
 
 ## Widget-test contract
 

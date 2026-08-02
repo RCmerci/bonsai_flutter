@@ -37,14 +37,39 @@ val create
   -> (Context.t -> Bonsai.Cont.graph -> Bonsai_flutter_ui.Widget.t Bonsai.Cont.t)
   -> t
 
+(** Creates a runtime-scoped worker-backed application. [decode_config] runs
+    on domain 0. Service callbacks and service state run only on the singleton
+    OCaml Worker Domain, while [component] and event subscribers remain on
+    domain 0. *)
+val create_with_worker
+  :  ?name:string
+  -> ?trace:(string -> unit)
+  -> decode_config:(bytes -> ('config, string) result)
+  -> service:('config, 'request, 'response, 'push) Worker.Service.t
+  -> (('request, 'response, 'push) Worker.client
+      -> Context.t
+      -> Bonsai.Cont.graph
+      -> Bonsai_flutter_ui.Widget.t Bonsai.Cont.t)
+  -> t
+
 val name : t -> string option
 
 module Private : sig
-  val component
+  type instance
+
+  val instantiate
     :  t
+    -> runtime_epoch:int64
+    -> application_payload:bytes
+    -> (instance, string) result
+
+  val component
+    :  instance
     -> Driver.Handler.t
     -> Bonsai.Cont.graph
     -> Bonsai_flutter_ui.Widget.t Bonsai.Cont.t
 
   val trace : t -> (string -> unit) option
+  val before_flush : instance -> schedule:(unit Bonsai.Effect.t -> unit) -> unit
+  val shutdown : instance -> unit
 end

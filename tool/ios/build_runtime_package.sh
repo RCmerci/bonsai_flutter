@@ -43,6 +43,7 @@ require_command mkdir
 require_command mv
 require_command opam
 require_command patch
+require_command pkg-config
 require_command rg
 require_command sed
 require_command shasum
@@ -156,6 +157,13 @@ if test "$package_name" = jst-config; then
 fi
 
 sdk_version=$(xcrun --sdk "$target" --show-sdk-version)
+sdk_root=$(xcrun --sdk "$target" --show-sdk-path)
+target_pkg_config_path="$repository_root/vendor/pkgconfig/$target"
+test -f "$target_pkg_config_path/sqlite3.pc" ||
+  fail "missing target SQLite pkg-config metadata"
+export PKG_CONFIG_PATH="$target_pkg_config_path"
+export PKG_CONFIG_SYSROOT_DIR="$sdk_root"
+export SQLITE3_DISABLE_LOADABLE_EXTENSIONS=1
 host_lib=$(
   OPAMROOT="$opam_root" \
     opam var --switch="$switch" lib
@@ -288,6 +296,10 @@ printf '%s\n' "$package_components" |
         )
         for extra_c_object in $extra_c_objects; do
           case "$extra_c_object" in
+            -lsqlite3)
+              test "$package_name" = sqlite3 ||
+                fail "$component unexpectedly depends on system SQLite"
+              ;;
             -l*)
               static_archive="lib${extra_c_object#-l}.a"
               if test "$source_component_relative" = .; then
@@ -349,6 +361,22 @@ printf '%s\n' "$package_components" |
       >/dev/null ||
       fail "staged component is not visible to findlib: $component"
   done
+
+if test "$package_name" = sqlite3; then
+  test -f "$target_package_root/libsqlite3_stubs.a" ||
+    fail "sqlite3 target stubs archive is missing"
+  bundled_sqlite_archive="lib${package_name}.a"
+  test ! -f "$target_package_root/$bundled_sqlite_archive" ||
+    fail "a bundled SQLite implementation was staged"
+  sqlite_link_metadata=$(
+    OPAMROOT="$opam_root" \
+      opam exec --switch="$switch" -- \
+      ocamlobjinfo "$target_package_root/sqlite3.cmxa"
+  )
+  printf '%s\n' "$sqlite_link_metadata" |
+    grep -F -- '-lsqlite3_stubs -lsqlite3' >/dev/null ||
+    fail "sqlite3 target archive lost its external system link requirement"
+fi
 
 representative_object=$(
   find "$build_directory/default.ios" -type f -name '*.o' |

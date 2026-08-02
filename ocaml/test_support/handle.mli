@@ -8,6 +8,15 @@ val create
   -> (Driver.Handler.t -> Bonsai.Cont.graph -> Bonsai_flutter_ui.Widget.t Bonsai.Cont.t)
   -> t
 
+(** Creates a headless instance of an [App.t], including its runtime-scoped
+    worker lifecycle when applicable. *)
+val create_app
+  :  runtime_epoch:int64
+  -> time_source:Bonsai.Time_source.t
+  -> App.t
+  -> application_payload:bytes
+  -> t
+
 val show : t -> string
 val show_diff : t -> string
 val find : t -> Query.t -> Bonsai_flutter_runtime.Mounted_tree.Snapshot.node option

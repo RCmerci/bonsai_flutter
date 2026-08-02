@@ -57,6 +57,10 @@ void main(List<String> args) async {
           '-Wl,-exported_symbols_list,${exportList.toFilePath()}',
         ],
         if (input.config.code.targetOS == OS.iOS) ...['-framework', 'Security'],
+        ...systemLinkFlagsForTesting(
+          input.config.code.targetOS,
+          input.userDefines['link_system_sqlite3'],
+        ),
       ],
     );
     await cbuilder.run(
@@ -79,12 +83,24 @@ bool _modeSpecificOcamlArtifacts(BuildInput input) {
 }
 
 bool _booleanUserDefine(BuildInput input, String name) {
-  final value = input.userDefines[name];
+  return _booleanValue(name, input.userDefines[name]);
+}
+
+bool _booleanValue(String name, Object? value) {
   return switch (value) {
     null => false,
     true || 'true' => true,
     false || 'false' => false,
     _ => throw FormatException('$name must be true or false, found $value.'),
+  };
+}
+
+List<String> systemLinkFlagsForTesting(OS targetOS, Object? userDefine) {
+  final enabled = _booleanValue('link_system_sqlite3', userDefine);
+  if (!enabled) return const [];
+  return switch (targetOS) {
+    OS.macOS || OS.iOS => const ['-lsqlite3'],
+    _ => const [],
   };
 }
 

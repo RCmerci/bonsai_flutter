@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Replaced multi-entry native ownership with one process-wide logical runtime,
+  Driver, and Dart coordinator lease. Added versioned Fresh and explicit
+  replacement startup, stale-handle tombstones, and one lazily spawned,
+  sequentially reused OCaml Worker Domain with a bounded request FIFO,
+  guaranteed responses, coalesced pushes, cancellation, fair computation
+  slices, condition-based idle waiting, and exact final-shutdown semantics.
+- Added the OCaml-owned SQLite Worker Todo example. Flutter resolves its
+  Application Support path and passes it through the startup envelope; the
+  Worker Domain exclusively owns the SQLite 5.4.0 connection, migrations,
+  statements, transactions, and cleanup. The example displays Flutter-host and
+  OCaml-Worker startup-stage timings. Real macOS FFI tests cover CRUD, push
+  ordering, suspension, resume, runtime recreation, and persistence, and
+  iPhoneOS arm64 artifacts link Apple system SQLite while retaining the exact
+  existing `bf_*` export boundary.
 - Migrated the host and iPhoneOS build graphs to OCaml 5.1.1 and the Jane
   Street v0.17.x release line, removed bleeding-repository and keyword-mode
   requirements from CI, and regenerated the locked iOS runtime closure.

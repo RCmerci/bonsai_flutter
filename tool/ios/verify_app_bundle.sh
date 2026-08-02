@@ -16,11 +16,20 @@ require_command() {
     fail "required command is unavailable: $1"
 }
 
-test "$#" -ge 1 && test "$#" -le 2 ||
-  fail "usage: verify_app_bundle.sh <Runner.app> [framework.dSYM]"
+test "$#" -ge 1 && test "$#" -le 3 ||
+  fail "usage: verify_app_bundle.sh <Runner.app> [framework.dSYM] [require-sqlite]"
 
 app_path=$1
-dsym_path=${2:-}
+dsym_path=
+sqlite_mode=
+if test "${2:-}" = require-sqlite; then
+  sqlite_mode=require-sqlite
+else
+  dsym_path=${2:-}
+  sqlite_mode=${3:-}
+fi
+test -z "$sqlite_mode" || test "$sqlite_mode" = require-sqlite ||
+  fail "expected optional mode require-sqlite"
 framework_name=bonsai_flutter_native
 framework_path="$app_path/Frameworks/$framework_name.framework"
 binary_path="$framework_path/$framework_name"
@@ -57,6 +66,21 @@ xcrun otool -L "$binary_path" |
       *) fail "prohibited framework dependency: $dependency" ;;
     esac
   done
+
+if test "$sqlite_mode" = require-sqlite; then
+  xcrun otool -L "$binary_path" |
+    grep -F '/usr/lib/libsqlite3.dylib' >/dev/null ||
+    fail "framework does not require Apple system libsqlite3"
+  nm -u "$binary_path" |
+    awk '{ print $1 }' |
+    grep -E '^_sqlite3_' >/dev/null ||
+    fail "framework does not reference sqlite3 symbols"
+else
+  if xcrun otool -L "$binary_path" |
+    grep -F '/usr/lib/libsqlite3.dylib' >/dev/null; then
+    fail "framework unexpectedly requires Apple system libsqlite3"
+  fi
+fi
 
 actual_exports=$(
   nm -gU "$binary_path" |

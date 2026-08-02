@@ -181,10 +181,19 @@ of scope.
 
 ## Examples
 
-The repository contains OCaml-owned Counter, Todo, Text Input, Host Effects,
-Navigation, Host Navigation, Gallery, and Bonsai Mail applications under
-[`examples`](examples). Their Flutter directories contain only host setup,
-renderer registration, and native-library initialization.
+The repository contains OCaml-owned Counter, Clock, Todo, Text Input, Host
+Effects, Navigation, Host Navigation, Gallery, Bonsai Mail, and SQLite Worker
+Todo applications under [`examples`](examples). Their Flutter directories
+contain only host setup, renderer registration, native-library initialization,
+and platform bootstrap such as Application Support path discovery.
+
+The [SQLite Worker Todo example](examples/sqlite_worker/README.md) exercises
+the singleton OCaml Worker Domain with bounded typed requests, correlated
+responses, coalesced pushes, and a Worker-Domain-owned SQLite connection. Its
+Apple artifacts link the system `libsqlite3` without bundling another SQLite
+implementation. macOS arm64 and unsigned physical-device iPhoneOS arm64
+packaging are validated; signed device execution requires external signing
+material and a reachable iPhone.
 
 ## Current limitations and roadmap
 

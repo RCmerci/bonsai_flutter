@@ -490,8 +490,7 @@ let revision t = Driver.For_testing.revision t.driver
 let pending_host_effect_count t = Driver.For_testing.pending_host_effect_count t.driver
 let shutdown t = Driver.shutdown t.driver
 
-let create ~runtime_epoch ~time_source component =
-  let driver = Driver.create ~runtime_epoch ~time_source component in
+let create_from_driver ~runtime_epoch driver =
   let t =
     { driver
     ; runtime_epoch
@@ -510,4 +509,29 @@ let create ~runtime_epoch ~time_source component =
      fail "initial headless pump did not emit a full snapshot");
   t.baseline <- render_tree t;
   t
+;;
+
+let create ~runtime_epoch ~time_source component =
+  Driver.create ~runtime_epoch ~time_source component |> create_from_driver ~runtime_epoch
+;;
+
+let create_app ~runtime_epoch ~time_source app ~application_payload =
+  match App.Private.instantiate app ~runtime_epoch ~application_payload with
+  | Error error -> fail "headless App initialization failed: %s" error
+  | Ok instance ->
+    let driver =
+      try
+        Driver.create
+          ?trace:(App.Private.trace app)
+          ~before_flush:(App.Private.before_flush instance)
+          ~before_shutdown:(fun () -> App.Private.shutdown instance)
+          ~runtime_epoch
+          ~time_source
+          (App.Private.component instance)
+      with
+      | exception_ ->
+        App.Private.shutdown instance;
+        raise exception_
+    in
+    create_from_driver ~runtime_epoch driver
 ;;

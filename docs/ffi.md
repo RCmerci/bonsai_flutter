@@ -113,6 +113,18 @@ backpressure; supported high-frequency state events coalesce only by their
 explicit node, handler, and tag identity. The prepared prefix is committed
 only after synchronous presentation handoff succeeds.
 
+The Dart isolate above is the **Dart runtime coordinator isolate**. It is not
+the OCaml Worker Domain. It owns the singleton coordinator lease and serializes
+FFI calls, but every such call registers the foreign thread and enters OCaml
+domain 0 through the unchanged ABI.
+
+The **OCaml Worker Domain** is created and managed inside OCaml. Domain 0 sends
+it typed immutable requests over a bounded FIFO and receives guaranteed
+correlated responses plus latest-wins push topics. This traffic never crosses
+FFI and adds no C export, Dart isolate command, or renderer-protocol command.
+SQLite handles and worker mutable state never appear in a native output buffer
+or cross to Dart.
+
 ## OCaml callback bridge
 
 The embedded route starts OCaml once with `caml_startup_exn` and resolves five

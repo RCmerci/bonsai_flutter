@@ -27,8 +27,45 @@ type output =
   ; error : string
   }
 
-let runtimes : (int64, Driver.t) Hashtbl.t = Hashtbl.create 8
-let random = Random.State.make_self_init ()
+type active_runtime =
+  { handle : int64
+  ; driver : Driver.t
+  }
+
+type runtime_slot =
+  | Empty
+  | Creating
+  | Active of active_runtime
+  | Destroying of active_runtime
+  | Finalized
+
+type state_tag =
+  | Empty_tag
+  | Creating_tag
+  | Active_tag
+  | Destroying_tag
+  | Finalized_tag
+
+let runtime_slot = ref Empty
+let next_handle = ref 1L
+let recorded_state_history = ref []
+let driver_creations = ref 0
+let driver_shutdowns = ref 0
+let active_drivers = ref 0
+let peak_active_drivers = ref 0
+
+let state_tag = function
+  | Empty -> Empty_tag
+  | Creating -> Creating_tag
+  | Active _ -> Active_tag
+  | Destroying _ -> Destroying_tag
+  | Finalized -> Finalized_tag
+;;
+
+let transition state =
+  runtime_slot := state;
+  recorded_state_history := state_tag state :: !recorded_state_history
+;;
 
 let status_code = function
   | Ok -> 0
@@ -51,17 +88,11 @@ let output
 ;;
 
 let fresh_handle () =
-  let rec loop () =
-    let high = Int64.of_int (Random.State.bits random) in
-    let low = Int64.of_int (Random.State.bits random) in
-    let candidate =
-      Int64.logor (Int64.shift_left high 30) low |> Int64.logand Int64.max_int
-    in
-    if Int64.equal candidate 0L || Hashtbl.mem runtimes candidate
-    then loop ()
-    else candidate
-  in
-  loop ()
+  let handle = !next_handle in
+  if Int64.equal handle Int64.max_int
+  then failwith "Runtime handle space is exhausted"
+  else next_handle := Int64.succ handle;
+  handle
 ;;
 
 let exception_message exception_ =
@@ -76,23 +107,80 @@ let exception_message exception_ =
 
 let () = Printexc.record_backtrace true
 
-let create config =
+let shutdown_driver runtime =
+  Driver.shutdown runtime.driver;
+  incr driver_shutdowns;
+  decr active_drivers
+;;
+
+let destroy_active runtime =
+  transition (Destroying runtime);
+  shutdown_driver runtime;
+  transition Empty
+;;
+
+let create_in_empty config =
+  transition Creating;
   try
-    let name = Bytes.to_string config in
-    match Entrypoint.Private.find name with
-    | None -> create_error ("Unknown OCaml entrypoint: " ^ name)
+    match Entrypoint.Private.find config.Runtime_bootstrap_config.entrypoint with
+    | None ->
+      transition Empty;
+      create_error ("Unknown OCaml entrypoint: " ^ config.entrypoint)
     | Some app ->
       let handle = fresh_handle () in
-      let time_source = Bonsai.Time_source.create ~start:(Core.Time_ns.now ()) in
-      let driver =
-        Driver.create
-          ?trace:(App.Private.trace app)
-          ~runtime_epoch:handle
-          ~time_source
-          (App.Private.component app)
-      in
-      Hashtbl.add runtimes handle driver;
-      { status = Ok; handle; error = "" }
+      (match
+         App.Private.instantiate
+           app
+           ~runtime_epoch:handle
+           ~application_payload:config.application_payload
+       with
+       | Error error ->
+         transition Empty;
+         create_error error
+       | Ok instance ->
+         let time_source = Bonsai.Time_source.create ~start:(Core.Time_ns.now ()) in
+         let driver =
+           try
+             Driver.create
+               ?trace:(App.Private.trace app)
+               ~before_flush:(App.Private.before_flush instance)
+               ~before_shutdown:(fun () -> App.Private.shutdown instance)
+               ~runtime_epoch:handle
+               ~time_source
+               (App.Private.component instance)
+           with
+           | exception_ ->
+             App.Private.shutdown instance;
+             raise exception_
+         in
+         incr driver_creations;
+         incr active_drivers;
+         peak_active_drivers := Int.max !peak_active_drivers !active_drivers;
+         transition (Active { handle; driver });
+         { status = Ok; handle; error = "" })
+  with
+  | exception_ ->
+    transition Empty;
+    create_error (exception_message exception_)
+;;
+
+let create config =
+  try
+    match !runtime_slot with
+    | Finalized -> create_error "Runtime_stopped"
+    | Creating | Destroying _ -> create_error "Runtime_busy"
+    | Empty | Active _ ->
+      (match Runtime_bootstrap_config.decode config with
+       | Error error -> create_error error
+       | Ok config ->
+         (match !runtime_slot, config.launch_policy with
+          | Active _, Runtime_bootstrap_config.Fresh ->
+            create_error "Runtime_already_active"
+          | Active runtime, Replace_existing ->
+            destroy_active runtime;
+            create_in_empty config
+          | Empty, _ -> create_in_empty config
+          | Creating, _ | Destroying _, _ | Finalized, _ -> assert false))
   with
   | exception_ -> create_error (exception_message exception_)
 ;;
@@ -135,9 +223,9 @@ let driver_error error =
 ;;
 
 let find_runtime handle =
-  match Hashtbl.find_opt runtimes handle with
-  | Some runtime -> Result.Ok runtime
-  | None ->
+  match !runtime_slot with
+  | Active runtime when Int64.equal runtime.handle handle -> Result.Ok runtime.driver
+  | Empty | Creating | Active _ | Destroying _ | Finalized ->
     Result.Error
       (output ~status:Fatal_error ~error_code:9 ~error:"Unknown native runtime handle" ())
 ;;
@@ -250,15 +338,77 @@ let presentation_rejected handle presentation_id revision reason =
 ;;
 
 let destroy handle =
-  match Hashtbl.find_opt runtimes handle with
-  | None -> ()
-  | Some driver ->
-    Driver.shutdown driver;
-    Hashtbl.remove runtimes handle
+  match !runtime_slot with
+  | Active runtime when Int64.equal runtime.handle handle -> destroy_active runtime
+  | Empty | Creating | Active _ | Destroying _ | Finalized -> ()
 ;;
 
 module For_testing = struct
-  let runtime_count () = Hashtbl.length runtimes
+  type runtime_state =
+    | Empty
+    | Creating
+    | Active
+    | Destroying
+    | Finalized
+
+  type observations =
+    { driver_creations : int
+    ; driver_shutdowns : int
+    ; active_drivers : int
+    ; peak_active_drivers : int
+    }
+
+  let runtime_state = function
+    | Empty_tag -> Empty
+    | Creating_tag -> Creating
+    | Active_tag -> Active
+    | Destroying_tag -> Destroying
+    | Finalized_tag -> Finalized
+  ;;
+
+  let state () = state_tag !runtime_slot |> runtime_state
+  let state_history () = List.rev_map runtime_state !recorded_state_history
+
+  let runtime_count () =
+    match !runtime_slot with
+    | Active _ | Destroying _ -> 1
+    | Empty | Creating | Finalized -> 0
+  ;;
+
+  let observations () =
+    { driver_creations = !driver_creations
+    ; driver_shutdowns = !driver_shutdowns
+    ; active_drivers = !active_drivers
+    ; peak_active_drivers = !peak_active_drivers
+    }
+  ;;
+
+  let reset_observations () =
+    let current_active_drivers =
+      match !runtime_slot with
+      | Active _ | Destroying _ -> 1
+      | Empty | Creating | Finalized -> 0
+    in
+    driver_creations := 0;
+    driver_shutdowns := 0;
+    active_drivers := current_active_drivers;
+    peak_active_drivers := current_active_drivers
+  ;;
+
+  let clear_state_history () = recorded_state_history := []
+
+  let final_shutdown () =
+    match !runtime_slot with
+    | Finalized -> ()
+    | Creating | Destroying _ -> failwith "Runtime_busy"
+    | Active runtime ->
+      destroy_active runtime;
+      transition Finalized;
+      Worker_runtime.For_testing.final_shutdown ()
+    | Empty ->
+      transition Finalized;
+      Worker_runtime.For_testing.final_shutdown ()
+  ;;
 end
 
 let callback_create config =

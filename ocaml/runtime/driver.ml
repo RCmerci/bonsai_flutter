@@ -93,6 +93,8 @@ type pending_presentation =
 type t =
   { runtime_epoch : int64
   ; trace : (string -> unit) option
+  ; before_flush : schedule:(unit Bonsai.Effect.t -> unit) -> unit
+  ; before_shutdown : unit -> unit
   ; time_source : Bonsai.Time_source.t
   ; logical_time_origin : Core.Time_ns.t
   ; bonsai : Ui.Widget.t Bonsai_runtime_adapter.t
@@ -118,7 +120,14 @@ type t =
   ; mutable resync_count : int
   }
 
-let create ?trace ~runtime_epoch ~time_source component =
+let create
+      ?trace
+      ?(before_flush = fun ~schedule:_ -> ())
+      ?(before_shutdown = fun () -> ())
+      ~runtime_epoch
+      ~time_source
+      component
+  =
   if Int64.compare runtime_epoch 0L <= 0
   then invalid_arg "Driver.create: runtime_epoch must be positive";
   let pending_queue = Queue.create () in
@@ -139,6 +148,8 @@ let create ?trace ~runtime_epoch ~time_source component =
   let bonsai = Bonsai_runtime_adapter.create ~time_source (component pending_effects) in
   { runtime_epoch
   ; trace
+  ; before_flush
+  ; before_shutdown
   ; time_source
   ; logical_time_origin = Bonsai.Time_source.now time_source
   ; bonsai
@@ -1328,6 +1339,8 @@ let pump t ~monotonic_now_ns ?events () =
                 (match execute_validated_input t validated with
                  | Ok () -> ()
                  | Error error -> raise (Failure (error_to_string error))));
+             t.before_flush ~schedule:(fun scheduled_effect ->
+               Queue.add scheduled_effect t.pending_effects.pending_effects);
              drain_effects t;
              let flush_started = now_ns () in
              Bonsai_runtime_adapter.flush t.bonsai;
@@ -1468,6 +1481,7 @@ let presentation_rejected t ~presentation_id ~renderer_revision ~reason:_ =
 let shutdown t =
   if not t.is_shutdown
   then (
+    t.before_shutdown ();
     t.is_shutdown <- true;
     Host_effect.Private.shutdown t.host_effects;
     Queue.clear t.pending_effects.pending_effects;

@@ -17,5 +17,6 @@ export 'src/renderer/node_host.dart';
 export 'src/renderer/renderer_resource_store.dart';
 export 'src/renderer/widget_registry.dart';
 export 'src/runtime/runtime_client.dart';
+export 'src/runtime/runtime_bootstrap_config.dart';
 export 'src/runtime/event_batch_queue.dart';
 export 'src/store/node_store.dart';

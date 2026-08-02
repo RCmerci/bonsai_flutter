@@ -1,4 +1,4 @@
-(** OCaml-owned runtime table behind the stable C ABI.
+(** OCaml-owned singleton runtime slot behind the stable C ABI.
 
     C stores only the positive [int64] handle returned here. It never stores an
     OCaml heap value. *)
@@ -34,5 +34,25 @@ val presentation_rejected : int64 -> int64 -> int64 -> int -> output
 val destroy : int64 -> unit
 
 module For_testing : sig
+  type runtime_state =
+    | Empty
+    | Creating
+    | Active
+    | Destroying
+    | Finalized
+
+  type observations =
+    { driver_creations : int
+    ; driver_shutdowns : int
+    ; active_drivers : int
+    ; peak_active_drivers : int
+    }
+
+  val state : unit -> runtime_state
+  val state_history : unit -> runtime_state list
   val runtime_count : unit -> int
+  val observations : unit -> observations
+  val reset_observations : unit -> unit
+  val clear_state_history : unit -> unit
+  val final_shutdown : unit -> unit
 end

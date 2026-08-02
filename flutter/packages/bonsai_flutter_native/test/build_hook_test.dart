@@ -28,4 +28,33 @@ void main() {
       completes,
     );
   });
+
+  group('conditional system SQLite linking', () {
+    test('is absent by default and when explicitly disabled', () {
+      expect(build_hook.systemLinkFlagsForTesting(OS.macOS, null), isEmpty);
+      expect(build_hook.systemLinkFlagsForTesting(OS.iOS, false), isEmpty);
+      expect(build_hook.systemLinkFlagsForTesting(OS.macOS, 'false'), isEmpty);
+    });
+
+    test('adds Apple system SQLite only for opted-in Apple targets', () {
+      expect(build_hook.systemLinkFlagsForTesting(OS.macOS, true), [
+        '-lsqlite3',
+      ]);
+      expect(build_hook.systemLinkFlagsForTesting(OS.iOS, 'true'), [
+        '-lsqlite3',
+      ]);
+      expect(build_hook.systemLinkFlagsForTesting(OS.linux, true), isEmpty);
+    });
+
+    test('rejects non-boolean SQLite user defines', () {
+      expect(
+        () => build_hook.systemLinkFlagsForTesting(OS.macOS, 'yes'),
+        throwsA(isA<FormatException>()),
+      );
+      expect(
+        () => build_hook.systemLinkFlagsForTesting(OS.iOS, 1),
+        throwsA(isA<FormatException>()),
+      );
+    });
+  });
 }

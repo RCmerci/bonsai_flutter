@@ -78,6 +78,24 @@ input, host-operation replay, and sequence overflow.
 visible text, semantics label, and node kind. It does not implement CSS
 selectors.
 
+The singleton and Worker Domain suites use real `Domain.spawn`, bounded
+mailboxes, conditions, and deterministic synchronization. They prove that one
+UI-only or worker-backed runtime occupies the process-wide slot, replacement
+never overlaps Drivers or sessions, sequential recreation reuses the same
+Worker Domain identifier, ordinary destroy performs zero joins, and final
+shutdown joins a successfully spawned Domain exactly once. They also cover
+spawn and service failures, out-of-band Stop and Cancel, request/computation
+fairness, backpressure, stale fencing, response reservation, push coalescing,
+and idle waiting without polling.
+
+SQLite store tests use temporary on-disk databases and a real worker session.
+They cover migration and reopen, Unicode prepared values, list bounds, title
+validation, mutation idempotency, transactional revisions, future schemas,
+corruption, unopenable paths, finite lock contention, explicit close, and
+same-path recreation. Service and application tests verify Ready, List, Add,
+Toggle, Refresh, response-before-push ordering, snapshot and summary pushes,
+persistence, and fresh mutation identities after process epoch changes.
+
 ## Dart
 
 Pure Dart tests validate binary decoding, atomic `NodeStore` transactions,
@@ -217,6 +235,16 @@ second scenario follows the valid mobile background sequence, proves with a
 same-port snapshot that pump count remains unchanged while hidden or paused,
 then resumes and catches up using real foreground frames.
 
+The SQLite Worker integration scenario resolves a real Application Support
+path, starts the `sqlite_worker` entrypoint through FFI, waits for unsolicited
+Ready and the initial List response, performs Add and Toggle, observes pushed
+snapshots, and issues thirty foreground Refresh operations. It proves that
+hidden and paused intervals grant no pumps, resume restores progress, explicit
+disposal completes before unmount, and a sequential replacement recovers the
+committed Todo from the same database. Host debug timing is diagnostic only;
+the physical-device Profile lane is the authority for the 250 ms p95 and
+500 ms p99 foreground response limits.
+
 For interaction tuning, use a compact physical iPhone in Profile mode. The
 dedicated driver warms every interaction twice, records twenty detail
 entrances, edge-pop cancels, edge-pop commits, row-swipe cancels, and row-swipe
@@ -263,10 +291,11 @@ Run the complete hosted boundary:
 make ci-ios
 ```
 
-The repository contains eight standalone examples. Unsigned iPhoneOS arm64
-builds are verified for the original seven and the aggregate integration
-application; Bonsai Mail awaits the next full hosted packaging run. Counter
-Debug, Profile, and Release frameworks pass the artifact audit. That audit
+The repository contains ten standalone examples. Unsigned iPhoneOS arm64
+objects are built for all examples and the aggregate integration application.
+Counter and SQLite Worker Debug, Profile, and Release frameworks pass their
+artifact audits. The SQLite mode additionally requires Apple system SQLite
+imports and rejects any change to the public `bf_*` export boundary. The audit
 checks the final Mach-O platform, architecture, minimum version, Bitcode,
 install name, linked libraries, exact public exports, Native Assets manifest,
 prohibited process imports, privacy manifest, and Profile/Release dSYM UUIDs.
@@ -290,3 +319,10 @@ before the build because no matching development/distribution identities,
 profiles, and Team configuration were available. Consequently physical
 interaction, background/foreground transitions, cold relaunch, hot restart,
 signed archive export, and the physical device/OS matrix remain unverified.
+
+The SQLite Worker physical-device registration uses the same real-FFI
+scenario and records singleton recreation, Worker Domain identity, push and
+request ordering, persistence, suspension, resume, and Profile p95/p99
+latencies when signing inputs and a reachable device are available. An
+unsigned bundle is packaging evidence and is never substituted for these
+device assertions.

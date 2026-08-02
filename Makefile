@@ -16,6 +16,7 @@ NATIVE_OBJECT_TARGETS = \
 	examples/mail/ocaml/native_embed_debug.exe.o \
 	examples/mail/ocaml/native_embed_release.exe.o \
 	examples/navigation/ocaml/native_embed.exe.o \
+	examples/sqlite_worker/ocaml/native_embed.exe.o \
 	examples/text_input/ocaml/native_embed.exe.o \
 	examples/todo/ocaml/native_embed.exe.o
 
@@ -58,15 +59,15 @@ native-analyze:
 	cd flutter/packages/bonsai_flutter_native && dart analyze
 
 native-object:
-	BONSAI_FLUTTER_EMBED_OCAML=enabled dune build $(NATIVE_OBJECT_TARGET)
+	BONSAI_FLUTTER_APPLE_SDK_ROOT="$$(xcrun --sdk macosx --show-sdk-path)" BONSAI_FLUTTER_EMBED_OCAML=enabled dune build $(NATIVE_OBJECT_TARGET)
 	tool/macos/stage_native_objects.sh example $(EXAMPLE)
 
 native-objects:
-	BONSAI_FLUTTER_EMBED_OCAML=enabled dune build $(NATIVE_OBJECT_TARGETS)
+	BONSAI_FLUTTER_APPLE_SDK_ROOT="$$(xcrun --sdk macosx --show-sdk-path)" BONSAI_FLUTTER_EMBED_OCAML=enabled dune build $(NATIVE_OBJECT_TARGETS)
 	tool/macos/stage_native_objects.sh examples
 
 integration-native-object:
-	BONSAI_FLUTTER_EMBED_OCAML=enabled dune build flutter/integration_test/ocaml/native_integration_embed.exe.o
+	BONSAI_FLUTTER_APPLE_SDK_ROOT="$$(xcrun --sdk macosx --show-sdk-path)" BONSAI_FLUTTER_EMBED_OCAML=enabled dune build flutter/integration_test/ocaml/native_integration_embed.exe.o
 	tool/macos/stage_native_objects.sh integration
 
 integration-test: integration-native-object
@@ -110,7 +111,7 @@ ci-flutter:
 	cd flutter/integration_test && flutter pub get
 	cd flutter/integration_test && dart format --output=none --set-exit-if-changed benchmark integration_test lib test test_driver
 	cd flutter/integration_test && flutter analyze
-	@set -e; for example in clock counter todo text_input host_effects navigation gallery host_navigation mail; do \
+	@set -e; for example in clock counter todo text_input host_effects navigation gallery host_navigation mail sqlite_worker; do \
 	  (cd "examples/$$example/flutter" && \
 	    flutter pub get && \
 	    dart format --output=none --set-exit-if-changed lib && \
@@ -142,6 +143,13 @@ ci-ios:
 	tool/ios/verify_app_bundle.sh examples/counter/flutter/build/ios/iphoneos/Runner.app examples/counter/flutter/build/ios/Profile-iphoneos/bonsai_flutter_native.framework.dSYM
 	cd examples/counter/flutter && flutter build ios --release --no-codesign
 	tool/ios/verify_app_bundle.sh examples/counter/flutter/build/ios/iphoneos/Runner.app examples/counter/flutter/build/ios/Release-iphoneos/bonsai_flutter_native.framework.dSYM
+	cd examples/sqlite_worker/flutter && flutter pub get
+	cd examples/sqlite_worker/flutter && flutter build ios --debug --no-codesign
+	tool/ios/verify_app_bundle.sh examples/sqlite_worker/flutter/build/ios/iphoneos/Runner.app require-sqlite
+	cd examples/sqlite_worker/flutter && flutter build ios --profile --no-codesign
+	tool/ios/verify_app_bundle.sh examples/sqlite_worker/flutter/build/ios/iphoneos/Runner.app examples/sqlite_worker/flutter/build/ios/Profile-iphoneos/bonsai_flutter_native.framework.dSYM require-sqlite
+	cd examples/sqlite_worker/flutter && flutter build ios --release --no-codesign
+	tool/ios/verify_app_bundle.sh examples/sqlite_worker/flutter/build/ios/iphoneos/Runner.app examples/sqlite_worker/flutter/build/ios/Release-iphoneos/bonsai_flutter_native.framework.dSYM require-sqlite
 
 ci-ios-device:
 	@test -n "$(IOS_DEVICE_ID)" || (echo "IOS_DEVICE_ID is required" >&2; exit 1)

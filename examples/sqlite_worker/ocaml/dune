@@ -1,0 +1,32 @@
+(library
+ (name bonsai_flutter_sqlite_worker_example)
+ (wrapped false)
+ (modules
+  sqlite_worker_protocol
+  sqlite_worker_store
+  sqlite_worker_service
+  sqlite_worker_example)
+ (libraries
+  base
+  bonsai
+  bonsai_flutter.ui
+  bonsai_flutter.driver
+  core
+  incr_dom.ui_incr
+  sqlite3
+  unix
+  virtual_dom.ui_effect))
+
+(executable
+ (name native_embed)
+ (modules native_embed)
+ (enabled_if
+  (= %{env:BONSAI_FLUTTER_EMBED_OCAML=disabled} enabled))
+ (libraries
+  bonsai_flutter_sqlite_worker_example
+  bonsai_flutter.driver
+  bonsai_flutter.native_backend)
+ (link_flags
+  (:standard -cclib -L%{env:BONSAI_FLUTTER_APPLE_SDK_ROOT=}/usr/lib))
+ (modes
+  (native object)))

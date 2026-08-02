@@ -133,6 +133,40 @@ All version-sensitive Bonsai integration is confined to
 
 ## Runtime model
 
+### Singleton worker topology
+
+The runtime uses the four-stage topology accepted in ADR 0007:
+
+```text
+Flutter UI isolate
+  -> Dart runtime coordinator isolate
+  -> OCaml UI domain 0
+  <-> OCaml Worker Domain
+```
+
+The Flutter UI isolate owns widgets, rendering, plugins, and Application
+Support path discovery. One active Dart runtime coordinator isolate owns the
+native lease and serializes the existing synchronous C ABI. Every Dart foreign
+thread still enters the single embedded OCaml runtime through domain 0. The
+Worker Domain is internal to OCaml and communicates with domain 0 only through
+bounded immutable messages; it never calls Dart, Flutter, the C bridge,
+Bonsai, or the Driver.
+
+The following ownership rules are process-wide:
+
+| Owner | Exclusive state and responsibilities |
+| --- | --- |
+| Flutter UI isolate | Widgets, render objects, plugins, platform channels, and platform path resolution. |
+| Dart runtime coordinator isolate | The singleton coordinator lease, ordered FFI calls, presentation coordination, and native buffers while copying. |
+| OCaml UI domain 0 | The singleton runtime state machine, one active `bf_runtime`, one `Driver.t`, Bonsai state and effects, reconciliation, handlers, and worker-client endpoint. |
+| OCaml Worker Domain | Zero or one worker session, business computation, SQLite connection, statements, migrations, transactions, and worker-only cleanup. |
+
+UI-only and worker-backed applications occupy the same singleton runtime and
+Driver slot. The Worker Domain is spawned lazily, reused across sequential
+worker sessions, and is never selected by `Domain.recommended_domain_count`.
+An actual spawn failure is terminal for worker-backed startup; work never
+falls back to domain 0.
+
 Each runtime has:
 
 - a random nonzero 64-bit epoch;

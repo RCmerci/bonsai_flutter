@@ -11,6 +11,9 @@ static int64_t last_monotonic_now_ns = -1;
 static uint64_t last_presentation_id = 0;
 static uint64_t last_revision = 0;
 static int32_t last_rejection_reason = -1;
+static uint64_t current_handle = 0;
+static uint64_t last_destroyed_handle = 0;
+static int create_count = 0;
 
 int bf_ocaml_bridge_initialize(char *error, size_t error_capacity) {
   (void)error;
@@ -23,15 +26,32 @@ bf_status bf_ocaml_bridge_create(const uint8_t *config,
                                  uint64_t *handle,
                                  char *error,
                                  size_t error_capacity) {
-  const char expected[] = "counter";
+  const char first[] = "counter";
+  const char replacement[] = "replacement";
   (void)error;
   (void)error_capacity;
-  if (config_length != sizeof(expected) - 1 ||
-      memcmp(config, expected, sizeof(expected) - 1) != 0) {
+  if (!((config_length == sizeof(first) - 1 &&
+         memcmp(config, first, sizeof(first) - 1) == 0) ||
+        (config_length == sizeof(replacement) - 1 &&
+         memcmp(config, replacement, sizeof(replacement) - 1) == 0))) {
     return BF_STATUS_FATAL_ERROR;
   }
-  *handle = 42;
+  *handle = (uint64_t)(42 + create_count);
+  create_count += 1;
+  current_handle = *handle;
   return BF_STATUS_OK;
+}
+
+static bf_status stale_handle(bf_ocaml_response *response) {
+  const char message[] = "Unknown native runtime handle";
+  response->error = (char *)malloc(sizeof(message));
+  if (response->error == NULL) {
+    return BF_STATUS_FATAL_ERROR;
+  }
+  memcpy(response->error, message, sizeof(message));
+  response->status = BF_STATUS_FATAL_ERROR;
+  response->error_code = BF_ERROR_OCAML_EXCEPTION;
+  return BF_STATUS_FATAL_ERROR;
 }
 
 static bf_status respond(bf_ocaml_response *response,
@@ -62,8 +82,8 @@ bf_status bf_ocaml_bridge_pump(uint64_t handle,
                                const uint8_t *input,
                                size_t input_length,
                                bf_ocaml_response *response) {
-  if (handle != 42) {
-    return BF_STATUS_FATAL_ERROR;
+  if (handle != current_handle) {
+    return stale_handle(response);
   }
   pump_count += 1;
   last_monotonic_now_ns = monotonic_now_ns;
@@ -94,8 +114,8 @@ bf_status bf_ocaml_bridge_presentation_succeeded(
     uint64_t revision,
     int64_t monotonic_now_ns,
     bf_ocaml_response *response) {
-  if (handle != 42) {
-    return BF_STATUS_FATAL_ERROR;
+  if (handle != current_handle) {
+    return stale_handle(response);
   }
   presentation_succeeded_count += 1;
   last_presentation_id = presentation_id;
@@ -110,8 +130,8 @@ bf_status bf_ocaml_bridge_presentation_rejected(
     uint64_t revision,
     int32_t rejection_reason,
     bf_ocaml_response *response) {
-  if (handle != 42) {
-    return BF_STATUS_FATAL_ERROR;
+  if (handle != current_handle) {
+    return stale_handle(response);
   }
   presentation_rejected_count += 1;
   last_presentation_id = presentation_id;
@@ -127,8 +147,10 @@ void bf_ocaml_bridge_response_release(bf_ocaml_response *response) {
 }
 
 void bf_ocaml_bridge_destroy(uint64_t handle) {
-  if (handle == 42) {
-    destroy_count += 1;
+  last_destroyed_handle = handle;
+  destroy_count += 1;
+  if (handle == current_handle) {
+    current_handle = 0;
   }
 }
 
@@ -144,3 +166,4 @@ int64_t bf_mock_last_monotonic_now_ns(void) { return last_monotonic_now_ns; }
 uint64_t bf_mock_last_presentation_id(void) { return last_presentation_id; }
 uint64_t bf_mock_last_revision(void) { return last_revision; }
 int32_t bf_mock_last_rejection_reason(void) { return last_rejection_reason; }
+uint64_t bf_mock_last_destroyed_handle(void) { return last_destroyed_handle; }

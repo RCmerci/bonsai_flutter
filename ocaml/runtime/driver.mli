@@ -78,13 +78,16 @@ type t
 
 val create
   :  ?trace:(string -> unit)
+  -> ?before_flush:(schedule:(unit Bonsai.Effect.t -> unit) -> unit)
+  -> ?before_shutdown:(unit -> unit)
   -> runtime_epoch:int64
   -> time_source:Bonsai.Time_source.t
   -> (Handler.t -> Bonsai.Cont.graph -> Bonsai_flutter_ui.Widget.t Bonsai.Cont.t)
   -> t
 
-(** Advances logical time, consumes at most one atomic input batch, flushes
-    Bonsai once, and reserves one presentation token. *)
+(** Advances logical time, consumes at most one atomic input batch, drains the
+    bounded worker hook, flushes Bonsai once, and reserves one presentation
+    token. *)
 val pump
   :  t
   -> monotonic_now_ns:int64

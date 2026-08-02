@@ -17,6 +17,7 @@ module Debug = Bonsai_flutter_ui.Debug
 module Effect = Bonsai.Effect
 module Environment = Environment
 module Host_effect = Host_effect
+module Worker = Worker
 module App = App
 module Driver = Driver
 module Entrypoint = Entrypoint

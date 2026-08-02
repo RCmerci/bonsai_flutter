@@ -1,0 +1,33 @@
+name: bonsai_flutter_sqlite_worker_example
+description: Test-first scaffold for the SQLite Worker Todo example.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=3.44.0"
+
+hooks:
+  user_defines:
+    bonsai_flutter_native:
+      native_artifact_root: ../../../_build/native-artifacts/sqlite_worker/
+      require_ocaml_backend: true
+      link_system_sqlite3: true
+
+dependencies:
+  bonsai_flutter:
+    path: ../../../flutter/packages/bonsai_flutter
+  bonsai_flutter_native:
+    path: ../../../flutter/packages/bonsai_flutter_native
+  flutter:
+    sdk: flutter
+  path: ^1.9.1
+  path_provider: ^2.1.5
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

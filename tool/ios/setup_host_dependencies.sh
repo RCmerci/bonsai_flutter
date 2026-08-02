@@ -42,6 +42,7 @@ install_for_switch() {
     "ocamlfind.$OCAMLFIND_VERSION" \
     "bonsai.$BONSAI_VERSION" \
     "core.$CORE_VERSION" \
+    "sqlite3.$SQLITE3_VERSION" \
     --assume-depexts \
     --yes
 

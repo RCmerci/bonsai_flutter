@@ -35,6 +35,21 @@ linking. It rejects a missing object, wrong architecture, wrong platform,
 wrong SDK kind, inconsistent minimum version, Bitcode, and an optional
 C-only fallback when `require_ocaml_backend` is true.
 
+Applications that use the SQLite binding opt into the Apple system library:
+
+```yaml
+hooks:
+  user_defines:
+    bonsai_flutter_native:
+      native_artifact_root: ../../../_build/native-artifacts/sqlite_worker/
+      require_ocaml_backend: true
+      link_system_sqlite3: true
+```
+
+`link_system_sqlite3` is a strict boolean and is accepted only for Apple
+targets. The build hook adds `-lsqlite3` only when opted in; every other
+application remains free of a SQLite dependency.
+
 ## macOS
 
 Build and stage all standalone macOS objects:
@@ -67,10 +82,17 @@ make ios-device-native-objects
 
 `tool/ios/toolchain.lock` pins OCaml 5.1.1, opam-cross-ios, target triples,
 deployment settings, and the Jane Street v0.17 release line.
-`vendor/opam-ios/runtime-closure.lock` pins the exact 42-package runtime
+`vendor/opam-ios/runtime-closure.lock` pins the exact runtime
 closure by source URL and SHA-256 digest. Host PPX executables and generators
 remain native macOS processes; only target metadata and selected target
 runtime components enter the iOS sysroot.
+
+The SQLite OCaml binding is pinned exactly to `sqlite3` 5.4.0. The target
+closure stages the arm64 iPhoneOS `libsqlite3_stubs.a` binding archive and
+metadata containing `-lsqlite3`; it does not stage a `libsqlite3.a` engine.
+SDK-aware pkg-config metadata selects Apple headers and the system library and
+is audited against Homebrew, `/usr/local`, macOS SDK, loadable-extension, and
+bundled-engine leakage.
 
 The iPhoneOS output is a real arm64 `IOS` complete object with minimum 13.0.
 iOS Simulator is intentionally unsupported; use a registered physical iPhone
@@ -106,9 +128,15 @@ verifier requires the corresponding linked symbols, including either
 `mach_absolute_time` or `clock_gettime_nsec_np`, and rejects unrelated blanket
 reasons.
 
+SQLite applications invoke the verifier's explicit `require-sqlite` mode. It
+requires the final framework to import `/usr/lib/libsqlite3.dylib` and real
+`_sqlite3_*` symbols while retaining the exact existing `bf_*` export set.
+The default mode rejects an unexpected SQLite dependency, which protects
+non-SQLite examples from accidental global linkage.
+
 ## Current evidence boundary
 
-The repository contains nine standalone examples. All nine examples and the
+The repository contains ten standalone examples. All ten examples and the
 aggregate integration application build as unsigned iPhoneOS arm64
 applications. Counter Debug, Profile, and Release frameworks pass the
 repository bundle audit.

@@ -76,6 +76,7 @@ require_exact_installed_version bonsai v0.17.0
 require_exact_installed_version core v0.17.2
 require_exact_installed_version incr_dom v0.17.0
 require_exact_installed_version incremental v0.17.0
+require_exact_installed_version sqlite3 5.4.0
 require_exact_installed_version virtual_dom v0.17.0
 for package in bonsai incr_dom incremental virtual_dom; do
   require_opam_release_source "$package" v0.17.0
@@ -160,6 +161,39 @@ dependency_control_text=$(cat \
   tool/ci/*.sh \
   tool/ios/*.sh \
   tool/macos/*.sh)
+require_text \
+  "$dependency_control_text" \
+  'sqlite3' \
+  "dependency controls"
+require_text \
+  "$(cat vendor/opam-ios/runtime-closure.lock)" \
+  'sqlite3|5.4.0|target|https://github.com/mmottl/sqlite3-ocaml/releases/download/5.4.0/sqlite3-5.4.0.tbz|f0069532f78ac24f16d79262af01434952d0481f8bf80ae541dff4a56cc4e9ff|sqlite3' \
+  "iOS runtime closure lock"
+require_text \
+  "$(cat tool/ios/toolchain.lock)" \
+  "SQLITE3_VERSION='5.4.0'" \
+  "iOS toolchain lock"
+ios_closure_verifier=$(cat tool/ios/verify_runtime_closure.sh)
+require_text "$ios_closure_verifier" '= 44 ||' "iOS closure package count"
+require_text "$ios_closure_verifier" '= 71 ||' "iOS closure component count"
+require_text "$ios_closure_verifier" 'sqlite3' "iOS closure findlib roots"
+require_text \
+  "$(cat tool/ios/setup_host_dependencies.sh)" \
+  'sqlite3.$SQLITE3_VERSION' \
+  "iOS host SQLite dependency setup"
+ios_runtime_package_builder=$(cat tool/ios/build_runtime_package.sh)
+require_text \
+  "$ios_runtime_package_builder" \
+  'libsqlite3_stubs.a' \
+  "iOS target SQLite stubs"
+require_text \
+  "$ios_runtime_package_builder" \
+  '-lsqlite3' \
+  "iOS target system SQLite dependency"
+reject_text \
+  "$ios_runtime_package_builder" \
+  'libsqlite3.a' \
+  "iOS target runtime package builder"
 reject_pattern \
   "$dependency_control_text" \
   'opam[[:space:]]+pin[[:space:]]+add[[:space:]]+(bonsai|incremental|incr_dom)' \
@@ -243,10 +277,15 @@ require_text "$ios_commands" "flutter build ios --debug --no-codesign" "ci-ios"
 require_text "$ios_commands" "flutter build ios --profile --no-codesign" "ci-ios"
 require_text "$ios_commands" "flutter build ios --release --no-codesign" "ci-ios"
 require_text "$ios_commands" "tool/ios/verify_app_bundle.sh" "ci-ios"
+require_text "$ios_commands" "examples/sqlite_worker/flutter" "ci-ios"
+require_text "$ios_commands" "verify_app_bundle.sh" "ci-ios SQLite bundle audit"
+require_text "$ios_commands" "require-sqlite" "ci-ios SQLite bundle audit"
 reject_text "$ios_commands" "simulator" "ci-ios"
 
 native_hook_source=$(tr -d '[:space:]' < flutter/packages/bonsai_flutter_native/hook/build.dart)
 require_text "$native_hook_source" "'-framework','Security'" "iOS native hook"
+require_text "$native_hook_source" "'link_system_sqlite3'" "conditional SQLite native hook"
+require_text "$native_hook_source" "'-lsqlite3'" "conditional SQLite native hook"
 ios_probe_source=$(cat tool/ios/build_probe.sh)
 require_text "$ios_probe_source" "-framework Security" "iOS cross probe"
 ios_bundle_verifier_source=$(cat tool/ios/verify_app_bundle.sh)
@@ -254,6 +293,18 @@ require_text \
   "$ios_bundle_verifier_source" \
   "mach_absolute_time" \
   "iOS app-bundle privacy verifier"
+require_text \
+  "$ios_bundle_verifier_source" \
+  "require-sqlite" \
+  "iOS app-bundle SQLite verifier mode"
+require_text \
+  "$ios_bundle_verifier_source" \
+  "libsqlite3" \
+  "iOS app-bundle SQLite dependency verifier"
+require_text \
+  "$ios_bundle_verifier_source" \
+  "sqlite3_" \
+  "iOS app-bundle SQLite export rejection"
 
 ios_device_commands=$(dry_run_target ci-ios-device)
 require_text "$ios_device_commands" "IOS_DEVICE_ID" "ci-ios-device"
@@ -317,7 +368,7 @@ reject_text \
   "$native_backend_test_dune" \
   "bonsai_flutter_mail_example" \
   "generic native backend test dependencies"
-for example in clock counter gallery host_effects host_navigation mail navigation text_input todo; do
+for example in clock counter gallery host_effects host_navigation mail navigation sqlite_worker text_input todo; do
   require_file "examples/$example/ocaml/native_embed.ml"
   if test "$example" = mail; then
     require_text \
@@ -343,6 +394,17 @@ for example in clock counter gallery host_effects host_navigation mail navigatio
     "$example_pubspec" \
     "require_ocaml_backend: true" \
     "$example Flutter build hook"
+  if test "$example" = sqlite_worker; then
+    require_text \
+      "$example_pubspec" \
+      "link_system_sqlite3: true" \
+      "$example Flutter build hook"
+  else
+    reject_text \
+      "$example_pubspec" \
+      "link_system_sqlite3" \
+      "$example Flutter build hook"
+  fi
   if test "$example" = mail; then
     require_text \
       "$example_pubspec" \
@@ -375,6 +437,10 @@ require_text \
   "$integration_pubspec" \
   "require_ocaml_backend: true" \
   "integration Flutter build hook"
+require_text \
+  "$integration_pubspec" \
+  "link_system_sqlite3: true" \
+  "integration Flutter build hook"
 require_file flutter/integration_test/ios/Runner/PrivacyInfo.xcprivacy
 integration_ios_project=$(
   cat flutter/integration_test/ios/Runner.xcodeproj/project.pbxproj
@@ -393,6 +459,7 @@ for example_library in \
   bonsai_flutter_host_navigation_example \
   bonsai_flutter_mail_example \
   bonsai_flutter_navigation_example \
+  bonsai_flutter_sqlite_worker_example \
   bonsai_flutter_text_input_example \
   bonsai_flutter_todo_example
 do

@@ -12,6 +12,31 @@ let require_no_substring output substring message =
   require (not (Core.String.is_substring output ~substring)) message
 ;;
 
+let set_u16_le bytes offset value =
+  Bytes.set_uint8 bytes offset (value land 0xff);
+  Bytes.set_uint8 bytes (offset + 1) ((value lsr 8) land 0xff)
+;;
+
+let set_u32_le bytes offset value =
+  for index = 0 to 3 do
+    Bytes.set_uint8 bytes (offset + index) ((value lsr (index * 8)) land 0xff)
+  done
+;;
+
+let startup_config ~policy ~entrypoint =
+  let entrypoint = Bytes.of_string entrypoint in
+  let config = Bytes.create (20 + Bytes.length entrypoint) in
+  Bytes.blit_string "BFR1" 0 config 0 4;
+  set_u16_le config 4 1;
+  set_u16_le config 6 0;
+  Bytes.set_uint8 config 8 policy;
+  Bytes.fill config 9 3 '\000';
+  set_u32_le config 12 (Bytes.length entrypoint);
+  set_u32_le config 16 0;
+  Bytes.blit entrypoint 0 config 20 (Bytes.length entrypoint);
+  config
+;;
+
 let capture_stderr run =
   let path = Filename.temp_file "bonsai_flutter_native_trace" ".log" in
   let saved_stderr = Unix.dup Unix.stderr in
@@ -69,9 +94,12 @@ let trace_fixture _handlers _graph =
      |> Ui.Widget.with_test_id (Ui.Test_id.string "trace-root"))
 ;;
 
+let broken_component _handlers _graph = failwith "intentional startup failure"
+
 let () =
   Entrypoint.For_testing.clear ();
   Entrypoint.register ~name:"counter" (App.create counter);
+  Entrypoint.register ~name:"broken" (App.create broken_component);
   let created = Native_backend.create (Bytes.of_string "counter") in
   require (created.status = Native_backend.Ok) "registered entrypoint did not create";
   require (Int64.compare created.handle 0L > 0) "native handle must be positive";
@@ -111,6 +139,100 @@ let () =
   require
     (Native_backend.For_testing.runtime_count () = 0)
     "runtime destroy retained native backend handles";
+  Native_backend.For_testing.reset_observations ();
+  let fresh_config = startup_config ~policy:0 ~entrypoint:"counter" in
+  let replace_config = startup_config ~policy:1 ~entrypoint:"counter" in
+  let first = Native_backend.create fresh_config in
+  require (first.status = Native_backend.Ok) "Fresh runtime did not create";
+  let before_rejected_create = Native_backend.For_testing.observations () in
+  let duplicate = Native_backend.create fresh_config in
+  require
+    (duplicate.status = Native_backend.Fatal_error)
+    "second Fresh runtime was accepted";
+  require_substring
+    duplicate.error
+    "Runtime_already_active"
+    "second Fresh failure did not identify the occupied singleton";
+  let after_rejected_create = Native_backend.For_testing.observations () in
+  require
+    (after_rejected_create.driver_creations = before_rejected_create.driver_creations)
+    "second Fresh create allocated another Driver";
+  require
+    (after_rejected_create.active_drivers = 1)
+    "second Fresh create changed the active Driver count";
+  require
+    (after_rejected_create.peak_active_drivers = 1)
+    "second Fresh create overlapped Drivers";
+  require
+    (Native_backend.For_testing.state () = Native_backend.For_testing.Active)
+    "singleton slot did not remain Active after rejected Fresh create";
+  Native_backend.For_testing.clear_state_history ();
+  let replacement = Native_backend.create replace_config in
+  require (replacement.status = Native_backend.Ok) "replacement runtime did not create";
+  require
+    (Native_backend.For_testing.state_history ()
+     = [ Native_backend.For_testing.Destroying
+       ; Native_backend.For_testing.Empty
+       ; Native_backend.For_testing.Creating
+       ; Native_backend.For_testing.Active
+       ])
+    "replacement did not follow Destroying -> Empty -> Creating -> Active";
+  let replacement_observations = Native_backend.For_testing.observations () in
+  require
+    (replacement_observations.driver_shutdowns = 1)
+    "replacement did not shut down the old Driver";
+  require
+    (replacement_observations.active_drivers = 1)
+    "replacement did not leave exactly one active Driver";
+  require
+    (replacement_observations.peak_active_drivers = 1)
+    "replacement overlapped old and new Drivers";
+  let stale_pump = Native_backend.pump first.handle 0L Bytes.empty in
+  require
+    (stale_pump.status = Native_backend.Fatal_error)
+    "tombstoned runtime accepted a stale pump";
+  let stale_presentation = Native_backend.presentation_succeeded first.handle 1L 1L 0L in
+  require
+    (stale_presentation.status = Native_backend.Fatal_error)
+    "tombstoned runtime accepted a stale presentation";
+  Native_backend.destroy first.handle;
+  let live_after_stale_destroy = Native_backend.pump replacement.handle 0L Bytes.empty in
+  require
+    (live_after_stale_destroy.status = Native_backend.Ok)
+    "stale destroy affected the replacement runtime";
+  Native_backend.destroy replacement.handle;
+  let legacy_first = Native_backend.create fresh_config in
+  require
+    (legacy_first.status = Native_backend.Ok)
+    "Fresh runtime before legacy create failed";
+  let legacy_replacement = Native_backend.create (Bytes.of_string "counter") in
+  require
+    (legacy_replacement.status = Native_backend.Ok)
+    "legacy raw configuration did not use compatibility replacement";
+  let stale_legacy = Native_backend.pump legacy_first.handle 0L Bytes.empty in
+  require
+    (stale_legacy.status = Native_backend.Fatal_error)
+    "legacy replacement did not tombstone the old handle";
+  Native_backend.destroy legacy_replacement.handle;
+  Native_backend.For_testing.clear_state_history ();
+  let failed = Native_backend.create (startup_config ~policy:0 ~entrypoint:"broken") in
+  require (failed.status = Native_backend.Fatal_error) "failed startup was accepted";
+  require_substring
+    failed.error
+    "intentional startup failure"
+    "failed startup lost its original error";
+  require
+    (Native_backend.For_testing.state () = Native_backend.For_testing.Empty)
+    "failed startup did not restore the singleton slot to Empty";
+  require
+    (Native_backend.For_testing.state_history ()
+     = [ Native_backend.For_testing.Creating; Native_backend.For_testing.Empty ])
+    "failed startup did not roll Creating back to Empty";
+  let after_failure = Native_backend.create fresh_config in
+  require
+    (after_failure.status = Native_backend.Ok)
+    "failed startup left the singleton slot unusable";
+  Native_backend.destroy after_failure.handle;
   let missing = Native_backend.create (Bytes.of_string "missing") in
   require (missing.status = Native_backend.Fatal_error) "unknown entrypoint was accepted";
   let trace_message message = Printf.eprintf "[Trace Fixture][ocaml]%s\n%!" message in
@@ -204,5 +326,16 @@ let () =
     "trace omitted inbound event metadata";
   require
     (Native_backend.For_testing.runtime_count () = 0)
-    "traced runtime destroy retained native backend handles"
+    "traced runtime destroy retained native backend handles";
+  Native_backend.For_testing.final_shutdown ();
+  Native_backend.For_testing.final_shutdown ();
+  require
+    (Native_backend.For_testing.state () = Native_backend.For_testing.Finalized)
+    "final shutdown did not enter the absorbing Finalized state";
+  let stopped = Native_backend.create fresh_config in
+  require (stopped.status = Native_backend.Fatal_error) "create after Finalized succeeded";
+  require_substring
+    stopped.error
+    "Runtime_stopped"
+    "create after Finalized returned the wrong error"
 ;;

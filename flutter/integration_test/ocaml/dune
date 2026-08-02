@@ -14,10 +14,14 @@
   bonsai_flutter_gallery
   bonsai_flutter_host_navigation_example
   bonsai_flutter_mail_example
+  bonsai_flutter_sqlite_worker_example
   bonsai_flutter_text_input_example
   bonsai_flutter_todo_example
   incr_dom.ui_incr
   incr_dom.ui_time_source
+  sqlite3
   virtual_dom.ui_effect)
+ (link_flags
+  (:standard -cclib -L%{env:BONSAI_FLUTTER_APPLE_SDK_ROOT=}/usr/lib))
  (modes
   (native object)))

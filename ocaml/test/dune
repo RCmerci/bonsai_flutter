@@ -159,6 +159,98 @@
   unix))
 
 (test
+ (name runtime_bootstrap_config_tests)
+ (modules runtime_bootstrap_config_tests)
+ (libraries core bonsai_flutter.driver))
+
+(test
+ (name bounded_mailbox_tests)
+ (modules bounded_mailbox_tests)
+ (libraries core bonsai_flutter.driver threads))
+
+(test
+ (name worker_runtime_tests)
+ (modules worker_runtime_tests)
+ (libraries core bonsai_flutter.driver threads))
+
+(test
+ (name worker_runtime_not_started_shutdown_tests)
+ (modules worker_runtime_not_started_shutdown_tests)
+ (libraries core bonsai_flutter.driver threads))
+
+(test
+ (name worker_runtime_spawn_failure_tests)
+ (modules worker_runtime_spawn_failure_tests)
+ (libraries core bonsai_flutter.driver threads))
+
+(test
+ (name worker_runtime_attached_final_shutdown_tests)
+ (modules worker_runtime_attached_final_shutdown_tests)
+ (libraries core bonsai_flutter.driver threads))
+
+(test
+ (name worker_runtime_cancel_failure_tests)
+ (modules worker_runtime_cancel_failure_tests)
+ (libraries core bonsai_flutter.driver threads))
+
+(test
+ (name worker_driver_tests)
+ (modules worker_driver_tests)
+ (libraries
+  base
+  core
+  bonsai
+  bonsai_flutter.ui
+  bonsai_flutter.protocol
+  bonsai_flutter.runtime
+  bonsai_flutter.driver
+  incr_dom.ui_incr
+  incr_dom.ui_time_source
+  threads
+  virtual_dom.ui_effect))
+
+(test
+ (name native_backend_worker_tests)
+ (modules native_backend_worker_tests)
+ (libraries
+  base
+  core
+  bonsai
+  bonsai_flutter.ui
+  bonsai_flutter.protocol
+  bonsai_flutter.runtime
+  bonsai_flutter.driver
+  bonsai_flutter.native_backend
+  incr_dom.ui_incr
+  incr_dom.ui_time_source
+  threads
+  virtual_dom.ui_effect))
+
+(test
+ (name sqlite_worker_store_tests)
+ (modules sqlite_worker_store_tests)
+ (libraries core sqlite3 bonsai_flutter_sqlite_worker_example threads unix))
+
+(test
+ (name sqlite_worker_example_tests)
+ (modules sqlite_worker_example_tests)
+ (libraries
+  base
+  core
+  bonsai
+  bonsai_flutter.ui
+  bonsai_flutter.runtime
+  bonsai_flutter.driver
+  bonsai_flutter_test
+  bonsai_flutter_sqlite_worker_example
+  incr_dom.ui_incr
+  incr_dom.ui_time_source
+  sqlite3
+  threads
+  unix
+  virtual_dom.ui_effect))
+
+(test
  (name mail_example_tests)
  (modules mail_example_tests)
  (libraries

@@ -48,6 +48,7 @@ case "$1" in
       host_navigation \
       mail \
       navigation \
+      sqlite_worker \
       text_input \
       todo
     do
@@ -88,7 +89,7 @@ case "$1" in
           "$source_root/examples/mail/ocaml/native_embed_release.exe.o" \
           release
         ;;
-      clock | counter | gallery | host_effects | host_navigation | navigation | text_input | todo)
+      clock | counter | gallery | host_effects | host_navigation | navigation | sqlite_worker | text_input | todo)
         stage_object \
           "$2" \
           "$source_root/examples/$2/ocaml/native_embed.exe.o"

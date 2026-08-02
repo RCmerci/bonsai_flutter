@@ -30,7 +30,17 @@
  (name bonsai_flutter_driver)
  (public_name bonsai_flutter.driver)
  (wrapped false)
- (modules bonsai_v017 host_effect environment driver app entrypoint)
+ (modules
+  bonsai_v017
+  host_effect
+  environment
+  driver
+  app
+  entrypoint
+  runtime_bootstrap_config
+  bounded_mailbox
+  worker
+  worker_runtime)
  (libraries
   bonsai
   base
@@ -41,5 +51,6 @@
   core
   incr_dom.ui_incr
   incr_dom.ui_time_source
+  threads
   virtual_dom.ui_effect
   unix))
