@@ -165,6 +165,31 @@ require_text \
   "$dependency_control_text" \
   'sqlite3' \
   "dependency controls"
+
+dune_package_metadata() {
+  awk -v RS='' -v package_name="$1" \
+    'index($0, "(name " package_name ")") { print; exit }' \
+    dune-project
+}
+
+bonsai_flutter_dune_package=$(dune_package_metadata bonsai_flutter)
+bonsai_flutter_test_dune_package=$(dune_package_metadata bonsai_flutter_test)
+reject_text \
+  "$bonsai_flutter_dune_package" \
+  '(sqlite3 ' \
+  "bonsai_flutter dune package dependencies"
+require_text \
+  "$bonsai_flutter_test_dune_package" \
+  '(sqlite3 (= 5.4.0))' \
+  "bonsai_flutter_test dune package dependencies"
+reject_text \
+  "$(cat bonsai_flutter.opam)" \
+  '"sqlite3"' \
+  "bonsai_flutter opam dependencies"
+require_text \
+  "$(cat bonsai_flutter_test.opam)" \
+  '"sqlite3" {= "5.4.0"}' \
+  "bonsai_flutter_test opam dependencies"
 require_text \
   "$(cat vendor/opam-ios/runtime-closure.lock)" \
   'sqlite3|5.4.0|target|https://github.com/mmottl/sqlite3-ocaml/releases/download/5.4.0/sqlite3-5.4.0.tbz|f0069532f78ac24f16d79262af01434952d0481f8bf80ae541dff4a56cc4e9ff|sqlite3' \

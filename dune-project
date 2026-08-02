@@ -18,7 +18,6 @@
   (bonsai (and (>= v0.17) (< v0.18~)))
   (core (and (>= v0.17) (< v0.18~)))
   (incr_dom (and (>= v0.17) (< v0.18~)))
-  (sqlite3 (= 5.4.0))
   (virtual_dom (and (>= v0.17) (< v0.18~)))))
 
 (package
@@ -34,4 +33,5 @@
   (bonsai (and (>= v0.17) (< v0.18~)))
   (core (and (>= v0.17) (< v0.18~)))
   (incr_dom (and (>= v0.17) (< v0.18~)))
+  (sqlite3 (= 5.4.0))
   (virtual_dom (and (>= v0.17) (< v0.18~)))))
