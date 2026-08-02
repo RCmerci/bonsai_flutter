@@ -1,3 +1,4 @@
+module ID = Bonsai_flutter_spec.Id
 module Test = Bonsai_flutter_test
 module Ui = Bonsai_flutter_ui
 
@@ -25,7 +26,12 @@ let component handlers graph =
 
 let () =
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
-  let handle = Test.Handle.create ~runtime_epoch:701L ~time_source component in
+  let handle =
+    Test.Handle.create
+      ~runtime_epoch:(ID.Runtime.Epoch.of_int64 701L)
+      ~time_source
+      component
+  in
   require
     (String.equal
        (Test.Handle.show handle)

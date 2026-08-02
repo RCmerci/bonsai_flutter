@@ -1,16 +1,18 @@
 module Protocol = Bonsai_flutter_protocol
 module Runtime = Bonsai_flutter_runtime
 module Ui = Bonsai_flutter_ui
+module ID = Bonsai_flutter_spec.Id
 
 type t =
   { driver : Driver.t
-  ; runtime_epoch : int64
-  ; mutable sequence : int64
+  ; runtime_epoch : ID.Runtime.epoch
+  ; mutable sequence : ID.Runtime.event_sequence
   ; mutable last_frame : Driver.frame option
   ; mutable last_pump_result : Driver.pump_result option
   ; mutable next_monotonic_ns : int64
   ; mutable baseline : string
-  ; pending_requests : (int64, Protocol.Wire_frame.host_request_payload) Hashtbl.t
+  ; pending_requests :
+      (ID.Host.request_id, Protocol.Wire_frame.host_request_payload) Hashtbl.t
   }
 
 let fail format = Printf.ksprintf failwith format
@@ -52,7 +54,10 @@ let snapshot t =
 let ordered_nodes snapshot =
   let rec visit reversed node_id =
     match Runtime.Mounted_tree.Snapshot.find snapshot node_id with
-    | None -> fail "mounted snapshot references missing node %Ld" node_id
+    | None ->
+      fail
+        "mounted snapshot references missing node %Ld"
+        (Runtime.Node_id.to_int64 node_id)
     | Some node -> Array.fold_left visit (node :: reversed) node.children
   in
   match Runtime.Mounted_tree.Snapshot.root_id snapshot with
@@ -89,7 +94,10 @@ let render_tree t =
     let node =
       match Runtime.Mounted_tree.Snapshot.find snapshot node_id with
       | Some node -> node
-      | None -> fail "mounted snapshot references missing node %Ld" node_id
+      | None ->
+        fail
+          "mounted snapshot references missing node %Ld"
+          (Runtime.Node_id.to_int64 node_id)
     in
     if Buffer.length output > 0 then Buffer.add_char output '\n';
     Buffer.add_string output (String.make (depth * 2) ' ');
@@ -105,7 +113,11 @@ let render_tree t =
        Buffer.add_char output ' ';
        Buffer.add_string output (Printf.sprintf "%S" value)
      | Native_widget_props { kind_id; version; _ } ->
-       Printf.bprintf output " native_kind=%d version=%d" kind_id version
+       Printf.bprintf
+         output
+         " native_kind=%d version=%d"
+         (ID.Native_widget.Kind_id.to_int kind_id)
+         version
      | _ -> ());
     if Array.length node.event_bindings > 0
     then (
@@ -203,13 +215,13 @@ let dispatch t query tag payload =
         (Runtime.Node_id.to_int64 node.node_id)
         (Ui.Event.Tag.to_string tag)
   in
-  t.sequence <- Int64.succ t.sequence;
+  t.sequence <- ID.Runtime.Event_sequence.succ t.sequence;
   let event =
     Protocol.Inbound_event.
       { sequence = t.sequence
       ; displayed_revision = Driver.For_testing.revision t.driver
-      ; node_id = Runtime.Node_id.to_int64 node.node_id
-      ; handler_id = Runtime.Handler_id.to_int64 binding.handler_id
+      ; node_id = node.node_id
+      ; handler_id = binding.handler_id
       ; event_tag = protocol_tag tag
       ; payload
       }
@@ -315,7 +327,7 @@ let input_text t query text =
   apply_text_edit
     t
     query
-    ~local_revision:(Int64.succ accepted_local_revision)
+    ~local_revision:(ID.Text_input.Local_revision.succ accepted_local_revision)
     ~base_document_revision:document_revision
     ~text
     ~selection_start:cursor
@@ -329,7 +341,11 @@ let key_down t query ~logical_key =
     query
     Ui.Event.Tag.Key
     (Protocol.Inbound_event.Key
-       { logical_key; physical_key = 0L; action = Key_down; modifiers = 0 })
+       { logical_key
+       ; physical_key = ID.Input.Physical_key.zero
+       ; action = Key_down
+       ; modifiers = 0
+       })
 ;;
 
 let focus t query =
@@ -373,13 +389,13 @@ let protocol_environment (environment : Environment.snapshot) =
 ;;
 
 let set_environment t environment =
-  t.sequence <- Int64.succ t.sequence;
+  t.sequence <- ID.Runtime.Event_sequence.succ t.sequence;
   let event =
     Protocol.Inbound_event.
       { sequence = t.sequence
       ; displayed_revision = Driver.For_testing.revision t.driver
-      ; node_id = 0L
-      ; handler_id = 0L
+      ; node_id = ID.Ui.Node_id.zero
+      ; handler_id = ID.Ui.Handler_id.zero
       ; event_tag = Protocol.Generated_protocol.Event_tag.environment_changed
       ; payload = Environment_changed (protocol_environment environment)
       }
@@ -397,7 +413,9 @@ let resize t ~width ~height =
 
 let only_pending_request t =
   match
-    Hashtbl.to_seq_keys t.pending_requests |> List.of_seq |> List.sort Int64.compare
+    Hashtbl.to_seq_keys t.pending_requests
+    |> List.of_seq
+    |> List.sort ID.Host.Request_id.compare
   with
   | [ request_id ] -> request_id
   | [] -> fail "no host effect is pending"
@@ -412,14 +430,14 @@ let respond_to_host_effect t ?request_id ?(status = Protocol.Inbound_event.Host_
     | None -> only_pending_request t
   in
   if not (Hashtbl.mem t.pending_requests request_id)
-  then fail "host request %Ld is not pending" request_id;
-  t.sequence <- Int64.succ t.sequence;
+  then fail "host request %Ld is not pending" (ID.Host.Request_id.to_int64 request_id);
+  t.sequence <- ID.Runtime.Event_sequence.succ t.sequence;
   let event =
     Protocol.Inbound_event.
       { sequence = t.sequence
       ; displayed_revision = Driver.For_testing.revision t.driver
-      ; node_id = 0L
-      ; handler_id = 0L
+      ; node_id = ID.Ui.Node_id.zero
+      ; handler_id = ID.Ui.Handler_id.zero
       ; event_tag = Protocol.Generated_protocol.Event_tag.host_response
       ; payload = Host_response { request_id; status; value }
       }
@@ -494,7 +512,7 @@ let create_from_driver ~runtime_epoch driver =
   let t =
     { driver
     ; runtime_epoch
-    ; sequence = 0L
+    ; sequence = ID.Runtime.Event_sequence.zero
     ; last_frame = None
     ; last_pump_result = None
     ; next_monotonic_ns = 0L

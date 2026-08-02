@@ -29,8 +29,8 @@ module Action : sig
     | Dismiss
 
   val equal : t -> t -> bool
-  val to_wire_id : t -> int64
-  val of_wire_id : int64 -> t option
+  val to_wire_id : t -> Bonsai_flutter_spec.Id.Input.semantics_action_id
+  val of_wire_id : Bonsai_flutter_spec.Id.Input.semantics_action_id -> t option
 end
 
 type t

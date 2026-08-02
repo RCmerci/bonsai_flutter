@@ -2,6 +2,7 @@
  (name runtime_bench)
  (modules runtime_bench)
  (libraries
+  bonsai_flutter.spec_impl
   unix
   bonsai_flutter.ui
   bonsai_flutter.protocol

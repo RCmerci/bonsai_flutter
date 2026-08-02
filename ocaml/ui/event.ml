@@ -1,3 +1,5 @@
+module ID = Bonsai_flutter_spec.Id
+
 module Tag = struct
   type t =
     | Press
@@ -61,9 +63,9 @@ module Payload = struct
     }
 
   type text_edit =
-    { session_id : int64
-    ; local_revision : int64
-    ; base_document_revision : int64
+    { session_id : ID.Text_input.session_id
+    ; local_revision : ID.Text_input.local_revision
+    ; base_document_revision : ID.Text_input.document_revision
     ; text : string
     ; selection : text_selection
     ; composing : text_selection option
@@ -80,14 +82,14 @@ module Payload = struct
     }
 
   type route_pop =
-    { page_key : string
+    { page_key : ID.Navigation.page_key
     ; result : string option
     }
 
   type native_event =
-    { kind_id : int
+    { kind_id : ID.Native_widget.kind_id
     ; version : int
-    ; event_id : int
+    ; event_id : ID.Native_widget.event_id
     ; payload : bytes
     }
 
@@ -108,7 +110,7 @@ module Payload = struct
     }
 
   type pointer =
-    { pointer_id : int64
+    { pointer_id : ID.Input.pointer_id
     ; local_x : float
     ; local_y : float
     ; global_x : float
@@ -123,8 +125,8 @@ module Payload = struct
     | Key_repeat
 
   type key =
-    { logical_key : int64
-    ; physical_key : int64
+    { logical_key : ID.Input.logical_key
+    ; physical_key : ID.Input.physical_key
     ; action : key_action
     ; modifiers : int
     }

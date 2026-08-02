@@ -36,8 +36,8 @@ type kind =
 type t
 
 val kind : t -> kind
-val base_revision : t -> int64
-val target_revision : t -> int64
+val base_revision : t -> Bonsai_flutter_spec.Id.Runtime.renderer_revision
+val target_revision : t -> Bonsai_flutter_spec.Id.Runtime.renderer_revision
 val operations : t -> Operation.t list
 val is_empty : t -> bool
 
@@ -49,8 +49,8 @@ val apply
 module Private : sig
   val create
     :  kind:kind
-    -> base_revision:int64
-    -> target_revision:int64
+    -> base_revision:Bonsai_flutter_spec.Id.Runtime.renderer_revision
+    -> target_revision:Bonsai_flutter_spec.Id.Runtime.renderer_revision
     -> Operation.t list
     -> t
 end

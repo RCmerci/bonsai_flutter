@@ -43,7 +43,7 @@ module Handler : sig
 end
 
 type frame =
-  { revision : int64
+  { revision : Bonsai_flutter_spec.Id.Runtime.renderer_revision
   ; frame_patch : Bonsai_flutter_runtime.Frame_patch.t
   ; bytes : bytes
   ; stats : Bonsai_flutter_protocol.Wire_frame.runtime_stats
@@ -62,8 +62,8 @@ type error =
 val error_to_string : error -> string
 
 type pump_result =
-  { presentation_id : int64
-  ; renderer_revision : int64
+  { presentation_id : Bonsai_flutter_spec.Id.Runtime.presentation_id
+  ; renderer_revision : Bonsai_flutter_spec.Id.Runtime.renderer_revision
   ; frame : frame option
   ; recoverable_error : error option
   }
@@ -80,7 +80,7 @@ val create
   :  ?trace:(string -> unit)
   -> ?before_flush:(schedule:(unit Bonsai.Effect.t -> unit) -> unit)
   -> ?before_shutdown:(unit -> unit)
-  -> runtime_epoch:int64
+  -> runtime_epoch:Bonsai_flutter_spec.Id.Runtime.epoch
   -> time_source:Bonsai.Time_source.t
   -> (Handler.t -> Bonsai.Cont.graph -> Bonsai_flutter_ui.Widget.t Bonsai.Cont.t)
   -> t
@@ -97,15 +97,15 @@ val pump
 
 val presentation_succeeded
   :  t
-  -> presentation_id:int64
-  -> renderer_revision:int64
+  -> presentation_id:Bonsai_flutter_spec.Id.Runtime.presentation_id
+  -> renderer_revision:Bonsai_flutter_spec.Id.Runtime.renderer_revision
   -> monotonic_now_ns:int64
   -> (unit, error) result
 
 val presentation_rejected
   :  t
-  -> presentation_id:int64
-  -> renderer_revision:int64
+  -> presentation_id:Bonsai_flutter_spec.Id.Runtime.presentation_id
+  -> renderer_revision:Bonsai_flutter_spec.Id.Runtime.renderer_revision
   -> reason:rejection_reason
   -> (unit, error) result
 
@@ -113,12 +113,20 @@ val shutdown : t -> unit
 val is_shutdown : t -> bool
 
 module For_testing : sig
-  val runtime_epoch : t -> int64
-  val revision : t -> int64
+  val runtime_epoch : t -> Bonsai_flutter_spec.Id.Runtime.epoch
+  val revision : t -> Bonsai_flutter_spec.Id.Runtime.renderer_revision
   val snapshot : t -> Bonsai_flutter_runtime.Mounted_tree.Snapshot.t option
   val environment : t -> Environment.snapshot
   val pending_host_effect_count : t -> int
   val retained_handler_frame_count : t -> int
-  val set_next_presentation_id : t -> int64 -> unit
-  val set_next_renderer_revision : t -> int64 -> unit
+
+  val set_next_presentation_id
+    :  t
+    -> Bonsai_flutter_spec.Id.Runtime.presentation_id
+    -> unit
+
+  val set_next_renderer_revision
+    :  t
+    -> Bonsai_flutter_spec.Id.Runtime.renderer_revision
+    -> unit
 end

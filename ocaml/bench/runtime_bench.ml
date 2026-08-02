@@ -1,6 +1,7 @@
 module Protocol = Bonsai_flutter_protocol
 module Runtime = Bonsai_flutter_runtime
 module Ui = Bonsai_flutter_ui
+module ID = Bonsai_flutter_spec.Id
 
 module Benchmark_handler_map = Map.Make (struct
     type t = Runtime.Handler_id.t
@@ -21,8 +22,8 @@ let reconcile_exn
   match
     Runtime.Reconciler.reconcile
       reconciler
-      ~base_revision
-      ~target_revision
+      ~base_revision:(ID.Runtime.Renderer_revision.of_int64 base_revision)
+      ~target_revision:(ID.Runtime.Renderer_revision.of_int64 target_revision)
       ~old
       ~base_handler_frame
       widget
@@ -56,7 +57,9 @@ let text_children count =
 ;;
 
 let mount widget =
-  let reconciler = Runtime.Reconciler.create ~runtime_epoch:1L in
+  let reconciler =
+    Runtime.Reconciler.create ~runtime_epoch:(ID.Runtime.Epoch.of_int64 1L)
+  in
   let output =
     reconcile_exn
       reconciler
@@ -252,25 +255,38 @@ let handler_entries count =
   List.init count (fun index ->
     let handler_id = Int64.of_int (index + 1) in
     Runtime.Handler_registry.Frame.
-      { node_id = handler_id; event_tag = Ui.Event.Tag.Press; handler_id; handler })
+      { node_id = ID.Ui.Node_id.of_int64 handler_id
+      ; event_tag = Ui.Event.Tag.Press
+      ; handler_id = ID.Ui.Handler_id.of_int64 handler_id
+      ; handler
+      })
 ;;
 
 let benchmark_handler_frames count =
   let entries = handler_entries count in
-  let base = Runtime.Handler_registry.Frame.Private.create ~revision:1L entries in
+  let base =
+    Runtime.Handler_registry.Frame.Private.create
+      ~revision:(ID.Runtime.Renderer_revision.of_int64 1L)
+      entries
+  in
   let iterations = if count = 1000 then 5000 else 1000 in
   benchmark
     (Printf.sprintf "handler frame build (%d)" count)
     (if count = 1000 then 500 else 100)
-    (fun _ -> ignore (Runtime.Handler_registry.Frame.Private.create ~revision:1L entries));
+    (fun _ ->
+       ignore
+         (Runtime.Handler_registry.Frame.Private.create
+            ~revision:(ID.Runtime.Renderer_revision.of_int64 1L)
+            entries));
   benchmark
     (Printf.sprintf "handler zero-change derive (%d)" count)
     iterations
     (fun iteration ->
        ignore
          (Runtime.Handler_registry.Frame.Private.derive
-            ~revision:(Int64.of_int (iteration + 2))
-            ~base_revision:1L
+            ~revision:
+              (ID.Runtime.Renderer_revision.of_int64 (Int64.of_int (iteration + 2)))
+            ~base_revision:(ID.Runtime.Renderer_revision.of_int64 1L)
             ~base
             ~removals:[]
             ~additions:[]));
@@ -279,10 +295,15 @@ let benchmark_handler_frames count =
     List.init change_count (fun index ->
       let handler_id = Int64.of_int (count + index + 1) in
       Runtime.Handler_registry.Frame.
-        { node_id = handler_id; event_tag = Ui.Event.Tag.Press; handler_id; handler })
+        { node_id = ID.Ui.Node_id.of_int64 handler_id
+        ; event_tag = Ui.Event.Tag.Press
+        ; handler_id = ID.Ui.Handler_id.of_int64 handler_id
+        ; handler
+        })
   in
   let removals change_count =
-    List.init change_count (fun index -> Int64.of_int (index + 1))
+    List.init change_count (fun index ->
+      ID.Ui.Handler_id.of_int64 (Int64.of_int (index + 1)))
   in
   List.iter
     (fun change_count ->
@@ -294,8 +315,9 @@ let benchmark_handler_frames count =
          (fun iteration ->
             ignore
               (Runtime.Handler_registry.Frame.Private.derive
-                 ~revision:(Int64.of_int (iteration + 2))
-                 ~base_revision:1L
+                 ~revision:
+                   (ID.Runtime.Renderer_revision.of_int64 (Int64.of_int (iteration + 2)))
+                 ~base_revision:(ID.Runtime.Renderer_revision.of_int64 1L)
                  ~base
                  ~removals
                  ~additions)))
@@ -303,7 +325,8 @@ let benchmark_handler_frames count =
   let lookup_iterations = 1_000_000 in
   let random = Random.State.make [| 0xB0; 0x5A; count |] in
   let lookup_ids =
-    Array.init 65536 (fun _ -> Int64.of_int (Random.State.int random count + 1))
+    Array.init 65536 (fun _ ->
+      ID.Ui.Handler_id.of_int64 (Int64.of_int (Random.State.int random count + 1)))
   in
   let lookup_id iteration = lookup_ids.(iteration land (Array.length lookup_ids - 1)) in
   benchmark
@@ -398,13 +421,17 @@ let benchmark_handler_copy_crossover count =
          else
            List.init replacements (fun index ->
              let bucket_midpoint = ((index * count) + (count / 2)) / replacements in
-             Int64.of_int (bucket_midpoint + 1))
+             ID.Ui.Handler_id.of_int64 (Int64.of_int (bucket_midpoint + 1)))
        in
        let additions =
          List.init replacements (fun index ->
            let handler_id = Int64.of_int (count + index + 1) in
            Runtime.Handler_registry.Frame.
-             { node_id = handler_id; event_tag = Ui.Event.Tag.Press; handler_id; handler })
+             { node_id = ID.Ui.Node_id.of_int64 handler_id
+             ; event_tag = Ui.Event.Tag.Press
+             ; handler_id = ID.Ui.Handler_id.of_int64 handler_id
+             ; handler
+             })
        in
        let map_iterations =
          if replacements = 0 then 100_000 else max 100 (250_000 / replacements)
@@ -447,21 +474,25 @@ let measure_retained_handler_frames count =
   Gc.compact ();
   let before = (Gc.stat ()).live_words in
   let entries = handler_entries count in
-  let base = Runtime.Handler_registry.Frame.Private.create ~revision:1L entries in
+  let base =
+    Runtime.Handler_registry.Frame.Private.create
+      ~revision:(ID.Runtime.Renderer_revision.of_int64 1L)
+      entries
+  in
   let replacement = List.hd (handler_entries 1) in
   let replacement =
     Runtime.Handler_registry.Frame.
       { replacement with
-        node_id = Int64.of_int (count + 1)
-      ; handler_id = Int64.of_int (count + 1)
+        node_id = ID.Ui.Node_id.of_int64 (Int64.of_int (count + 1))
+      ; handler_id = ID.Ui.Handler_id.of_int64 (Int64.of_int (count + 1))
       }
   in
   let derived =
     Runtime.Handler_registry.Frame.Private.derive
-      ~revision:2L
-      ~base_revision:1L
+      ~revision:(ID.Runtime.Renderer_revision.of_int64 2L)
+      ~base_revision:(ID.Runtime.Renderer_revision.of_int64 1L)
       ~base
-      ~removals:[ 1L ]
+      ~removals:[ ID.Ui.Handler_id.of_int64 1L ]
       ~additions:[ replacement ]
   in
   Gc.compact ();
@@ -477,7 +508,7 @@ let protocol_frame count =
   let operations =
     List.init count (fun index ->
       Protocol.Wire_frame.Create_node
-        { node_id = Int64.of_int (index + 1)
+        { node_id = ID.Ui.Node_id.of_int64 (Int64.of_int (index + 1))
         ; kind = Text
         ; props =
             Text_props
@@ -492,9 +523,9 @@ let protocol_frame count =
         })
   in
   Protocol.Wire_frame.
-    { runtime_epoch = 1L
-    ; base_revision = 0L
-    ; target_revision = 1L
+    { runtime_epoch = ID.Runtime.Epoch.of_int64 1L
+    ; base_revision = ID.Runtime.Renderer_revision.of_int64 0L
+    ; target_revision = ID.Runtime.Renderer_revision.of_int64 1L
     ; kind = Full_snapshot
     ; operations
     }
@@ -555,13 +586,13 @@ let benchmark_protocol () =
   let runtime_final = runtime_frame final_stats in
   let incremental =
     Protocol.Wire_frame.
-      { runtime_epoch = 1L
-      ; base_revision = 1L
-      ; target_revision = 2L
+      { runtime_epoch = ID.Runtime.Epoch.of_int64 1L
+      ; base_revision = ID.Runtime.Renderer_revision.of_int64 1L
+      ; target_revision = ID.Runtime.Renderer_revision.of_int64 2L
       ; kind = Incremental_frame
       ; operations =
           [ Update_props
-              { node_id = 1L
+              { node_id = ID.Ui.Node_id.of_int64 1L
               ; props =
                   Text_props
                     { value = "Changed"

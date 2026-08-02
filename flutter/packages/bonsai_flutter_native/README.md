@@ -5,6 +5,9 @@ It provides the opaque `bf_runtime`, fixed-width status values, owned output
 buffers, generated private FFI declarations, and the public `NativeRuntime`
 Dart wrapper.
 
+The current version contract is native ABI 2.0 and renderer protocol 1.14.
+The package queries and validates them independently before runtime creation.
+
 The build hook, buffer ownership tests, and Dart wrapper have been verified on
 macOS arm64 and as unsigned iPhoneOS arm64 artifacts with Dart 3.12.2. By
 default the hook builds the C ABI fallback, whose runtime calls return an

@@ -1,4 +1,8 @@
 module Ui = Bonsai_flutter_ui
+module ID = Bonsai_flutter_spec.Id
+
+let home_page_key = ID.Navigation.Page_key.of_string "home"
+let details_page_key = ID.Navigation.Page_key.of_string "details"
 
 let component handlers graph =
   let details_open, set_details_open = Bonsai_v017.state ~equal:Bool.equal false graph in
@@ -17,8 +21,10 @@ let component handlers graph =
       ~equal:( == )
       set_details_open
       ~f:(fun set_open -> function
-      | Ui.Event.Payload.Route_pop { page_key = "details"; _ } | Ui.Event.Payload.Unit ->
+      | Ui.Event.Payload.Route_pop { page_key; _ }
+        when ID.Navigation.Page_key.equal page_key details_page_key ->
         set_open (fun _ -> false)
+      | Ui.Event.Payload.Unit -> set_open (fun _ -> false)
       | _ -> Bonsai.Effect.Ignore)
   in
   let handlers =
@@ -31,7 +37,7 @@ let component handlers graph =
     ~f:(fun details_open (open_details, close_details) ->
       let home =
         Ui.Widget.page
-          ~page_key:"home"
+          ~page_key:home_page_key
           ~can_pop:false
           (Ui.Material.scaffold
              ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Navigation") ())
@@ -48,7 +54,7 @@ let component handlers graph =
         then
           [ home
           ; Ui.Widget.page
-              ~page_key:"details"
+              ~page_key:details_page_key
               ~transition:Ui.Navigation.Slide
               (Ui.Material.scaffold
                  ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Details") ())
@@ -63,7 +69,8 @@ let component handlers graph =
         else [ home ]
       in
       Ui.Widget.navigator
-        ~restoration_scope_id:"navigation-example"
+        ~restoration_scope_id:
+          (ID.Navigation.Restoration_scope_id.of_string "navigation-example")
         ~on_pop:close_details
         pages)
 ;;

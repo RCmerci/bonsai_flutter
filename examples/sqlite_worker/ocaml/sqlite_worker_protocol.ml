@@ -1,3 +1,5 @@
+module ID = Bonsai_flutter_spec.Id
+
 type todo =
   { id : int64
   ; title : string
@@ -105,10 +107,10 @@ type push =
   | Fatal of error
 
 module Topic = struct
-  let ready = 0
-  let store = 1
-  let summary = 2
-  let fatal = 3
-  let startup_timing = 4
+  let ready = ID.Worker.Push_topic.of_int 0
+  let store = ID.Worker.Push_topic.of_int 1
+  let summary = ID.Worker.Push_topic.of_int 2
+  let fatal = ID.Worker.Push_topic.of_int 3
+  let startup_timing = ID.Worker.Push_topic.of_int 4
   let count = 5
 end

@@ -1,3 +1,4 @@
+module ID = Bonsai_flutter_spec.Id
 module Protocol_event = Bonsai_flutter_protocol.Inbound_event
 module Ui_event = Bonsai_flutter_ui.Event
 
@@ -47,7 +48,7 @@ let convert_tag tag =
   then Ok Route_pop
   else if tag = Id.native_event
   then Ok Native_event
-  else invalid "unsupported event tag %d" tag
+  else invalid "unsupported event tag %d" (ID.Protocol.Event_tag.to_int tag)
 ;;
 
 let convert_payload tag payload =
@@ -123,7 +124,7 @@ let convert_payload tag payload =
     Ok (Route_pop { page_key; result })
   | Native_event { kind_id; version; event_id; payload } when tag = Id.native_event ->
     Ok (Native_event { kind_id; version; event_id; payload })
-  | _ -> invalid "payload does not match event tag %d" tag
+  | _ -> invalid "payload does not match event tag %d" (ID.Protocol.Event_tag.to_int tag)
 ;;
 
 let convert_event ~runtime_epoch (event : Protocol_event.t) =
@@ -133,9 +134,9 @@ let convert_event ~runtime_epoch (event : Protocol_event.t) =
       Handler_registry.
         { runtime_epoch
         ; displayed_revision = event.displayed_revision
-        ; node_id = Node_id.Private.of_int64 event.node_id
+        ; node_id = event.node_id
         ; event_tag
-        ; handler_id = Handler_id.Private.of_int64 event.handler_id
+        ; handler_id = event.handler_id
         ; event_sequence = event.sequence
         ; payload
         }

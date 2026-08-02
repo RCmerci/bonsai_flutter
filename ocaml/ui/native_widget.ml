@@ -1,3 +1,5 @@
+module ID = Bonsai_flutter_spec.Id
+
 module Capability = struct
   type t =
     | Stateful
@@ -24,11 +26,12 @@ end
 
 module Extension = struct
   type ('props, 'event) t =
-    { kind_id : int
+    { kind_id : ID.Native_widget.kind_id
     ; version : int
     ; capabilities : int64
     ; encode_props : 'props -> bytes
-    ; decode_event : event_id:int -> bytes -> ('event, string) result
+    ; decode_event :
+        event_id:ID.Native_widget.event_id -> bytes -> ('event, string) result
     }
 
   let validate_u16 label value =
@@ -39,7 +42,7 @@ module Extension = struct
   ;;
 
   let create ~kind_id ~version ~capabilities ~encode_props ~decode_event () =
-    validate_u16 "kind_id" kind_id;
+    validate_u16 "kind_id" (ID.Native_widget.Kind_id.to_int kind_id);
     validate_u16 "version" version;
     { kind_id
     ; version
@@ -99,9 +102,9 @@ module Little_endian = struct
 end
 
 module Virtual_list = struct
-  let kind_id = 1
+  let kind_id = ID.Native_widget.Kind_id.of_int 1
   let version = 1
-  let visible_range_event_id = 1
+  let visible_range_event_id = ID.Native_widget.Event_id.of_int 1
 
   type props =
     { total_count : int
@@ -267,9 +270,9 @@ module Virtual_list = struct
 end
 
 module Swipe_action = struct
-  let kind_id = 2
+  let kind_id = ID.Native_widget.Kind_id.of_int 2
   let version = 1
-  let commit_event_id = 1
+  let commit_event_id = ID.Native_widget.Event_id.of_int 1
 
   type direction =
     | Start_to_end
@@ -410,9 +413,9 @@ module Swipe_action = struct
 end
 
 module Navigation_shell = struct
-  let kind_id = 3
+  let kind_id = ID.Native_widget.Kind_id.of_int 3
   let version = 1
-  let drawer_state_changed_event_id = 1
+  let drawer_state_changed_event_id = ID.Native_widget.Event_id.of_int 1
 
   type drawer_state =
     | Closed

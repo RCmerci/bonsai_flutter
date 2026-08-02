@@ -1,6 +1,7 @@
 (library
  (name bonsai_flutter_ui)
  (public_name bonsai_flutter.ui)
+ (libraries bonsai_flutter.spec_impl)
  (modules
   key
   test_id

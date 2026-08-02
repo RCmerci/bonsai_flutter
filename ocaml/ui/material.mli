@@ -54,9 +54,9 @@ val text_field
   -> ?keyboard_type:Text_editing.keyboard_type
   -> ?input_action:Text_editing.input_action
   -> ?autofocus:bool
-  -> session_id:int64
-  -> document_revision:int64
-  -> accepted_local_revision:int64
+  -> session_id:Bonsai_flutter_spec.Id.Text_input.session_id
+  -> document_revision:Bonsai_flutter_spec.Id.Text_input.document_revision
+  -> accepted_local_revision:Bonsai_flutter_spec.Id.Text_input.local_revision
   -> update_mode:Text_editing.update_mode
   -> value:Text_editing.Value.t
   -> on_edit:Event.Handler.t

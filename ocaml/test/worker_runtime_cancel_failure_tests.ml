@@ -1,3 +1,5 @@
+module ID = Bonsai_flutter_spec.Id
+
 let fail format = Printf.ksprintf failwith format
 let require condition message = if not condition then fail "%s" message
 
@@ -92,7 +94,9 @@ let rec drain_until_terminal client events =
 
 let () =
   let client =
-    match Worker_runtime.start ~runtime_epoch:501L service () with
+    match
+      Worker_runtime.start ~runtime_epoch:(ID.Runtime.Epoch.of_int64 501L) service ()
+    with
     | Ok client -> client
     | Error error -> fail "unexpected worker startup failure: %s" error
   in
@@ -106,7 +110,7 @@ let () =
     (List.exists
        (function
          | Worker.Response { request_id; outcome = Failed error; _ } ->
-           Int64.equal request_id cancelled_request_id
+           ID.Worker.Request_id.equal request_id cancelled_request_id
            && Core.String.is_substring
                 error
                 ~substring:"intentional cancel callback failure"
@@ -117,7 +121,12 @@ let () =
     ((Worker_runtime.For_testing.diagnostics ()).state = Worker_runtime.Idle)
     "cancel callback failure escaped the session boundary";
   let replacement =
-    match Worker_runtime.start ~runtime_epoch:502L benign_service () with
+    match
+      Worker_runtime.start
+        ~runtime_epoch:(ID.Runtime.Epoch.of_int64 502L)
+        benign_service
+        ()
+    with
     | Ok client -> client
     | Error error -> fail "cancel callback failure prevented Domain reuse: %s" error
   in

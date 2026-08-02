@@ -1,5 +1,6 @@
 module Protocol = Sqlite_worker_protocol
 module Test = Bonsai_flutter_test
+module ID = Bonsai_flutter_spec.Id
 
 let fail format = Printf.ksprintf failwith format
 let require condition message = if not condition then fail "%s" message
@@ -41,7 +42,7 @@ let require_text handle value message =
 let create_handle ~runtime_epoch path =
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   Test.Handle.create_app
-    ~runtime_epoch
+    ~runtime_epoch:(ID.Runtime.Epoch.of_int64 runtime_epoch)
     ~time_source
     Sqlite_worker_example.app
     ~application_payload:(Bytes.of_string path)
@@ -104,7 +105,10 @@ let rec drain_until_mutation_and_pushes client events =
 let test_service_ready_response_before_autonomous_pushes path =
   let client =
     worker_ok
-      (Worker_runtime.start ~runtime_epoch:700L Sqlite_worker_service.service path)
+      (Worker_runtime.start
+         ~runtime_epoch:(ID.Runtime.Epoch.of_int64 700L)
+         Sqlite_worker_service.service
+         path)
   in
   Worker.For_testing.await_output client;
   let initial = Worker.For_testing.drain_events client ~max_events:64 in
@@ -131,7 +135,7 @@ let test_service_ready_response_before_autonomous_pushes path =
     List.find_map
       (function
         | index, Worker.Response { request_id = actual; outcome = Completed _; _ }
-          when Int64.equal request_id actual -> Some index
+          when ID.Worker.Request_id.equal request_id actual -> Some index
         | _ -> None)
       indexed
     |> Option.get
@@ -155,7 +159,10 @@ let test_service_ready_response_before_autonomous_pushes path =
 let test_service_reports_worker_startup_timings path =
   let client =
     worker_ok
-      (Worker_runtime.start ~runtime_epoch:699L Sqlite_worker_service.service path)
+      (Worker_runtime.start
+         ~runtime_epoch:(ID.Runtime.Epoch.of_int64 699L)
+         Sqlite_worker_service.service
+         path)
   in
   Worker.For_testing.await_output client;
   let initial = Worker.For_testing.drain_events client ~max_events:64 in

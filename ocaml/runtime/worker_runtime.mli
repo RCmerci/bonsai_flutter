@@ -12,14 +12,14 @@ type diagnostics =
   { state : state
   ; spawn_count : int
   ; join_count : int
-  ; worker_domain_id : Domain.id option
+  ; worker_domain_id : Bonsai_flutter_spec.Id.Worker.domain_id option
   ; active_sessions : int
   ; peak_active_sessions : int
   ; idle_wait_count : int
   }
 
 val start
-  :  runtime_epoch:int64
+  :  runtime_epoch:Bonsai_flutter_spec.Id.Runtime.epoch
   -> ('config, 'request, 'response, 'push) Worker.Service.t
   -> 'config
   -> (('request, 'response, 'push) Worker.client, string) result

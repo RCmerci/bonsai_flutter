@@ -1,6 +1,6 @@
 (** Monotonic handler identity, unique within a runtime epoch. *)
 
-type t = int64
+type t = Bonsai_flutter_spec.Id.Ui.handler_id
 
 val compare : t -> t -> int
 val equal : t -> t -> bool

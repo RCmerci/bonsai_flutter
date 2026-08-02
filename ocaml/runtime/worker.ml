@@ -1,3 +1,5 @@
+module ID = Bonsai_flutter_spec.Id
+
 type computation =
   [ `Idle
   | `Continue
@@ -11,26 +13,26 @@ type 'response outcome =
 
 type ('response, 'push) event =
   | Response of
-      { runtime_epoch : int64
-      ; worker_generation : int64
-      ; request_id : int64
+      { runtime_epoch : ID.Runtime.epoch
+      ; worker_generation : ID.Worker.generation
+      ; request_id : ID.Worker.request_id
       ; outcome : 'response outcome
       }
   | Push of
-      { runtime_epoch : int64
-      ; worker_generation : int64
-      ; push_sequence : int64
-      ; topic : int
+      { runtime_epoch : ID.Runtime.epoch
+      ; worker_generation : ID.Worker.generation
+      ; push_sequence : ID.Worker.push_sequence
+      ; topic : ID.Worker.push_topic
       ; payload : 'push
       }
   | Terminal of
-      { runtime_epoch : int64
-      ; worker_generation : int64
+      { runtime_epoch : ID.Runtime.epoch
+      ; worker_generation : ID.Worker.generation
       ; error : string
       }
 
 type send_result =
-  | Accepted of int64
+  | Accepted of ID.Worker.request_id
   | Full
   | Not_ready
   | Stopping
@@ -63,19 +65,22 @@ module Service = struct
   type ('config, 'request, 'response, 'push) t =
     | Service :
         { push_topic_count : int
-        ; init : emit:(topic:int -> 'push -> unit) -> 'config -> ('state, string) result
+        ; init :
+            emit:(topic:ID.Worker.push_topic -> 'push -> unit)
+            -> 'config
+            -> ('state, string) result
         ; handle_request :
             'state
             -> cancelled:(unit -> bool)
-            -> emit:(topic:int -> 'push -> unit)
+            -> emit:(topic:ID.Worker.push_topic -> 'push -> unit)
             -> 'request
             -> ('response, string) result * computation
         ; step :
             'state
             -> cancelled:(unit -> bool)
-            -> emit:(topic:int -> 'push -> unit)
+            -> emit:(topic:ID.Worker.push_topic -> 'push -> unit)
             -> computation
-        ; cancel : 'state -> request_id:int64 -> unit
+        ; cancel : 'state -> request_id:ID.Worker.request_id -> unit
         ; shutdown : 'state -> unit
         }
         -> ('config, 'request, 'response, 'push) t
@@ -88,15 +93,15 @@ module Service = struct
 end
 
 type 'request request_envelope =
-  { runtime_epoch : int64
-  ; worker_generation : int64
-  ; request_id : int64
+  { runtime_epoch : ID.Runtime.epoch
+  ; worker_generation : ID.Worker.generation
+  ; request_id : ID.Worker.request_id
   ; payload : 'request
   }
 
 type ('request, 'response, 'push) client =
-  { runtime_epoch : int64
-  ; worker_generation : int64
+  { runtime_epoch : ID.Runtime.epoch
+  ; worker_generation : ID.Worker.generation
   ; requests : 'request request_envelope Bounded_mailbox.Fifo.t
   ; responses : ('response, 'push) event Bounded_mailbox.Reserved.t
   ; pushes : ('response, 'push) event Bounded_mailbox.Coalesced.t
@@ -104,17 +109,17 @@ type ('request, 'response, 'push) client =
   ; status : int Atomic.t
   ; stop_requested : bool Atomic.t
   ; cancellation_mutex : Mutex.t
-  ; cancellations : (int64, unit) Hashtbl.t
+  ; cancellations : (ID.Worker.request_id, unit) Hashtbl.t
   ; output_mutex : Mutex.t
   ; output_condition : Condition.t
   ; pending_output_count : int Atomic.t
   ; stopped_mutex : Mutex.t
   ; stopped_condition : Condition.t
   ; mutable stopped : bool
-  ; mutable next_request_id : int64
-  ; pending_requests : (int64, unit) Hashtbl.t
+  ; mutable next_request_id : ID.Worker.request_id
+  ; pending_requests : (ID.Worker.request_id, unit) Hashtbl.t
   ; mutable subscribers : (('response, 'push) event -> unit Bonsai.Effect.t) list
-  ; mutable last_push_sequence : int64
+  ; mutable last_push_sequence : ID.Worker.push_sequence
   ; mutable terminal_event : ('response, 'push) event option
   }
 
@@ -152,10 +157,10 @@ let prepare ~runtime_epoch ~worker_generation service config =
     ; stopped_mutex = Mutex.create ()
     ; stopped_condition = Condition.create ()
     ; stopped = false
-    ; next_request_id = 1L
+    ; next_request_id = ID.Worker.Request_id.one
     ; pending_requests = Hashtbl.create request_capacity
     ; subscribers = []
-    ; last_push_sequence = 0L
+    ; last_push_sequence = ID.Worker.Push_sequence.zero
     ; terminal_event = None
     }
   in
@@ -182,9 +187,9 @@ let decrement_pending_output_locked client count =
 
 let next_request_id client =
   let request_id = client.next_request_id in
-  if Int64.equal request_id Int64.max_int
+  if ID.Worker.Request_id.equal request_id ID.Worker.Request_id.max_value
   then failwith "Worker request ID counter exhausted"
-  else client.next_request_id <- Int64.succ request_id;
+  else client.next_request_id <- ID.Worker.Request_id.succ request_id;
   request_id
 ;;
 
@@ -316,14 +321,15 @@ type run_result =
 
 let run_session (Packed_startup { service; config; client }) ~on_startup ~on_idle_wait =
   let (Service.Service callbacks) = service in
-  let next_push_sequence = ref 1L in
+  let next_push_sequence = ref ID.Worker.Push_sequence.one in
   let emit ~topic payload =
-    if topic < 0 || topic >= callbacks.push_topic_count
+    let topic_index = ID.Worker.Push_topic.to_int topic in
+    if topic_index < 0 || topic_index >= callbacks.push_topic_count
     then failwith "Worker push topic invariant failed";
     let push_sequence = !next_push_sequence in
-    if Int64.equal push_sequence Int64.max_int
+    if ID.Worker.Push_sequence.equal push_sequence ID.Worker.Push_sequence.max_value
     then failwith "Worker push sequence exhausted"
-    else next_push_sequence := Int64.succ push_sequence;
+    else next_push_sequence := ID.Worker.Push_sequence.succ push_sequence;
     let event =
       Push
         { runtime_epoch = client.runtime_epoch
@@ -334,7 +340,7 @@ let run_session (Packed_startup { service; config; client }) ~on_startup ~on_idl
         }
     in
     with_output_lock client (fun () ->
-      match Bounded_mailbox.Coalesced.push client.pushes ~topic event with
+      match Bounded_mailbox.Coalesced.push client.pushes ~topic:topic_index event with
       | `Added -> increment_pending_output_locked client
       | `Replaced -> Condition.broadcast client.output_condition
       | `Full -> failwith "Worker push mailbox invariant failed")
@@ -426,8 +432,11 @@ let run_session (Packed_startup { service; config; client }) ~on_startup ~on_idl
         match request with
         | Some request ->
           if
-            (not (Int64.equal request.runtime_epoch client.runtime_epoch))
-            || not (Int64.equal request.worker_generation client.worker_generation)
+            (not (ID.Runtime.Epoch.equal request.runtime_epoch client.runtime_epoch))
+            || not
+                 (ID.Worker.Generation.equal
+                    request.worker_generation
+                    client.worker_generation)
           then failwith "Worker request metadata invariant failed";
           if is_cancelled client request.request_id
           then (
@@ -520,7 +529,8 @@ let raw_events client ~max_events =
       |> List.map snd
       |> List.sort (fun left right ->
         match left, right with
-        | Push left, Push right -> Int64.compare left.push_sequence right.push_sequence
+        | Push left, Push right ->
+          ID.Worker.Push_sequence.compare left.push_sequence right.push_sequence
         | _ -> 0)
     in
     let events = responses @ terminal @ injected @ pushes in
@@ -531,8 +541,8 @@ let raw_events client ~max_events =
 let accepted_event client = function
   | Response response as event ->
     if
-      Int64.equal response.runtime_epoch client.runtime_epoch
-      && Int64.equal response.worker_generation client.worker_generation
+      ID.Runtime.Epoch.equal response.runtime_epoch client.runtime_epoch
+      && ID.Worker.Generation.equal response.worker_generation client.worker_generation
       && Hashtbl.mem client.pending_requests response.request_id
     then (
       Hashtbl.remove client.pending_requests response.request_id;
@@ -541,17 +551,17 @@ let accepted_event client = function
     else None
   | Push push as event ->
     if
-      Int64.equal push.runtime_epoch client.runtime_epoch
-      && Int64.equal push.worker_generation client.worker_generation
-      && Int64.compare push.push_sequence client.last_push_sequence > 0
+      ID.Runtime.Epoch.equal push.runtime_epoch client.runtime_epoch
+      && ID.Worker.Generation.equal push.worker_generation client.worker_generation
+      && ID.Worker.Push_sequence.compare push.push_sequence client.last_push_sequence > 0
     then (
       client.last_push_sequence <- push.push_sequence;
       Some event)
     else None
   | Terminal terminal as event ->
     if
-      Int64.equal terminal.runtime_epoch client.runtime_epoch
-      && Int64.equal terminal.worker_generation client.worker_generation
+      ID.Runtime.Epoch.equal terminal.runtime_epoch client.runtime_epoch
+      && ID.Worker.Generation.equal terminal.worker_generation client.worker_generation
     then Some event
     else None
 ;;

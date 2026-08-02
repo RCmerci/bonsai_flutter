@@ -1,6 +1,7 @@
 module Protocol = Bonsai_flutter_protocol
 module Runtime = Bonsai_flutter_runtime
 module Ui = Bonsai_flutter_ui
+module ID = Bonsai_flutter_spec.Id
 
 let fail format = Printf.ksprintf failwith format
 
@@ -55,7 +56,7 @@ let test_counter_press_dispatch () =
   in
   let frame =
     Runtime.Handler_registry.Frame.Private.create
-      ~revision:1L
+      ~revision:(ID.Runtime.Renderer_revision.of_int64 1L)
       [ { node_id = Runtime.Node_id.Private.of_int64 3L
         ; event_tag = Ui.Event.Tag.Press
         ; handler_id = Runtime.Handler_id.Private.of_int64 9001L
@@ -63,11 +64,17 @@ let test_counter_press_dispatch () =
         }
       ]
   in
-  let registry = Runtime.Handler_registry.create ~runtime_epoch:21L in
+  let registry =
+    Runtime.Handler_registry.create ~runtime_epoch:(ID.Runtime.Epoch.of_int64 21L)
+  in
   (match Runtime.Handler_registry.install registry frame with
    | Ok () -> ()
    | Error error -> fail "install failed: %s" (Runtime.Runtime_error.to_string error));
-  (match Runtime.Handler_registry.commit_displayed_revision registry ~revision:1L with
+  (match
+     Runtime.Handler_registry.commit_displayed_revision
+       registry
+       ~revision:(ID.Runtime.Renderer_revision.of_int64 1L)
+   with
    | Ok () -> ()
    | Error error ->
      fail "frame presentation failed: %s" (Runtime.Runtime_error.to_string error));
@@ -86,7 +93,7 @@ let test_text_edit_dispatch () =
   in
   let frame =
     Runtime.Handler_registry.Frame.Private.create
-      ~revision:2L
+      ~revision:(ID.Runtime.Renderer_revision.of_int64 2L)
       [ { node_id = Runtime.Node_id.Private.of_int64 4L
         ; event_tag = Ui.Event.Tag.Text_edit
         ; handler_id = Runtime.Handler_id.Private.of_int64 44L
@@ -94,28 +101,34 @@ let test_text_edit_dispatch () =
         }
       ]
   in
-  let registry = Runtime.Handler_registry.create ~runtime_epoch:22L in
+  let registry =
+    Runtime.Handler_registry.create ~runtime_epoch:(ID.Runtime.Epoch.of_int64 22L)
+  in
   (match Runtime.Handler_registry.install registry frame with
    | Ok () -> ()
    | Error error -> fail "install failed: %s" (Runtime.Runtime_error.to_string error));
-  (match Runtime.Handler_registry.commit_displayed_revision registry ~revision:2L with
+  (match
+     Runtime.Handler_registry.commit_displayed_revision
+       registry
+       ~revision:(ID.Runtime.Renderer_revision.of_int64 2L)
+   with
    | Ok () -> ()
    | Error error ->
      fail "frame presentation failed: %s" (Runtime.Runtime_error.to_string error));
   let batch =
     Protocol.Inbound_event.
-      { runtime_epoch = 22L
+      { runtime_epoch = ID.Runtime.Epoch.of_int64 22L
       ; events =
-          [ { sequence = 1L
-            ; displayed_revision = 2L
-            ; node_id = 4L
-            ; handler_id = 44L
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 1L
+            ; displayed_revision = ID.Runtime.Renderer_revision.of_int64 2L
+            ; node_id = ID.Ui.Node_id.of_int64 4L
+            ; handler_id = ID.Ui.Handler_id.of_int64 44L
             ; event_tag = Protocol.Generated_protocol.Event_tag.text_edit
             ; payload =
                 Text_edit
-                  { session_id = 7L
-                  ; local_revision = 3L
-                  ; base_document_revision = 2L
+                  { session_id = ID.Text_input.Session_id.of_int64 7L
+                  ; local_revision = ID.Text_input.Local_revision.of_int64 3L
+                  ; base_document_revision = ID.Text_input.Document_revision.of_int64 2L
                   ; text = "拼😀音"
                   ; selection = { start_utf16 = 4; end_utf16 = 4 }
                   ; composing = Some { start_utf16 = 0; end_utf16 = 4 }
@@ -129,7 +142,11 @@ let test_text_edit_dispatch () =
    | Error _ -> fail "text edit dispatch failed");
   match !received with
   | Some edit ->
-    expect (Int64.equal edit.local_revision 3L) "local revision changed";
+    expect
+      (ID.Text_input.Local_revision.equal
+         edit.local_revision
+         (ID.Text_input.Local_revision.of_int64 3L))
+      "local revision changed";
     expect (String.equal edit.text "拼😀音") "text changed";
     expect (Option.is_some edit.composing) "composing range was lost"
   | None -> fail "text edit handler was not invoked"

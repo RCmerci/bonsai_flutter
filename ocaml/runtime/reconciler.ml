@@ -1,3 +1,4 @@
+module ID = Bonsai_flutter_spec.Id
 module Ui = Bonsai_flutter_ui
 module Widget = Ui.Widget
 
@@ -9,9 +10,9 @@ module Key_table = Hashtbl.Make (struct
   end)
 
 type t =
-  { runtime_epoch : int64
-  ; mutable next_node_id : int64
-  ; mutable next_handler_id : int64
+  { runtime_epoch : ID.Runtime.epoch
+  ; mutable next_node_id : ID.Ui.node_id
+  ; mutable next_handler_id : ID.Ui.handler_id
   }
 
 type output =
@@ -20,17 +21,22 @@ type output =
   ; handler_frame : Handler_registry.Frame.t
   }
 
-let create ~runtime_epoch = { runtime_epoch; next_node_id = 1L; next_handler_id = 1L }
+let create ~runtime_epoch =
+  { runtime_epoch
+  ; next_node_id = ID.Ui.Node_id.one
+  ; next_handler_id = ID.Ui.Handler_id.one
+  }
+;;
 
 let allocate_node_id t =
   let allocated = t.next_node_id in
-  t.next_node_id <- Int64.succ allocated;
+  t.next_node_id <- ID.Ui.Node_id.succ allocated;
   allocated
 ;;
 
 let allocate_handler_id t =
   let allocated = t.next_handler_id in
-  t.next_handler_id <- Int64.succ allocated;
+  t.next_handler_id <- ID.Ui.Handler_id.succ allocated;
   allocated
 ;;
 
@@ -109,7 +115,7 @@ let child_ids_equal old_children new_children =
 let key_options_equal = Option.equal Ui.Key.equal
 
 let reconcile t ~base_revision ~target_revision ~old ~base_handler_frame new_widget =
-  if Int64.compare target_revision base_revision <= 0
+  if ID.Runtime.Renderer_revision.compare target_revision base_revision <= 0
   then
     Error
       (Runtime_error.Invalid_patch "target revision must be greater than base revision")
@@ -118,14 +124,17 @@ let reconcile t ~base_revision ~target_revision ~old ~base_handler_frame new_wid
       match old, base_handler_frame with
       | None, None -> Ok (Handler_registry.Frame.Private.empty ~revision:base_revision)
       | Some _, Some frame
-        when Int64.equal (Handler_registry.Frame.revision frame) base_revision -> Ok frame
+        when ID.Runtime.Renderer_revision.equal
+               (Handler_registry.Frame.revision frame)
+               base_revision -> Ok frame
       | Some _, Some frame ->
         Error
           (Runtime_error.Invalid_patch
              (Printf.sprintf
                 "handler base revision %Ld does not match tree base revision %Ld"
-                (Handler_registry.Frame.revision frame)
-                base_revision))
+                (ID.Runtime.Renderer_revision.to_int64
+                   (Handler_registry.Frame.revision frame))
+                (ID.Runtime.Renderer_revision.to_int64 base_revision)))
       | Some _, None ->
         Error
           (Runtime_error.Invalid_patch "incremental reconcile requires a handler base")

@@ -27,7 +27,7 @@ type layout =
   }
 
 type native_menu_item =
-  { item_id : string
+  { item_id : Bonsai_flutter_spec.Id.Host.native_menu_item_id
   ; label : string
   ; enabled : bool
   }
@@ -85,7 +85,7 @@ val save_file
 val request_focus
   :  ?cancellation:Cancellation.t
   -> t
-  -> node_id:int64
+  -> node_id:Bonsai_flutter_spec.Id.Ui.node_id
   -> (unit, error) result Bonsai.Effect.t
 
 val clear_focus
@@ -99,7 +99,7 @@ val scroll_to
   -> ?alignment:float
   -> ?animated:bool
   -> t
-  -> node_id:int64
+  -> node_id:Bonsai_flutter_spec.Id.Ui.node_id
   -> (unit, error) result Bonsai.Effect.t
 
 val set_window_title
@@ -119,7 +119,8 @@ val show_native_menu
   :  ?cancellation:Cancellation.t
   -> t
   -> native_menu_item list
-  -> (string option, error) result Bonsai.Effect.t
+  -> (Bonsai_flutter_spec.Id.Host.native_menu_item_id option, error) result
+       Bonsai.Effect.t
 
 val haptic_feedback
   :  ?cancellation:Cancellation.t
@@ -136,7 +137,7 @@ val platform_information
 val measure_layout
   :  ?cancellation:Cancellation.t
   -> t
-  -> node_id:int64
+  -> node_id:Bonsai_flutter_spec.Id.Ui.node_id
   -> (layout, error) result Bonsai.Effect.t
 
 module Prepared_operations : sig
@@ -154,7 +155,7 @@ module Private : sig
   module Validated_response : sig
     type t
 
-    val request_id : t -> int64
+    val request_id : t -> Bonsai_flutter_spec.Id.Host.request_id
   end
 
   val validate_response

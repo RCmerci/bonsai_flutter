@@ -1,5 +1,8 @@
 module Ui = Bonsai_flutter_ui
+module ID = Bonsai_flutter_spec.Id
 
+let native_kind_id = ID.Native_widget.Kind_id.of_int
+let native_event_id = ID.Native_widget.Event_id.of_int
 let check condition message = if not condition then failwith message
 
 let expect_invalid_argument f message =
@@ -13,12 +16,12 @@ type dial_event = Changed of int
 
 let dial_extension =
   Ui.Native_widget.Extension.create
-    ~kind_id:42
+    ~kind_id:(native_kind_id 42)
     ~version:3
     ~capabilities:[ Ui.Native_widget.Capability.Stateful ]
     ~encode_props:(fun value -> Bytes.of_string (string_of_int value))
     ~decode_event:(fun ~event_id payload ->
-      if event_id = 7
+      if ID.Native_widget.Event_id.equal event_id (native_event_id 7)
       then Ok (Changed (int_of_string (Bytes.to_string payload)))
       else Error "unknown dial event")
     ()
@@ -38,7 +41,7 @@ let test_typed_native_widget () =
   check (Ui.Widget.Private.Kind.equal view.kind Native_widget) "native widget kind";
   (match view.props with
    | Native_widget_props { kind_id; version; capabilities; payload } ->
-     check (kind_id = 42) "native kind ID";
+     check (ID.Native_widget.Kind_id.equal kind_id (native_kind_id 42)) "native kind ID";
      check (version = 3) "native version";
      check (Int64.equal capabilities 1L) "native capabilities";
      check (Bytes.equal payload (Bytes.of_string "17")) "native props payload"
@@ -47,7 +50,11 @@ let test_typed_native_widget () =
   Ui.Event.Handler.Private.invoke
     binding.handler
     (Native_event
-       { kind_id = 42; version = 3; event_id = 7; payload = Bytes.of_string "23" });
+       { kind_id = native_kind_id 42
+       ; version = 3
+       ; event_id = native_event_id 7
+       ; payload = Bytes.of_string "23"
+       });
   check (!received = Some (Changed 23)) "typed native event"
 ;;
 
@@ -126,12 +133,12 @@ let test_virtual_list_handler_path_and_payload_filtering () =
       ~first_index:12
       ~last_exclusive:20
   in
-  invoke 99 1 1 valid;
-  invoke Ui.Native_widget.Virtual_list.kind_id 2 1 valid;
-  invoke Ui.Native_widget.Virtual_list.kind_id 1 2 valid;
-  invoke Ui.Native_widget.Virtual_list.kind_id 1 1 Bytes.empty;
+  invoke (native_kind_id 99) 1 (native_event_id 1) valid;
+  invoke Ui.Native_widget.Virtual_list.kind_id 2 (native_event_id 1) valid;
+  invoke Ui.Native_widget.Virtual_list.kind_id 1 (native_event_id 2) valid;
+  invoke Ui.Native_widget.Virtual_list.kind_id 1 (native_event_id 1) Bytes.empty;
   check (!received = None) "malformed virtual-list event was accepted";
-  invoke Ui.Native_widget.Virtual_list.kind_id 1 1 valid;
+  invoke Ui.Native_widget.Virtual_list.kind_id 1 (native_event_id 1) valid;
   match !received with
   | Some { Ui.Event.Payload.first_index; last_exclusive } ->
     check (Int64.equal first_index 12L) "handler visible first index";
@@ -170,7 +177,9 @@ let test_swipe_action_props_contract () =
   check (Array.length view.children = 3) "swipe action must always have three children";
   (match view.props with
    | Native_widget_props { kind_id; version; capabilities; payload } ->
-     check (kind_id = 2) "swipe action kind ID";
+     check
+       (ID.Native_widget.Kind_id.equal kind_id (native_kind_id 2))
+       "swipe action kind ID";
      check (version = 1) "swipe action schema version";
      check (Int64.equal capabilities 7L) "swipe action capabilities";
      check (Char.code (Bytes.get payload 0) = 3) "swipe action enabled flags";
@@ -203,14 +212,22 @@ let test_swipe_action_props_contract () =
   Ui.Event.Handler.Private.invoke
     binding.handler
     (Native_event
-       { kind_id = 2; version = 1; event_id = 1; payload = Bytes.of_string "\000" });
+       { kind_id = native_kind_id 2
+       ; version = 1
+       ; event_id = native_event_id 1
+       ; payload = Bytes.of_string "\000"
+       });
   check
     (!received = Some Ui.Native_widget.Swipe_action.Start_to_end)
     "start-to-end commit decoding";
   Ui.Event.Handler.Private.invoke
     binding.handler
     (Native_event
-       { kind_id = 2; version = 1; event_id = 1; payload = Bytes.of_string "\001" });
+       { kind_id = native_kind_id 2
+       ; version = 1
+       ; event_id = native_event_id 1
+       ; payload = Bytes.of_string "\001"
+       });
   check
     (!received = Some Ui.Native_widget.Swipe_action.End_to_start)
     "end-to-start commit decoding"
@@ -262,13 +279,13 @@ let test_swipe_action_event_filtering () =
       binding.handler
       (Native_event { kind_id; version; event_id; payload })
   in
-  invoke 99 1 1 (Bytes.of_string "\000");
-  invoke 2 2 1 (Bytes.of_string "\000");
-  invoke 2 1 2 (Bytes.of_string "\000");
-  invoke 2 1 1 Bytes.empty;
-  invoke 2 1 1 (Bytes.of_string "\002");
+  invoke (native_kind_id 99) 1 (native_event_id 1) (Bytes.of_string "\000");
+  invoke (native_kind_id 2) 2 (native_event_id 1) (Bytes.of_string "\000");
+  invoke (native_kind_id 2) 1 (native_event_id 2) (Bytes.of_string "\000");
+  invoke (native_kind_id 2) 1 (native_event_id 1) Bytes.empty;
+  invoke (native_kind_id 2) 1 (native_event_id 1) (Bytes.of_string "\002");
   check (!received = []) "malformed swipe native event was not ignored";
-  invoke 2 1 1 (Bytes.of_string "\000");
+  invoke (native_kind_id 2) 1 (native_event_id 1) (Bytes.of_string "\000");
   check
     (!received = [ Ui.Native_widget.Swipe_action.Start_to_end ])
     "valid swipe event was filtered"
@@ -292,7 +309,9 @@ let test_navigation_shell_contract_and_events () =
   check (Array.length view.children = 4) "navigation shell child shape";
   (match view.props with
    | Native_widget_props { kind_id; version; capabilities; payload } ->
-     check (kind_id = 3) "navigation shell kind ID";
+     check
+       (ID.Native_widget.Kind_id.equal kind_id (native_kind_id 3))
+       "navigation shell kind ID";
      check (version = 1) "navigation shell schema version";
      check (Int64.equal capabilities 7L) "navigation shell capabilities";
      let props = Ui.Native_widget.Navigation_shell.For_testing.decode_props_exn payload in
@@ -305,9 +324,9 @@ let test_navigation_shell_contract_and_events () =
   Ui.Event.Handler.Private.invoke
     binding.handler
     (Native_event
-       { kind_id = 3
+       { kind_id = native_kind_id 3
        ; version = 1
-       ; event_id = 1
+       ; event_id = native_event_id 1
        ; payload = Ui.Native_widget.Navigation_shell.For_testing.encode_drawer_state Open
        });
   check
@@ -319,11 +338,11 @@ let test_navigation_shell_contract_and_events () =
        Ui.Event.Handler.Private.invoke
          binding.handler
          (Native_event { kind_id; version; event_id; payload }))
-    [ 99, 1, 1, Bytes.of_string "\000"
-    ; 3, 2, 1, Bytes.of_string "\000"
-    ; 3, 1, 2, Bytes.of_string "\000"
-    ; 3, 1, 1, Bytes.empty
-    ; 3, 1, 1, Bytes.of_string "\002"
+    [ native_kind_id 99, 1, native_event_id 1, Bytes.of_string "\000"
+    ; native_kind_id 3, 2, native_event_id 1, Bytes.of_string "\000"
+    ; native_kind_id 3, 1, native_event_id 2, Bytes.of_string "\000"
+    ; native_kind_id 3, 1, native_event_id 1, Bytes.empty
+    ; native_kind_id 3, 1, native_event_id 1, Bytes.of_string "\002"
     ];
   check (!received = None) "malformed navigation-shell event was accepted";
   expect_invalid_argument

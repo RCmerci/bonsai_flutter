@@ -1,0 +1,5 @@
+(library
+ (name bonsai_flutter_spec_impl)
+ (public_name bonsai_flutter.spec_impl)
+ (implements bonsai_flutter_spec)
+ (modules id))

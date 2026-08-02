@@ -1,4 +1,5 @@
 module Ui = Bonsai_flutter_ui
+module ID = Bonsai_flutter_spec.Id
 
 type mailbox =
   | Inbox
@@ -1091,7 +1092,7 @@ let render_detail_page
   let page_key = Printf.sprintf "mail-detail-%d" message.id in
   Ui.Widget.page
     ~key:(Ui.Key.string page_key)
-    ~page_key
+    ~page_key:(ID.Navigation.Page_key.of_string page_key)
     ~transition:Ui.Navigation.Slide
     (Ui.Material.scaffold
        ~body:
@@ -1289,7 +1290,10 @@ let render_mail_page
     ~on_drawer_state_changed:drawer_settled
     ()
   |> Ui.Widget.with_test_id (Ui.Test_id.string "mail-navigation-shell")
-  |> Ui.Widget.page ~key:(Ui.Key.string "mail-list") ~page_key:"mail-list" ~can_pop:false
+  |> Ui.Widget.page
+       ~key:(Ui.Key.string "mail-list")
+       ~page_key:(ID.Navigation.Page_key.of_string "mail-list")
+       ~can_pop:false
   |> Ui.Widget.with_test_id (Ui.Test_id.string "mail-list-page")
 ;;
 
@@ -1526,8 +1530,11 @@ let component handlers graph =
       | Ui.Event.Payload.Route_pop { page_key; _ } ->
         set_state (fun state ->
           match state.selected_id with
-          | Some id when String.equal page_key (Printf.sprintf "mail-detail-%d" id) ->
-            { state with selected_id = None; notice = None }
+          | Some id
+            when ID.Navigation.Page_key.equal
+                   page_key
+                   (ID.Navigation.Page_key.of_string (Printf.sprintf "mail-detail-%d" id))
+            -> { state with selected_id = None; notice = None }
           | None | Some _ -> state)
       | _ -> Bonsai.Effect.Ignore)
   in
@@ -1539,7 +1546,10 @@ let component handlers graph =
         invalid_arg (Printf.sprintf "Mail: duplicate selected message ID %d" message_id))
   in
   Bonsai.Cont.map2 pages on_pop ~f:(fun pages on_pop ->
-    Ui.Widget.navigator ~restoration_scope_id:"bonsai-mail" ~on_pop pages
+    Ui.Widget.navigator
+      ~restoration_scope_id:(ID.Navigation.Restoration_scope_id.of_string "bonsai-mail")
+      ~on_pop
+      pages
     |> Ui.Widget.constrained_box
          ~constraints:(Ui.Layout.Box_constraints.create ~max_width:720. ())
     |> Ui.Widget.center

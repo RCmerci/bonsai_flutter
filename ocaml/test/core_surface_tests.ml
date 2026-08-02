@@ -1,4 +1,5 @@
 module Ui = Bonsai_flutter_ui
+module ID = Bonsai_flutter_spec.Id
 
 let check condition message = if not condition then failwith message
 let handler = Ui.Event.Handler.create (fun _ -> ())
@@ -38,7 +39,8 @@ let widgets =
   ; Ui.Widget.clip ~behavior:Ui.Style.Clip.Anti_alias child
   ; Ui.Widget.opacity 0.5 child
   ; Ui.Widget.animated_opacity
-      ~animation:(Ui.Animation.create ~id:7L ~duration_ms:250 ())
+      ~animation:
+        (Ui.Animation.create ~id:(ID.Ui.Animation_id.of_int64 7L) ~duration_ms:250 ())
       ~opacity:0.75
       ~on_completed:handler
       child
@@ -92,10 +94,10 @@ let test_navigation_constructors () =
   in
   let page =
     Ui.Widget.page
-      ~page_key:"settings"
+      ~page_key:(ID.Navigation.Page_key.of_string "settings")
       ~transition:Ui.Navigation.Fade
       ~can_pop:true
-      ~restoration_id:"settings-page"
+      ~restoration_id:(ID.Navigation.Restoration_id.of_string "settings-page")
       (Ui.Widget.text "Settings")
   in
   let navigator = Ui.Widget.navigator ~on_pop [ page ] in

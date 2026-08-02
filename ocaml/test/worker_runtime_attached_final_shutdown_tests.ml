@@ -1,3 +1,5 @@
+module ID = Bonsai_flutter_spec.Id
+
 let require condition message = if not condition then failwith message
 let shutdown_count = Atomic.make 0
 
@@ -13,7 +15,9 @@ let service =
 
 let () =
   let client =
-    match Worker_runtime.start ~runtime_epoch:11L service () with
+    match
+      Worker_runtime.start ~runtime_epoch:(ID.Runtime.Epoch.of_int64 11L) service ()
+    with
     | Ok client -> client
     | Error error -> failwith error
   in

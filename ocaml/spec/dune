@@ -1,0 +1,5 @@
+(library
+ (name bonsai_flutter_spec)
+ (public_name bonsai_flutter.spec)
+ (modules id)
+ (virtual_modules id))

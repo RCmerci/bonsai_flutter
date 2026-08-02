@@ -1,3 +1,5 @@
+module ID = Bonsai_flutter_spec.Id
+
 module Kind = struct
   type t =
     | Empty
@@ -262,15 +264,15 @@ type props =
       ; enabled : bool
       }
   | Text_input_props of
-      { session_id : int64
-      ; document_revision : int64
+      { session_id : ID.Text_input.session_id
+      ; document_revision : ID.Text_input.document_revision
       ; value : Text_editing.Value.t
       ; enabled : bool
       ; read_only : bool
       ; obscure_text : bool
       ; keyboard_type : Text_editing.keyboard_type
       ; input_action : Text_editing.input_action
-      ; accepted_local_revision : int64
+      ; accepted_local_revision : ID.Text_input.local_revision
       ; update_mode : Text_editing.update_mode
       ; autofocus : bool
       }
@@ -278,12 +280,13 @@ type props =
       { alignment : Navigation.overlay_alignment
       ; dismissible : bool
       }
-  | Navigator_props of { restoration_scope_id : string option }
+  | Navigator_props of
+      { restoration_scope_id : ID.Navigation.restoration_scope_id option }
   | Page_props of
-      { page_key : string
+      { page_key : ID.Navigation.page_key
       ; transition : Navigation.page_transition
       ; can_pop : bool
-      ; restoration_id : string option
+      ; restoration_id : ID.Navigation.restoration_id option
       }
   | Safe_area_props of
       { left : bool
@@ -298,7 +301,7 @@ type props =
   | Environment_boundary_props
   | Material_dialog_props of { barrier_dismissible : bool }
   | Native_widget_props of
-      { kind_id : int
+      { kind_id : ID.Native_widget.kind_id
       ; version : int
       ; capabilities : int64
       ; payload : bytes
@@ -440,26 +443,36 @@ let props_equal left right =
   | Cupertino_switch_props left, Cupertino_switch_props right ->
     Bool.equal left.value right.value && Bool.equal left.enabled right.enabled
   | Text_input_props left, Text_input_props right ->
-    Int64.equal left.session_id right.session_id
-    && Int64.equal left.document_revision right.document_revision
+    ID.Text_input.Session_id.equal left.session_id right.session_id
+    && ID.Text_input.Document_revision.equal
+         left.document_revision
+         right.document_revision
     && Text_editing.Value.equal left.value right.value
     && Bool.equal left.enabled right.enabled
     && Bool.equal left.read_only right.read_only
     && Bool.equal left.obscure_text right.obscure_text
     && left.keyboard_type = right.keyboard_type
     && left.input_action = right.input_action
-    && Int64.equal left.accepted_local_revision right.accepted_local_revision
+    && ID.Text_input.Local_revision.equal
+         left.accepted_local_revision
+         right.accepted_local_revision
     && left.update_mode = right.update_mode
     && Bool.equal left.autofocus right.autofocus
   | Overlay_props left, Overlay_props right ->
     left.alignment = right.alignment && Bool.equal left.dismissible right.dismissible
   | Navigator_props left, Navigator_props right ->
-    Option.equal String.equal left.restoration_scope_id right.restoration_scope_id
+    Option.equal
+      ID.Navigation.Restoration_scope_id.equal
+      left.restoration_scope_id
+      right.restoration_scope_id
   | Page_props left, Page_props right ->
-    String.equal left.page_key right.page_key
+    ID.Navigation.Page_key.equal left.page_key right.page_key
     && left.transition = right.transition
     && Bool.equal left.can_pop right.can_pop
-    && Option.equal String.equal left.restoration_id right.restoration_id
+    && Option.equal
+         ID.Navigation.Restoration_id.equal
+         left.restoration_id
+         right.restoration_id
   | Safe_area_props left, Safe_area_props right ->
     Bool.equal left.left right.left
     && Bool.equal left.top right.top
@@ -990,7 +1003,8 @@ let page
       ?restoration_id
       child
   =
-  if String.length page_key = 0 then invalid_arg "Widget.page: page_key must not be empty";
+  if String.length (ID.Navigation.Page_key.to_string page_key) = 0
+  then invalid_arg "Widget.page: page_key must not be empty";
   create
     ~key
     ~kind:Kind.Page
@@ -1180,12 +1194,6 @@ let cupertino_switch ?key ?(enabled = true) ~value ~on_changed () =
     ~children:[||]
 ;;
 
-let nonnegative_int64 label value =
-  if Int64.compare value 0L < 0
-  then invalid_arg (Printf.sprintf "Widget.text_input: %s must be non-negative" label);
-  value
-;;
-
 let text_input
       ?key
       ?(enabled = true)
@@ -1204,21 +1212,34 @@ let text_input
       ~on_focus_changed
       ()
   =
+  if ID.Text_input.Session_id.compare session_id ID.Text_input.Session_id.zero < 0
+  then invalid_arg "Widget.text_input: session_id must be non-negative";
+  if
+    ID.Text_input.Document_revision.compare
+      document_revision
+      ID.Text_input.Document_revision.zero
+    < 0
+  then invalid_arg "Widget.text_input: document_revision must be non-negative";
+  if
+    ID.Text_input.Local_revision.compare
+      accepted_local_revision
+      ID.Text_input.Local_revision.zero
+    < 0
+  then invalid_arg "Widget.text_input: accepted_local_revision must be non-negative";
   create
     ~key
     ~kind:Kind.Text_input
     ~props:
       (Text_input_props
-         { session_id = nonnegative_int64 "session_id" session_id
-         ; document_revision = nonnegative_int64 "document_revision" document_revision
+         { session_id
+         ; document_revision
          ; value
          ; enabled
          ; read_only
          ; obscure_text
          ; keyboard_type
          ; input_action
-         ; accepted_local_revision =
-             nonnegative_int64 "accepted_local_revision" accepted_local_revision
+         ; accepted_local_revision
          ; update_mode
          ; autofocus
          })
@@ -1448,15 +1469,15 @@ module Private = struct
         ; enabled : bool
         }
     | Text_input_props of
-        { session_id : int64
-        ; document_revision : int64
+        { session_id : ID.Text_input.session_id
+        ; document_revision : ID.Text_input.document_revision
         ; value : Text_editing.Value.t
         ; enabled : bool
         ; read_only : bool
         ; obscure_text : bool
         ; keyboard_type : Text_editing.keyboard_type
         ; input_action : Text_editing.input_action
-        ; accepted_local_revision : int64
+        ; accepted_local_revision : ID.Text_input.local_revision
         ; update_mode : Text_editing.update_mode
         ; autofocus : bool
         }
@@ -1464,12 +1485,13 @@ module Private = struct
         { alignment : Navigation.overlay_alignment
         ; dismissible : bool
         }
-    | Navigator_props of { restoration_scope_id : string option }
+    | Navigator_props of
+        { restoration_scope_id : ID.Navigation.restoration_scope_id option }
     | Page_props of
-        { page_key : string
+        { page_key : ID.Navigation.page_key
         ; transition : Navigation.page_transition
         ; can_pop : bool
-        ; restoration_id : string option
+        ; restoration_id : ID.Navigation.restoration_id option
         }
     | Safe_area_props of
         { left : bool
@@ -1484,7 +1506,7 @@ module Private = struct
     | Environment_boundary_props
     | Material_dialog_props of { barrier_dismissible : bool }
     | Native_widget_props of
-        { kind_id : int
+        { kind_id : ID.Native_widget.kind_id
         ; version : int
         ; capabilities : int64
         ; payload : bytes

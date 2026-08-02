@@ -93,10 +93,10 @@ type push =
   | Fatal of error
 
 module Topic : sig
-  val ready : int
-  val store : int
-  val summary : int
-  val fatal : int
-  val startup_timing : int
+  val ready : Bonsai_flutter_spec.Id.Worker.push_topic
+  val store : Bonsai_flutter_spec.Id.Worker.push_topic
+  val summary : Bonsai_flutter_spec.Id.Worker.push_topic
+  val fatal : Bonsai_flutter_spec.Id.Worker.push_topic
+  val startup_timing : Bonsai_flutter_spec.Id.Worker.push_topic
   val count : int
 end

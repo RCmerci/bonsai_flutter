@@ -6,6 +6,7 @@
  (libraries
   bonsai
   base
+  bonsai_flutter.spec_impl
   bonsai_flutter.ui
   bonsai_flutter.protocol
   bonsai_flutter.runtime

@@ -13,26 +13,26 @@ type 'response outcome =
 
 type ('response, 'push) event =
   | Response of
-      { runtime_epoch : int64
-      ; worker_generation : int64
-      ; request_id : int64
+      { runtime_epoch : Bonsai_flutter_spec.Id.Runtime.epoch
+      ; worker_generation : Bonsai_flutter_spec.Id.Worker.generation
+      ; request_id : Bonsai_flutter_spec.Id.Worker.request_id
       ; outcome : 'response outcome
       }
   | Push of
-      { runtime_epoch : int64
-      ; worker_generation : int64
-      ; push_sequence : int64
-      ; topic : int
+      { runtime_epoch : Bonsai_flutter_spec.Id.Runtime.epoch
+      ; worker_generation : Bonsai_flutter_spec.Id.Worker.generation
+      ; push_sequence : Bonsai_flutter_spec.Id.Worker.push_sequence
+      ; topic : Bonsai_flutter_spec.Id.Worker.push_topic
       ; payload : 'push
       }
   | Terminal of
-      { runtime_epoch : int64
-      ; worker_generation : int64
+      { runtime_epoch : Bonsai_flutter_spec.Id.Runtime.epoch
+      ; worker_generation : Bonsai_flutter_spec.Id.Worker.generation
       ; error : string
       }
 
 type send_result =
-  | Accepted of int64
+  | Accepted of Bonsai_flutter_spec.Id.Worker.request_id
   | Full
   | Not_ready
   | Stopping
@@ -44,19 +44,22 @@ module Service : sig
 
   val create
     :  push_topic_count:int
-    -> init:(emit:(topic:int -> 'push -> unit) -> 'config -> ('state, string) result)
+    -> init:
+         (emit:(topic:Bonsai_flutter_spec.Id.Worker.push_topic -> 'push -> unit)
+          -> 'config
+          -> ('state, string) result)
     -> handle_request:
          ('state
           -> cancelled:(unit -> bool)
-          -> emit:(topic:int -> 'push -> unit)
+          -> emit:(topic:Bonsai_flutter_spec.Id.Worker.push_topic -> 'push -> unit)
           -> 'request
           -> ('response, string) result * computation)
     -> step:
          ('state
           -> cancelled:(unit -> bool)
-          -> emit:(topic:int -> 'push -> unit)
+          -> emit:(topic:Bonsai_flutter_spec.Id.Worker.push_topic -> 'push -> unit)
           -> computation)
-    -> cancel:('state -> request_id:int64 -> unit)
+    -> cancel:('state -> request_id:Bonsai_flutter_spec.Id.Worker.request_id -> unit)
     -> shutdown:('state -> unit)
     -> ('config, 'request, 'response, 'push) t
 end
@@ -66,7 +69,10 @@ val send : ('request, 'response, 'push) client -> 'request -> send_result
 
 (** Requests cooperative cancellation without entering the bounded request
     lane. *)
-val cancel : ('request, 'response, 'push) client -> request_id:int64 -> unit
+val cancel
+  :  ('request, 'response, 'push) client
+  -> request_id:Bonsai_flutter_spec.Id.Worker.request_id
+  -> unit
 
 (** Registers a domain-0-only effect handler. The handler is invoked only by a
     later accepted Driver pump. *)
@@ -75,8 +81,13 @@ val on_event
   -> (('response, 'push) event -> unit Bonsai.Effect.t)
   -> unit
 
-val runtime_epoch : ('request, 'response, 'push) client -> int64
-val worker_generation : ('request, 'response, 'push) client -> int64
+val runtime_epoch
+  :  ('request, 'response, 'push) client
+  -> Bonsai_flutter_spec.Id.Runtime.epoch
+
+val worker_generation
+  :  ('request, 'response, 'push) client
+  -> Bonsai_flutter_spec.Id.Worker.generation
 
 module Private : sig
   type packed_startup
@@ -88,8 +99,8 @@ module Private : sig
     | Session_callback_failed of string
 
   val prepare
-    :  runtime_epoch:int64
-    -> worker_generation:int64
+    :  runtime_epoch:Bonsai_flutter_spec.Id.Runtime.epoch
+    -> worker_generation:Bonsai_flutter_spec.Id.Worker.generation
     -> ('config, 'request, 'response, 'push) Service.t
     -> 'config
     -> ('request, 'response, 'push) client * packed_startup
@@ -125,10 +136,10 @@ module For_testing : sig
 
   val inject_push
     :  ('request, 'response, 'push) client
-    -> runtime_epoch:int64
-    -> worker_generation:int64
-    -> push_sequence:int64
-    -> topic:int
+    -> runtime_epoch:Bonsai_flutter_spec.Id.Runtime.epoch
+    -> worker_generation:Bonsai_flutter_spec.Id.Worker.generation
+    -> push_sequence:Bonsai_flutter_spec.Id.Worker.push_sequence
+    -> topic:Bonsai_flutter_spec.Id.Worker.push_topic
     -> 'push
     -> unit
 end

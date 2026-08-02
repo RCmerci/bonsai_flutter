@@ -1,3 +1,4 @@
+module ID = Bonsai_flutter_spec.Id
 module Protocol = Bonsai_flutter_protocol
 module Ui = Bonsai_flutter_ui
 
@@ -98,16 +99,28 @@ let broken_component _handlers _graph = failwith "intentional startup failure"
 
 let () =
   Entrypoint.For_testing.clear ();
-  Entrypoint.register ~name:"counter" (App.create counter);
-  Entrypoint.register ~name:"broken" (App.create broken_component);
+  Entrypoint.register
+    ~name:(ID.Application.Entrypoint_name.of_string "counter")
+    (App.create counter);
+  Entrypoint.register
+    ~name:(ID.Application.Entrypoint_name.of_string "broken")
+    (App.create broken_component);
   let created = Native_backend.create (Bytes.of_string "counter") in
   require (created.status = Native_backend.Ok) "registered entrypoint did not create";
-  require (Int64.compare created.handle 0L > 0) "native handle must be positive";
+  require
+    (ID.Runtime.Handle.compare created.handle ID.Runtime.Handle.zero > 0)
+    "native handle must be positive";
   let initial = Native_backend.pump created.handle 0L Bytes.empty in
   require (initial.status = Native_backend.Ok) "initial native pump failed";
   require (Bytes.length initial.bytes > 0) "initial native pump returned no frame";
-  require (initial.presentation_id = 1L) "initial presentation ID must be one";
-  require (initial.revision = 1L) "initial native revision must be one";
+  require
+    (ID.Runtime.Presentation_id.equal
+       initial.presentation_id
+       ID.Runtime.Presentation_id.one)
+    "initial presentation ID must be one";
+  require
+    (ID.Runtime.Renderer_revision.equal initial.revision ID.Runtime.Renderer_revision.one)
+    "initial native revision must be one";
   (match Protocol.Binary_codec.decode initial.bytes with
    | Ok { kind = Full_snapshot; _ } -> ()
    | Ok _ -> fail "initial native frame was not a full snapshot"
@@ -129,7 +142,9 @@ let () =
   require
     (String.length after_destroy.error > 0)
     "destroyed native handle returned no diagnostic";
-  require (after_destroy.error_code = 9) "destroyed handle error was not structured";
+  require
+    (ID.Ffi.Error_code.equal after_destroy.error_code (ID.Ffi.Error_code.of_int 9))
+    "destroyed handle error was not structured";
   for _iteration = 1 to 100 do
     let runtime = Native_backend.create (Bytes.of_string "counter") in
     require (runtime.status = Native_backend.Ok) "soak runtime did not create";
@@ -191,7 +206,13 @@ let () =
   require
     (stale_pump.status = Native_backend.Fatal_error)
     "tombstoned runtime accepted a stale pump";
-  let stale_presentation = Native_backend.presentation_succeeded first.handle 1L 1L 0L in
+  let stale_presentation =
+    Native_backend.presentation_succeeded
+      first.handle
+      ID.Runtime.Presentation_id.one
+      ID.Runtime.Renderer_revision.one
+      0L
+  in
   require
     (stale_presentation.status = Native_backend.Fatal_error)
     "tombstoned runtime accepted a stale presentation";
@@ -237,7 +258,7 @@ let () =
   require (missing.status = Native_backend.Fatal_error) "unknown entrypoint was accepted";
   let trace_message message = Printf.eprintf "[Trace Fixture][ocaml]%s\n%!" message in
   Entrypoint.register
-    ~name:"trace-fixture"
+    ~name:(ID.Application.Entrypoint_name.of_string "trace-fixture")
     (App.create ~name:"Trace Fixture" ~trace:trace_message trace_fixture);
   let trace =
     capture_stderr (fun () ->
@@ -268,12 +289,13 @@ let () =
         "traced idle presentation failed";
       let resync =
         Protocol.Inbound_event.
-          { runtime_epoch = runtime.handle
+          { runtime_epoch =
+              runtime.handle |> ID.Runtime.Handle.to_int64 |> ID.Runtime.Epoch.of_int64
           ; events =
-              [ { sequence = 1L
+              [ { sequence = ID.Runtime.Event_sequence.of_int64 1L
                 ; displayed_revision = initial.revision
-                ; node_id = 0L
-                ; handler_id = 0L
+                ; node_id = ID.Ui.Node_id.zero
+                ; handler_id = ID.Ui.Handler_id.zero
                 ; event_tag = Protocol.Generated_protocol.Event_tag.resync_requested
                 ; payload = Unit
                 }

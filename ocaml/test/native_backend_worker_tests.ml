@@ -1,3 +1,4 @@
+module ID = Bonsai_flutter_spec.Id
 module Ui = Bonsai_flutter_ui
 
 let fail format = Printf.ksprintf failwith format
@@ -43,7 +44,7 @@ let service =
       if String.equal config "fail-init"
       then Error "intentional init failure"
       else (
-        emit ~topic:0 "ready";
+        emit ~topic:(ID.Worker.Push_topic.of_int 0) "ready";
         Ok ()))
     ~handle_request:(fun () ~cancelled:_ ~emit:_ -> function
        | Echo value -> Ok value, `Idle
@@ -74,9 +75,11 @@ let client () =
 
 let () =
   Entrypoint.For_testing.clear ();
-  Entrypoint.register ~name:"ui-only" (App.create ui_component);
   Entrypoint.register
-    ~name:"worker-backed"
+    ~name:(ID.Application.Entrypoint_name.of_string "ui-only")
+    (App.create ui_component);
+  Entrypoint.register
+    ~name:(ID.Application.Entrypoint_name.of_string "worker-backed")
     (App.create_with_worker
        ~decode_config:(fun payload -> Ok (Bytes.to_string payload))
        ~service

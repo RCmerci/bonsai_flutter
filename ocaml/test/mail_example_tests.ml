@@ -1,6 +1,7 @@
 module Test = Bonsai_flutter_test
 module Ui = Bonsai_flutter_ui
 module Runtime = Bonsai_flutter_runtime
+module ID = Bonsai_flutter_spec.Id
 
 let fail format = Printf.ksprintf failwith format
 let require condition message = if not condition then fail "%s" message
@@ -13,7 +14,10 @@ let test_mail_app_disables_trace_by_default () =
 
 let create_handle () =
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
-  Test.Handle.create ~runtime_epoch:902L ~time_source Mail.component
+  Test.Handle.create
+    ~runtime_epoch:(ID.Runtime.Epoch.of_int64 902L)
+    ~time_source
+    Mail.component
 ;;
 
 let require_present handle query message =
@@ -83,9 +87,9 @@ let native_swipe handle id direction =
   Test.Handle.native_event
     handle
     (Test.Query.test_id (Printf.sprintf "mail-swipe-%d" id))
-    ~kind_id:2
+    ~kind_id:(ID.Native_widget.Kind_id.of_int 2)
     ~version:1
-    ~event_id:1
+    ~event_id:(ID.Native_widget.Event_id.of_int 1)
     ~payload:(Bytes.make 1 (Char.chr direction))
 ;;
 
@@ -122,7 +126,8 @@ let navigation_props handle =
       "mail navigation shell is missing"
   in
   match shell.props with
-  | Ui.Widget.Private.Native_widget_props { kind_id = 3; payload; _ } ->
+  | Ui.Widget.Private.Native_widget_props { kind_id; payload; _ }
+    when ID.Native_widget.Kind_id.equal kind_id (ID.Native_widget.Kind_id.of_int 3) ->
     Ui.Native_widget.Navigation_shell.For_testing.decode_props_exn payload
   | _ -> fail "mail navigation shell has the wrong native contract"
 ;;
@@ -264,7 +269,7 @@ let test_open_marks_read_and_platform_pop_preserves_state () =
     Test.Handle.route_pop
       handle
       (Test.Query.kind "Navigator")
-      ~page_key:"mail-detail-1"
+      ~page_key:(ID.Navigation.Page_key.of_string "mail-detail-1")
       ();
     require_absent
       handle
@@ -371,11 +376,31 @@ let test_swipe_event_filtering_and_nested_action_isolation () =
         ~event_id
         ~payload
     in
-    send 99 1 1 (Bytes.of_string "\000");
-    send 2 2 1 (Bytes.of_string "\000");
-    send 2 1 2 (Bytes.of_string "\000");
-    send 2 1 1 Bytes.empty;
-    send 2 1 1 (Bytes.of_string "\002");
+    send
+      (ID.Native_widget.Kind_id.of_int 99)
+      1
+      (ID.Native_widget.Event_id.of_int 1)
+      (Bytes.of_string "\000");
+    send
+      (ID.Native_widget.Kind_id.of_int 2)
+      2
+      (ID.Native_widget.Event_id.of_int 1)
+      (Bytes.of_string "\000");
+    send
+      (ID.Native_widget.Kind_id.of_int 2)
+      1
+      (ID.Native_widget.Event_id.of_int 2)
+      (Bytes.of_string "\000");
+    send
+      (ID.Native_widget.Kind_id.of_int 2)
+      1
+      (ID.Native_widget.Event_id.of_int 1)
+      Bytes.empty;
+    send
+      (ID.Native_widget.Kind_id.of_int 2)
+      1
+      (ID.Native_widget.Event_id.of_int 1)
+      (Bytes.of_string "\002");
     require_present
       handle
       (Test.Query.test_id "mail-row-1")
@@ -397,7 +422,7 @@ let test_stale_route_pop_is_ignored () =
     Test.Handle.route_pop
       handle
       (Test.Query.kind "Navigator")
-      ~page_key:"mail-detail-999"
+      ~page_key:(ID.Navigation.Page_key.of_string "mail-detail-999")
       ();
     require_present
       handle
@@ -407,7 +432,7 @@ let test_stale_route_pop_is_ignored () =
     Test.Handle.route_pop
       handle
       (Test.Query.kind "Navigator")
-      ~page_key:"mail-detail-1"
+      ~page_key:(ID.Navigation.Page_key.of_string "mail-detail-1")
       ();
     require_absent
       handle
@@ -599,9 +624,9 @@ let test_drawer_mailboxes_settings_and_settled_state () =
     Test.Handle.native_event
       handle
       (Test.Query.test_id "mail-navigation-shell")
-      ~kind_id:3
+      ~kind_id:(ID.Native_widget.Kind_id.of_int 3)
       ~version:1
-      ~event_id:1
+      ~event_id:(ID.Native_widget.Event_id.of_int 1)
       ~payload:(Bytes.of_string "\001");
     require (navigation_props handle).drawer_open "settled-open event lost drawer state";
     Test.Handle.present handle;
@@ -633,9 +658,9 @@ let test_drawer_mailboxes_settings_and_settled_state () =
     Test.Handle.native_event
       handle
       (Test.Query.test_id "mail-navigation-shell")
-      ~kind_id:3
+      ~kind_id:(ID.Native_widget.Kind_id.of_int 3)
       ~version:1
-      ~event_id:1
+      ~event_id:(ID.Native_widget.Event_id.of_int 1)
       ~payload:(Bytes.of_string "\000");
     require (not (navigation_props handle).drawer_open) "settled-close event was ignored")
 ;;

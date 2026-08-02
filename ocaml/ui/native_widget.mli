@@ -19,11 +19,14 @@ module Extension : sig
   type ('props, 'event) t
 
   val create
-    :  kind_id:int
+    :  kind_id:Bonsai_flutter_spec.Id.Native_widget.kind_id
     -> version:int
     -> capabilities:Capability.t list
     -> encode_props:('props -> bytes)
-    -> decode_event:(event_id:int -> bytes -> ('event, string) result)
+    -> decode_event:
+         (event_id:Bonsai_flutter_spec.Id.Native_widget.event_id
+          -> bytes
+          -> ('event, string) result)
     -> unit
     -> ('props, 'event) t
 end
@@ -53,8 +56,8 @@ val widget_with_handler
   -> Widget.t
 
 module Virtual_list : sig
-  val kind_id : int
-  val visible_range_event_id : int
+  val kind_id : Bonsai_flutter_spec.Id.Native_widget.kind_id
+  val visible_range_event_id : Bonsai_flutter_spec.Id.Native_widget.event_id
 
   val create
     :  ?key:Key.t
@@ -140,8 +143,8 @@ module Navigation_shell : sig
     | Closed
     | Open
 
-  val kind_id : int
-  val drawer_state_changed_event_id : int
+  val kind_id : Bonsai_flutter_spec.Id.Native_widget.kind_id
+  val drawer_state_changed_event_id : Bonsai_flutter_spec.Id.Native_widget.event_id
 
   val create
     :  ?key:Key.t

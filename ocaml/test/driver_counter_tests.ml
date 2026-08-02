@@ -1,6 +1,7 @@
 module Protocol = Bonsai_flutter_protocol
 module Runtime = Bonsai_flutter_runtime
 module Ui = Bonsai_flutter_ui
+module ID = Bonsai_flutter_spec.Id
 
 let fail format = Printf.ksprintf failwith format
 let require condition message = if not condition then fail "%s" message
@@ -39,7 +40,7 @@ let present driver ~revision =
   match Hashtbl.find_opt pending_presentations driver with
   | None -> Error (Driver.Invalid_state "test has no pending presentation")
   | Some result ->
-    if not (Int64.equal revision result.renderer_revision)
+    if not (ID.Runtime.Renderer_revision.equal revision result.renderer_revision)
     then Error (Driver.Invalid_state "test supplied the wrong renderer revision")
     else (
       Hashtbl.remove pending_presentations driver;
@@ -119,7 +120,7 @@ let find_button_binding (frame : Protocol.Wire_frame.t) =
 ;;
 
 let () =
-  let runtime_epoch = 21L in
+  let runtime_epoch = ID.Runtime.Epoch.of_int64 21L in
   let activations = ref 0 in
   let after_displays = ref 0 in
   let trace_messages = ref [] in
@@ -188,7 +189,7 @@ let () =
     Protocol.Inbound_event.
       { runtime_epoch
       ; events =
-          [ { sequence = 1L
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 1L
             ; displayed_revision = initial.revision
             ; node_id
             ; handler_id
@@ -242,17 +243,19 @@ let () =
     Protocol.Inbound_event.
       { runtime_epoch
       ; events =
-          [ { sequence = 2L
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 2L
             ; displayed_revision = updated.revision
             ; node_id
             ; handler_id
             ; event_tag
             ; payload = Unit
             }
-          ; { sequence = 3L
+          ; { sequence = ID.Runtime.Event_sequence.of_int64 3L
             ; displayed_revision = updated.revision
             ; node_id
-            ; handler_id = Int64.add handler_id 1000L
+            ; handler_id =
+                ID.Ui.Handler_id.of_int64
+                  (Int64.add (ID.Ui.Handler_id.to_int64 handler_id) 1000L)
             ; event_tag
             ; payload = Unit
             }
@@ -272,7 +275,7 @@ let () =
     Protocol.Inbound_event.
       { runtime_epoch
       ; events =
-          [ { sequence = 4L
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 4L
             ; displayed_revision = updated.revision
             ; node_id
             ; handler_id
@@ -302,10 +305,10 @@ let () =
     Protocol.Inbound_event.
       { runtime_epoch
       ; events =
-          [ { sequence = 5L
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 5L
             ; displayed_revision = after_rejection.revision
-            ; node_id = 0L
-            ; handler_id = 0L
+            ; node_id = ID.Ui.Node_id.zero
+            ; handler_id = ID.Ui.Handler_id.zero
             ; event_tag = Protocol.Generated_protocol.Event_tag.resync_requested
             ; payload = Unit
             }
@@ -319,7 +322,11 @@ let () =
   in
   let resync_wire = decode_frame resync.bytes in
   require (resync_wire.kind = Full_snapshot) "resync was not a full snapshot";
-  require (Int64.equal resync_wire.base_revision 0L) "resync base revision was not zero";
+  require
+    (ID.Runtime.Renderer_revision.equal
+       resync_wire.base_revision
+       ID.Runtime.Renderer_revision.zero)
+    "resync base revision was not zero";
   require (resync.stats.resync_count = 1) "resync instrumentation did not increment";
   ok (present driver ~revision:resync.revision);
   Driver.shutdown driver
@@ -353,7 +360,7 @@ let host_effect_component ?cancellation host_ref handlers graph =
 ;;
 
 let test_host_effect_round_trip () =
-  let runtime_epoch = 81L in
+  let runtime_epoch = ID.Runtime.Epoch.of_int64 81L in
   let host_ref = ref None in
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   let driver =
@@ -371,7 +378,7 @@ let test_host_effect_round_trip () =
     Protocol.Inbound_event.
       { runtime_epoch
       ; events =
-          [ { sequence = 1L
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 1L
             ; displayed_revision = initial.revision
             ; node_id
             ; handler_id
@@ -407,10 +414,10 @@ let test_host_effect_round_trip () =
     Protocol.Inbound_event.
       { runtime_epoch
       ; events =
-          [ { sequence = 2L
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 2L
             ; displayed_revision = request_frame.revision
-            ; node_id = 0L
-            ; handler_id = 0L
+            ; node_id = ID.Ui.Node_id.zero
+            ; handler_id = ID.Ui.Handler_id.zero
             ; event_tag = Protocol.Generated_protocol.Event_tag.host_response
             ; payload =
                 Host_response
@@ -443,7 +450,7 @@ let test_host_effect_round_trip () =
 let () = test_host_effect_round_trip ()
 
 let test_host_effect_cancellation () =
-  let runtime_epoch = 83L in
+  let runtime_epoch = ID.Runtime.Epoch.of_int64 83L in
   let host_ref = ref None in
   let cancellation = Host_effect.Cancellation.create () in
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
@@ -465,7 +472,7 @@ let test_host_effect_cancellation () =
     Protocol.Inbound_event.
       { runtime_epoch
       ; events =
-          [ { sequence = 1L
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 1L
             ; displayed_revision = initial.revision
             ; node_id
             ; handler_id
@@ -496,7 +503,7 @@ let test_host_effect_cancellation () =
     (List.exists
        (function
          | Protocol.Wire_frame.Cancel_host_request { request_id = cancelled_request_id }
-           -> Int64.equal request_id cancelled_request_id
+           -> ID.Host.Request_id.equal request_id cancelled_request_id
          | _ -> false)
        cancelled.operations)
     "cancellation frame did not carry CancelHostRequest";
@@ -532,7 +539,7 @@ let environment_component handlers _graph =
 ;;
 
 let test_environment_is_dynamic_input () =
-  let runtime_epoch = 82L in
+  let runtime_epoch = ID.Runtime.Epoch.of_int64 82L in
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   let driver = Driver.create ~runtime_epoch ~time_source environment_component in
   let initial =
@@ -567,10 +574,10 @@ let test_environment_is_dynamic_input () =
     Protocol.Inbound_event.
       { runtime_epoch
       ; events =
-          [ { sequence = 1L
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 1L
             ; displayed_revision = initial.revision
-            ; node_id = 0L
-            ; handler_id = 0L
+            ; node_id = ID.Ui.Node_id.zero
+            ; handler_id = ID.Ui.Handler_id.zero
             ; event_tag = Protocol.Generated_protocol.Event_tag.environment_changed
             ; payload = Environment_changed environment
             }
@@ -593,10 +600,10 @@ let test_environment_is_dynamic_input () =
     Protocol.Inbound_event.
       { batch with
         events =
-          [ { sequence = 2L
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 2L
             ; displayed_revision = updated_frame.revision
-            ; node_id = 0L
-            ; handler_id = 0L
+            ; node_id = ID.Ui.Node_id.zero
+            ; handler_id = ID.Ui.Handler_id.zero
             ; event_tag = Protocol.Generated_protocol.Event_tag.environment_changed
             ; payload = Environment_changed environment
             }
@@ -701,7 +708,7 @@ let event_batch ~runtime_epoch ~sequence ~revision ~node_id binding =
 ;;
 
 let test_handler_dependencies_control_identity () =
-  let runtime_epoch = 84L in
+  let runtime_epoch = ID.Runtime.Epoch.of_int64 84L in
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   let driver = Driver.create ~runtime_epoch ~time_source handler_dependency_component in
   let initial =
@@ -725,7 +732,7 @@ let test_handler_dependencies_control_identity () =
            ~events:
              (event_batch
                 ~runtime_epoch
-                ~sequence:1L
+                ~sequence:(ID.Runtime.Event_sequence.of_int64 1L)
                 ~revision:initial.revision
                 ~node_id:toggle_node
                 toggle_binding)
@@ -742,7 +749,7 @@ let test_handler_dependencies_control_identity () =
     | [ Protocol.Wire_frame.Update_event_bindings
           { node_id; event_bindings = [ binding ] }
       ]
-      when Int64.equal node_id observe_node -> binding
+      when ID.Ui.Node_id.equal node_id observe_node -> binding
     | operations ->
       fail
         "dependency change must emit one binding update, got %d operations"
@@ -750,7 +757,9 @@ let test_handler_dependencies_control_identity () =
   in
   require
     (not
-       (Int64.equal initial_observe_binding.handler_id current_observe_binding.handler_id))
+       (ID.Ui.Handler_id.equal
+          initial_observe_binding.handler_id
+          current_observe_binding.handler_id))
     "dependency change reused the previous handler ID";
   ok (present driver ~revision:changed_dependency.revision);
   let unchanged_dependency =
@@ -761,7 +770,7 @@ let test_handler_dependencies_control_identity () =
            ~events:
              (event_batch
                 ~runtime_epoch
-                ~sequence:2L
+                ~sequence:(ID.Runtime.Event_sequence.of_int64 2L)
                 ~revision:changed_dependency.revision
                 ~node_id:observe_node
                 current_observe_binding)

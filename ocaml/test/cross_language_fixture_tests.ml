@@ -1,5 +1,11 @@
 module Protocol = Bonsai_flutter_protocol
+module ID = Bonsai_flutter_spec.Id
 
+let epoch = ID.Runtime.Epoch.of_int64
+let sequence = ID.Runtime.Event_sequence.of_int64
+let revision = ID.Runtime.Renderer_revision.of_int64
+let node = ID.Ui.Node_id.of_int64
+let handler = ID.Ui.Handler_id.of_int64
 let fail format = Printf.ksprintf failwith format
 
 let expect condition format =
@@ -64,12 +70,12 @@ let test_counter_press () =
   let open Protocol.Inbound_event in
   expect_fixture
     "dart_counter_press.hex"
-    { runtime_epoch = 21L
+    { runtime_epoch = epoch 21L
     ; events =
-        [ { sequence = 1L
-          ; displayed_revision = 1L
-          ; node_id = 3L
-          ; handler_id = 9001L
+        [ { sequence = sequence 1L
+          ; displayed_revision = revision 1L
+          ; node_id = node 3L
+          ; handler_id = handler 9001L
           ; event_tag = Protocol.Generated_protocol.Event_tag.press
           ; payload = Unit
           }
@@ -81,16 +87,16 @@ let test_host_response () =
   let open Protocol.Inbound_event in
   expect_fixture
     "dart_host_response.hex"
-    { runtime_epoch = 31L
+    { runtime_epoch = epoch 31L
     ; events =
-        [ { sequence = 2L
-          ; displayed_revision = 3L
-          ; node_id = 0L
-          ; handler_id = 0L
+        [ { sequence = sequence 2L
+          ; displayed_revision = revision 3L
+          ; node_id = node 0L
+          ; handler_id = handler 0L
           ; event_tag = Protocol.Generated_protocol.Event_tag.host_response
           ; payload =
               Host_response
-                { request_id = 44L
+                { request_id = ID.Host.Request_id.of_int64 44L
                 ; status = Host_error
                 ; value = Bytes.of_string "denied: 剪贴板😀"
                 }
@@ -103,18 +109,18 @@ let test_text_edit_unicode () =
   let open Protocol.Inbound_event in
   expect_fixture
     "dart_text_edit_unicode.hex"
-    { runtime_epoch = 22L
+    { runtime_epoch = epoch 22L
     ; events =
-        [ { sequence = 3L
-          ; displayed_revision = 2L
-          ; node_id = 4L
-          ; handler_id = 44L
+        [ { sequence = sequence 3L
+          ; displayed_revision = revision 2L
+          ; node_id = node 4L
+          ; handler_id = handler 44L
           ; event_tag = Protocol.Generated_protocol.Event_tag.text_edit
           ; payload =
               Text_edit
-                { session_id = 7L
-                ; local_revision = 3L
-                ; base_document_revision = 2L
+                { session_id = ID.Text_input.Session_id.of_int64 7L
+                ; local_revision = ID.Text_input.Local_revision.of_int64 3L
+                ; base_document_revision = ID.Text_input.Document_revision.of_int64 2L
                 ; text = "拼😀音"
                 ; selection = { start_utf16 = 4; end_utf16 = 4 }
                 ; composing = Some { start_utf16 = 0; end_utf16 = 4 }
@@ -128,12 +134,12 @@ let test_environment_changed () =
   let open Protocol.Inbound_event in
   expect_fixture
     "dart_environment_changed.hex"
-    { runtime_epoch = 31L
+    { runtime_epoch = epoch 31L
     ; events =
-        [ { sequence = 4L
-          ; displayed_revision = 3L
-          ; node_id = 0L
-          ; handler_id = 0L
+        [ { sequence = sequence 4L
+          ; displayed_revision = revision 3L
+          ; node_id = node 0L
+          ; handler_id = handler 0L
           ; event_tag = Protocol.Generated_protocol.Event_tag.environment_changed
           ; payload =
               Environment_changed

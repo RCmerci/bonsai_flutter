@@ -1,3 +1,4 @@
+module ID = Bonsai_flutter_spec.Id
 module Ui = Bonsai_flutter_ui
 
 module Handler_map = Map.Make (struct
@@ -21,7 +22,7 @@ module Frame = struct
     }
 
   type t =
-    { revision : int64
+    { revision : ID.Runtime.renderer_revision
     ; entries : entry Handler_map.t
     }
 
@@ -45,7 +46,7 @@ module Frame = struct
     let empty ~revision = { revision; entries = Handler_map.empty }
 
     let derive ~revision ~base_revision ~base ~removals ~additions =
-      if not (Int64.equal base.revision base_revision)
+      if not (ID.Runtime.Renderer_revision.equal base.revision base_revision)
       then invalid_arg "Handler_registry.Frame: base revision mismatch";
       let entries, _ =
         List.fold_left
@@ -73,20 +74,20 @@ module Frame = struct
 end
 
 type event =
-  { runtime_epoch : int64
-  ; displayed_revision : int64
+  { runtime_epoch : ID.Runtime.epoch
+  ; displayed_revision : ID.Runtime.renderer_revision
   ; node_id : Node_id.t
   ; event_tag : Ui.Event.Tag.t
   ; handler_id : Handler_id.t
-  ; event_sequence : int64
+  ; event_sequence : ID.Runtime.event_sequence
   ; payload : Ui.Event.Payload.t
   }
 
 type t =
-  { runtime_epoch : int64
-  ; frames : (int64, Frame.t) Hashtbl.t
-  ; mutable displayed_revision : int64 option
-  ; mutable last_event_sequence : int64 option
+  { runtime_epoch : ID.Runtime.epoch
+  ; frames : (ID.Runtime.renderer_revision, Frame.t) Hashtbl.t
+  ; mutable displayed_revision : ID.Runtime.renderer_revision option
+  ; mutable last_event_sequence : ID.Runtime.event_sequence option
   }
 
 let create ~runtime_epoch =
@@ -103,7 +104,9 @@ let install t frame =
   then
     Error
       (Runtime_error.Invalid_patch
-         (Printf.sprintf "handler frame %Ld is already installed" revision))
+         (Printf.sprintf
+            "handler frame %Ld is already installed"
+            (ID.Runtime.Renderer_revision.to_int64 revision)))
   else (
     Hashtbl.add t.frames revision frame;
     Ok ())
@@ -114,7 +117,7 @@ let mark_displayed_revision t ~revision =
   | None -> Error (Runtime_error.Stale_event { revision })
   | Some _ ->
     (match t.displayed_revision with
-     | Some current when Int64.compare revision current < 0 ->
+     | Some current when ID.Runtime.Renderer_revision.compare revision current < 0 ->
        Error (Runtime_error.Revision_mismatch { expected = current; actual = revision })
      | None | Some _ ->
        t.displayed_revision <- Some revision;
@@ -124,14 +127,15 @@ let mark_displayed_revision t ~revision =
 let retire_before t ~revision =
   let retired =
     Hashtbl.to_seq_keys t.frames
-    |> Seq.filter (fun candidate -> Int64.compare candidate revision < 0)
+    |> Seq.filter (fun candidate ->
+      ID.Runtime.Renderer_revision.compare candidate revision < 0)
     |> List.of_seq
   in
   List.iter (Hashtbl.remove t.frames) retired
 ;;
 
 let retire_superseded t ~displayed_revision =
-  retire_before t ~revision:(Int64.pred displayed_revision)
+  retire_before t ~revision:(ID.Runtime.Renderer_revision.pred displayed_revision)
 ;;
 
 let commit_displayed_revision t ~revision =
@@ -148,21 +152,22 @@ let exception_message = function
 ;;
 
 let validate_event t ~last_event_sequence (event : event) =
-  if not (Int64.equal event.runtime_epoch t.runtime_epoch)
+  if not (ID.Runtime.Epoch.equal event.runtime_epoch t.runtime_epoch)
   then
     Error
       (Runtime_error.Wrong_runtime_epoch
          { expected = t.runtime_epoch; actual = event.runtime_epoch })
   else (
     match last_event_sequence with
-    | Some last when Int64.compare event.event_sequence last <= 0 ->
+    | Some last when ID.Runtime.Event_sequence.compare event.event_sequence last <= 0 ->
       Error
         (Runtime_error.Duplicate_or_out_of_order_event { sequence = event.event_sequence })
     | None | Some _ ->
       (match t.displayed_revision with
        | None -> Error (Runtime_error.Stale_event { revision = event.displayed_revision })
-       | Some displayed when Int64.compare event.displayed_revision displayed > 0 ->
-         Error (Runtime_error.Stale_event { revision = event.displayed_revision })
+       | Some displayed
+         when ID.Runtime.Renderer_revision.compare event.displayed_revision displayed > 0
+         -> Error (Runtime_error.Stale_event { revision = event.displayed_revision })
        | Some _ ->
          (match Hashtbl.find_opt t.frames event.displayed_revision with
           | None ->
@@ -190,7 +195,7 @@ module Validated_batch = struct
 
   type t =
     { events : validated_event list
-    ; last_event_sequence : int64 option
+    ; last_event_sequence : ID.Runtime.event_sequence option
     }
 end
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Aligned the native protocol query and Dart version contract with generated
+  renderer protocol 1.14.
+
 ## 0.0.1
 
 - Replaced runtime-driving ABI v1 with exact ABI 2.0 while retaining renderer

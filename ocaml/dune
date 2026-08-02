@@ -3,6 +3,7 @@
  (public_name bonsai_flutter)
  (modules bonsai_flutter)
  (libraries
+  bonsai_flutter.spec_impl
   base
   bonsai
   bonsai_flutter.ui

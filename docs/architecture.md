@@ -61,6 +61,25 @@ OCaml never calls back into a Dart UI isolate.
 
 No layer reaches through another layer to manipulate its private tree.
 
+## Shared ID contract
+
+`bonsai_flutter.spec` is a virtual library that groups identity types by
+ownership: `Runtime`, `Worker`, `Ui`, `Text_input`, `Navigation`, `Input`,
+`Host`, `Native_widget`, `Application`, `Protocol`, and `Ffi`.
+`bonsai_flutter.spec_impl` provides the production implementation.
+
+Every primitive-backed ID is exposed as a private type. Code must use the
+category-specific constructor, accessor, comparison, and monotonic helpers
+instead of treating IDs as interchangeable `int64`, `int`, or `string`
+values. Primitive conversion is explicit at wire, ABI, persistence, and
+diagnostic boundaries. The runtime representation and protocol bytes remain
+unchanged.
+
+The native ABI error code is an `Ffi.error_code`, not a
+`Protocol.runtime_error`: the ABI defines codes 0 through 15, while the
+generated protocol runtime-error discriminants currently define codes 1
+through 12.
+
 ## Ownership
 
 OCaml owns:
@@ -278,7 +297,7 @@ dynamic environment snapshots, and Navigator/Page/Overlay/MaterialDialog
 layouts. Version 1.4 adds the NativeWidget envelope, capability declarations,
 opaque typed properties, and typed native events. Later compatible minors
 extend the typed surface; current producers and consumers report protocol
-1.12. The Dart decoder's output is accepted by the same atomic `NodeStore`.
+1.14. The Dart decoder's output is accepted by the same atomic `NodeStore`.
 Checksum negotiation, the remaining widget families, and supported-platform
 packaging remain later vertical slices.
 
@@ -355,7 +374,7 @@ one incremental text-property operation for `Count: 1`. A rejected mixed-valid
 event batch cannot leak a queued effect into a later pump.
 
 The native-assets package exposes exact ABI 2.0 independently from renderer
-protocol 1.12, generated FFI bindings, presentation identity, explicit native
+protocol 1.14, generated FFI bindings, presentation identity, explicit native
 output ownership, and an idempotent Dart wrapper. A dedicated Dart isolate
 serializes pump, presentation-success, presentation-rejection, and destroy
 calls and transfers byte payloads without exposing native pointers to the UI

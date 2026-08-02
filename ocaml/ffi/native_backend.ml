@@ -1,4 +1,5 @@
 module Protocol = Bonsai_flutter_protocol
+module ID = Bonsai_flutter_spec.Id
 
 external ensure_native_bridge_linked : unit -> unit = "bf_native_embed_link_anchor"
 
@@ -14,21 +15,21 @@ type status =
 
 type create_result =
   { status : status
-  ; handle : int64
+  ; handle : ID.Runtime.handle
   ; error : string
   }
 
 type output =
   { status : status
   ; bytes : bytes
-  ; presentation_id : int64
-  ; revision : int64
-  ; error_code : int
+  ; presentation_id : ID.Runtime.presentation_id
+  ; revision : ID.Runtime.renderer_revision
+  ; error_code : ID.Ffi.error_code
   ; error : string
   }
 
 type active_runtime =
-  { handle : int64
+  { handle : ID.Runtime.handle
   ; driver : Driver.t
   }
 
@@ -47,7 +48,7 @@ type state_tag =
   | Finalized_tag
 
 let runtime_slot = ref Empty
-let next_handle = ref 1L
+let next_handle = ref ID.Runtime.Handle.one
 let recorded_state_history = ref []
 let driver_creations = ref 0
 let driver_shutdowns = ref 0
@@ -73,25 +74,31 @@ let status_code = function
   | Fatal_error -> 2
 ;;
 
-let create_error error = { status = Fatal_error; handle = 0L; error }
+let create_error error = { status = Fatal_error; handle = ID.Runtime.Handle.zero; error }
 
 let output
       ?(status = Ok)
       ?(bytes = Bytes.empty)
-      ?(presentation_id = 0L)
-      ?(revision = 0L)
+      ?(presentation_id = ID.Runtime.Presentation_id.zero)
+      ?(revision = ID.Runtime.Renderer_revision.zero)
       ?(error_code = 0)
       ?(error = "")
       ()
   =
-  { status; bytes; presentation_id; revision; error_code; error }
+  { status
+  ; bytes
+  ; presentation_id
+  ; revision
+  ; error_code = ID.Ffi.Error_code.of_int error_code
+  ; error
+  }
 ;;
 
 let fresh_handle () =
   let handle = !next_handle in
-  if Int64.equal handle Int64.max_int
+  if ID.Runtime.Handle.equal handle ID.Runtime.Handle.max_value
   then failwith "Runtime handle space is exhausted"
-  else next_handle := Int64.succ handle;
+  else next_handle := ID.Runtime.Handle.succ handle;
   handle
 ;;
 
@@ -125,13 +132,18 @@ let create_in_empty config =
     match Entrypoint.Private.find config.Runtime_bootstrap_config.entrypoint with
     | None ->
       transition Empty;
-      create_error ("Unknown OCaml entrypoint: " ^ config.entrypoint)
+      create_error
+        ("Unknown OCaml entrypoint: "
+         ^ ID.Application.Entrypoint_name.to_string config.entrypoint)
     | Some app ->
       let handle = fresh_handle () in
+      let runtime_epoch =
+        handle |> ID.Runtime.Handle.to_int64 |> ID.Runtime.Epoch.of_int64
+      in
       (match
          App.Private.instantiate
            app
-           ~runtime_epoch:handle
+           ~runtime_epoch
            ~application_payload:config.application_payload
        with
        | Error error ->
@@ -145,7 +157,7 @@ let create_in_empty config =
                ?trace:(App.Private.trace app)
                ~before_flush:(App.Private.before_flush instance)
                ~before_shutdown:(fun () -> App.Private.shutdown instance)
-               ~runtime_epoch:handle
+               ~runtime_epoch
                ~time_source
                (App.Private.component instance)
            with
@@ -224,7 +236,8 @@ let driver_error error =
 
 let find_runtime handle =
   match !runtime_slot with
-  | Active runtime when Int64.equal runtime.handle handle -> Result.Ok runtime.driver
+  | Active runtime when ID.Runtime.Handle.equal runtime.handle handle ->
+    Result.Ok runtime.driver
   | Empty | Creating | Active _ | Destroying _ | Finalized ->
     Result.Error
       (output ~status:Fatal_error ~error_code:9 ~error:"Unknown native runtime handle" ())
@@ -339,7 +352,8 @@ let presentation_rejected handle presentation_id revision reason =
 
 let destroy handle =
   match !runtime_slot with
-  | Active runtime when Int64.equal runtime.handle handle -> destroy_active runtime
+  | Active runtime when ID.Runtime.Handle.equal runtime.handle handle ->
+    destroy_active runtime
   | Empty | Creating | Active _ | Destroying _ | Finalized -> ()
 ;;
 
@@ -413,38 +427,54 @@ end
 
 let callback_create config =
   let result = create (Bytes.of_string config) in
-  status_code result.status, result.handle, result.error
+  status_code result.status, ID.Runtime.Handle.to_int64 result.handle, result.error
 ;;
 
 let callback_pump handle monotonic_now_ns input =
-  let result = pump handle monotonic_now_ns (Bytes.of_string input) in
+  let result =
+    pump (ID.Runtime.Handle.of_int64 handle) monotonic_now_ns (Bytes.of_string input)
+  in
   ( status_code result.status
   , Bytes.to_string result.bytes
-  , result.presentation_id
-  , result.revision
-  , result.error_code
+  , ID.Runtime.Presentation_id.to_int64 result.presentation_id
+  , ID.Runtime.Renderer_revision.to_int64 result.revision
+  , ID.Ffi.Error_code.to_int result.error_code
   , result.error )
 ;;
 
 let callback_presentation_succeeded handle presentation_id revision monotonic_now_ns =
-  let result = presentation_succeeded handle presentation_id revision monotonic_now_ns in
+  let result =
+    presentation_succeeded
+      (ID.Runtime.Handle.of_int64 handle)
+      (ID.Runtime.Presentation_id.of_int64 presentation_id)
+      (ID.Runtime.Renderer_revision.of_int64 revision)
+      monotonic_now_ns
+  in
   ( status_code result.status
   , Bytes.to_string result.bytes
-  , result.presentation_id
-  , result.revision
-  , result.error_code
+  , ID.Runtime.Presentation_id.to_int64 result.presentation_id
+  , ID.Runtime.Renderer_revision.to_int64 result.revision
+  , ID.Ffi.Error_code.to_int result.error_code
   , result.error )
 ;;
 
 let callback_presentation_rejected handle presentation_id revision reason =
-  let result = presentation_rejected handle presentation_id revision reason in
+  let result =
+    presentation_rejected
+      (ID.Runtime.Handle.of_int64 handle)
+      (ID.Runtime.Presentation_id.of_int64 presentation_id)
+      (ID.Runtime.Renderer_revision.of_int64 revision)
+      reason
+  in
   ( status_code result.status
   , Bytes.to_string result.bytes
-  , result.presentation_id
-  , result.revision
-  , result.error_code
+  , ID.Runtime.Presentation_id.to_int64 result.presentation_id
+  , ID.Runtime.Renderer_revision.to_int64 result.revision
+  , ID.Ffi.Error_code.to_int result.error_code
   , result.error )
 ;;
+
+let callback_destroy handle = destroy (ID.Runtime.Handle.of_int64 handle)
 
 let () =
   Callback.register "bonsai_flutter.create" callback_create;
@@ -453,5 +483,5 @@ let () =
     "bonsai_flutter.presentation_succeeded"
     callback_presentation_succeeded;
   Callback.register "bonsai_flutter.presentation_rejected" callback_presentation_rejected;
-  Callback.register "bonsai_flutter.destroy" destroy
+  Callback.register "bonsai_flutter.destroy" callback_destroy
 ;;

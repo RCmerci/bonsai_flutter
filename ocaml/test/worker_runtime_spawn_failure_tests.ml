@@ -1,3 +1,5 @@
+module ID = Bonsai_flutter_spec.Id
+
 let require condition message = if not condition then failwith message
 
 let service =
@@ -12,7 +14,9 @@ let service =
 
 let () =
   Worker_runtime.For_testing.fail_next_spawn (Failure "injected Domain.spawn failure");
-  let started = Worker_runtime.start ~runtime_epoch:1L service () in
+  let started =
+    Worker_runtime.start ~runtime_epoch:(ID.Runtime.Epoch.of_int64 1L) service ()
+  in
   require (Result.is_error started) "injected Domain.spawn failure started on domain 0";
   let diagnostics = Worker_runtime.For_testing.diagnostics () in
   require (diagnostics.state = Worker_runtime.Terminal) "spawn failure was not terminal";

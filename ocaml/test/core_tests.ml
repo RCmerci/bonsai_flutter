@@ -1,16 +1,90 @@
 module Ui = Bonsai_flutter_ui
 module Runtime = Bonsai_flutter_runtime
+module ID = Bonsai_flutter_spec.Id
 module Widget = Ui.Widget
 module Key = Ui.Key
 module Event = Ui.Event
 module Mounted_tree = Runtime.Mounted_tree
 module Frame_patch = Runtime.Frame_patch
-module Handler_registry = Runtime.Handler_registry
-module Reconciler = Runtime.Reconciler
+
+module Handler_registry = struct
+  include Runtime.Handler_registry
+
+  module Frame = struct
+    include Runtime.Handler_registry.Frame
+
+    module Private = struct
+      let create ~revision entries =
+        Runtime.Handler_registry.Frame.Private.create
+          ~revision:(ID.Runtime.Renderer_revision.of_int64 revision)
+          entries
+      ;;
+
+      let empty ~revision =
+        Runtime.Handler_registry.Frame.Private.empty
+          ~revision:(ID.Runtime.Renderer_revision.of_int64 revision)
+      ;;
+
+      let derive ~revision ~base_revision ~base ~removals ~additions =
+        Runtime.Handler_registry.Frame.Private.derive
+          ~revision:(ID.Runtime.Renderer_revision.of_int64 revision)
+          ~base_revision:(ID.Runtime.Renderer_revision.of_int64 base_revision)
+          ~base
+          ~removals
+          ~additions
+      ;;
+    end
+  end
+
+  let create ~runtime_epoch =
+    Runtime.Handler_registry.create
+      ~runtime_epoch:(ID.Runtime.Epoch.of_int64 runtime_epoch)
+  ;;
+
+  let mark_displayed_revision t ~revision =
+    Runtime.Handler_registry.mark_displayed_revision
+      t
+      ~revision:(ID.Runtime.Renderer_revision.of_int64 revision)
+  ;;
+
+  let retire_before t ~revision =
+    Runtime.Handler_registry.retire_before
+      t
+      ~revision:(ID.Runtime.Renderer_revision.of_int64 revision)
+  ;;
+
+  let commit_displayed_revision t ~revision =
+    Runtime.Handler_registry.commit_displayed_revision
+      t
+      ~revision:(ID.Runtime.Renderer_revision.of_int64 revision)
+  ;;
+end
+
+module Reconciler = struct
+  include Runtime.Reconciler
+
+  let create ~runtime_epoch =
+    Runtime.Reconciler.create ~runtime_epoch:(ID.Runtime.Epoch.of_int64 runtime_epoch)
+  ;;
+
+  let reconcile t ~base_revision ~target_revision ~old ~base_handler_frame widget =
+    Runtime.Reconciler.reconcile
+      t
+      ~base_revision:(ID.Runtime.Renderer_revision.of_int64 base_revision)
+      ~target_revision:(ID.Runtime.Renderer_revision.of_int64 target_revision)
+      ~old
+      ~base_handler_frame
+      widget
+  ;;
+end
+
 module Runtime_error = Runtime.Runtime_error
 
 exception Test_failure of string
 
+let epoch = ID.Runtime.Epoch.of_int64
+let revision = ID.Runtime.Renderer_revision.of_int64
+let event_sequence = ID.Runtime.Event_sequence.of_int64
 let fail format = Printf.ksprintf (fun message -> raise (Test_failure message)) format
 let check condition format = if not condition then fail "%s" format
 
@@ -225,8 +299,8 @@ let test_physical_equality_emits_no_patch () =
   in
   check (Frame_patch.is_empty second.frame_patch) "physical equality emitted a patch";
   check_int64
-    ~expected:(Mounted_tree.root_id first.mounted_tree)
-    ~actual:(Mounted_tree.root_id second.mounted_tree)
+    ~expected:(Mounted_tree.root_id first.mounted_tree |> Runtime.Node_id.to_int64)
+    ~actual:(Mounted_tree.root_id second.mounted_tree |> Runtime.Node_id.to_int64)
     "root identity";
   apply_and_compare ~old_snapshot:(Some (Mounted_tree.snapshot first.mounted_tree)) second
 ;;
@@ -326,7 +400,10 @@ let test_keyed_insert_and_delete_are_incremental () =
   in
   let second_snapshot = Mounted_tree.snapshot second.mounted_tree in
   let a_after = (node_by_key second_snapshot (Key.string "a")).node_id in
-  check_int64 ~expected:a_before ~actual:a_after "surviving keyed child";
+  check_int64
+    ~expected:(Runtime.Node_id.to_int64 a_before)
+    ~actual:(Runtime.Node_id.to_int64 a_after)
+    "surviving keyed child";
   check_int ~expected:1 ~actual:(count_operations second.frame_patch is_create) "creates";
   check_int ~expected:1 ~actual:(count_operations second.frame_patch is_drop) "drops";
   apply_and_compare ~old_snapshot:(Some first_snapshot) second
@@ -353,7 +430,7 @@ let test_kind_replacement_remounts () =
       (Widget.column ~key [ Widget.text "new" ])
   in
   let new_id = Mounted_tree.root_id second.mounted_tree in
-  check (not (Int64.equal old_id new_id)) "kind replacement reused node ID";
+  check (not (Runtime.Node_id.equal old_id new_id)) "kind replacement reused node ID";
   check_int ~expected:2 ~actual:(count_operations second.frame_patch is_create) "creates";
   check_int ~expected:1 ~actual:(count_operations second.frame_patch is_drop) "drops";
   check_int
@@ -392,7 +469,7 @@ let test_duplicate_keys_fail_without_consuming_ids () =
   in
   check_int64
     ~expected:1L
-    ~actual:(Mounted_tree.root_id valid.mounted_tree)
+    ~actual:(Mounted_tree.root_id valid.mounted_tree |> Runtime.Node_id.to_int64)
     "failed reconciliation consumed a node ID"
 ;;
 
@@ -565,9 +642,12 @@ let test_mixed_keyed_and_unkeyed_match_by_index () =
   let after = Mounted_tree.snapshot second.mounted_tree in
   let last_after = (node_by_text after "last").node_id in
   let first_after = (node_by_text after "first").node_id in
-  check_int64 ~expected:last_before ~actual:last_after "same-index unkeyed child";
+  check_int64
+    ~expected:(Runtime.Node_id.to_int64 last_before)
+    ~actual:(Runtime.Node_id.to_int64 last_after)
+    "same-index unkeyed child";
   check
-    (not (Int64.equal first_before first_after))
+    (not (Runtime.Node_id.equal first_before first_after))
     "unkeyed child moved to a different index without remounting";
   apply_and_compare ~old_snapshot:(Some before) second
 ;;
@@ -601,9 +681,9 @@ let test_persistent_handler_frame_derivation () =
   let handler = press_handler (fun () -> ()) in
   let entry handler_id =
     Handler_registry.Frame.
-      { node_id = Int64.add handler_id 100L
+      { node_id = Runtime.Node_id.Private.of_int64 (Int64.add handler_id 100L)
       ; event_tag = Event.Tag.Press
-      ; handler_id
+      ; handler_id = Runtime.Handler_id.Private.of_int64 handler_id
       ; handler
       }
   in
@@ -626,7 +706,8 @@ let test_persistent_handler_frame_derivation () =
   in
   check_int64
     ~expected:2L
-    ~actual:(Handler_registry.Frame.revision unchanged)
+    ~actual:
+      (Handler_registry.Frame.revision unchanged |> ID.Runtime.Renderer_revision.to_int64)
     "derived handler frame revision";
   let changed =
     Handler_registry.Frame.Private.derive
@@ -672,7 +753,7 @@ let test_persistent_handler_frame_derivation () =
          ~revision:4L
          ~base_revision:1L
          ~base
-         ~removals:[ 99L ]
+         ~removals:[ Runtime.Handler_id.Private.of_int64 99L ]
          ~additions:[])
     "missing handler removal";
   expect_invalid_argument
@@ -779,8 +860,8 @@ let test_handler_deltas_avoid_full_tree_collection () =
            Event.Tag.Press
        in
        check_int64
-         ~expected:before.handler_id
-         ~actual:after.handler_id
+         ~expected:(Runtime.Handler_id.to_int64 before.handler_id)
+         ~actual:(Runtime.Handler_id.to_int64 after.handler_id)
          "keyed reorder changed a handler ID")
     [ "first"; "second" ]
 ;;
@@ -876,7 +957,7 @@ let test_handler_delta_add_replace_remove_and_drop () =
       Event.Tag.Tap
   in
   check
-    (Int64.compare remounted.handler_id new_tap_binding.handler_id > 0)
+    (Runtime.Handler_id.compare remounted.handler_id new_tap_binding.handler_id > 0)
     "remounted handler did not receive a fresh monotonic ID"
 ;;
 
@@ -912,7 +993,7 @@ let test_handler_change_gets_new_id_and_one_revision_grace () =
   let second_node = node_by_key (Mounted_tree.snapshot second.mounted_tree) key in
   let second_binding = binding_exn second_node Event.Tag.Press in
   check
-    (not (Int64.equal first_binding.handler_id second_binding.handler_id))
+    (not (Runtime.Handler_id.equal first_binding.handler_id second_binding.handler_id))
     "changed handler reused a handler ID";
   check_int
     ~expected:1
@@ -921,12 +1002,12 @@ let test_handler_change_gets_new_id_and_one_revision_grace () =
   (match
      Handler_registry.dispatch
        registry
-       { runtime_epoch = 51L
-       ; displayed_revision = 2L
+       { runtime_epoch = epoch 51L
+       ; displayed_revision = revision 2L
        ; node_id = second_node.node_id
        ; event_tag = Event.Tag.Press
        ; handler_id = second_binding.handler_id
-       ; event_sequence = 1L
+       ; event_sequence = event_sequence 1L
        ; payload = Event.Payload.Unit
        }
    with
@@ -937,12 +1018,12 @@ let test_handler_change_gets_new_id_and_one_revision_grace () =
   ok
     (Handler_registry.dispatch
        registry
-       { runtime_epoch = 51L
-       ; displayed_revision = 1L
+       { runtime_epoch = epoch 51L
+       ; displayed_revision = revision 1L
        ; node_id = first_node.node_id
        ; event_tag = Event.Tag.Press
        ; handler_id = first_binding.handler_id
-       ; event_sequence = 1L
+       ; event_sequence = event_sequence 1L
        ; payload = Event.Payload.Unit
        });
   check_int ~expected:1 ~actual:!old_calls "old handler before presentation";
@@ -951,24 +1032,24 @@ let test_handler_change_gets_new_id_and_one_revision_grace () =
   ok
     (Handler_registry.dispatch
        registry
-       { runtime_epoch = 51L
-       ; displayed_revision = 1L
+       { runtime_epoch = epoch 51L
+       ; displayed_revision = revision 1L
        ; node_id = first_node.node_id
        ; event_tag = Event.Tag.Press
        ; handler_id = first_binding.handler_id
-       ; event_sequence = 2L
+       ; event_sequence = event_sequence 2L
        ; payload = Event.Payload.Unit
        });
   check_int ~expected:2 ~actual:!old_calls "previous-frame handler during grace period";
   ok
     (Handler_registry.dispatch
        registry
-       { runtime_epoch = 51L
-       ; displayed_revision = 2L
+       { runtime_epoch = epoch 51L
+       ; displayed_revision = revision 2L
        ; node_id = second_node.node_id
        ; event_tag = Event.Tag.Press
        ; handler_id = second_binding.handler_id
-       ; event_sequence = 3L
+       ; event_sequence = event_sequence 3L
        ; payload = Event.Payload.Unit
        });
   check_int ~expected:1 ~actual:!new_calls "new handler after presentation";
@@ -985,12 +1066,12 @@ let test_handler_change_gets_new_id_and_one_revision_grace () =
   match
     Handler_registry.dispatch
       registry
-      { runtime_epoch = 51L
-      ; displayed_revision = 1L
+      { runtime_epoch = epoch 51L
+      ; displayed_revision = revision 1L
       ; node_id = first_node.node_id
       ; event_tag = Event.Tag.Press
       ; handler_id = first_binding.handler_id
-      ; event_sequence = 4L
+      ; event_sequence = event_sequence 4L
       ; payload = Event.Payload.Unit
       }
   with
@@ -1030,8 +1111,8 @@ let test_unchanged_handler_reuses_id () =
       Event.Tag.Press
   in
   check_int64
-    ~expected:first_binding.handler_id
-    ~actual:second_binding.handler_id
+    ~expected:(Runtime.Handler_id.to_int64 first_binding.handler_id)
+    ~actual:(Runtime.Handler_id.to_int64 second_binding.handler_id)
     "unchanged handler ID";
   check_int
     ~expected:0
@@ -1061,16 +1142,16 @@ let test_handler_registry_validates_epoch_sequence_and_binding () =
   let node = node_by_key (Mounted_tree.snapshot output.mounted_tree) key in
   let binding = binding_exn node Event.Tag.Press in
   let event =
-    { Handler_registry.runtime_epoch = 53L
-    ; displayed_revision = 1L
+    { Handler_registry.runtime_epoch = epoch 53L
+    ; displayed_revision = revision 1L
     ; node_id = node.node_id
     ; event_tag = Event.Tag.Press
     ; handler_id = binding.handler_id
-    ; event_sequence = 10L
+    ; event_sequence = event_sequence 10L
     ; payload = Event.Payload.Unit
     }
   in
-  (match Handler_registry.dispatch registry { event with runtime_epoch = 999L } with
+  (match Handler_registry.dispatch registry { event with runtime_epoch = epoch 999L } with
    | Error (Runtime_error.Wrong_runtime_epoch _) -> ()
    | Error error -> fail "wrong epoch error: %s" (Runtime_error.to_string error)
    | Ok () -> fail "wrong-epoch event was accepted");
@@ -1082,7 +1163,10 @@ let test_handler_registry_validates_epoch_sequence_and_binding () =
   (match
      Handler_registry.dispatch
        registry
-       { event with event_sequence = 11L; node_id = Int64.succ event.node_id }
+       { event with
+         event_sequence = ID.Runtime.Event_sequence.of_int64 11L
+       ; node_id = ID.Ui.Node_id.succ event.node_id
+       }
    with
    | Error (Runtime_error.Handler_mismatch _) -> ()
    | Error error ->
@@ -1114,12 +1198,12 @@ let test_handler_exception_is_structured () =
   match
     Handler_registry.dispatch
       registry
-      { runtime_epoch = 54L
-      ; displayed_revision = 1L
+      { runtime_epoch = epoch 54L
+      ; displayed_revision = revision 1L
       ; node_id = node.node_id
       ; event_tag = Event.Tag.Press
       ; handler_id = binding.handler_id
-      ; event_sequence = 1L
+      ; event_sequence = event_sequence 1L
       ; payload = Event.Payload.Unit
       }
   with
@@ -1184,7 +1268,9 @@ let test_node_ids_are_never_reused () =
       (keyed_text "new" "new")
   in
   let new_id = Mounted_tree.root_id second.mounted_tree in
-  check (Int64.compare new_id old_id > 0) "node ID was reused or moved backwards"
+  check
+    (Runtime.Node_id.compare new_id old_id > 0)
+    "node ID was reused or moved backwards"
 ;;
 
 let test_ten_thousand_keyed_children_reverse_in_linear_shape () =
@@ -1314,12 +1400,12 @@ let test_layout_material_and_semantics_widgets_are_incremental () =
   ok
     (Handler_registry.dispatch
        registry
-       { runtime_epoch = 59L
-       ; displayed_revision = 2L
+       { runtime_epoch = epoch 59L
+       ; displayed_revision = revision 2L
        ; node_id = checkbox.node_id
        ; event_tag = Event.Tag.Value_changed
        ; handler_id = binding.handler_id
-       ; event_sequence = 1L
+       ; event_sequence = event_sequence 1L
        ; payload = Event.Payload.Bool false
        });
   check (!changed_to = Some false) "checkbox did not receive the typed bool payload";
@@ -1346,9 +1432,10 @@ let test_text_input_props_and_typed_edit_are_incremental () =
   let tree ~document_revision ~accepted_local_revision ~update_mode value =
     Widget.text_input
       ~key
-      ~session_id:7L
-      ~document_revision
-      ~accepted_local_revision
+      ~session_id:(ID.Text_input.Session_id.of_int64 7L)
+      ~document_revision:(ID.Text_input.Document_revision.of_int64 document_revision)
+      ~accepted_local_revision:
+        (ID.Text_input.Local_revision.of_int64 accepted_local_revision)
       ~update_mode
       ~value
       ~on_edit
@@ -1394,17 +1481,17 @@ let test_text_input_props_and_typed_edit_are_incremental () =
   ok
     (Handler_registry.dispatch
        registry
-       { runtime_epoch = 60L
-       ; displayed_revision = 2L
+       { runtime_epoch = epoch 60L
+       ; displayed_revision = revision 2L
        ; node_id = editor.node_id
        ; event_tag = Event.Tag.Text_edit
        ; handler_id = binding.handler_id
-       ; event_sequence = 1L
+       ; event_sequence = event_sequence 1L
        ; payload =
            Event.Payload.Text_edit
-             { session_id = 7L
-             ; local_revision = 2L
-             ; base_document_revision = 2L
+             { session_id = ID.Text_input.Session_id.of_int64 7L
+             ; local_revision = ID.Text_input.Local_revision.of_int64 2L
+             ; base_document_revision = ID.Text_input.Document_revision.of_int64 2L
              ; text = "A😀!!"
              ; selection = { start_utf16 = 5; end_utf16 = 5 }
              ; composing = None

@@ -10,28 +10,41 @@ type status =
 
 type create_result =
   { status : status
-  ; handle : int64
+  ; handle : Bonsai_flutter_spec.Id.Runtime.handle
   ; error : string
   }
 
 type output =
   { status : status
   ; bytes : bytes
-  ; presentation_id : int64
-  ; revision : int64
-  ; error_code : int
+  ; presentation_id : Bonsai_flutter_spec.Id.Runtime.presentation_id
+  ; revision : Bonsai_flutter_spec.Id.Runtime.renderer_revision
+  ; error_code : Bonsai_flutter_spec.Id.Ffi.error_code
   ; error : string
   }
 
 (** Registers an application runtime entrypoint and forces the shared native
     bridge into its complete object. *)
-val embed : name:string -> App.t -> unit
+val embed : name:Bonsai_flutter_spec.Id.Application.entrypoint_name -> App.t -> unit
 
 val create : bytes -> create_result
-val pump : int64 -> int64 -> bytes -> output
-val presentation_succeeded : int64 -> int64 -> int64 -> int64 -> output
-val presentation_rejected : int64 -> int64 -> int64 -> int -> output
-val destroy : int64 -> unit
+val pump : Bonsai_flutter_spec.Id.Runtime.handle -> int64 -> bytes -> output
+
+val presentation_succeeded
+  :  Bonsai_flutter_spec.Id.Runtime.handle
+  -> Bonsai_flutter_spec.Id.Runtime.presentation_id
+  -> Bonsai_flutter_spec.Id.Runtime.renderer_revision
+  -> int64
+  -> output
+
+val presentation_rejected
+  :  Bonsai_flutter_spec.Id.Runtime.handle
+  -> Bonsai_flutter_spec.Id.Runtime.presentation_id
+  -> Bonsai_flutter_spec.Id.Runtime.renderer_revision
+  -> int
+  -> output
+
+val destroy : Bonsai_flutter_spec.Id.Runtime.handle -> unit
 
 module For_testing : sig
   type runtime_state =

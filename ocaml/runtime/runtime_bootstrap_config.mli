@@ -6,7 +6,7 @@ type launch_policy =
   | Replace_existing
 
 type t =
-  { entrypoint : string
+  { entrypoint : Bonsai_flutter_spec.Id.Application.entrypoint_name
   ; launch_policy : launch_policy
   ; application_payload : bytes
   }

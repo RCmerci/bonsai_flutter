@@ -1,5 +1,6 @@
 module Protocol = Sqlite_worker_protocol
 module Ui = Bonsai_flutter_ui
+module ID = Bonsai_flutter_spec.Id
 
 type status =
   [ `Booting
@@ -11,8 +12,8 @@ type status =
   ]
 
 type state =
-  { runtime_epoch : int64
-  ; worker_generation : int64
+  { runtime_epoch : ID.Runtime.epoch
+  ; worker_generation : ID.Worker.generation
   ; status : status
   ; todos : Protocol.todo list
   ; has_snapshot : bool
@@ -20,10 +21,10 @@ type state =
   ; completed_count : int
   ; query_generation : int64
   ; latest_database_revision : int64
-  ; last_push_sequence : int64
+  ; last_push_sequence : ID.Worker.push_sequence
   ; title : string
-  ; title_document_revision : int64
-  ; title_local_revision : int64
+  ; title_document_revision : ID.Text_input.document_revision
+  ; title_local_revision : ID.Text_input.local_revision
   ; mutation_namespace : string
   ; next_mutation : int64
   ; pending_label : string option
@@ -62,10 +63,10 @@ let initial_state client =
   ; completed_count = 0
   ; query_generation = 0L
   ; latest_database_revision = 0L
-  ; last_push_sequence = 0L
+  ; last_push_sequence = ID.Worker.Push_sequence.zero
   ; title = ""
-  ; title_document_revision = 0L
-  ; title_local_revision = 0L
+  ; title_document_revision = ID.Text_input.Document_revision.zero
+  ; title_local_revision = ID.Text_input.Local_revision.zero
   ; mutation_namespace = fresh_mutation_namespace ()
   ; next_mutation = 1L
   ; pending_label = None
@@ -76,8 +77,8 @@ let initial_state client =
 ;;
 
 let matching_envelope state ~runtime_epoch ~worker_generation =
-  Int64.equal state.runtime_epoch runtime_epoch
-  && Int64.equal state.worker_generation worker_generation
+  ID.Runtime.Epoch.equal state.runtime_epoch runtime_epoch
+  && ID.Worker.Generation.equal state.worker_generation worker_generation
 ;;
 
 let apply_snapshot state snapshot =
@@ -121,7 +122,7 @@ let apply_response state response =
 ;;
 
 let apply_push state push_sequence payload =
-  if Int64.compare push_sequence state.last_push_sequence <= 0
+  if ID.Worker.Push_sequence.compare push_sequence state.last_push_sequence <= 0
   then state
   else (
     let state = { state with last_push_sequence = push_sequence } in
@@ -201,7 +202,7 @@ let mutation_id state kind =
   Printf.sprintf
     "%s-%Ld-%Ld-%s"
     state.mutation_namespace
-    state.runtime_epoch
+    (ID.Runtime.Epoch.to_int64 state.runtime_epoch)
     state.next_mutation
     kind
 ;;
@@ -264,7 +265,8 @@ let component client handlers graph =
         set_state (fun state ->
           { state with
             title = edit.text
-          ; title_document_revision = Int64.succ state.title_document_revision
+          ; title_document_revision =
+              ID.Text_input.Document_revision.succ state.title_document_revision
           ; title_local_revision = edit.local_revision
           })
       | _ -> Bonsai.Effect.Ignore)
@@ -299,7 +301,8 @@ let component client handlers graph =
             [ set_state (fun current ->
                 { current with
                   title = ""
-                ; title_document_revision = Int64.succ current.title_document_revision
+                ; title_document_revision =
+                    ID.Text_input.Document_revision.succ current.title_document_revision
                 ; next_mutation = Int64.succ current.next_mutation
                 ; pending_label = Some "Adding…"
                 ; error_message = None
@@ -412,7 +415,7 @@ let component client handlers graph =
       in
       let input =
         Ui.Material.text_field
-          ~session_id:1L
+          ~session_id:(ID.Text_input.Session_id.of_int64 1L)
           ~document_revision:state.title_document_revision
           ~accepted_local_revision:state.title_local_revision
           ~update_mode:Ui.Text_editing.Ack

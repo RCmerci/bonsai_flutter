@@ -59,7 +59,7 @@ module Private : sig
 
   val instantiate
     :  t
-    -> runtime_epoch:int64
+    -> runtime_epoch:Bonsai_flutter_spec.Id.Runtime.epoch
     -> application_payload:bytes
     -> (instance, string) result
 

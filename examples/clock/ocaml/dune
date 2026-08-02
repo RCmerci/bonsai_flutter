@@ -3,6 +3,7 @@
  (wrapped false)
  (modules clock)
  (libraries
+  bonsai_flutter.spec_impl
   base
   core
   bonsai
@@ -18,6 +19,7 @@
  (enabled_if
   (= %{env:BONSAI_FLUTTER_EMBED_OCAML=disabled} enabled))
  (libraries
+  bonsai_flutter.spec_impl
   bonsai_flutter_clock_example
   bonsai_flutter.driver
   bonsai_flutter.native_backend)

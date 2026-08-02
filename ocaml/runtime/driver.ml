@@ -1,6 +1,7 @@
 module Protocol = Bonsai_flutter_protocol
 module Runtime = Bonsai_flutter_runtime
 module Ui = Bonsai_flutter_ui
+module ID = Bonsai_flutter_spec.Id
 
 module Handler = struct
   type t =
@@ -36,7 +37,7 @@ module Handler = struct
 end
 
 type frame =
-  { revision : int64
+  { revision : ID.Runtime.renderer_revision
   ; frame_patch : Runtime.Frame_patch.t
   ; bytes : bytes
   ; stats : Protocol.Wire_frame.runtime_stats
@@ -53,8 +54,8 @@ type error =
   | Shutdown
 
 type pump_result =
-  { presentation_id : int64
-  ; renderer_revision : int64
+  { presentation_id : ID.Runtime.presentation_id
+  ; renderer_revision : ID.Runtime.renderer_revision
   ; frame : frame option
   ; recoverable_error : error option
   }
@@ -82,8 +83,8 @@ let error_to_string = function
 ;;
 
 type pending_presentation =
-  { presentation_id : int64
-  ; renderer_revision : int64
+  { presentation_id : ID.Runtime.presentation_id
+  ; renderer_revision : ID.Runtime.renderer_revision
   ; candidate_tree : Runtime.Mounted_tree.t
   ; candidate_handler_frame : Runtime.Handler_registry.Frame.t option
   ; prepared_host_operations : Host_effect.Prepared_operations.t
@@ -91,7 +92,7 @@ type pending_presentation =
   }
 
 type t =
-  { runtime_epoch : int64
+  { runtime_epoch : ID.Runtime.epoch
   ; trace : (string -> unit) option
   ; before_flush : schedule:(unit Bonsai.Effect.t -> unit) -> unit
   ; before_shutdown : unit -> unit
@@ -105,12 +106,12 @@ type t =
   ; environment : Environment.t
   ; mutable displayed_tree : Runtime.Mounted_tree.t option
   ; mutable displayed_handler_frame : Runtime.Handler_registry.Frame.t option
-  ; mutable displayed_revision : int64
+  ; mutable displayed_revision : ID.Runtime.renderer_revision
   ; mutable last_monotonic_ns : int64
-  ; mutable last_event_sequence : int64 option
-  ; mutable next_presentation_id : int64
+  ; mutable last_event_sequence : ID.Runtime.event_sequence option
+  ; mutable next_presentation_id : ID.Runtime.presentation_id
   ; mutable presentation_sequence_exhausted : bool
-  ; mutable next_renderer_revision : int64
+  ; mutable next_renderer_revision : ID.Runtime.renderer_revision
   ; mutable pending_presentation : pending_presentation option
   ; mutable force_full_snapshot_next : bool
   ; mutable terminal_error : error option
@@ -128,7 +129,7 @@ let create
       ~time_source
       component
   =
-  if Int64.compare runtime_epoch 0L <= 0
+  if ID.Runtime.Epoch.compare runtime_epoch ID.Runtime.Epoch.zero <= 0
   then invalid_arg "Driver.create: runtime_epoch must be positive";
   let pending_queue = Queue.create () in
   let pending_before_display = Queue.create () in
@@ -160,12 +161,12 @@ let create
   ; environment = environment_input
   ; displayed_tree = None
   ; displayed_handler_frame = None
-  ; displayed_revision = 0L
+  ; displayed_revision = ID.Runtime.Renderer_revision.zero
   ; last_monotonic_ns = -1L
   ; last_event_sequence = None
-  ; next_presentation_id = 1L
+  ; next_presentation_id = ID.Runtime.Presentation_id.one
   ; presentation_sequence_exhausted = false
-  ; next_renderer_revision = 1L
+  ; next_renderer_revision = ID.Runtime.Renderer_revision.one
   ; pending_presentation = None
   ; force_full_snapshot_next = false
   ; terminal_error = None
@@ -615,9 +616,7 @@ let wire_bindings bindings =
   Array.to_list bindings
   |> List.map (fun (binding : Runtime.Mounted_tree.Mounted_binding.t) ->
     Protocol.Wire_frame.
-      { event_tag = wire_event_tag binding.event_tag
-      ; handler_id = Runtime.Handler_id.to_int64 binding.handler_id
-      })
+      { event_tag = wire_event_tag binding.event_tag; handler_id = binding.handler_id })
 ;;
 
 let wire_operation = function
@@ -627,7 +626,7 @@ let wire_operation = function
      | Ok kind, Ok props ->
        Ok
          (Protocol.Wire_frame.Create_node
-            { node_id = Runtime.Node_id.to_int64 node_id
+            { node_id
             ; kind
             ; props
             ; event_bindings = wire_bindings event_bindings
@@ -636,27 +635,16 @@ let wire_operation = function
      | Error error, _ | _, Error error -> Error error)
   | Update_props { node_id; props } ->
     (match wire_props props with
-     | Ok props ->
-       Ok
-         (Protocol.Wire_frame.Update_props
-            { node_id = Runtime.Node_id.to_int64 node_id; props })
+     | Ok props -> Ok (Protocol.Wire_frame.Update_props { node_id; props })
      | Error error -> Error error)
   | Update_event_bindings { node_id; event_bindings } ->
     Ok
       (Protocol.Wire_frame.Update_event_bindings
-         { node_id = Runtime.Node_id.to_int64 node_id
-         ; event_bindings = wire_bindings event_bindings
-         })
+         { node_id; event_bindings = wire_bindings event_bindings })
   | Set_children { node_id; children } ->
-    Ok
-      (Protocol.Wire_frame.Set_children
-         { node_id = Runtime.Node_id.to_int64 node_id
-         ; children = Array.to_list children |> List.map Runtime.Node_id.to_int64
-         })
-  | Set_root node_id ->
-    Ok (Protocol.Wire_frame.Set_root (Runtime.Node_id.to_int64 node_id))
-  | Drop_node node_id ->
-    Ok (Protocol.Wire_frame.Drop_node (Runtime.Node_id.to_int64 node_id))
+    Ok (Protocol.Wire_frame.Set_children { node_id; children = Array.to_list children })
+  | Set_root node_id -> Ok (Protocol.Wire_frame.Set_root node_id)
+  | Drop_node node_id -> Ok (Protocol.Wire_frame.Drop_node node_id)
 ;;
 
 let wire_operations operations =
@@ -807,7 +795,7 @@ let trace_widget_diff t ~target_revision ~widget ~old_tree output =
       in
       Printf.sprintf
         "[widget-diff] targetRevision=%Ld kind=%s\n%s"
-        target_revision
+        (ID.Runtime.Renderer_revision.to_int64 target_revision)
         (frame_kind_name frame_kind)
         diff)
 ;;
@@ -816,12 +804,15 @@ type produced_candidate =
   { candidate_tree : Runtime.Mounted_tree.t
   ; candidate_handler_frame : Runtime.Handler_registry.Frame.t option
   ; prepared_host_operations : Host_effect.Prepared_operations.t
-  ; renderer_revision : int64
+  ; renderer_revision : ID.Runtime.renderer_revision
   ; emitted_frame : frame option
   }
 
 let produce_candidate t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot =
-  if Int64.equal t.next_renderer_revision Int64.max_int
+  if
+    ID.Runtime.Renderer_revision.equal
+      t.next_renderer_revision
+      ID.Runtime.Renderer_revision.max_value
   then Error (Invalid_state "renderer revision counter exhausted")
   else (
     let target_revision = t.next_renderer_revision in
@@ -864,7 +855,7 @@ let produce_candidate t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot 
           let frame_kind = Runtime.Frame_patch.kind output.frame_patch in
           let base_revision =
             match frame_kind with
-            | Runtime.Frame_patch.Full_snapshot -> 0L
+            | Runtime.Frame_patch.Full_snapshot -> ID.Runtime.Renderer_revision.zero
             | Incremental_frame -> t.displayed_revision
           in
           if frame_kind = Runtime.Frame_patch.Full_snapshot
@@ -918,16 +909,17 @@ let produce_candidate t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot 
                   ; stats
                   }
                 in
-                t.next_renderer_revision <- Int64.succ target_revision;
+                t.next_renderer_revision
+                <- ID.Runtime.Renderer_revision.succ target_revision;
                 trace_lazy t (fun () ->
                   Printf.sprintf
                     "[outbound-frame] direction=ocaml->flutter epoch=%Ld kind=%s \
                      baseRevision=%Ld targetRevision=%Ld operations=%d bytes=%d\n\
                     \  operationSummary=%s"
-                    t.runtime_epoch
+                    (ID.Runtime.Epoch.to_int64 t.runtime_epoch)
                     (frame_kind_name frame_kind)
-                    base_revision
-                    target_revision
+                    (ID.Runtime.Renderer_revision.to_int64 base_revision)
+                    (ID.Runtime.Renderer_revision.to_int64 target_revision)
                     (List.length operations)
                     (Bytes.length bytes)
                     (operation_summary operations));
@@ -943,7 +935,7 @@ let produce_candidate t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot 
 let event_tag_name event_tag =
   match Protocol.Generated_protocol.Event_tag.debug_name event_tag with
   | Some name -> name
-  | None -> Printf.sprintf "unknown(%d)" event_tag
+  | None -> Printf.sprintf "unknown(%d)" (ID.Protocol.Event_tag.to_int event_tag)
 ;;
 
 let pointer_kind_name = function
@@ -974,9 +966,9 @@ let payload_summary = function
   | Text_edit edit ->
     Printf.sprintf
       "text_edit(session=%Ld localRevision=%Ld baseDocumentRevision=%Ld bytes=%d)"
-      edit.session_id
-      edit.local_revision
-      edit.base_document_revision
+      (ID.Text_input.Session_id.to_int64 edit.session_id)
+      (ID.Text_input.Local_revision.to_int64 edit.local_revision)
+      (ID.Text_input.Document_revision.to_int64 edit.base_document_revision)
       (String.length edit.text)
   | Int64 value -> Printf.sprintf "int64(%Ld)" value
   | Tap tap ->
@@ -990,7 +982,7 @@ let payload_summary = function
   | Pointer pointer ->
     Printf.sprintf
       "pointer(id=%Ld local=%g,%g global=%g,%g pointer=%s buttons=%d)"
-      pointer.pointer_id
+      (ID.Input.Pointer_id.to_int64 pointer.pointer_id)
       pointer.local_x
       pointer.local_y
       pointer.global_x
@@ -1000,8 +992,8 @@ let payload_summary = function
   | Key key ->
     Printf.sprintf
       "key(logical=%Ld physical=%Ld action=%s modifiers=%d)"
-      key.logical_key
-      key.physical_key
+      (ID.Input.Logical_key.to_int64 key.logical_key)
+      (ID.Input.Physical_key.to_int64 key.physical_key)
       (key_action_name key.action)
       key.modifiers
   | Scroll { pixels; delta } -> Printf.sprintf "scroll(pixels=%g delta=%g)" pixels delta
@@ -1010,12 +1002,12 @@ let payload_summary = function
   | Route_pop route ->
     Printf.sprintf
       "route_pop(pageKey=%S resultBytes=%d)"
-      route.page_key
+      (ID.Navigation.Page_key.to_string route.page_key)
       (Option.fold ~none:0 ~some:String.length route.result)
   | Host_response response ->
     Printf.sprintf
       "host_response(request=%Ld status=%s bytes=%d)"
-      response.request_id
+      (ID.Host.Request_id.to_int64 response.request_id)
       (host_response_status_name response.status)
       (Bytes.length response.value)
   | Environment_changed environment ->
@@ -1028,9 +1020,9 @@ let payload_summary = function
   | Native_event event ->
     Printf.sprintf
       "native_event(kind=%d version=%d event=%d bytes=%d)"
-      event.kind_id
+      (ID.Native_widget.Kind_id.to_int event.kind_id)
       event.version
-      event.event_id
+      (ID.Native_widget.Event_id.to_int event.event_id)
       (Bytes.length event.payload)
 ;;
 
@@ -1040,17 +1032,17 @@ let trace_inbound_event_batch t (batch : Protocol.Inbound_event.batch) =
     Printf.bprintf
       output
       "[inbound-event-batch] direction=flutter->ocaml epoch=%Ld events=%d"
-      batch.runtime_epoch
+      (ID.Runtime.Epoch.to_int64 batch.runtime_epoch)
       (List.length batch.events);
     List.iter
       (fun (event : Protocol.Inbound_event.t) ->
          Printf.bprintf
            output
            "\n  sequence=%Ld displayedRevision=%Ld node=%Ld handler=%Ld tag=%s payload=%s"
-           event.sequence
-           event.displayed_revision
-           event.node_id
-           event.handler_id
+           (ID.Runtime.Event_sequence.to_int64 event.sequence)
+           (ID.Runtime.Renderer_revision.to_int64 event.displayed_revision)
+           (ID.Ui.Node_id.to_int64 event.node_id)
+           (ID.Ui.Handler_id.to_int64 event.handler_id)
            (event_tag_name event.event_tag)
            (payload_summary event.payload))
       batch.events;
@@ -1108,7 +1100,7 @@ type validated_control =
 type validated_input =
   { ui_events : Runtime.Event_dispatcher.Validated_batch.t option
   ; controls : validated_control list
-  ; last_event_sequence : int64 option
+  ; last_event_sequence : ID.Runtime.event_sequence option
   ; force_full_snapshot : bool
   }
 
@@ -1154,7 +1146,7 @@ let valid_environment (environment : Protocol.Inbound_event.environment) =
 ;;
 
 let validate_input t (batch : Protocol.Inbound_event.batch) =
-  if not (Int64.equal batch.runtime_epoch t.runtime_epoch)
+  if not (ID.Runtime.Epoch.equal batch.runtime_epoch t.runtime_epoch)
   then Error (Host_response_error "runtime epoch mismatch")
   else (
     let seen_host_responses = Hashtbl.create 8 in
@@ -1182,14 +1174,15 @@ let validate_input t (batch : Protocol.Inbound_event.batch) =
       | (event : Protocol.Inbound_event.t) :: rest ->
         if
           match last_sequence with
-          | Some previous -> Int64.compare event.sequence previous <= 0
+          | Some previous ->
+            ID.Runtime.Event_sequence.compare event.sequence previous <= 0
           | None -> false
         then
           Error
             (Host_response_error
                (Printf.sprintf
                   "duplicate or out-of-order event sequence %Ld"
-                  event.sequence))
+                  (ID.Runtime.Event_sequence.to_int64 event.sequence)))
         else (
           let next_sequence = Some event.sequence in
           let is_host_response =
@@ -1204,9 +1197,12 @@ let validate_input t (batch : Protocol.Inbound_event.batch) =
           if is_host_response || is_environment || is_resync
           then
             if
-              (not (Int64.equal event.node_id 0L))
-              || (not (Int64.equal event.handler_id 0L))
-              || not (Int64.equal event.displayed_revision t.displayed_revision)
+              (not (ID.Ui.Node_id.equal event.node_id ID.Ui.Node_id.zero))
+              || (not (ID.Ui.Handler_id.equal event.handler_id ID.Ui.Handler_id.zero))
+              || not
+                   (ID.Runtime.Renderer_revision.equal
+                      event.displayed_revision
+                      t.displayed_revision)
             then Error (Host_response_error "malformed runtime control event")
             else if is_host_response
             then (
@@ -1218,7 +1214,7 @@ let validate_input t (batch : Protocol.Inbound_event.batch) =
                     (Host_response_error
                        (Printf.sprintf
                           "duplicate host response ID %Ld"
-                          response.request_id))
+                          (ID.Host.Request_id.to_int64 response.request_id)))
                 else (
                   Hashtbl.add seen_host_responses response.request_id ();
                   match Host_effect.Private.validate_response t.host_effects response with
@@ -1297,9 +1293,12 @@ let reserve_presentation_id t =
   then Error (Invalid_state "presentation ID counter exhausted")
   else (
     let presentation_id = t.next_presentation_id in
-    if Int64.equal presentation_id Int64.max_int
+    if
+      ID.Runtime.Presentation_id.equal
+        presentation_id
+        ID.Runtime.Presentation_id.max_value
     then t.presentation_sequence_exhausted <- true
-    else t.next_presentation_id <- Int64.succ presentation_id;
+    else t.next_presentation_id <- ID.Runtime.Presentation_id.succ presentation_id;
     Ok presentation_id)
 ;;
 
@@ -1385,9 +1384,10 @@ let exact_pending t ~presentation_id ~renderer_revision =
   match t.pending_presentation with
   | None -> Error (Invalid_state "no presentation is pending")
   | Some pending ->
-    if not (Int64.equal pending.presentation_id presentation_id)
+    if not (ID.Runtime.Presentation_id.equal pending.presentation_id presentation_id)
     then Error (Invalid_state "presentation ID does not match the pending token")
-    else if not (Int64.equal pending.renderer_revision renderer_revision)
+    else if
+      not (ID.Runtime.Renderer_revision.equal pending.renderer_revision renderer_revision)
     then Error (Invalid_state "renderer revision does not match the pending token")
     else Ok pending
 ;;
@@ -1408,8 +1408,8 @@ let presentation_succeeded t ~presentation_id ~renderer_revision ~monotonic_now_
                  Printf.sprintf
                    "[presentation-ack] presentationId=%Ld revision=%Ld \
                     direction=flutter->ocaml"
-                   presentation_id
-                   renderer_revision))
+                   (ID.Runtime.Presentation_id.to_int64 presentation_id)
+                   (ID.Runtime.Renderer_revision.to_int64 renderer_revision)))
             pending.emitted_frame;
           let fail_fatal error = Error (terminal t error) in
           (match
@@ -1471,8 +1471,8 @@ let presentation_rejected t ~presentation_id ~renderer_revision ~reason:_ =
        trace_lazy t (fun () ->
          Printf.sprintf
            "[presentation-rejected] presentationId=%Ld revision=%Ld"
-           presentation_id
-           renderer_revision);
+           (ID.Runtime.Presentation_id.to_int64 presentation_id)
+           (ID.Runtime.Renderer_revision.to_int64 renderer_revision));
        t.pending_presentation <- None;
        t.force_full_snapshot_next <- true;
        Ok ())

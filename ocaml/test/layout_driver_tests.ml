@@ -1,3 +1,4 @@
+module ID = Bonsai_flutter_spec.Id
 module Ui = Bonsai_flutter_ui
 
 let require condition message = if not condition then failwith message
@@ -15,7 +16,7 @@ let component handlers _graph =
     Ui.Widget.animated_opacity
       ~animation:
         (Ui.Animation.create
-           ~id:7001L
+           ~id:(ID.Ui.Animation_id.of_int64 7001L)
            ~duration_ms:250
            ~curve:Ui.Animation.Curve.Ease_in_out
            ())
@@ -37,7 +38,7 @@ let component handlers _graph =
 let () =
   let driver =
     Driver.create
-      ~runtime_epoch:99L
+      ~runtime_epoch:(ID.Runtime.Epoch.of_int64 99L)
       ~time_source:(Bonsai.Time_source.create ~start:Core.Time_ns.epoch)
       component
   in
@@ -78,11 +79,13 @@ let () =
              match props, event_bindings with
              | ( Animated_opacity_props
                    { opacity = 0.75
-                   ; animation = { id = 7001L; duration_ms = 250; curve = Ease_in_out }
+                   ; animation = { id; duration_ms = 250; curve = Ease_in_out }
                    }
                , [ { event_tag; _ } ] ) ->
-               event_tag
-               = Bonsai_flutter_protocol.Generated_protocol.Event_tag.animation_completed
+               ID.Ui.Animation_id.equal id (ID.Ui.Animation_id.of_int64 7001L)
+               && event_tag
+                  = Bonsai_flutter_protocol.Generated_protocol.Event_tag
+                    .animation_completed
              | _ -> false
            in
            saw_stack, saw_expanded, saw_positioned, saw_animation

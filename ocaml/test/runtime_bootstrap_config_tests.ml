@@ -1,5 +1,8 @@
+module ID = Bonsai_flutter_spec.Id
+
 let fail format = Printf.ksprintf failwith format
 let require condition message = if not condition then fail "%s" message
+let entrypoint = ID.Application.Entrypoint_name.to_string
 
 let set_u16_le bytes offset value =
   Bytes.set_uint8 bytes offset (value land 0xff);
@@ -47,7 +50,7 @@ let require_error bytes expected =
 let () =
   let payload = Bytes.of_string "opaque\000payload" in
   let fresh = decoded (envelope ~entrypoint:"counter" payload) in
-  require (fresh.entrypoint = "counter") "Fresh entrypoint was not decoded";
+  require (entrypoint fresh.entrypoint = "counter") "Fresh entrypoint was not decoded";
   require
     (fresh.launch_policy = Runtime_bootstrap_config.Fresh)
     "Fresh launch policy byte was not decoded";
@@ -57,7 +60,7 @@ let () =
     (replace.launch_policy = Runtime_bootstrap_config.Replace_existing)
     "Replace_existing launch policy byte was not decoded";
   let legacy = decoded (Bytes.of_string "legacy-entrypoint") in
-  require (legacy.entrypoint = "legacy-entrypoint") "legacy entrypoint changed";
+  require (entrypoint legacy.entrypoint = "legacy-entrypoint") "legacy entrypoint changed";
   require
     (legacy.launch_policy = Runtime_bootstrap_config.Replace_existing)
     "legacy entrypoint did not use compatibility replacement";

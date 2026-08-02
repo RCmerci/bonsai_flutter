@@ -135,17 +135,17 @@ val theme : ?key:Key.t -> data:Theme.t -> t -> t
 
 val navigator
   :  ?key:Key.t
-  -> ?restoration_scope_id:string
+  -> ?restoration_scope_id:Bonsai_flutter_spec.Id.Navigation.restoration_scope_id
   -> on_pop:Event.Handler.t
   -> t list
   -> t
 
 val page
   :  ?key:Key.t
-  -> page_key:string
+  -> page_key:Bonsai_flutter_spec.Id.Navigation.page_key
   -> ?transition:Navigation.page_transition
   -> ?can_pop:bool
-  -> ?restoration_id:string
+  -> ?restoration_id:Bonsai_flutter_spec.Id.Navigation.restoration_id
   -> t
   -> t
 
@@ -166,9 +166,9 @@ val text_input
   -> ?keyboard_type:Text_editing.keyboard_type
   -> ?input_action:Text_editing.input_action
   -> ?autofocus:bool
-  -> session_id:int64
-  -> document_revision:int64
-  -> accepted_local_revision:int64
+  -> session_id:Bonsai_flutter_spec.Id.Text_input.session_id
+  -> document_revision:Bonsai_flutter_spec.Id.Text_input.document_revision
+  -> accepted_local_revision:Bonsai_flutter_spec.Id.Text_input.local_revision
   -> update_mode:Text_editing.update_mode
   -> value:Text_editing.Value.t
   -> on_edit:Event.Handler.t
@@ -440,15 +440,15 @@ module Private : sig
         ; enabled : bool
         }
     | Text_input_props of
-        { session_id : int64
-        ; document_revision : int64
+        { session_id : Bonsai_flutter_spec.Id.Text_input.session_id
+        ; document_revision : Bonsai_flutter_spec.Id.Text_input.document_revision
         ; value : Text_editing.Value.t
         ; enabled : bool
         ; read_only : bool
         ; obscure_text : bool
         ; keyboard_type : Text_editing.keyboard_type
         ; input_action : Text_editing.input_action
-        ; accepted_local_revision : int64
+        ; accepted_local_revision : Bonsai_flutter_spec.Id.Text_input.local_revision
         ; update_mode : Text_editing.update_mode
         ; autofocus : bool
         }
@@ -456,12 +456,15 @@ module Private : sig
         { alignment : Navigation.overlay_alignment
         ; dismissible : bool
         }
-    | Navigator_props of { restoration_scope_id : string option }
+    | Navigator_props of
+        { restoration_scope_id :
+            Bonsai_flutter_spec.Id.Navigation.restoration_scope_id option
+        }
     | Page_props of
-        { page_key : string
+        { page_key : Bonsai_flutter_spec.Id.Navigation.page_key
         ; transition : Navigation.page_transition
         ; can_pop : bool
-        ; restoration_id : string option
+        ; restoration_id : Bonsai_flutter_spec.Id.Navigation.restoration_id option
         }
     | Safe_area_props of
         { left : bool
@@ -476,7 +479,7 @@ module Private : sig
     | Environment_boundary_props
     | Material_dialog_props of { barrier_dismissible : bool }
     | Native_widget_props of
-        { kind_id : int
+        { kind_id : Bonsai_flutter_spec.Id.Native_widget.kind_id
         ; version : int
         ; capabilities : int64
         ; payload : bytes
@@ -569,7 +572,7 @@ module Private : sig
 
   val native_widget
     :  ?key:Key.t
-    -> kind_id:int
+    -> kind_id:Bonsai_flutter_spec.Id.Native_widget.kind_id
     -> version:int
     -> capabilities:int64
     -> payload:bytes

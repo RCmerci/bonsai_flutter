@@ -1,3 +1,5 @@
+module ID = Bonsai_flutter_spec.Id
+
 module Role = struct
   type t =
     | Generic
@@ -40,18 +42,19 @@ module Action = struct
   let equal left right = left = right
 
   let to_wire_id = function
-    | Tap -> 1L
-    | Long_press -> 2L
-    | Focus -> 3L
-    | Increase -> 4L
-    | Decrease -> 5L
-    | Copy -> 6L
-    | Cut -> 7L
-    | Paste -> 8L
-    | Dismiss -> 9L
+    | Tap -> ID.Input.Semantics_action_id.of_int64 1L
+    | Long_press -> ID.Input.Semantics_action_id.of_int64 2L
+    | Focus -> ID.Input.Semantics_action_id.of_int64 3L
+    | Increase -> ID.Input.Semantics_action_id.of_int64 4L
+    | Decrease -> ID.Input.Semantics_action_id.of_int64 5L
+    | Copy -> ID.Input.Semantics_action_id.of_int64 6L
+    | Cut -> ID.Input.Semantics_action_id.of_int64 7L
+    | Paste -> ID.Input.Semantics_action_id.of_int64 8L
+    | Dismiss -> ID.Input.Semantics_action_id.of_int64 9L
   ;;
 
-  let of_wire_id = function
+  let of_wire_id id =
+    match ID.Input.Semantics_action_id.to_int64 id with
     | 1L -> Some Tap
     | 2L -> Some Long_press
     | 3L -> Some Focus
@@ -109,7 +112,11 @@ let role_of_wire = function
 let actions_to_bits actions =
   List.fold_left
     (fun bits action ->
-       let shift = Int64.to_int (Action.to_wire_id action) - 1 in
+       let shift =
+         ID.Input.Semantics_action_id.to_int64 (Action.to_wire_id action)
+         |> Int64.to_int
+         |> fun id -> id - 1
+       in
        bits lor (1 lsl shift))
     0
     actions
@@ -127,7 +134,10 @@ let actions_of_bits bits =
           if bits land (1 lsl (wire_id - 1)) = 0
           then reversed
           else (
-            match Action.of_wire_id (Int64.of_int wire_id) with
+            match
+              Action.of_wire_id
+                (ID.Input.Semantics_action_id.of_int64 (Int64.of_int wire_id))
+            with
             | Some action -> action :: reversed
             | None -> reversed)
         in

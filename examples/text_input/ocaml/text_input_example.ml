@@ -1,17 +1,20 @@
 module Ui = Bonsai_flutter_ui
+module ID = Bonsai_flutter_spec.Id
 
 type state =
-  { session_id : int64
-  ; document_revision : int64
-  ; accepted_local_revision : int64
+  { session_id : ID.Text_input.session_id
+  ; document_revision : ID.Text_input.document_revision
+  ; accepted_local_revision : ID.Text_input.local_revision
   ; update_mode : Ui.Text_editing.update_mode
   ; value : Ui.Text_editing.Value.t
   }
 
 let equal left right =
-  Int64.equal left.session_id right.session_id
-  && Int64.equal left.document_revision right.document_revision
-  && Int64.equal left.accepted_local_revision right.accepted_local_revision
+  ID.Text_input.Session_id.equal left.session_id right.session_id
+  && ID.Text_input.Document_revision.equal left.document_revision right.document_revision
+  && ID.Text_input.Local_revision.equal
+       left.accepted_local_revision
+       right.accepted_local_revision
   && left.update_mode = right.update_mode
   && Ui.Text_editing.Value.equal left.value right.value
 ;;
@@ -38,9 +41,9 @@ let value_of_edit (edit : Ui.Event.Payload.text_edit) =
 let initial_state =
   let text = "Type here" in
   let selection = Ui.Text_editing.Range.create ~text ~start_utf16:9 ~end_utf16:9 in
-  { session_id = 1L
-  ; document_revision = 1L
-  ; accepted_local_revision = 0L
+  { session_id = ID.Text_input.Session_id.of_int64 1L
+  ; document_revision = ID.Text_input.Document_revision.of_int64 1L
+  ; accepted_local_revision = ID.Text_input.Local_revision.zero
   ; update_mode = Ui.Text_editing.Force_replace
   ; value = Ui.Text_editing.Value.create ~text ~selection ()
   }
@@ -58,13 +61,20 @@ let component handlers graph =
       | Ui.Event.Payload.Text_edit edit ->
         set_state (fun current ->
           if
-            (not (Int64.equal edit.session_id current.session_id))
-            || Int64.compare edit.local_revision current.accepted_local_revision <= 0
-            || Int64.compare edit.base_document_revision current.document_revision > 0
+            (not (ID.Text_input.Session_id.equal edit.session_id current.session_id))
+            || ID.Text_input.Local_revision.compare
+                 edit.local_revision
+                 current.accepted_local_revision
+               <= 0
+            || ID.Text_input.Document_revision.compare
+                 edit.base_document_revision
+                 current.document_revision
+               > 0
           then current
           else
             { current with
-              document_revision = Int64.succ current.document_revision
+              document_revision =
+                ID.Text_input.Document_revision.succ current.document_revision
             ; accepted_local_revision = edit.local_revision
             ; update_mode = Ui.Text_editing.Ack
             ; value = value_of_edit edit

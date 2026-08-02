@@ -46,6 +46,11 @@ runtime-driving ABI consists of `bf_runtime_pump`,
 `bf_runtime_presentation_rejected`; the old `bf_runtime_step` and
 `bf_runtime_frame_presented` operations have no compatibility fallback.
 
+This version statement records the constraint of the foreground-pump change:
+that change retained protocol 1.12 while advancing only the native ABI. Later
+compatible schema additions advanced the current renderer protocol to 1.14
+without changing this ADR's scheduling or presentation contracts.
+
 ## Transaction contracts
 
 ### Pump

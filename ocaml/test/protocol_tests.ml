@@ -1,5 +1,16 @@
 open Bonsai_flutter_protocol
+module ID = Bonsai_flutter_spec.Id
 
+let epoch = ID.Runtime.Epoch.of_int64
+let revision = ID.Runtime.Renderer_revision.of_int64
+let sequence = ID.Runtime.Event_sequence.of_int64
+let node = ID.Ui.Node_id.of_int64
+let handler = ID.Ui.Handler_id.of_int64
+let request = ID.Host.Request_id.of_int64
+let session = ID.Text_input.Session_id.of_int64
+let document_revision = ID.Text_input.Document_revision.of_int64
+let local_revision = ID.Text_input.Local_revision.of_int64
+let animation = ID.Ui.Animation_id.of_int64
 let fail format = Printf.ksprintf failwith format
 
 let expect condition format =
@@ -44,20 +55,20 @@ let fixture () = fixture_named "counter_full.hex"
 
 let counter_frame =
   Wire_frame.
-    { runtime_epoch = 7L
-    ; base_revision = 0L
-    ; target_revision = 1L
+    { runtime_epoch = epoch 7L
+    ; base_revision = revision 0L
+    ; target_revision = revision 1L
     ; kind = Full_snapshot
     ; operations =
         [ Create_node
-            { node_id = 1L
+            { node_id = node 1L
             ; kind = Column
             ; props = Linear_props
             ; event_bindings = []
             ; parent_data = No_parent_data
             }
         ; Create_node
-            { node_id = 2L
+            { node_id = node 2L
             ; kind = Text
             ; props =
                 Text_props
@@ -70,8 +81,8 @@ let counter_frame =
             ; event_bindings = []
             ; parent_data = No_parent_data
             }
-        ; Set_children { node_id = 1L; children = [ 2L ] }
-        ; Set_root 1L
+        ; Set_children { node_id = node 1L; children = [ node 2L ] }
+        ; Set_root (node 1L)
         ]
     }
 ;;
@@ -85,13 +96,13 @@ let test_golden_fixture () =
 let test_round_trip () =
   let frame =
     Wire_frame.
-      { runtime_epoch = 7L
-      ; base_revision = 1L
-      ; target_revision = 2L
+      { runtime_epoch = epoch 7L
+      ; base_revision = revision 1L
+      ; target_revision = revision 2L
       ; kind = Incremental_frame
       ; operations =
           [ Update_props
-              { node_id = 2L
+              { node_id = node 2L
               ; props =
                   Text_props
                     { value = "计数: 1"
@@ -130,11 +141,11 @@ let test_styled_text_props_round_trip () =
   in
   let frame =
     Wire_frame.
-      { runtime_epoch = 7L
-      ; base_revision = 1L
-      ; target_revision = 2L
+      { runtime_epoch = epoch 7L
+      ; base_revision = revision 1L
+      ; target_revision = revision 2L
       ; kind = Incremental_frame
-      ; operations = [ Update_props { node_id = 2L; props } ]
+      ; operations = [ Update_props { node_id = node 2L; props } ]
       }
   in
   match Binary_codec.encode frame with
@@ -157,17 +168,18 @@ let test_legacy_text_props_layout () =
 let test_animation_props_round_trip () =
   let frame =
     Wire_frame.
-      { runtime_epoch = 7L
-      ; base_revision = 1L
-      ; target_revision = 2L
+      { runtime_epoch = epoch 7L
+      ; base_revision = revision 1L
+      ; target_revision = revision 2L
       ; kind = Incremental_frame
       ; operations =
           [ Update_props
-              { node_id = 9L
+              { node_id = node 9L
               ; props =
                   Animated_opacity_props
                     { opacity = 0.75
-                    ; animation = { id = 7001L; duration_ms = 250; curve = Ease_in_out }
+                    ; animation =
+                        { id = animation 7001L; duration_ms = 250; curve = Ease_in_out }
                     }
               }
           ]
@@ -184,19 +196,19 @@ let test_animation_props_round_trip () =
 let test_legacy_opacity_layout () =
   let frame =
     Wire_frame.
-      { runtime_epoch = 8L
-      ; base_revision = 0L
-      ; target_revision = 1L
+      { runtime_epoch = epoch 8L
+      ; base_revision = revision 0L
+      ; target_revision = revision 1L
       ; kind = Full_snapshot
       ; operations =
           [ Create_node
-              { node_id = 4L
+              { node_id = node 4L
               ; kind = Opacity
               ; props = Opacity_props { opacity = 0.5 }
               ; event_bindings = []
               ; parent_data = No_parent_data
               }
-          ; Set_root 4L
+          ; Set_root (node 4L)
           ]
       }
   in
@@ -213,38 +225,38 @@ let test_legacy_opacity_layout () =
 let test_layout_material_and_semantics_props_round_trip () =
   let frame =
     Wire_frame.
-      { runtime_epoch = 9L
-      ; base_revision = 0L
-      ; target_revision = 1L
+      { runtime_epoch = epoch 9L
+      ; base_revision = revision 0L
+      ; target_revision = revision 1L
       ; kind = Full_snapshot
       ; operations =
           [ Create_node
-              { node_id = 1L
+              { node_id = node 1L
               ; kind = Padding
               ; props = Padding_props { left = 12.; top = 8.; right = 12.; bottom = 8. }
               ; event_bindings = []
               ; parent_data = No_parent_data
               }
           ; Create_node
-              { node_id = 2L
+              { node_id = node 2L
               ; kind = Center
               ; props = Center_props { width_factor = None; height_factor = Some 1.5 }
               ; event_bindings = []
               ; parent_data = No_parent_data
               }
           ; Create_node
-              { node_id = 3L
+              { node_id = node 3L
               ; kind = Scroll_view
               ; props = Scroll_view_props { axis = Vertical; reverse = false }
               ; event_bindings =
                   [ { event_tag = Generated_protocol.Event_tag.scroll_notification
-                    ; handler_id = 80L
+                    ; handler_id = handler 80L
                     }
                   ]
               ; parent_data = No_parent_data
               }
           ; Create_node
-              { node_id = 4L
+              { node_id = node 4L
               ; kind = Semantics
               ; props =
                   Semantics_props
@@ -266,7 +278,7 @@ let test_layout_material_and_semantics_props_round_trip () =
               ; parent_data = No_parent_data
               }
           ; Create_node
-              { node_id = 5L
+              { node_id = node 5L
               ; kind = Theme
               ; props =
                   Theme_props
@@ -275,12 +287,12 @@ let test_layout_material_and_semantics_props_round_trip () =
               ; parent_data = No_parent_data
               }
           ; Create_node
-              { node_id = 6L
+              { node_id = node 6L
               ; kind = Material_checkbox
               ; props = Material_checkbox_props { value = false; enabled = true }
               ; event_bindings =
                   [ { event_tag = Generated_protocol.Event_tag.value_changed
-                    ; handler_id = 81L
+                    ; handler_id = handler 81L
                     }
                   ]
               ; parent_data = No_parent_data
@@ -299,17 +311,17 @@ let test_layout_material_and_semantics_props_round_trip () =
 let test_text_input_props_round_trip () =
   let frame =
     Wire_frame.
-      { runtime_epoch = 10L
-      ; base_revision = 4L
-      ; target_revision = 5L
+      { runtime_epoch = epoch 10L
+      ; base_revision = revision 4L
+      ; target_revision = revision 5L
       ; kind = Incremental_frame
       ; operations =
           [ Update_props
-              { node_id = 12L
+              { node_id = node 12L
               ; props =
                   Text_input_props
-                    { session_id = 7L
-                    ; document_revision = 9L
+                    { session_id = session 7L
+                    ; document_revision = document_revision 9L
                     ; value =
                         { text = "拼😀音"
                         ; selection = { start_utf16 = 4; end_utf16 = 4 }
@@ -320,7 +332,7 @@ let test_text_input_props_round_trip () =
                     ; obscure_text = false
                     ; keyboard_type = Keyboard_text
                     ; input_action = Done
-                    ; accepted_local_revision = 11L
+                    ; accepted_local_revision = local_revision 11L
                     ; update_mode = Correction
                     ; autofocus = true
                     }
@@ -339,17 +351,17 @@ let test_text_input_props_round_trip () =
 let test_text_input_rejects_split_surrogate_range () =
   let frame =
     Wire_frame.
-      { runtime_epoch = 10L
-      ; base_revision = 1L
-      ; target_revision = 2L
+      { runtime_epoch = epoch 10L
+      ; base_revision = revision 1L
+      ; target_revision = revision 2L
       ; kind = Incremental_frame
       ; operations =
           [ Update_props
-              { node_id = 12L
+              { node_id = node 12L
               ; props =
                   Text_input_props
-                    { session_id = 1L
-                    ; document_revision = 1L
+                    { session_id = session 1L
+                    ; document_revision = document_revision 1L
                     ; value =
                         { text = "😀"
                         ; selection = { start_utf16 = 1; end_utf16 = 1 }
@@ -360,7 +372,7 @@ let test_text_input_rejects_split_surrogate_range () =
                     ; obscure_text = false
                     ; keyboard_type = Keyboard_text
                     ; input_action = Done
-                    ; accepted_local_revision = 0L
+                    ; accepted_local_revision = local_revision 0L
                     ; update_mode = Ack
                     ; autofocus = false
                     }
@@ -406,11 +418,11 @@ let test_event_batch_fixture () =
   match Event_batch_codec.decode encoded with
   | Error error -> fail "event batch decode failed: %s" error.message
   | Ok { Inbound_event.runtime_epoch; events = [ event ] } ->
-    expect (runtime_epoch = 21L) "unexpected event epoch";
-    expect (event.sequence = 1L) "unexpected event sequence";
-    expect (event.displayed_revision = 1L) "unexpected displayed revision";
-    expect (event.node_id = 3L) "unexpected event node";
-    expect (event.handler_id = 9001L) "unexpected handler";
+    expect (runtime_epoch = epoch 21L) "unexpected event epoch";
+    expect (event.sequence = sequence 1L) "unexpected event sequence";
+    expect (event.displayed_revision = revision 1L) "unexpected displayed revision";
+    expect (event.node_id = node 3L) "unexpected event node";
+    expect (event.handler_id = handler 9001L) "unexpected handler";
     expect (event.event_tag = Generated_protocol.Event_tag.press) "unexpected tag";
     expect (event.payload = Unit) "unexpected payload"
   | Ok _ -> fail "unexpected event batch shape"
@@ -439,34 +451,34 @@ let test_unknown_event_tag () =
 let test_interaction_props_round_trip () =
   let frame =
     Wire_frame.
-      { runtime_epoch = 12L
-      ; base_revision = 0L
-      ; target_revision = 1L
+      { runtime_epoch = epoch 12L
+      ; base_revision = revision 0L
+      ; target_revision = revision 1L
       ; kind = Full_snapshot
       ; operations =
           [ Create_node
-              { node_id = 1L
+              { node_id = node 1L
               ; kind = Gesture
               ; props = Gesture_props
               ; event_bindings = []
               ; parent_data = No_parent_data
               }
           ; Create_node
-              { node_id = 2L
+              { node_id = node 2L
               ; kind = Focus_scope
               ; props = Focus_scope_props { autofocus = true }
               ; event_bindings = []
               ; parent_data = No_parent_data
               }
           ; Create_node
-              { node_id = 3L
+              { node_id = node 3L
               ; kind = Mouse_region
               ; props = Mouse_region_props { opaque = false }
               ; event_bindings = []
               ; parent_data = No_parent_data
               }
           ; Create_node
-              { node_id = 4L
+              { node_id = node 4L
               ; kind = Keyboard_listener
               ; props = Keyboard_listener_props { autofocus = true; key_policy = Handled }
               ; event_bindings = []
@@ -486,10 +498,10 @@ let test_interaction_props_round_trip () =
 let test_interaction_event_round_trip () =
   let events =
     Inbound_event.
-      [ { sequence = 1L
-        ; displayed_revision = 1L
-        ; node_id = 1L
-        ; handler_id = 10L
+      [ { sequence = sequence 1L
+        ; displayed_revision = revision 1L
+        ; node_id = node 1L
+        ; handler_id = handler 10L
         ; event_tag = Generated_protocol.Event_tag.tap
         ; payload =
             Tap
@@ -500,14 +512,14 @@ let test_interaction_event_round_trip () =
               ; pointer_kind = Touch
               }
         }
-      ; { sequence = 2L
-        ; displayed_revision = 1L
-        ; node_id = 1L
-        ; handler_id = 11L
+      ; { sequence = sequence 2L
+        ; displayed_revision = revision 1L
+        ; node_id = node 1L
+        ; handler_id = handler 11L
         ; event_tag = Generated_protocol.Event_tag.pointer_down
         ; payload =
             Pointer
-              { pointer_id = 7L
+              { pointer_id = ID.Input.Pointer_id.of_int64 7L
               ; local_x = 5.
               ; local_y = 6.
               ; global_x = 7.
@@ -516,22 +528,22 @@ let test_interaction_event_round_trip () =
               ; buttons = 1
               }
         }
-      ; { sequence = 3L
-        ; displayed_revision = 1L
-        ; node_id = 2L
-        ; handler_id = 12L
+      ; { sequence = sequence 3L
+        ; displayed_revision = revision 1L
+        ; node_id = node 2L
+        ; handler_id = handler 12L
         ; event_tag = Generated_protocol.Event_tag.key
         ; payload =
             Key
-              { logical_key = 97L
-              ; physical_key = 0x70004L
+              { logical_key = ID.Input.Logical_key.of_int64 97L
+              ; physical_key = ID.Input.Physical_key.of_int64 0x70004L
               ; action = Key_down
               ; modifiers = 3
               }
         }
       ]
   in
-  let batch = Inbound_event.{ runtime_epoch = 12L; events } in
+  let batch = Inbound_event.{ runtime_epoch = epoch 12L; events } in
   match Event_batch_codec.encode batch with
   | Error error -> fail "interaction event encode failed: %s" error.message
   | Ok bytes ->
@@ -562,20 +574,23 @@ let test_host_requests_round_trip () =
   let open Wire_frame in
   expect_frame_round_trip
     "host requests"
-    { runtime_epoch = 31L
-    ; base_revision = 2L
-    ; target_revision = 3L
+    { runtime_epoch = epoch 31L
+    ; base_revision = revision 2L
+    ; target_revision = revision 3L
     ; kind = Incremental_frame
     ; operations =
-        [ Host_request { request_id = 1L; payload = Clipboard_write { text = "剪贴板😀" } }
+        [ Host_request
+            { request_id = request 1L; payload = Clipboard_write { text = "剪贴板😀" } }
         ; Host_request
-            { request_id = 2L
+            { request_id = request 2L
             ; payload =
                 Pick_file { allowed_extensions = [ "txt"; "md" ]; allow_multiple = true }
             }
         ; Host_request
-            { request_id = 3L; payload = Open_url { uri = "https://example.com/路径" } }
-        ; Cancel_host_request { request_id = 2L }
+            { request_id = request 3L
+            ; payload = Open_url { uri = "https://example.com/路径" }
+            }
+        ; Cancel_host_request { request_id = request 2L }
         ]
     }
 ;;
@@ -584,25 +599,28 @@ let test_host_response_events_round_trip () =
   let open Inbound_event in
   expect_event_batch_round_trip
     "host response events"
-    { runtime_epoch = 31L
+    { runtime_epoch = epoch 31L
     ; events =
-        [ { sequence = 1L
-          ; displayed_revision = 3L
-          ; node_id = 0L
-          ; handler_id = 0L
+        [ { sequence = sequence 1L
+          ; displayed_revision = revision 3L
+          ; node_id = node 0L
+          ; handler_id = handler 0L
           ; event_tag = Generated_protocol.Event_tag.host_response
           ; payload =
               Host_response
-                { request_id = 1L; status = Host_ok; value = Bytes.of_string "accepted" }
+                { request_id = request 1L
+                ; status = Host_ok
+                ; value = Bytes.of_string "accepted"
+                }
           }
-        ; { sequence = 2L
-          ; displayed_revision = 3L
-          ; node_id = 0L
-          ; handler_id = 0L
+        ; { sequence = sequence 2L
+          ; displayed_revision = revision 3L
+          ; node_id = node 0L
+          ; handler_id = handler 0L
           ; event_tag = Generated_protocol.Event_tag.host_response
           ; payload =
               Host_response
-                { request_id = 2L; status = Host_cancelled; value = Bytes.empty }
+                { request_id = request 2L; status = Host_cancelled; value = Bytes.empty }
           }
         ]
     }
@@ -632,12 +650,12 @@ let test_environment_event_round_trip () =
   in
   expect_event_batch_round_trip
     "environment event"
-    { runtime_epoch = 31L
+    { runtime_epoch = epoch 31L
     ; events =
-        [ { sequence = 1L
-          ; displayed_revision = 3L
-          ; node_id = 0L
-          ; handler_id = 0L
+        [ { sequence = sequence 1L
+          ; displayed_revision = revision 3L
+          ; node_id = node 0L
+          ; handler_id = handler 0L
           ; event_tag = Generated_protocol.Event_tag.environment_changed
           ; payload = Environment_changed environment
           }
@@ -649,25 +667,27 @@ let test_native_widget_props_round_trip () =
   let open Wire_frame in
   expect_frame_round_trip
     "native widget props"
-    { runtime_epoch = 7L
-    ; base_revision = 0L
-    ; target_revision = 1L
+    { runtime_epoch = epoch 7L
+    ; base_revision = revision 0L
+    ; target_revision = revision 1L
     ; kind = Full_snapshot
     ; operations =
         [ Create_node
-            { node_id = 1L
+            { node_id = node 1L
             ; kind = Native_widget
             ; props =
                 Native_widget_props
-                  { kind_id = 42
+                  { kind_id = ID.Native_widget.Kind_id.of_int 42
                   ; version = 3
                   ; capabilities = 5L
                   ; payload = Bytes.of_string "\000typed\255"
                   }
-            ; event_bindings = [ { event_tag = 21; handler_id = 9L } ]
+            ; event_bindings =
+                [ { event_tag = ID.Protocol.Event_tag.of_int 21; handler_id = handler 9L }
+                ]
             ; parent_data = No_parent_data
             }
-        ; Set_root 1L
+        ; Set_root (node 1L)
         ]
     }
 ;;
@@ -676,22 +696,25 @@ let test_pressable_props_round_trip () =
   let open Wire_frame in
   expect_frame_round_trip
     "pressable props"
-    { runtime_epoch = 7L
-    ; base_revision = 0L
-    ; target_revision = 1L
+    { runtime_epoch = epoch 7L
+    ; base_revision = revision 0L
+    ; target_revision = revision 1L
     ; kind = Full_snapshot
     ; operations =
         [ Create_node
-            { node_id = 1L
+            { node_id = node 1L
             ; kind = Pressable
             ; props =
                 Pressable_props
                   { overlay_color_argb = 0x181c2026l; release_delay_ms = 80 }
             ; event_bindings =
-                [ { event_tag = Generated_protocol.Event_tag.press; handler_id = 9L } ]
+                [ { event_tag = Generated_protocol.Event_tag.press
+                  ; handler_id = handler 9L
+                  }
+                ]
             ; parent_data = No_parent_data
             }
-        ; Set_root 1L
+        ; Set_root (node 1L)
         ]
     }
 ;;
@@ -700,18 +723,18 @@ let test_native_event_round_trip () =
   let open Inbound_event in
   expect_event_batch_round_trip
     "native event"
-    { runtime_epoch = 4L
+    { runtime_epoch = epoch 4L
     ; events =
-        [ { sequence = 1L
-          ; displayed_revision = 3L
-          ; node_id = 8L
-          ; handler_id = 9L
+        [ { sequence = sequence 1L
+          ; displayed_revision = revision 3L
+          ; node_id = node 8L
+          ; handler_id = handler 9L
           ; event_tag = Generated_protocol.Event_tag.native_event
           ; payload =
               Native_event
-                { kind_id = 42
+                { kind_id = ID.Native_widget.Kind_id.of_int 42
                 ; version = 3
-                ; event_id = 7
+                ; event_id = ID.Native_widget.Event_id.of_int 7
                 ; payload = Bytes.of_string "\000\023\255"
                 }
           }
@@ -723,19 +746,19 @@ let test_runtime_stats_round_trip () =
   let open Wire_frame in
   expect_frame_round_trip
     "runtime stats"
-    { runtime_epoch = 9L
-    ; base_revision = 0L
-    ; target_revision = 1L
+    { runtime_epoch = epoch 9L
+    ; base_revision = revision 0L
+    ; target_revision = revision 1L
     ; kind = Full_snapshot
     ; operations =
         [ Create_node
-            { node_id = 1L
+            { node_id = node 1L
             ; kind = Empty
             ; props = Empty_props
             ; event_bindings = []
             ; parent_data = No_parent_data
             }
-        ; Set_root 1L
+        ; Set_root (node 1L)
         ; Runtime_stats
             { event_batch_size = 3
             ; bonsai_flush_ns = 11L
@@ -806,19 +829,19 @@ let runtime_stats_exn frame =
 let test_runtime_stats_backpatch () =
   let frame =
     Wire_frame.
-      { runtime_epoch = 91L
-      ; base_revision = 0L
-      ; target_revision = 1L
+      { runtime_epoch = epoch 91L
+      ; base_revision = revision 0L
+      ; target_revision = revision 1L
       ; kind = Full_snapshot
       ; operations =
           [ Create_node
-              { node_id = 1L
+              { node_id = node 1L
               ; kind = Empty
               ; props = Empty_props
               ; event_bindings = []
               ; parent_data = No_parent_data
               }
-          ; Set_root 1L
+          ; Set_root (node 1L)
           ; Runtime_stats zero_runtime_stats
           ]
       }
@@ -848,9 +871,9 @@ let test_runtime_stats_backpatch () =
 let test_runtime_stats_backpatch_limits () =
   let frame =
     Wire_frame.
-      { runtime_epoch = 92L
-      ; base_revision = 1L
-      ; target_revision = 2L
+      { runtime_epoch = epoch 92L
+      ; base_revision = revision 1L
+      ; target_revision = revision 2L
       ; kind = Incremental_frame
       ; operations = [ Runtime_stats zero_runtime_stats ]
       }
@@ -873,9 +896,9 @@ let test_runtime_encode_requires_exactly_one_stats_operation () =
    | Ok _ -> fail "runtime encoder accepted a frame without runtime stats");
   let duplicate =
     Wire_frame.
-      { runtime_epoch = 93L
-      ; base_revision = 1L
-      ; target_revision = 2L
+      { runtime_epoch = epoch 93L
+      ; base_revision = revision 1L
+      ; target_revision = revision 2L
       ; kind = Incremental_frame
       ; operations =
           [ Runtime_stats zero_runtime_stats; Runtime_stats zero_runtime_stats ]
@@ -889,44 +912,46 @@ let test_runtime_encode_requires_exactly_one_stats_operation () =
 let test_runtime_stats_backpatch_variants () =
   let frames =
     Wire_frame.
-      [ { runtime_epoch = 95L
-        ; base_revision = 0L
-        ; target_revision = 1L
+      [ { runtime_epoch = epoch 95L
+        ; base_revision = revision 0L
+        ; target_revision = revision 1L
         ; kind = Full_snapshot
         ; operations =
             [ Create_node
-                { node_id = 1L
+                { node_id = node 1L
                 ; kind = Empty
                 ; props = Empty_props
                 ; event_bindings = []
                 ; parent_data = No_parent_data
                 }
-            ; Set_root 1L
+            ; Set_root (node 1L)
             ; Runtime_stats zero_runtime_stats
             ]
         }
-      ; { runtime_epoch = 95L
-        ; base_revision = 1L
-        ; target_revision = 2L
+      ; { runtime_epoch = epoch 95L
+        ; base_revision = revision 1L
+        ; target_revision = revision 2L
         ; kind = Incremental_frame
         ; operations =
-            [ Update_props { node_id = 1L; props = Empty_props }
+            [ Update_props { node_id = node 1L; props = Empty_props }
             ; Runtime_stats zero_runtime_stats
             ]
         }
-      ; { runtime_epoch = 95L
-        ; base_revision = 2L
-        ; target_revision = 3L
+      ; { runtime_epoch = epoch 95L
+        ; base_revision = revision 2L
+        ; target_revision = revision 3L
         ; kind = Incremental_frame
         ; operations =
             [ Host_request
-                { request_id = 7L; payload = Clipboard_write { text = "patched" } }
+                { request_id = request 7L
+                ; payload = Clipboard_write { text = "patched" }
+                }
             ; Runtime_stats zero_runtime_stats
             ]
         }
-      ; { runtime_epoch = 95L
-        ; base_revision = 3L
-        ; target_revision = 4L
+      ; { runtime_epoch = epoch 95L
+        ; base_revision = revision 3L
+        ; target_revision = revision 4L
         ; kind = Incremental_frame
         ; operations = [ Runtime_stats zero_runtime_stats ]
         }

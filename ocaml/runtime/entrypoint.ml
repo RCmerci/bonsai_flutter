@@ -1,6 +1,9 @@
-let entries : (string, App.t) Hashtbl.t = Hashtbl.create 8
+module ID = Bonsai_flutter_spec.Id
+
+let entries : (ID.Application.entrypoint_name, App.t) Hashtbl.t = Hashtbl.create 8
 
 let validate_name name =
+  let name = ID.Application.Entrypoint_name.to_string name in
   if String.length name = 0 then invalid_arg "Entrypoint.register: name must not be empty";
   if String.contains name '\000'
   then invalid_arg "Entrypoint.register: name must not contain NUL"
@@ -9,7 +12,10 @@ let validate_name name =
 let register ~name app =
   validate_name name;
   if Hashtbl.mem entries name
-  then invalid_arg ("Entrypoint.register: duplicate entrypoint " ^ name);
+  then
+    invalid_arg
+      ("Entrypoint.register: duplicate entrypoint "
+       ^ ID.Application.Entrypoint_name.to_string name);
   Hashtbl.add entries name app
 ;;
 

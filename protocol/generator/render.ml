@@ -23,22 +23,39 @@ let snake_to_camel name =
 
 let capitalize name = String.capitalize_ascii name
 
-let render_ocaml_module_interface buffer name entries =
+let render_ocaml_module_interface buffer name id_type entries =
   Printf.bprintf buffer "module %s : sig\n" name;
   List.iter
-    (fun (entry : Schema.entry) -> Printf.bprintf buffer "  val %s : int\n" entry.name)
+    (fun (entry : Schema.entry) ->
+       Printf.bprintf buffer "  val %s : %s\n" entry.name id_type)
     entries;
-  Buffer.add_string buffer "  val debug_name : int -> string option\n";
+  Printf.bprintf buffer "  val debug_name : %s -> string option\n" id_type;
   Buffer.add_string buffer "end\n\n"
 ;;
 
-let render_ocaml_module_implementation buffer name entries =
+let render_ocaml_module_implementation buffer name id_module entries =
   Printf.bprintf buffer "module %s = struct\n" name;
+  let previous_binding_was_multiline = ref false in
   List.iter
     (fun (entry : Schema.entry) ->
-       Printf.bprintf buffer "  let %s = %d\n" entry.name entry.id)
+       if !previous_binding_was_multiline then Buffer.add_char buffer '\n';
+       let binding =
+         Printf.sprintf "  let %s = %s.of_int %d" entry.name id_module entry.id
+       in
+       if String.length binding <= 90
+       then (
+         Printf.bprintf buffer "%s\n" binding;
+         previous_binding_was_multiline := false)
+       else (
+         Printf.bprintf
+           buffer
+           "\n  let %s =\n    %s.of_int %d\n  ;;\n"
+           entry.name
+           id_module
+           entry.id;
+         previous_binding_was_multiline := true))
     entries;
-  Buffer.add_string buffer "\n  let debug_name = function\n";
+  Printf.bprintf buffer "\n  let debug_name id =\n    match %s.to_int id with\n" id_module;
   List.iter
     (fun (entry : Schema.entry) ->
        Printf.bprintf buffer "    | %d -> Some %S\n" entry.id entry.name)
@@ -101,12 +118,30 @@ let render_property_markdown buffer title properties =
 
 let all (schema : Schema.t) =
   let categories =
-    [ "Frame_kind", schema.frame_kinds
-    ; "Operation", schema.operations
-    ; "Node_kind", schema.node_kinds
-    ; "Event_tag", schema.event_tags
-    ; "Host_request", schema.host_requests
-    ; "Runtime_error", schema.runtime_errors
+    [ ( "Frame_kind"
+      , "Bonsai_flutter_spec.Id.Protocol.frame_kind"
+      , "ID.Protocol.Frame_kind"
+      , schema.frame_kinds )
+    ; ( "Operation"
+      , "Bonsai_flutter_spec.Id.Protocol.operation"
+      , "ID.Protocol.Operation"
+      , schema.operations )
+    ; ( "Node_kind"
+      , "Bonsai_flutter_spec.Id.Protocol.node_kind"
+      , "ID.Protocol.Node_kind"
+      , schema.node_kinds )
+    ; ( "Event_tag"
+      , "Bonsai_flutter_spec.Id.Protocol.event_tag"
+      , "ID.Protocol.Event_tag"
+      , schema.event_tags )
+    ; ( "Host_request"
+      , "Bonsai_flutter_spec.Id.Protocol.host_request_kind"
+      , "ID.Protocol.Host_request_kind"
+      , schema.host_requests )
+    ; ( "Runtime_error"
+      , "Bonsai_flutter_spec.Id.Protocol.runtime_error"
+      , "ID.Protocol.Runtime_error"
+      , schema.runtime_errors )
     ]
   in
   let ocaml_interface = Buffer.create 4096 in
@@ -126,25 +161,29 @@ let all (schema : Schema.t) =
     \  val max_nodes : int\n\
      end\n\n";
   List.iter
-    (fun (name, entries) -> render_ocaml_module_interface ocaml_interface name entries)
+    (fun (name, id_type, _, entries) ->
+       render_ocaml_module_interface ocaml_interface name id_type entries)
     categories;
   if schema.common_props <> []
   then
     render_ocaml_module_interface
       ocaml_interface
       "Common_prop"
+      "Bonsai_flutter_spec.Id.Protocol.property"
       (property_entries schema.common_props);
   List.iter
     (fun (group : Schema.property_group) ->
        render_ocaml_module_interface
          ocaml_interface
          (capitalize group.name ^ "_prop")
+         "Bonsai_flutter_spec.Id.Protocol.property"
          (property_entries group.properties))
     schema.kind_props;
   let ocaml_implementation = Buffer.create 4096 in
   Buffer.add_string
     ocaml_implementation
-    "(* Generated from [protocol/schema.sexp]. Do not edit. *)\n\n";
+    "(* Generated from [protocol/schema.sexp]. Do not edit. *)\n\n\
+     module ID = Bonsai_flutter_spec.Id\n\n";
   Printf.bprintf ocaml_implementation "let protocol_major = %d\n" schema.major;
   Printf.bprintf ocaml_implementation "let protocol_minor = %d\n\n" schema.minor;
   Printf.bprintf
@@ -162,20 +201,22 @@ let all (schema : Schema.t) =
     schema.limits.max_operations
     schema.limits.max_nodes;
   List.iter
-    (fun (name, entries) ->
-       render_ocaml_module_implementation ocaml_implementation name entries)
+    (fun (name, _, id_module, entries) ->
+       render_ocaml_module_implementation ocaml_implementation name id_module entries)
     categories;
   if schema.common_props <> []
   then
     render_ocaml_module_implementation
       ocaml_implementation
       "Common_prop"
+      "ID.Protocol.Property"
       (property_entries schema.common_props);
   List.iter
     (fun (group : Schema.property_group) ->
        render_ocaml_module_implementation
          ocaml_implementation
          (capitalize group.name ^ "_prop")
+         "ID.Protocol.Property"
          (property_entries group.properties))
     schema.kind_props;
   let dart = Buffer.create 4096 in
@@ -200,7 +241,7 @@ let all (schema : Schema.t) =
     schema.limits.max_operations
     schema.limits.max_nodes;
   List.iter
-    (fun (name, entries) ->
+    (fun (name, _, _, entries) ->
        render_dart_class dart (capitalize (snake_to_camel name) ^ "Id") entries)
     categories;
   if schema.common_props <> []
@@ -218,7 +259,7 @@ let all (schema : Schema.t) =
     "<!-- Generated from protocol/schema.sexp. Do not edit. -->\n\n# Protocol IDs\n\n";
   Printf.bprintf markdown "Protocol version: `%d.%d`\n\n" schema.major schema.minor;
   List.iter
-    (fun (name, entries) ->
+    (fun (name, _, _, entries) ->
        render_markdown_table
          markdown
          (String.concat " " (String.split_on_char '_' name))

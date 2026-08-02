@@ -1,3 +1,5 @@
+module ID = Bonsai_flutter_spec.Id
+
 type error_code =
   | Invalid_magic
   | Unsupported_version
@@ -307,7 +309,7 @@ let read_payload reader event_tag =
     || event_tag = Generated_protocol.Event_tag.pointer_down
     || event_tag = Generated_protocol.Event_tag.pointer_up
   then (
-    let pointer_id = Reader.u64 reader in
+    let pointer_id = Reader.u64 reader |> ID.Input.Pointer_id.of_int64 in
     let local_x, local_y, global_x, global_y = read_position reader in
     let pointer_kind = read_pointer_kind reader in
     let buttons = Reader.u32 reader in
@@ -318,9 +320,11 @@ let read_payload reader event_tag =
   then Bool (read_bool reader)
   else if event_tag = Generated_protocol.Event_tag.text_edit
   then (
-    let session_id = Reader.u64 reader in
-    let local_revision = Reader.u64 reader in
-    let base_document_revision = Reader.u64 reader in
+    let session_id = Reader.u64 reader |> ID.Text_input.Session_id.of_int64 in
+    let local_revision = Reader.u64 reader |> ID.Text_input.Local_revision.of_int64 in
+    let base_document_revision =
+      Reader.u64 reader |> ID.Text_input.Document_revision.of_int64
+    in
     let text = read_string reader in
     let selection = read_text_selection reader text in
     let composing =
@@ -335,8 +339,8 @@ let read_payload reader event_tag =
   then Text (read_string reader)
   else if event_tag = Generated_protocol.Event_tag.key
   then (
-    let logical_key = Reader.u64 reader in
-    let physical_key = Reader.u64 reader in
+    let logical_key = Reader.u64 reader |> ID.Input.Logical_key.of_int64 in
+    let physical_key = Reader.u64 reader |> ID.Input.Physical_key.of_int64 in
     let action =
       match Reader.u8 reader with
       | 0 -> Inbound_event.Key_down
@@ -366,12 +370,14 @@ let read_payload reader event_tag =
     Visible_range { first_index; last_exclusive })
   else if event_tag = Generated_protocol.Event_tag.route_pop
   then (
-    let page_key = read_string reader in
-    if String.length page_key = 0 then fail Invalid_payload "route page key is empty";
+    let page_key_string = read_string reader in
+    if String.length page_key_string = 0
+    then fail Invalid_payload "route page key is empty";
+    let page_key = ID.Navigation.Page_key.of_string page_key_string in
     Route_pop { page_key; result = read_optional_string reader })
   else if event_tag = Generated_protocol.Event_tag.host_response
   then (
-    let request_id = Reader.u64 reader in
+    let request_id = Reader.u64 reader |> ID.Host.Request_id.of_int64 in
     let status =
       match Reader.u8 reader with
       | 0 -> Inbound_event.Host_ok
@@ -439,17 +445,23 @@ let read_payload reader event_tag =
       })
   else if event_tag = Generated_protocol.Event_tag.native_event
   then (
-    let kind_id = Reader.u32 reader in
+    let kind_id_value = Reader.u32 reader in
     let version = Reader.u16 reader in
-    let event_id = Reader.u16 reader in
-    if kind_id = 0 then fail Invalid_payload "native event kind ID must be positive";
+    let event_id_value = Reader.u16 reader in
+    if kind_id_value = 0 then fail Invalid_payload "native event kind ID must be positive";
     if version = 0 then fail Invalid_payload "native event version must be positive";
-    if event_id = 0 then fail Invalid_payload "native event ID must be positive";
+    if event_id_value = 0 then fail Invalid_payload "native event ID must be positive";
+    let kind_id = ID.Native_widget.Kind_id.of_int kind_id_value in
+    let event_id = ID.Native_widget.Event_id.of_int event_id_value in
     let payload_length = Reader.u32 reader in
     if payload_length < 0 then fail Truncated_input "negative native event payload length";
     Native_event
       { kind_id; version; event_id; payload = Reader.bytes reader payload_length })
-  else fail Unknown_event_tag "unsupported event tag %d" event_tag
+  else
+    fail
+      Unknown_event_tag
+      "unsupported event tag %d"
+      (ID.Protocol.Event_tag.to_int event_tag)
 ;;
 
 let check_u64 label value =
@@ -536,12 +548,17 @@ let write_payload writer event_tag payload =
   | Text_edit edit ->
     if event_tag <> Generated_protocol.Event_tag.text_edit
     then fail Invalid_payload "text edit payload does not match event tag";
-    check_u64 "session ID" edit.session_id;
-    check_u64 "local revision" edit.local_revision;
-    check_u64 "base document revision" edit.base_document_revision;
-    Writer.u64 writer edit.session_id;
-    Writer.u64 writer edit.local_revision;
-    Writer.u64 writer edit.base_document_revision;
+    let session_id = ID.Text_input.Session_id.to_int64 edit.session_id in
+    let local_revision = ID.Text_input.Local_revision.to_int64 edit.local_revision in
+    let base_document_revision =
+      ID.Text_input.Document_revision.to_int64 edit.base_document_revision
+    in
+    check_u64 "session ID" session_id;
+    check_u64 "local revision" local_revision;
+    check_u64 "base document revision" base_document_revision;
+    Writer.u64 writer session_id;
+    Writer.u64 writer local_revision;
+    Writer.u64 writer base_document_revision;
     write_string writer edit.text;
     write_text_selection writer edit.text edit.selection;
     (match edit.composing with
@@ -570,6 +587,7 @@ let write_payload writer event_tag payload =
       && event_tag <> Generated_protocol.Event_tag.pointer_down
       && event_tag <> Generated_protocol.Event_tag.pointer_up
     then fail Invalid_payload "pointer payload does not match event tag";
+    let pointer_id = ID.Input.Pointer_id.to_int64 pointer_id in
     check_u64 "pointer ID" pointer_id;
     check_u32 "pointer buttons" buttons;
     Writer.u64 writer pointer_id;
@@ -579,6 +597,8 @@ let write_payload writer event_tag payload =
   | Key { logical_key; physical_key; action; modifiers } ->
     if event_tag <> Generated_protocol.Event_tag.key
     then fail Invalid_payload "key payload does not match event tag";
+    let logical_key = ID.Input.Logical_key.to_int64 logical_key in
+    let physical_key = ID.Input.Physical_key.to_int64 physical_key in
     check_u64 "logical key" logical_key;
     check_u64 "physical key" physical_key;
     check_u32 "key modifiers" modifiers;
@@ -610,12 +630,14 @@ let write_payload writer event_tag payload =
   | Route_pop { page_key; result } ->
     if event_tag <> Generated_protocol.Event_tag.route_pop
     then fail Invalid_payload "route pop payload does not match event tag";
+    let page_key = ID.Navigation.Page_key.to_string page_key in
     if String.length page_key = 0 then fail Invalid_payload "route page key is empty";
     write_string writer page_key;
     write_optional_string writer result
   | Host_response { request_id; status; value } ->
     if event_tag <> Generated_protocol.Event_tag.host_response
     then fail Invalid_payload "host response payload does not match event tag";
+    let request_id = ID.Host.Request_id.to_int64 request_id in
     check_u64 "host request ID" request_id;
     Writer.u64 writer request_id;
     Writer.u8
@@ -669,6 +691,8 @@ let write_payload writer event_tag payload =
   | Native_event { kind_id; version; event_id; payload } ->
     if event_tag <> Generated_protocol.Event_tag.native_event
     then fail Invalid_payload "native payload does not match event tag";
+    let kind_id = ID.Native_widget.Kind_id.to_int kind_id in
+    let event_id = ID.Native_widget.Event_id.to_int event_id in
     if kind_id <= 0 || kind_id > 0xffff
     then fail Invalid_payload "native event kind ID is outside 1..65535";
     if version <= 0 || version > 0xffff
@@ -684,34 +708,46 @@ let write_payload writer event_tag payload =
 
 let write_event event =
   let body = Writer.create () in
-  check_u64 "event sequence" event.Inbound_event.sequence;
-  check_u64 "displayed revision" event.displayed_revision;
-  check_u64 "node ID" event.node_id;
-  check_u64 "handler ID" event.handler_id;
-  if event.event_tag < 0 || event.event_tag > 0xffff
+  let sequence = ID.Runtime.Event_sequence.to_int64 event.Inbound_event.sequence in
+  let displayed_revision =
+    ID.Runtime.Renderer_revision.to_int64 event.displayed_revision
+  in
+  let node_id = ID.Ui.Node_id.to_int64 event.node_id in
+  let handler_id = ID.Ui.Handler_id.to_int64 event.handler_id in
+  let event_tag = ID.Protocol.Event_tag.to_int event.event_tag in
+  check_u64 "event sequence" sequence;
+  check_u64 "displayed revision" displayed_revision;
+  check_u64 "node ID" node_id;
+  check_u64 "handler ID" handler_id;
+  if event_tag < 0 || event_tag > 0xffff
   then fail Invalid_payload "event tag is outside u16";
-  Writer.u64 body event.sequence;
-  Writer.u64 body event.displayed_revision;
-  Writer.u64 body event.node_id;
-  Writer.u64 body event.handler_id;
-  Writer.u16 body event.event_tag;
+  Writer.u64 body sequence;
+  Writer.u64 body displayed_revision;
+  Writer.u64 body node_id;
+  Writer.u64 body handler_id;
+  Writer.u16 body event_tag;
   write_payload body event.event_tag event.payload;
   Writer.contents body
 ;;
 
 let encode batch =
   try
-    check_u64 "runtime epoch" batch.Inbound_event.runtime_epoch;
+    let runtime_epoch = ID.Runtime.Epoch.to_int64 batch.Inbound_event.runtime_epoch in
+    check_u64 "runtime epoch" runtime_epoch;
     if List.length batch.events > Generated_protocol.Limits.max_operations
     then fail Too_many_events "event count exceeds the limit";
     let payload = Writer.create () in
     Writer.u32 payload (List.length batch.events);
-    let previous_sequence = ref (-1L) in
+    let previous_sequence = ref None in
     List.iter
       (fun event ->
-         if Int64.compare event.Inbound_event.sequence !previous_sequence <= 0
+         if
+           match !previous_sequence with
+           | None -> false
+           | Some previous ->
+             ID.Runtime.Event_sequence.compare event.Inbound_event.sequence previous <= 0
          then fail Invalid_payload "event sequences must be strictly increasing";
-         previous_sequence := event.sequence;
+         previous_sequence := Some event.sequence;
          let body = write_event event in
          Writer.u32 payload (Bytes.length body);
          Writer.bytes payload body)
@@ -722,16 +758,19 @@ let encode batch =
       | [] -> 0L, 0L
       | first :: _ ->
         let last = List.hd (List.rev batch.events) in
-        first.displayed_revision, last.sequence
+        ( ID.Runtime.Renderer_revision.to_int64 first.displayed_revision
+        , ID.Runtime.Event_sequence.to_int64 last.sequence )
     in
     let output = Writer.create () in
     Writer.string output "BFFR";
     Writer.u16 output Generated_protocol.protocol_major;
     Writer.u16 output Generated_protocol.protocol_minor;
     Writer.u16 output Generated_protocol.Limits.header_bytes;
-    Writer.u8 output Generated_protocol.Frame_kind.event_batch;
+    Writer.u8
+      output
+      (ID.Protocol.Frame_kind.to_int Generated_protocol.Frame_kind.event_batch);
     Writer.u8 output 0;
-    Writer.u64 output batch.runtime_epoch;
+    Writer.u64 output runtime_epoch;
     Writer.u64 output base_revision;
     Writer.u64 output target_sequence;
     Writer.u32 output (Bytes.length payload);
@@ -747,11 +786,11 @@ let encode batch =
 ;;
 
 let read_event reader =
-  let sequence = Reader.u64 reader in
-  let displayed_revision = Reader.u64 reader in
-  let node_id = Reader.u64 reader in
-  let handler_id = Reader.u64 reader in
-  let event_tag = Reader.u16 reader in
+  let sequence = Reader.u64 reader |> ID.Runtime.Event_sequence.of_int64 in
+  let displayed_revision = Reader.u64 reader |> ID.Runtime.Renderer_revision.of_int64 in
+  let node_id = Reader.u64 reader |> ID.Ui.Node_id.of_int64 in
+  let handler_id = Reader.u64 reader |> ID.Ui.Handler_id.of_int64 in
+  let event_tag = Reader.u16 reader |> ID.Protocol.Event_tag.of_int in
   let payload = read_payload reader event_tag in
   require_empty reader;
   Inbound_event.{ sequence; displayed_revision; node_id; handler_id; event_tag; payload }
@@ -774,10 +813,12 @@ let decode bytes =
     then fail Unsupported_version "unsupported protocol version %d.%d" major minor;
     if Reader.u16 reader <> Generated_protocol.Limits.header_bytes
     then fail Invalid_header "invalid header size";
-    if Reader.u8 reader <> Generated_protocol.Frame_kind.event_batch
+    if
+      Reader.u8 reader
+      <> ID.Protocol.Frame_kind.to_int Generated_protocol.Frame_kind.event_batch
     then fail Invalid_frame_kind "expected an event-batch frame";
     if Reader.u8 reader <> 0 then fail Invalid_header "unsupported frame flags";
-    let runtime_epoch = Reader.u64 reader in
+    let runtime_epoch = Reader.u64 reader |> ID.Runtime.Epoch.of_int64 in
     let base_revision = Reader.u64 reader in
     let target_sequence = Reader.u64 reader in
     let payload_length = Reader.u32 reader in
@@ -789,15 +830,19 @@ let decode bytes =
     let count = Reader.u32 payload in
     if count < 0 || count > Generated_protocol.Limits.max_operations
     then fail Too_many_events "event count exceeds the limit";
-    let previous_sequence = ref (-1L) in
+    let previous_sequence = ref None in
     let events =
       List.init count (fun _ ->
         let body_length = Reader.u32 payload in
         if body_length < 0 then fail Truncated_input "negative event body length";
         let event = read_event (Reader.sub_reader payload body_length) in
-        if Int64.compare event.sequence !previous_sequence <= 0
+        if
+          match !previous_sequence with
+          | None -> false
+          | Some previous ->
+            ID.Runtime.Event_sequence.compare event.sequence previous <= 0
         then fail Invalid_payload "event sequences must be strictly increasing";
-        previous_sequence := event.sequence;
+        previous_sequence := Some event.sequence;
         event)
     in
     require_empty payload;
@@ -807,7 +852,9 @@ let decode bytes =
        then fail Invalid_header "empty event batch has nonzero metadata"
      | first :: _ ->
        let last = List.hd (List.rev events) in
-       if base_revision <> first.displayed_revision || target_sequence <> last.sequence
+       if
+         base_revision <> ID.Runtime.Renderer_revision.to_int64 first.displayed_revision
+         || target_sequence <> ID.Runtime.Event_sequence.to_int64 last.sequence
        then fail Invalid_header "header event metadata does not match the payload");
     Ok Inbound_event.{ runtime_epoch; events }
   with

@@ -73,10 +73,36 @@ let test_all_targets_are_rendered_from_one_model () =
   let outputs = Render.all (load_schema ()) in
   expect_contains outputs.ocaml_interface "val protocol_major : int";
   expect_contains outputs.ocaml_implementation "let protocol_major = 1";
-  expect_contains outputs.ocaml_implementation "let create_node = 2";
+  expect_contains outputs.ocaml_implementation "module ID = Bonsai_flutter_spec.Id";
+  expect_contains
+    outputs.ocaml_implementation
+    "let create_node = ID.Protocol.Operation.of_int 2";
+  expect_contains
+    outputs.ocaml_implementation
+    "match ID.Protocol.Operation.to_int id with";
   expect_contains outputs.ocaml_implementation {|Some "create_node"|};
+  expect_contains
+    outputs.ocaml_interface
+    "val incremental_frame : Bonsai_flutter_spec.Id.Protocol.frame_kind";
+  expect_contains
+    outputs.ocaml_interface
+    "val create_node : Bonsai_flutter_spec.Id.Protocol.operation";
+  expect_contains
+    outputs.ocaml_interface
+    "val material_dialog : Bonsai_flutter_spec.Id.Protocol.node_kind";
+  expect_contains
+    outputs.ocaml_interface
+    "val host_response : Bonsai_flutter_spec.Id.Protocol.event_tag";
+  expect_contains
+    outputs.ocaml_interface
+    "val clipboard_read : Bonsai_flutter_spec.Id.Protocol.host_request_kind";
+  expect_contains
+    outputs.ocaml_interface
+    "val stale_event : Bonsai_flutter_spec.Id.Protocol.runtime_error";
   expect_contains outputs.ocaml_interface "module Padding_prop : sig";
-  expect_contains outputs.ocaml_interface "val insets : int";
+  expect_contains
+    outputs.ocaml_interface
+    "val insets : Bonsai_flutter_spec.Id.Protocol.property";
   expect_contains outputs.ocaml_implementation "module Material_checkbox_prop = struct";
   expect_contains outputs.dart "static const int protocolMajor = 1;";
   expect_contains outputs.dart "static const int materialDialog = 107;";

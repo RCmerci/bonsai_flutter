@@ -1,3 +1,4 @@
+module ID = Bonsai_flutter_spec.Id
 module Protocol = Bonsai_flutter_protocol
 module Effect = Bonsai.Effect
 
@@ -26,7 +27,7 @@ type layout =
   }
 
 type native_menu_item =
-  { item_id : string
+  { item_id : ID.Host.native_menu_item_id
   ; label : string
   ; enabled : bool
   }
@@ -65,25 +66,25 @@ type pending =
       -> pending
 
 type queued_operation =
-  { id : int64
+  { id : ID.Host.operation_id
   ; operation : Protocol.Wire_frame.operation
   }
 
 type t =
   { schedule : unit Effect.t -> unit
-  ; pending : (int64, pending) Hashtbl.t
-  ; cancelled : (int64, unit) Hashtbl.t
+  ; pending : (ID.Host.request_id, pending) Hashtbl.t
+  ; cancelled : (ID.Host.request_id, unit) Hashtbl.t
   ; operations : queued_operation Queue.t
-  ; mutable next_request_id : int64
-  ; mutable next_operation_id : int64
+  ; mutable next_request_id : ID.Host.request_id
+  ; mutable next_operation_id : ID.Host.operation_id
   ; mutable shutdown : bool
   }
 
 let enqueue_operation t operation =
-  if Int64.equal t.next_operation_id Int64.max_int
+  if ID.Host.Operation_id.equal t.next_operation_id ID.Host.Operation_id.max_value
   then failwith "host operation ID space exhausted";
   let id = t.next_operation_id in
-  t.next_operation_id <- Int64.succ id;
+  t.next_operation_id <- ID.Host.Operation_id.succ id;
   Queue.add { id; operation } t.operations
 ;;
 
@@ -266,11 +267,11 @@ let request ?cancellation t payload decode =
       | Some (cancellation : Cancellation.t) when cancellation.cancelled ->
         respond t callback (Error Cancelled)
       | _ ->
-        if Int64.equal t.next_request_id Int64.max_int
+        if ID.Host.Request_id.equal t.next_request_id ID.Host.Request_id.max_value
         then respond t callback (Error (Failed "host request ID space exhausted"))
         else (
           let request_id = t.next_request_id in
-          t.next_request_id <- Int64.succ request_id;
+          t.next_request_id <- ID.Host.Request_id.succ request_id;
           Hashtbl.add t.pending request_id (Pending { decode; callback; cancellation });
           Option.iter
             (fun (cancellation : Cancellation.t) ->
@@ -349,7 +350,10 @@ let show_native_menu ?cancellation t items =
     ?cancellation
     t
     (Protocol.Wire_frame.Show_native_menu { items })
-    decode_optional_string
+    (fun bytes ->
+       match decode_optional_string bytes with
+       | Error _ as error -> error
+       | Ok item_id -> Ok (Option.map ID.Host.Native_menu_item_id.of_string item_id))
 ;;
 
 let haptic_feedback ?cancellation t kind =
@@ -402,7 +406,7 @@ let commit_operations t (prepared : Prepared_operations.t) =
       | [], _ -> Ok ()
       | _, [] -> Error "prepared host operation prefix is no longer available"
       | expected :: expected_rest, actual :: actual_rest ->
-        if Int64.equal expected.id actual.id
+        if ID.Host.Operation_id.equal expected.id actual.id
         then validate_prefix expected_rest actual_rest
         else Error "prepared host operation prefix is stale"
     in
@@ -420,8 +424,8 @@ module Private = struct
     ; pending = Hashtbl.create 16
     ; cancelled = Hashtbl.create 16
     ; operations = Queue.create ()
-    ; next_request_id = 1L
-    ; next_operation_id = 1L
+    ; next_request_id = ID.Host.Request_id.one
+    ; next_operation_id = ID.Host.Operation_id.one
     ; shutdown = false
     }
   ;;
@@ -429,7 +433,7 @@ module Private = struct
   module Validated_response = struct
     type nonrec t =
       { owner : t
-      ; request_id : int64
+      ; request_id : ID.Host.request_id
       ; pending_identity : pending option
       ; apply : unit -> unit
       }
@@ -449,7 +453,11 @@ module Private = struct
             ; pending_identity = None
             ; apply = (fun () -> Hashtbl.remove t.cancelled response.request_id)
             }
-      else Error (Printf.sprintf "unknown host request ID %Ld" response.request_id)
+      else
+        Error
+          (Printf.sprintf
+             "unknown host request ID %Ld"
+             (ID.Host.Request_id.to_int64 response.request_id))
     | Some (Pending pending as pending_identity) ->
       let result =
         match response.status with
@@ -489,7 +497,11 @@ module Private = struct
            | None -> false)
       in
       if not still_current
-      then Error (Printf.sprintf "stale host response ID %Ld" validated.request_id)
+      then
+        Error
+          (Printf.sprintf
+             "stale host response ID %Ld"
+             (ID.Host.Request_id.to_int64 validated.request_id))
       else (
         validated.apply ();
         Ok ()))

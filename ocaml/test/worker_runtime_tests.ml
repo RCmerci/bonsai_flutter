@@ -1,3 +1,5 @@
+module ID = Bonsai_flutter_spec.Id
+
 let fail format = Printf.ksprintf failwith format
 let require condition message = if not condition then fail "%s" message
 
@@ -113,7 +115,7 @@ let service =
     ~push_topic_count:2
     ~init:(fun ~emit config ->
       Atomic.set config.init_domain_id (Some (Domain.self ()));
-      emit ~topic:0 "ready";
+      emit ~topic:(ID.Worker.Push_topic.of_int 0) "ready";
       Ok { config; dirty = false })
     ~handle_request:(fun state ~cancelled ~emit request ->
       match request with
@@ -133,11 +135,11 @@ let service =
         done;
         Ok "cooperative-finished", `Idle
       | Emit_push value ->
-        emit ~topic:1 value;
+        emit ~topic:(ID.Worker.Push_topic.of_int 1) value;
         Ok "pushed", `Idle
       | Coalesce_push ->
-        emit ~topic:1 "old";
-        emit ~topic:1 "new";
+        emit ~topic:(ID.Worker.Push_topic.of_int 1) "old";
+        emit ~topic:(ID.Worker.Push_topic.of_int 1) "new";
         Ok "coalesced", `Idle
       | Fail_callback -> failwith "intentional service callback failure")
     ~step:(fun state ~cancelled:_ ~emit:_ ->
@@ -213,7 +215,8 @@ let test_request_push_backpressure_fairness_and_cancellation client config =
   require
     (List.exists
        (function
-         | Worker.Push { topic = 0; payload = "ready"; _ } -> true
+         | Worker.Push { topic; payload = "ready"; _ }
+           when ID.Worker.Push_topic.equal topic (ID.Worker.Push_topic.of_int 0) -> true
          | _ -> false)
        ready)
     "worker init did not emit its unsolicited Ready push";
@@ -223,7 +226,7 @@ let test_request_push_backpressure_fairness_and_cancellation client config =
     (List.exists
        (function
          | Worker.Response { request_id; outcome = Completed "hello"; _ } ->
-           Int64.equal request_id echo_id
+           ID.Worker.Request_id.equal request_id echo_id
          | _ -> false)
        echo_events)
     "domain-0 request did not receive its correlated Worker Domain response";
@@ -273,7 +276,7 @@ let test_request_push_backpressure_fairness_and_cancellation client config =
     (List.exists
        (function
          | Worker.Response { request_id; outcome = Cancelled; _ } ->
-           Int64.equal request_id cooperative_id
+           ID.Worker.Request_id.equal request_id cooperative_id
          | _ -> false)
        cancellation)
     "cooperative cancellation did not produce a typed Cancelled response";
@@ -283,7 +286,8 @@ let test_request_push_backpressure_fairness_and_cancellation client config =
   require
     (List.exists
        (function
-         | Worker.Push { topic = 1; payload = "unsolicited"; _ } -> true
+         | Worker.Push { topic; payload = "unsolicited"; _ }
+           when ID.Worker.Push_topic.equal topic (ID.Worker.Push_topic.of_int 1) -> true
          | _ -> false)
        pushed)
     "Worker Domain unsolicited push did not reach domain 0";
@@ -292,13 +296,16 @@ let test_request_push_backpressure_fairness_and_cancellation client config =
   require
     (List.exists
        (function
-         | Worker.Push { topic = 1; payload = "new"; _ } -> true
+         | Worker.Push { topic; payload = "new"; _ }
+           when ID.Worker.Push_topic.equal topic (ID.Worker.Push_topic.of_int 1) -> true
          | _ -> false)
        coalesced
      && not
           (List.exists
              (function
-               | Worker.Push { topic = 1; payload = "old"; _ } -> true
+               | Worker.Push { topic; payload = "old"; _ }
+                 when ID.Worker.Push_topic.equal topic (ID.Worker.Push_topic.of_int 1) ->
+                 true
                | _ -> false)
              coalesced))
     "push lane did not retain only the latest value for a topic"
@@ -307,7 +314,13 @@ let test_request_push_backpressure_fairness_and_cancellation client config =
 let () =
   let domain0_id = Domain.self () in
   let config = create_config () in
-  let first = ok (Worker_runtime.start ~runtime_epoch:101L service config) in
+  let first =
+    ok
+      (Worker_runtime.start
+         ~runtime_epoch:(ID.Runtime.Epoch.of_int64 101L)
+         service
+         config)
+  in
   let first_diagnostics = Worker_runtime.For_testing.diagnostics () in
   require
     (first_diagnostics.state = Worker_runtime.Attached)
@@ -348,7 +361,13 @@ let () =
     (Worker.send first (Echo "stale") = Worker.Stopping)
     "stopped client accepted a stale request";
   let second_config = create_config () in
-  let second = ok (Worker_runtime.start ~runtime_epoch:102L service second_config) in
+  let second =
+    ok
+      (Worker_runtime.start
+         ~runtime_epoch:(ID.Runtime.Epoch.of_int64 102L)
+         service
+         second_config)
+  in
   let second_diagnostics = Worker_runtime.For_testing.diagnostics () in
   require
     (second_diagnostics.worker_domain_id = Some first_domain_id)
@@ -359,7 +378,7 @@ let () =
     (second_diagnostics.active_sessions = 1 && second_diagnostics.peak_active_sessions = 1)
     "sequential recreation overlapped worker sessions";
   require
-    (not (Int64.equal first_generation (Worker.worker_generation second)))
+    (not (ID.Worker.Generation.equal first_generation (Worker.worker_generation second)))
     "sequential worker sessions reused a generation";
   Worker.For_testing.await_output second;
   ignore (drain second);
@@ -390,7 +409,13 @@ let () =
     ((Worker_runtime.For_testing.diagnostics ()).spawn_count = 1)
     "caught callback failure made the Worker Domain non-reusable";
   let third_config = create_config () in
-  let third = ok (Worker_runtime.start ~runtime_epoch:103L service third_config) in
+  let third =
+    ok
+      (Worker_runtime.start
+         ~runtime_epoch:(ID.Runtime.Epoch.of_int64 103L)
+         service
+         third_config)
+  in
   require
     ((Worker_runtime.For_testing.diagnostics ()).worker_domain_id = Some first_domain_id)
     "post-failure session did not reuse the Worker Domain";
@@ -399,7 +424,10 @@ let () =
   Worker_runtime.For_testing.await_state Worker_runtime.Terminal;
   require
     (Result.is_error
-       (Worker_runtime.start ~runtime_epoch:104L service (create_config ())))
+       (Worker_runtime.start
+          ~runtime_epoch:(ID.Runtime.Epoch.of_int64 104L)
+          service
+          (create_config ())))
     "terminal Worker Domain accepted another session";
   Worker_runtime.For_testing.final_shutdown ();
   let stopped = Worker_runtime.For_testing.diagnostics () in
@@ -412,6 +440,9 @@ let () =
     "repeated final shutdown joined again";
   require
     (Result.is_error
-       (Worker_runtime.start ~runtime_epoch:105L service (create_config ())))
+       (Worker_runtime.start
+          ~runtime_epoch:(ID.Runtime.Epoch.of_int64 105L)
+          service
+          (create_config ())))
     "worker-backed start after Stopped succeeded"
 ;;

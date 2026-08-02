@@ -1,11 +1,14 @@
 module Ui = Bonsai_flutter_ui
+module ID = Bonsai_flutter_spec.Id
+
+let document_revision = ID.Text_input.Document_revision.of_int64
 
 type item =
   { id : int
   ; title : string
   ; completed : bool
-  ; document_revision : int64
-  ; accepted_local_revision : int64
+  ; document_revision : ID.Text_input.document_revision
+  ; accepted_local_revision : ID.Text_input.local_revision
   }
 
 type state =
@@ -23,20 +26,20 @@ let initial =
       [ { id = 1
         ; title = "Keep identity"
         ; completed = false
-        ; document_revision = 1L
-        ; accepted_local_revision = 0L
+        ; document_revision = document_revision 1L
+        ; accepted_local_revision = ID.Text_input.Local_revision.zero
         }
       ; { id = 2
         ; title = "Preserve focus"
         ; completed = false
-        ; document_revision = 1L
-        ; accepted_local_revision = 0L
+        ; document_revision = document_revision 1L
+        ; accepted_local_revision = ID.Text_input.Local_revision.zero
         }
       ; { id = 3
         ; title = "Dispose deleted resources"
         ; completed = true
-        ; document_revision = 1L
-        ; accepted_local_revision = 0L
+        ; document_revision = document_revision 1L
+        ; accepted_local_revision = ID.Text_input.Local_revision.zero
         }
       ]
   }
@@ -70,8 +73,8 @@ let component handlers graph =
             { id = state.next_id
             ; title = Printf.sprintf "Todo %d" state.next_id
             ; completed = false
-            ; document_revision = 1L
-            ; accepted_local_revision = 0L
+            ; document_revision = document_revision 1L
+            ; accepted_local_revision = ID.Text_input.Local_revision.zero
             }
           in
           { next_id = state.next_id + 1
@@ -156,7 +159,8 @@ let component handlers graph =
                 update_item state item_id (fun item ->
                   { item with
                     title = edit.text
-                  ; document_revision = Int64.succ item.document_revision
+                  ; document_revision =
+                      ID.Text_input.Document_revision.succ item.document_revision
                   ; accepted_local_revision = edit.local_revision
                   }))
             | _ -> Bonsai.Effect.Ignore)
@@ -208,7 +212,8 @@ let component handlers graph =
               ; Ui.Widget.Flex.expanded
                   (Ui.Material.text_field
                      ~key:(Ui.Key.string (Printf.sprintf "todo-editor-%d" item.id))
-                     ~session_id:(Int64.of_int item.id)
+                     ~session_id:
+                       (ID.Text_input.Session_id.of_int64 (Int64.of_int item.id))
                      ~document_revision:item.document_revision
                      ~accepted_local_revision:item.accepted_local_revision
                      ~update_mode:Ui.Text_editing.Ack

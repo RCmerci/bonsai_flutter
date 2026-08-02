@@ -41,9 +41,9 @@ module Payload : sig
     }
 
   type text_edit =
-    { session_id : int64
-    ; local_revision : int64
-    ; base_document_revision : int64
+    { session_id : Bonsai_flutter_spec.Id.Text_input.session_id
+    ; local_revision : Bonsai_flutter_spec.Id.Text_input.local_revision
+    ; base_document_revision : Bonsai_flutter_spec.Id.Text_input.document_revision
     ; text : string
     ; selection : text_selection
     ; composing : text_selection option
@@ -60,14 +60,14 @@ module Payload : sig
     }
 
   type route_pop =
-    { page_key : string
+    { page_key : Bonsai_flutter_spec.Id.Navigation.page_key
     ; result : string option
     }
 
   type native_event =
-    { kind_id : int
+    { kind_id : Bonsai_flutter_spec.Id.Native_widget.kind_id
     ; version : int
-    ; event_id : int
+    ; event_id : Bonsai_flutter_spec.Id.Native_widget.event_id
     ; payload : bytes
     }
 
@@ -88,7 +88,7 @@ module Payload : sig
     }
 
   type pointer =
-    { pointer_id : int64
+    { pointer_id : Bonsai_flutter_spec.Id.Input.pointer_id
     ; local_x : float
     ; local_y : float
     ; global_x : float
@@ -103,8 +103,8 @@ module Payload : sig
     | Key_repeat
 
   type key =
-    { logical_key : int64
-    ; physical_key : int64
+    { logical_key : Bonsai_flutter_spec.Id.Input.logical_key
+    ; physical_key : Bonsai_flutter_spec.Id.Input.physical_key
     ; action : key_action
     ; modifiers : int
     }

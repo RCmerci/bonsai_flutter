@@ -1,4 +1,5 @@
 module Ui = Bonsai_flutter_ui
+module ID = Bonsai_flutter_spec.Id
 
 type gallery_card_event = Activate
 
@@ -7,8 +8,8 @@ type model =
   ; press_count : int
   ; native_count : int
   ; text : string
-  ; document_revision : int64
-  ; accepted_local_revision : int64
+  ; document_revision : ID.Text_input.document_revision
+  ; accepted_local_revision : ID.Text_input.local_revision
   ; interaction_status : string
   }
 
@@ -28,8 +29,10 @@ let equal_model left right =
   && Int.equal left.press_count right.press_count
   && Int.equal left.native_count right.native_count
   && String.equal left.text right.text
-  && Int64.equal left.document_revision right.document_revision
-  && Int64.equal left.accepted_local_revision right.accepted_local_revision
+  && ID.Text_input.Document_revision.equal left.document_revision right.document_revision
+  && ID.Text_input.Local_revision.equal
+       left.accepted_local_revision
+       right.accepted_local_revision
   && String.equal left.interaction_status right.interaction_status
 ;;
 
@@ -38,20 +41,22 @@ let initial_model =
   ; press_count = 0
   ; native_count = 0
   ; text = "Type 中文 or 😀"
-  ; document_revision = 0L
-  ; accepted_local_revision = 0L
+  ; document_revision = ID.Text_input.Document_revision.zero
+  ; accepted_local_revision = ID.Text_input.Local_revision.zero
   ; interaction_status = "Move, focus, tap, or press a key"
   }
 ;;
 
 let gallery_card =
   Ui.Native_widget.Extension.create
-    ~kind_id:1001
+    ~kind_id:(ID.Native_widget.Kind_id.of_int 1001)
     ~version:1
     ~capabilities:[ Ui.Native_widget.Capability.Stateful; Resource; Semantics ]
     ~encode_props:Bytes.of_string
     ~decode_event:(fun ~event_id payload ->
-      if event_id = 1 && Bytes.length payload = 0
+      if
+        ID.Native_widget.Event_id.equal event_id (ID.Native_widget.Event_id.of_int 1)
+        && Bytes.length payload = 0
       then Ok Activate
       else Error "unknown gallery card event")
     ()
@@ -92,7 +97,7 @@ let make_handlers registry set_model =
       | Ui.Event.Payload.Text_edit edit ->
         { model with
           text = edit.text
-        ; document_revision = Int64.succ model.document_revision
+        ; document_revision = ID.Text_input.Document_revision.succ model.document_revision
         ; accepted_local_revision = edit.local_revision
         }
       | _ -> model)
@@ -316,7 +321,7 @@ let text_input_section model handlers =
   section
     "Text input and IME"
     [ Ui.Material.text_field
-        ~session_id:1L
+        ~session_id:(ID.Text_input.Session_id.of_int64 1L)
         ~document_revision:model.document_revision
         ~accepted_local_revision:model.accepted_local_revision
         ~update_mode:Ui.Text_editing.Ack

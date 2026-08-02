@@ -1,7 +1,10 @@
 (library
  (name bonsai_flutter_runtime)
  (public_name bonsai_flutter.runtime)
- (libraries bonsai_flutter.ui bonsai_flutter.protocol)
+ (libraries
+  bonsai_flutter.spec_impl
+  bonsai_flutter.ui
+  bonsai_flutter.protocol)
  (modules
   node_id
   handler_id
@@ -42,6 +45,7 @@
   worker
   worker_runtime)
  (libraries
+  bonsai_flutter.spec_impl
   bonsai
   base
   bonsai_flutter.ui

@@ -7,15 +7,16 @@ type t =
       }
   | Invalid_patch of string
   | Revision_mismatch of
-      { expected : int64
-      ; actual : int64
+      { expected : Bonsai_flutter_spec.Id.Runtime.renderer_revision
+      ; actual : Bonsai_flutter_spec.Id.Runtime.renderer_revision
       }
   | Wrong_runtime_epoch of
-      { expected : int64
-      ; actual : int64
+      { expected : Bonsai_flutter_spec.Id.Runtime.epoch
+      ; actual : Bonsai_flutter_spec.Id.Runtime.epoch
       }
-  | Stale_event of { revision : int64 }
-  | Duplicate_or_out_of_order_event of { sequence : int64 }
+  | Stale_event of { revision : Bonsai_flutter_spec.Id.Runtime.renderer_revision }
+  | Duplicate_or_out_of_order_event of
+      { sequence : Bonsai_flutter_spec.Id.Runtime.event_sequence }
   | Handler_missing of { handler_id : Handler_id.t }
   | Handler_mismatch of
       { handler_id : Handler_id.t

@@ -10,16 +10,20 @@ module Frame : sig
 
   type t
 
-  val revision : t -> int64
+  val revision : t -> Bonsai_flutter_spec.Id.Runtime.renderer_revision
   val find : t -> Handler_id.t -> entry option
 
   module Private : sig
-    val create : revision:int64 -> entry list -> t
-    val empty : revision:int64 -> t
+    val create
+      :  revision:Bonsai_flutter_spec.Id.Runtime.renderer_revision
+      -> entry list
+      -> t
+
+    val empty : revision:Bonsai_flutter_spec.Id.Runtime.renderer_revision -> t
 
     val derive
-      :  revision:int64
-      -> base_revision:int64
+      :  revision:Bonsai_flutter_spec.Id.Runtime.renderer_revision
+      -> base_revision:Bonsai_flutter_spec.Id.Runtime.renderer_revision
       -> base:t
       -> removals:Handler_id.t list
       -> additions:entry list
@@ -28,36 +32,45 @@ module Frame : sig
 end
 
 type event =
-  { runtime_epoch : int64
-  ; displayed_revision : int64
+  { runtime_epoch : Bonsai_flutter_spec.Id.Runtime.epoch
+  ; displayed_revision : Bonsai_flutter_spec.Id.Runtime.renderer_revision
   ; node_id : Node_id.t
   ; event_tag : Bonsai_flutter_ui.Event.Tag.t
   ; handler_id : Handler_id.t
-  ; event_sequence : int64
+  ; event_sequence : Bonsai_flutter_spec.Id.Runtime.event_sequence
   ; payload : Bonsai_flutter_ui.Event.Payload.t
   }
 
 type t
 
-val create : runtime_epoch:int64 -> t
+val create : runtime_epoch:Bonsai_flutter_spec.Id.Runtime.epoch -> t
 val install : t -> Frame.t -> (unit, Runtime_error.t) result
 
 (** Marks a revision as displayed without retiring any handler frames. *)
-val mark_displayed_revision : t -> revision:int64 -> (unit, Runtime_error.t) result
+val mark_displayed_revision
+  :  t
+  -> revision:Bonsai_flutter_spec.Id.Runtime.renderer_revision
+  -> (unit, Runtime_error.t) result
 
 (** Retires handler frames strictly older than [revision]. *)
-val retire_before : t -> revision:int64 -> unit
+val retire_before : t -> revision:Bonsai_flutter_spec.Id.Runtime.renderer_revision -> unit
 
 (** Retires frames older than the revision immediately preceding the displayed
     revision. This bounded grace period accepts input that Flutter queued while
     the next frame was being committed. *)
-val retire_superseded : t -> displayed_revision:int64 -> unit
+val retire_superseded
+  :  t
+  -> displayed_revision:Bonsai_flutter_spec.Id.Runtime.renderer_revision
+  -> unit
 
 (** Marks a revision displayed and retires frames outside the grace period.
 
     Runtime drivers that must run lifecycle work between those operations
     should call [mark_displayed_revision] and [retire_superseded] separately. *)
-val commit_displayed_revision : t -> revision:int64 -> (unit, Runtime_error.t) result
+val commit_displayed_revision
+  :  t
+  -> revision:Bonsai_flutter_spec.Id.Runtime.renderer_revision
+  -> (unit, Runtime_error.t) result
 
 module Validated_batch : sig
   type t

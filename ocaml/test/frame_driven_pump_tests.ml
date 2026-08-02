@@ -1,6 +1,7 @@
 module Protocol = Bonsai_flutter_protocol
 module Runtime = Bonsai_flutter_runtime
 module Ui = Bonsai_flutter_ui
+module ID = Bonsai_flutter_spec.Id
 
 let fail format = Printf.ksprintf failwith format
 let require condition message = if not condition then fail "%s" message
@@ -63,7 +64,12 @@ let require_text result expected =
 
 let create ?trace ?(runtime_epoch = 41L) component =
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
-  time_source, Driver.create ?trace ~runtime_epoch ~time_source component
+  ( time_source
+  , Driver.create
+      ?trace
+      ~runtime_epoch:(ID.Runtime.Epoch.of_int64 runtime_epoch)
+      ~time_source
+      component )
 ;;
 
 let pump driver monotonic_now_ns = ok (Driver.pump driver ~monotonic_now_ns ())
@@ -165,7 +171,7 @@ let test_sleep_and_until_without_input () =
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   let driver =
     Driver.create
-      ~runtime_epoch:42L
+      ~runtime_epoch:(ID.Runtime.Epoch.of_int64 42L)
       ~time_source
       (timer_component
          ~time_source
@@ -303,7 +309,7 @@ let test_retained_token_starts_relative_timer_at_resume_acknowledgment () =
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   let driver =
     Driver.create
-      ~runtime_epoch:45L
+      ~runtime_epoch:(ID.Runtime.Epoch.of_int64 45L)
       ~time_source
       (relative_timer_after_display_component ~timer_fired)
   in
@@ -353,10 +359,10 @@ let test_no_diff_tokens_and_lifecycle_only_presentations () =
     let result = pump driver now in
     require (Option.is_none result.frame) "no-diff pump emitted a wire frame";
     require
-      (Int64.compare result.presentation_id !previous_id > 0)
+      (ID.Runtime.Presentation_id.compare result.presentation_id !previous_id > 0)
       "presentation identifiers did not increase";
     require
-      (Int64.equal result.renderer_revision stable_revision)
+      (ID.Runtime.Renderer_revision.equal result.renderer_revision stable_revision)
       "no-diff pump advanced renderer revision";
     present driver result now;
     previous_id := result.presentation_id
@@ -376,14 +382,14 @@ let test_exact_token_barrier_duplicate_future_and_unsolicited_acknowledgments ()
   require_error
     (Driver.presentation_succeeded
        driver
-       ~presentation_id:(Int64.succ initial.presentation_id)
+       ~presentation_id:(ID.Runtime.Presentation_id.succ initial.presentation_id)
        ~renderer_revision:initial.renderer_revision
        ~monotonic_now_ns:1L);
   require_error
     (Driver.presentation_succeeded
        driver
        ~presentation_id:initial.presentation_id
-       ~renderer_revision:(Int64.succ initial.renderer_revision)
+       ~renderer_revision:(ID.Runtime.Renderer_revision.succ initial.renderer_revision)
        ~monotonic_now_ns:1L);
   present driver initial 1L;
   require_error
@@ -415,7 +421,10 @@ let test_rejection_burns_revision_skips_lifecycle_and_forces_snapshot () =
   require (!activations = 0 && !after_displays = 0) "rejection ran presentation lifecycle";
   let recovery = pump driver 1L in
   require
-    (Int64.compare recovery.renderer_revision rejected.renderer_revision > 0)
+    (ID.Runtime.Renderer_revision.compare
+       recovery.renderer_revision
+       rejected.renderer_revision
+     > 0)
     "rejected renderer revision was reused";
   (match recovery.frame with
    | None -> fail "rejection recovery did not emit a full snapshot"
@@ -439,12 +448,14 @@ let test_negative_and_decreasing_clock_are_non_mutating () =
   require_error
     (Driver.presentation_succeeded
        driver
-       ~presentation_id:(Int64.succ first.presentation_id)
+       ~presentation_id:(ID.Runtime.Presentation_id.succ first.presentation_id)
        ~renderer_revision:first.renderer_revision
        ~monotonic_now_ns:19L);
   let next = pump driver 21L in
   require
-    (Int64.equal next.presentation_id (Int64.succ first.presentation_id))
+    (ID.Runtime.Presentation_id.equal
+       next.presentation_id
+       (ID.Runtime.Presentation_id.succ first.presentation_id))
     "invalid clock input mutated the presentation sequence";
   present driver next 21L;
   Driver.shutdown driver
@@ -470,7 +481,7 @@ let atomic_input_component ~handled ~timer_fired ~time_source handlers graph =
 ;;
 
 let test_invalid_input_is_atomic_and_does_not_starve_due_timer () =
-  let runtime_epoch = 50L in
+  let runtime_epoch = ID.Runtime.Epoch.of_int64 50L in
   let handled = ref 0 in
   let timer_fired = ref 0 in
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
@@ -488,17 +499,17 @@ let test_invalid_input_is_atomic_and_does_not_starve_due_timer () =
     Protocol.Inbound_event.
       { runtime_epoch
       ; events =
-          [ { sequence = 1L
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 1L
             ; displayed_revision = initial.renderer_revision
             ; node_id
             ; handler_id
             ; event_tag
             ; payload = Unit
             }
-          ; { sequence = 2L
+          ; { sequence = ID.Runtime.Event_sequence.of_int64 2L
             ; displayed_revision = initial.renderer_revision
             ; node_id
-            ; handler_id = Int64.succ handler_id
+            ; handler_id = ID.Ui.Handler_id.succ handler_id
             ; event_tag
             ; payload = Unit
             }
@@ -538,9 +549,9 @@ let test_changed_handler_identity_emits_binding_update () =
   present driver initial 0L;
   let events =
     Protocol.Inbound_event.
-      { runtime_epoch
+      { runtime_epoch = ID.Runtime.Epoch.of_int64 runtime_epoch
       ; events =
-          [ { sequence = 1L
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 1L
             ; displayed_revision = initial.renderer_revision
             ; node_id
             ; handler_id
@@ -566,9 +577,9 @@ let test_changed_handler_identity_emits_binding_update () =
   present driver updated 1L;
   let grace_events =
     Protocol.Inbound_event.
-      { runtime_epoch
+      { runtime_epoch = ID.Runtime.Epoch.of_int64 runtime_epoch
       ; events =
-          [ { sequence = 2L
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 2L
             ; displayed_revision = initial.renderer_revision
             ; node_id
             ; handler_id
@@ -585,9 +596,9 @@ let test_changed_handler_identity_emits_binding_update () =
   present driver grace 2L;
   let stale_events =
     Protocol.Inbound_event.
-      { runtime_epoch
+      { runtime_epoch = ID.Runtime.Epoch.of_int64 runtime_epoch
       ; events =
-          [ { sequence = 3L
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 3L
             ; displayed_revision = initial.renderer_revision
             ; node_id
             ; handler_id
@@ -637,9 +648,9 @@ let test_host_operation_replays_after_rejection_and_commits_once () =
   present driver initial 0L;
   let events =
     Protocol.Inbound_event.
-      { runtime_epoch
+      { runtime_epoch = ID.Runtime.Epoch.of_int64 runtime_epoch
       ; events =
-          [ { sequence = 1L
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 1L
             ; displayed_revision = initial.renderer_revision
             ; node_id
             ; handler_id
@@ -697,9 +708,9 @@ let test_lifecycle_before_display_reaches_fixed_point () =
   present driver initial 0L;
   let events =
     Protocol.Inbound_event.
-      { runtime_epoch = 53L
+      { runtime_epoch = ID.Runtime.Epoch.of_int64 53L
       ; events =
-          [ { sequence = 1L
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 1L
             ; displayed_revision = initial.renderer_revision
             ; node_id
             ; handler_id
@@ -734,7 +745,10 @@ let wait_before_display_component handlers graph =
 let test_wait_before_display_updates_initial_candidate () =
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   let driver =
-    Driver.create ~runtime_epoch:54L ~time_source wait_before_display_component
+    Driver.create
+      ~runtime_epoch:(ID.Runtime.Epoch.of_int64 54L)
+      ~time_source
+      wait_before_display_component
   in
   let initial = pump driver 0L in
   require_text initial "hidden";
@@ -803,13 +817,17 @@ let test_same_path_lifecycle_replacement_runs_replacement_on_removal () =
 
 let test_presentation_and_renderer_sequence_overflow_are_fatal () =
   let _, presentation_driver = create ~runtime_epoch:56L static_component in
-  Driver.For_testing.set_next_presentation_id presentation_driver Int64.max_int;
+  Driver.For_testing.set_next_presentation_id
+    presentation_driver
+    ID.Runtime.Presentation_id.max_value;
   let final_id = pump presentation_driver 0L in
   present presentation_driver final_id 0L;
   require_error (Driver.pump presentation_driver ~monotonic_now_ns:1L ());
   Driver.shutdown presentation_driver;
   let _, renderer_driver = create ~runtime_epoch:57L static_component in
-  Driver.For_testing.set_next_renderer_revision renderer_driver Int64.max_int;
+  Driver.For_testing.set_next_renderer_revision
+    renderer_driver
+    ID.Runtime.Renderer_revision.max_value;
   require_error (Driver.pump renderer_driver ~monotonic_now_ns:0L ());
   Driver.shutdown renderer_driver
 ;;

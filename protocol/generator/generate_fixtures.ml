@@ -1,4 +1,11 @@
 module Protocol = Bonsai_flutter_protocol
+module ID = Bonsai_flutter_spec.Id
+
+let epoch = ID.Runtime.Epoch.of_int64
+let revision = ID.Runtime.Renderer_revision.of_int64
+let node = ID.Ui.Node_id.of_int64
+let request = ID.Host.Request_id.of_int64
+let animation = ID.Ui.Animation_id.of_int64
 
 let hex bytes =
   let output = Buffer.create (Bytes.length bytes * 3) in
@@ -40,20 +47,20 @@ let encode_frame frame =
 ;;
 
 let counter_frame : Protocol.Wire_frame.t =
-  { runtime_epoch = 7L
-  ; base_revision = 0L
-  ; target_revision = 1L
+  { runtime_epoch = epoch 7L
+  ; base_revision = revision 0L
+  ; target_revision = revision 1L
   ; kind = Full_snapshot
   ; operations =
       [ Create_node
-          { node_id = 1L
+          { node_id = node 1L
           ; kind = Column
           ; props = Linear_props
           ; event_bindings = []
           ; parent_data = No_parent_data
           }
       ; Create_node
-          { node_id = 2L
+          { node_id = node 2L
           ; kind = Text
           ; props =
               Text_props
@@ -66,8 +73,8 @@ let counter_frame : Protocol.Wire_frame.t =
           ; event_bindings = []
           ; parent_data = No_parent_data
           }
-      ; Set_children { node_id = 1L; children = [ 2L ] }
-      ; Set_root 1L
+      ; Set_children { node_id = node 1L; children = [ node 2L ] }
+      ; Set_root (node 1L)
       ]
   }
 ;;
@@ -75,22 +82,22 @@ let counter_frame : Protocol.Wire_frame.t =
 let fixtures : (string * Protocol.Wire_frame.t) list =
   let open Protocol.Wire_frame in
   [ ( "ocaml_empty_incremental.hex"
-    , { runtime_epoch = 7L
-      ; base_revision = 1L
-      ; target_revision = 2L
+    , { runtime_epoch = epoch 7L
+      ; base_revision = revision 1L
+      ; target_revision = revision 2L
       ; kind = Incremental_frame
       ; operations = []
       } )
   ; "ocaml_counter_full.hex", counter_frame
   ; "counter_full.hex", counter_frame
   ; ( "ocaml_unicode_update.hex"
-    , { runtime_epoch = 7L
-      ; base_revision = 1L
-      ; target_revision = 2L
+    , { runtime_epoch = epoch 7L
+      ; base_revision = revision 1L
+      ; target_revision = revision 2L
       ; kind = Incremental_frame
       ; operations =
           [ Update_props
-              { node_id = 2L
+              { node_id = node 2L
               ; props =
                   Text_props
                     { value = "计数: 😀"
@@ -103,33 +110,36 @@ let fixtures : (string * Protocol.Wire_frame.t) list =
           ]
       } )
   ; ( "ocaml_reordered_children.hex"
-    , { runtime_epoch = 7L
-      ; base_revision = 2L
-      ; target_revision = 3L
-      ; kind = Incremental_frame
-      ; operations = [ Set_children { node_id = 1L; children = [ 3L; 2L ] } ]
-      } )
-  ; ( "ocaml_host_request.hex"
-    , { runtime_epoch = 31L
-      ; base_revision = 2L
-      ; target_revision = 3L
+    , { runtime_epoch = epoch 7L
+      ; base_revision = revision 2L
+      ; target_revision = revision 3L
       ; kind = Incremental_frame
       ; operations =
-          [ Host_request { request_id = 41L; payload = Clipboard_write { text = "剪贴板😀" } }
+          [ Set_children { node_id = node 1L; children = [ node 3L; node 2L ] } ]
+      } )
+  ; ( "ocaml_host_request.hex"
+    , { runtime_epoch = epoch 31L
+      ; base_revision = revision 2L
+      ; target_revision = revision 3L
+      ; kind = Incremental_frame
+      ; operations =
+          [ Host_request
+              { request_id = request 41L; payload = Clipboard_write { text = "剪贴板😀" } }
           ]
       } )
   ; ( "ocaml_animated_opacity.hex"
-    , { runtime_epoch = 7L
-      ; base_revision = 3L
-      ; target_revision = 4L
+    , { runtime_epoch = epoch 7L
+      ; base_revision = revision 3L
+      ; target_revision = revision 4L
       ; kind = Incremental_frame
       ; operations =
           [ Update_props
-              { node_id = 9L
+              { node_id = node 9L
               ; props =
                   Animated_opacity_props
                     { opacity = 0.25
-                    ; animation = { id = 7001L; duration_ms = 250; curve = Ease_in_out }
+                    ; animation =
+                        { id = animation 7001L; duration_ms = 250; curve = Ease_in_out }
                     }
               }
           ]

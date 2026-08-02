@@ -1,9 +1,11 @@
-type t = string
+module ID = Bonsai_flutter_spec.Id
+
+type t = ID.Ui.test_id
 
 let string value =
   if String.length value = 0 then invalid_arg "Test_id.string: value must not be empty";
-  value
+  ID.Ui.Test_id.of_string value
 ;;
 
-let equal = String.equal
-let to_string t = t
+let equal = ID.Ui.Test_id.equal
+let to_string = ID.Ui.Test_id.to_string

@@ -1,3 +1,5 @@
+module ID = Bonsai_flutter_spec.Id
+
 type t =
   | Duplicate_key of
       { parent_kind : string
@@ -5,15 +7,15 @@ type t =
       }
   | Invalid_patch of string
   | Revision_mismatch of
-      { expected : int64
-      ; actual : int64
+      { expected : ID.Runtime.renderer_revision
+      ; actual : ID.Runtime.renderer_revision
       }
   | Wrong_runtime_epoch of
-      { expected : int64
-      ; actual : int64
+      { expected : ID.Runtime.epoch
+      ; actual : ID.Runtime.epoch
       }
-  | Stale_event of { revision : int64 }
-  | Duplicate_or_out_of_order_event of { sequence : int64 }
+  | Stale_event of { revision : ID.Runtime.renderer_revision }
+  | Duplicate_or_out_of_order_event of { sequence : ID.Runtime.event_sequence }
   | Handler_missing of { handler_id : Handler_id.t }
   | Handler_mismatch of
       { handler_id : Handler_id.t
@@ -34,12 +36,23 @@ let to_string = function
       parent_kind
   | Invalid_patch message -> "invalid patch: " ^ message
   | Revision_mismatch { expected; actual } ->
-    Printf.sprintf "revision mismatch: expected %Ld, got %Ld" expected actual
+    Printf.sprintf
+      "revision mismatch: expected %Ld, got %Ld"
+      (ID.Runtime.Renderer_revision.to_int64 expected)
+      (ID.Runtime.Renderer_revision.to_int64 actual)
   | Wrong_runtime_epoch { expected; actual } ->
-    Printf.sprintf "runtime epoch mismatch: expected %Ld, got %Ld" expected actual
-  | Stale_event { revision } -> Printf.sprintf "stale event for revision %Ld" revision
+    Printf.sprintf
+      "runtime epoch mismatch: expected %Ld, got %Ld"
+      (ID.Runtime.Epoch.to_int64 expected)
+      (ID.Runtime.Epoch.to_int64 actual)
+  | Stale_event { revision } ->
+    Printf.sprintf
+      "stale event for revision %Ld"
+      (ID.Runtime.Renderer_revision.to_int64 revision)
   | Duplicate_or_out_of_order_event { sequence } ->
-    Printf.sprintf "duplicate or out-of-order event sequence %Ld" sequence
+    Printf.sprintf
+      "duplicate or out-of-order event sequence %Ld"
+      (ID.Runtime.Event_sequence.to_int64 sequence)
   | Handler_missing { handler_id } ->
     Printf.sprintf "missing handler %Ld" (Handler_id.to_int64 handler_id)
   | Handler_mismatch { handler_id; node_id; event_tag } ->

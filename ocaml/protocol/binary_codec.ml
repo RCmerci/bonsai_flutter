@@ -1,3 +1,5 @@
+module ID = Bonsai_flutter_spec.Id
+
 type error_code =
   | Invalid_magic
   | Unsupported_version
@@ -227,6 +229,7 @@ let animation_curve_id = function
 ;;
 
 let write_animation writer { id; duration_ms; curve } =
+  let id = ID.Ui.Animation_id.to_int64 id in
   check_u64 "animation id" id;
   check_u32 "animation duration" duration_ms;
   Writer.u64 writer id;
@@ -552,6 +555,11 @@ let write_props writer kind props =
         ; update_mode
         ; autofocus
         } ) ->
+    let session_id = ID.Text_input.Session_id.to_int64 session_id in
+    let document_revision = ID.Text_input.Document_revision.to_int64 document_revision in
+    let accepted_local_revision =
+      ID.Text_input.Local_revision.to_int64 accepted_local_revision
+    in
     check_u64 "text session ID" session_id;
     check_u64 "document revision" document_revision;
     check_u64 "accepted local revision" accepted_local_revision;
@@ -570,12 +578,16 @@ let write_props writer kind props =
     Writer.u8 writer (overlay_alignment_id alignment);
     write_bool writer dismissible
   | Navigator, Navigator_props { restoration_scope_id } ->
-    write_optional_string writer restoration_scope_id
+    write_optional_string
+      writer
+      (Option.map ID.Navigation.Restoration_scope_id.to_string restoration_scope_id)
   | Page, Page_props { page_key; transition; can_pop; restoration_id } ->
-    write_string writer page_key;
+    write_string writer (ID.Navigation.Page_key.to_string page_key);
     Writer.u8 writer (page_transition_id transition);
     write_bool writer can_pop;
-    write_optional_string writer restoration_id
+    write_optional_string
+      writer
+      (Option.map ID.Navigation.Restoration_id.to_string restoration_id)
   | ( Safe_area
     , Safe_area_props
         { left
@@ -598,6 +610,7 @@ let write_props writer kind props =
   | Material_dialog, Material_dialog_props { barrier_dismissible } ->
     write_bool writer barrier_dismissible
   | Native_widget, Native_widget_props { kind_id; version; capabilities; payload } ->
+    let kind_id = ID.Native_widget.Kind_id.to_int kind_id in
     check_u32 "native widget kind ID" kind_id;
     check_u16 "native widget version" version;
     check_u32 "native widget payload length" (Bytes.length payload);
@@ -662,7 +675,10 @@ let props_kind_id = function
   | Native_widget_props _ -> Generated_protocol.Node_kind.native_widget
 ;;
 
-let field_mask id = Int64.shift_left 1L (id - 1)
+let field_mask id =
+  let id = ID.Protocol.Property.to_int id in
+  Int64.shift_left 1L (id - 1)
+;;
 
 let changed_fields = function
   | Wire_frame.Empty_props | Linear_props | Gesture_props | Environment_boundary_props ->
@@ -873,7 +889,7 @@ let changed_fields = function
 ;;
 
 let write_update_props writer props =
-  Writer.u16 writer (props_kind_id props);
+  Writer.u16 writer (ID.Protocol.Node_kind.to_int (props_kind_id props));
   Writer.u64 writer (changed_fields props);
   match props with
   | Wire_frame.Empty_props | Linear_props | Gesture_props | Environment_boundary_props ->
@@ -1025,6 +1041,11 @@ let write_update_props writer props =
       ; update_mode
       ; autofocus
       } ->
+    let session_id = ID.Text_input.Session_id.to_int64 session_id in
+    let document_revision = ID.Text_input.Document_revision.to_int64 document_revision in
+    let accepted_local_revision =
+      ID.Text_input.Local_revision.to_int64 accepted_local_revision
+    in
     check_u64 "text session ID" session_id;
     check_u64 "document revision" document_revision;
     check_u64 "accepted local revision" accepted_local_revision;
@@ -1043,12 +1064,16 @@ let write_update_props writer props =
     Writer.u8 writer (overlay_alignment_id alignment);
     write_bool writer dismissible
   | Navigator_props { restoration_scope_id } ->
-    write_optional_string writer restoration_scope_id
+    write_optional_string
+      writer
+      (Option.map ID.Navigation.Restoration_scope_id.to_string restoration_scope_id)
   | Page_props { page_key; transition; can_pop; restoration_id } ->
-    write_string writer page_key;
+    write_string writer (ID.Navigation.Page_key.to_string page_key);
     Writer.u8 writer (page_transition_id transition);
     write_bool writer can_pop;
-    write_optional_string writer restoration_id
+    write_optional_string
+      writer
+      (Option.map ID.Navigation.Restoration_id.to_string restoration_id)
   | Safe_area_props
       { left
       ; top
@@ -1069,6 +1094,7 @@ let write_update_props writer props =
     Writer.f64 writer minimum_bottom
   | Material_dialog_props { barrier_dismissible } -> write_bool writer barrier_dismissible
   | Native_widget_props { kind_id; version; capabilities; payload } ->
+    let kind_id = ID.Native_widget.Kind_id.to_int kind_id in
     check_u32 "native widget kind ID" kind_id;
     check_u16 "native widget version" version;
     Writer.u32 writer kind_id;
@@ -1093,6 +1119,7 @@ let write_string_list writer values =
 ;;
 
 let write_host_request body request_id payload =
+  let request_id = ID.Host.Request_id.to_int64 request_id in
   check_u64 "host request ID" request_id;
   Writer.u64 body request_id;
   let request_kind, write_payload =
@@ -1116,12 +1143,14 @@ let write_host_request body request_id payload =
     | Request_focus { node_id } ->
       ( Generated_protocol.Host_request.request_focus
       , fun () ->
+          let node_id = ID.Ui.Node_id.to_int64 node_id in
           check_u64 "focus node ID" node_id;
           Writer.u64 body node_id )
     | Clear_focus -> Generated_protocol.Host_request.clear_focus, fun () -> ()
     | Scroll_to { node_id; alignment; animated } ->
       ( Generated_protocol.Host_request.scroll_to
       , fun () ->
+          let node_id = ID.Ui.Node_id.to_int64 node_id in
           check_u64 "scroll node ID" node_id;
           if not (Float.is_finite alignment)
           then fail Invalid_props "scroll alignment must be finite";
@@ -1149,7 +1178,7 @@ let write_host_request body request_id payload =
           Writer.u16 body (List.length items);
           List.iter
             (fun (item : Wire_frame.native_menu_item) ->
-               write_string body item.item_id;
+               write_string body (ID.Host.Native_menu_item_id.to_string item.item_id);
                write_string body item.label;
                write_bool body item.enabled)
             items )
@@ -1168,10 +1197,11 @@ let write_host_request body request_id payload =
     | Measure_layout { node_id } ->
       ( Generated_protocol.Host_request.measure_layout
       , fun () ->
+          let node_id = ID.Ui.Node_id.to_int64 node_id in
           check_u64 "layout node ID" node_id;
           Writer.u64 body node_id )
   in
-  Writer.u16 body request_kind;
+  Writer.u16 body (ID.Protocol.Host_request_kind.to_int request_kind);
   write_payload ()
 ;;
 
@@ -1181,10 +1211,12 @@ let write_bindings writer bindings =
   Writer.u16 writer count;
   List.iter
     (fun (binding : Wire_frame.event_binding) ->
-       check_u16 "event tag" binding.event_tag;
-       check_u64 "handler ID" binding.handler_id;
-       Writer.u16 writer binding.event_tag;
-       Writer.u64 writer binding.handler_id)
+       let event_tag = ID.Protocol.Event_tag.to_int binding.event_tag in
+       let handler_id = ID.Ui.Handler_id.to_int64 binding.handler_id in
+       check_u16 "event tag" event_tag;
+       check_u64 "handler ID" handler_id;
+       Writer.u16 writer event_tag;
+       Writer.u64 writer handler_id)
     bindings
 ;;
 
@@ -1209,39 +1241,43 @@ let write_parent_data writer = function
 
 let envelope payload opcode body =
   let bytes = Writer.contents body in
-  Writer.u8 payload opcode;
+  Writer.u8 payload (ID.Protocol.Operation.to_int opcode);
   Writer.u32 payload (Bytes.length bytes);
   Writer.bytes payload bytes
 ;;
 
 let write_empty_envelope payload opcode =
-  Writer.u8 payload opcode;
+  Writer.u8 payload (ID.Protocol.Operation.to_int opcode);
   Writer.u32 payload 0
 ;;
 
 let write_operation ?(record_runtime_stats_offsets = fun _ -> ()) payload = function
   | Wire_frame.Create_node { node_id; kind; props; event_bindings; parent_data } ->
+    let node_id = ID.Ui.Node_id.to_int64 node_id in
     check_u64 "node ID" node_id;
     let body = Writer.create () in
     Writer.u64 body node_id;
-    Writer.u16 body (node_kind_id kind);
+    Writer.u16 body (ID.Protocol.Node_kind.to_int (node_kind_id kind));
     write_props body kind props;
     write_bindings body event_bindings;
     write_parent_data body parent_data;
     envelope payload Generated_protocol.Operation.create_node body
   | Update_props { node_id; props } ->
+    let node_id = ID.Ui.Node_id.to_int64 node_id in
     check_u64 "node ID" node_id;
     let body = Writer.create () in
     Writer.u64 body node_id;
     write_update_props body props;
     envelope payload Generated_protocol.Operation.update_props body
   | Update_event_bindings { node_id; event_bindings } ->
+    let node_id = ID.Ui.Node_id.to_int64 node_id in
     check_u64 "node ID" node_id;
     let body = Writer.create () in
     Writer.u64 body node_id;
     write_bindings body event_bindings;
     envelope payload Generated_protocol.Operation.update_event_bindings body
   | Set_children { node_id; children } ->
+    let node_id = ID.Ui.Node_id.to_int64 node_id in
     check_u64 "node ID" node_id;
     if List.length children > Generated_protocol.Limits.max_nodes
     then fail Invalid_props "child count exceeds the node limit";
@@ -1250,16 +1286,19 @@ let write_operation ?(record_runtime_stats_offsets = fun _ -> ()) payload = func
     Writer.u32 body (List.length children);
     List.iter
       (fun child ->
+         let child = ID.Ui.Node_id.to_int64 child in
          check_u64 "child node ID" child;
          Writer.u64 body child)
       children;
     envelope payload Generated_protocol.Operation.set_children body
   | Set_root node_id ->
+    let node_id = ID.Ui.Node_id.to_int64 node_id in
     check_u64 "root node ID" node_id;
     let body = Writer.create () in
     Writer.u64 body node_id;
     envelope payload Generated_protocol.Operation.set_root body
   | Drop_node node_id ->
+    let node_id = ID.Ui.Node_id.to_int64 node_id in
     check_u64 "node ID" node_id;
     let body = Writer.create () in
     Writer.u64 body node_id;
@@ -1269,6 +1308,7 @@ let write_operation ?(record_runtime_stats_offsets = fun _ -> ()) payload = func
     write_host_request body request_id request;
     envelope payload Generated_protocol.Operation.host_request body
   | Cancel_host_request { request_id } ->
+    let request_id = ID.Host.Request_id.to_int64 request_id in
     check_u64 "host request ID" request_id;
     let body = Writer.create () in
     Writer.u64 body request_id;
@@ -1309,9 +1349,12 @@ let encode_bytes frame ~record_runtime_stats_offsets =
   let operation_count = List.length frame.Wire_frame.operations + 2 in
   if operation_count > Generated_protocol.Limits.max_operations
   then fail Too_many_operations "frame has %d operations" operation_count;
-  check_u64 "runtime epoch" frame.runtime_epoch;
-  check_u64 "base revision" frame.base_revision;
-  check_u64 "target revision" frame.target_revision;
+  let runtime_epoch = ID.Runtime.Epoch.to_int64 frame.runtime_epoch in
+  let base_revision = ID.Runtime.Renderer_revision.to_int64 frame.base_revision in
+  let target_revision = ID.Runtime.Renderer_revision.to_int64 frame.target_revision in
+  check_u64 "runtime epoch" runtime_epoch;
+  check_u64 "base revision" base_revision;
+  check_u64 "target revision" target_revision;
   let payload = Writer.create () in
   write_empty_envelope payload Generated_protocol.Operation.begin_frame;
   List.iter (write_operation ~record_runtime_stats_offsets payload) frame.operations;
@@ -1327,13 +1370,14 @@ let encode_bytes frame ~record_runtime_stats_offsets =
   Writer.u16 output Generated_protocol.Limits.header_bytes;
   Writer.u8
     output
-    (match frame.kind with
-     | Wire_frame.Full_snapshot -> Generated_protocol.Frame_kind.full_snapshot
-     | Incremental_frame -> Generated_protocol.Frame_kind.incremental_frame);
+    (ID.Protocol.Frame_kind.to_int
+       (match frame.kind with
+        | Wire_frame.Full_snapshot -> Generated_protocol.Frame_kind.full_snapshot
+        | Incremental_frame -> Generated_protocol.Frame_kind.incremental_frame));
   Writer.u8 output 0;
-  Writer.u64 output frame.runtime_epoch;
-  Writer.u64 output frame.base_revision;
-  Writer.u64 output frame.target_revision;
+  Writer.u64 output runtime_epoch;
+  Writer.u64 output base_revision;
+  Writer.u64 output target_revision;
   Writer.u32 output (Bytes.length payload);
   Writer.u32 output 0;
   Writer.u32 output 0;
@@ -1686,8 +1730,10 @@ let read_text_props reader ~protocol_minor =
 ;;
 
 let read_animation reader =
-  let id = Reader.u64 reader in
-  if Int64.compare id 0L < 0 then fail Invalid_props "animation id must be non-negative";
+  let id_value = Reader.u64 reader in
+  if Int64.compare id_value 0L < 0
+  then fail Invalid_props "animation id must be non-negative";
+  let id = ID.Ui.Animation_id.of_int64 id_value in
   let duration_ms = Reader.u32 reader in
   let curve =
     match Reader.u8 reader with
@@ -1715,7 +1761,7 @@ let read_semantics_role reader =
 ;;
 
 let read_node_kind reader =
-  match Reader.u16 reader with
+  match Reader.u16 reader |> ID.Protocol.Node_kind.of_int with
   | value when value = Generated_protocol.Node_kind.empty -> Wire_frame.Empty
   | value when value = Generated_protocol.Node_kind.text -> Text
   | value when value = Generated_protocol.Node_kind.rich_text -> Rich_text
@@ -1771,7 +1817,8 @@ let read_node_kind reader =
     Environment_boundary
   | value when value = Generated_protocol.Node_kind.material_dialog -> Material_dialog
   | value when value = Generated_protocol.Node_kind.native_widget -> Native_widget
-  | value -> fail Unknown_node_kind "unknown node kind %d" value
+  | value ->
+    fail Unknown_node_kind "unknown node kind %d" (ID.Protocol.Node_kind.to_int value)
 ;;
 
 let read_props reader kind ~protocol_minor =
@@ -1990,8 +2037,10 @@ let read_props reader kind ~protocol_minor =
   | Cupertino_switch ->
     Cupertino_switch_props { value = read_bool reader; enabled = read_bool reader }
   | Text_input ->
-    let session_id = Reader.u64 reader in
-    let document_revision = Reader.u64 reader in
+    let session_id = Reader.u64 reader |> ID.Text_input.Session_id.of_int64 in
+    let document_revision =
+      Reader.u64 reader |> ID.Text_input.Document_revision.of_int64
+    in
     let text = read_string reader in
     let read_text_range () =
       let start_utf16 = Reader.u32 reader in
@@ -2032,7 +2081,9 @@ let read_props reader kind ~protocol_minor =
       | 6 -> Go
       | value -> fail Invalid_props "invalid text input action %d" value
     in
-    let accepted_local_revision = Reader.u64 reader in
+    let accepted_local_revision =
+      Reader.u64 reader |> ID.Text_input.Local_revision.of_int64
+    in
     let update_mode =
       match Reader.u8 reader with
       | 0 -> Wire_frame.Ack
@@ -2069,10 +2120,18 @@ let read_props reader kind ~protocol_minor =
       | value -> fail Invalid_props "invalid overlay alignment %d" value
     in
     Overlay_props { alignment; dismissible = read_bool reader }
-  | Navigator -> Navigator_props { restoration_scope_id = read_optional_string reader }
+  | Navigator ->
+    Navigator_props
+      { restoration_scope_id =
+          Option.map
+            ID.Navigation.Restoration_scope_id.of_string
+            (read_optional_string reader)
+      }
   | Page ->
-    let page_key = read_string reader in
-    if String.length page_key = 0 then fail Invalid_props "page key must not be empty";
+    let page_key_value = read_string reader in
+    if String.length page_key_value = 0
+    then fail Invalid_props "page key must not be empty";
+    let page_key = ID.Navigation.Page_key.of_string page_key_value in
     let transition =
       match Reader.u8 reader with
       | 0 -> Wire_frame.No_transition
@@ -2081,7 +2140,9 @@ let read_props reader kind ~protocol_minor =
       | value -> fail Invalid_props "invalid page transition %d" value
     in
     let can_pop = read_bool reader in
-    let restoration_id = read_optional_string reader in
+    let restoration_id =
+      Option.map ID.Navigation.Restoration_id.of_string (read_optional_string reader)
+    in
     Page_props { page_key; transition; can_pop; restoration_id }
   | Safe_area ->
     Safe_area_props
@@ -2096,15 +2157,16 @@ let read_props reader kind ~protocol_minor =
       }
   | Material_dialog -> Material_dialog_props { barrier_dismissible = read_bool reader }
   | Native_widget ->
-    let kind_id = Reader.u32 reader in
+    let kind_id_value = Reader.u32 reader in
     let version = Reader.u16 reader in
-    if kind_id = 0 then fail Invalid_props "native widget kind ID must be positive";
+    if kind_id_value = 0 then fail Invalid_props "native widget kind ID must be positive";
     if version = 0 then fail Invalid_props "native widget version must be positive";
     let capabilities = Reader.u64 reader in
     let payload_length = Reader.u32 reader in
     if payload_length < 0
     then fail Truncated_input "negative native widget payload length";
     let payload = Reader.bytes reader payload_length in
+    let kind_id = ID.Native_widget.Kind_id.of_int kind_id_value in
     Native_widget_props { kind_id; version; capabilities; payload }
 ;;
 
@@ -2125,8 +2187,8 @@ let read_update_props reader ~protocol_minor =
 let read_bindings reader =
   let count = Reader.u16 reader in
   List.init count (fun _ ->
-    let event_tag = Reader.u16 reader in
-    let handler_id = Reader.u64 reader in
+    let event_tag = Reader.u16 reader |> ID.Protocol.Event_tag.of_int in
+    let handler_id = Reader.u64 reader |> ID.Ui.Handler_id.of_int64 in
     Wire_frame.{ event_tag; handler_id })
 ;;
 
@@ -2161,12 +2223,12 @@ let read_host_request body request_id request_kind =
       let data = read_bytes body in
       Save_file { suggested_name; data })
     else if request_kind = Generated_protocol.Host_request.request_focus
-    then Request_focus { node_id = Reader.u64 body }
+    then Request_focus { node_id = Reader.u64 body |> ID.Ui.Node_id.of_int64 }
     else if request_kind = Generated_protocol.Host_request.clear_focus
     then Clear_focus
     else if request_kind = Generated_protocol.Host_request.scroll_to
     then (
-      let node_id = Reader.u64 body in
+      let node_id = Reader.u64 body |> ID.Ui.Node_id.of_int64 in
       let alignment = read_finite_f64 body in
       let animated = read_bool body in
       Scroll_to { node_id; alignment; animated })
@@ -2183,7 +2245,7 @@ let read_host_request body request_id request_kind =
       Show_native_menu
         { items =
             List.init count (fun _ ->
-              let item_id = read_string body in
+              let item_id = read_string body |> ID.Host.Native_menu_item_id.of_string in
               let label = read_string body in
               let enabled = read_bool body in
               { item_id; label; enabled })
@@ -2200,8 +2262,12 @@ let read_host_request body request_id request_kind =
     else if request_kind = Generated_protocol.Host_request.platform_information
     then Platform_information
     else if request_kind = Generated_protocol.Host_request.measure_layout
-    then Measure_layout { node_id = Reader.u64 body }
-    else fail Invalid_props "unknown host request kind %d" request_kind
+    then Measure_layout { node_id = Reader.u64 body |> ID.Ui.Node_id.of_int64 }
+    else
+      fail
+        Invalid_props
+        "unknown host request kind %d"
+        (ID.Protocol.Host_request_kind.to_int request_kind)
   in
   Host_request { request_id; payload }
 ;;
@@ -2238,45 +2304,56 @@ let read_operation opcode body ~protocol_minor =
   let operation =
     if opcode = Generated_protocol.Operation.create_node
     then (
-      let node_id = Reader.u64 body in
+      let node_id = Reader.u64 body |> ID.Ui.Node_id.of_int64 in
       let kind = read_node_kind body in
       let props =
         try read_props body kind ~protocol_minor with
         | Codec_error error ->
-          fail error.code "node %Ld kind %d: %s" node_id (node_kind_id kind) error.message
+          fail
+            error.code
+            "node %Ld kind %d: %s"
+            (ID.Ui.Node_id.to_int64 node_id)
+            (ID.Protocol.Node_kind.to_int (node_kind_id kind))
+            error.message
       in
       let event_bindings = read_bindings body in
       let parent_data = read_parent_data body in
       Create_node { node_id; kind; props; event_bindings; parent_data })
     else if opcode = Generated_protocol.Operation.update_props
     then (
-      let node_id = Reader.u64 body in
+      let node_id = Reader.u64 body |> ID.Ui.Node_id.of_int64 in
       let props = read_update_props body ~protocol_minor in
       Update_props { node_id; props })
     else if opcode = Generated_protocol.Operation.update_event_bindings
     then (
-      let node_id = Reader.u64 body in
+      let node_id = Reader.u64 body |> ID.Ui.Node_id.of_int64 in
       let event_bindings = read_bindings body in
       Update_event_bindings { node_id; event_bindings })
     else if opcode = Generated_protocol.Operation.set_children
     then (
-      let node_id = Reader.u64 body in
+      let node_id = Reader.u64 body |> ID.Ui.Node_id.of_int64 in
       let count = Reader.u32 body in
       if count < 0 || count > Generated_protocol.Limits.max_nodes
       then fail Invalid_props "invalid child count";
-      let children = List.init count (fun _ -> Reader.u64 body) in
+      let children =
+        List.init count (fun _ -> Reader.u64 body |> ID.Ui.Node_id.of_int64)
+      in
       Set_children { node_id; children })
     else if opcode = Generated_protocol.Operation.set_root
-    then Set_root (Reader.u64 body)
+    then Set_root (Reader.u64 body |> ID.Ui.Node_id.of_int64)
     else if opcode = Generated_protocol.Operation.drop_node
-    then Drop_node (Reader.u64 body)
+    then Drop_node (Reader.u64 body |> ID.Ui.Node_id.of_int64)
     else if opcode = Generated_protocol.Operation.host_request
     then (
-      let request_id = Reader.u64 body in
+      let request_id = Reader.u64 body |> ID.Host.Request_id.of_int64 in
       let request_kind = Reader.u16 body in
       if request_kind = 0
       then Cancel_host_request { request_id }
-      else read_host_request body request_id request_kind)
+      else
+        read_host_request
+          body
+          request_id
+          (ID.Protocol.Host_request_kind.of_int request_kind))
     else if opcode = Generated_protocol.Operation.runtime_notification
     then (
       let event_batch_size = Reader.u32 body in
@@ -2301,7 +2378,8 @@ let read_operation opcode body ~protocol_minor =
         ; full_snapshot_count
         ; resync_count
         })
-    else fail Unknown_operation "unknown operation %d" opcode
+    else
+      fail Unknown_operation "unknown operation %d" (ID.Protocol.Operation.to_int opcode)
   in
   require_empty body;
   operation
@@ -2327,17 +2405,21 @@ let decode bytes =
     then fail Invalid_header "invalid header size %d" header_bytes;
     let kind =
       match Reader.u8 reader with
-      | value when value = Generated_protocol.Frame_kind.full_snapshot ->
-        Wire_frame.Full_snapshot
-      | value when value = Generated_protocol.Frame_kind.incremental_frame ->
-        Incremental_frame
+      | value
+        when value
+             = ID.Protocol.Frame_kind.to_int Generated_protocol.Frame_kind.full_snapshot
+        -> Wire_frame.Full_snapshot
+      | value
+        when value
+             = ID.Protocol.Frame_kind.to_int
+                 Generated_protocol.Frame_kind.incremental_frame -> Incremental_frame
       | value -> fail Invalid_frame_kind "invalid frame kind %d" value
     in
     let flags = Reader.u8 reader in
     if flags <> 0 then fail Invalid_flags "unsupported flags 0x%x" flags;
-    let runtime_epoch = Reader.u64 reader in
-    let base_revision = Reader.u64 reader in
-    let target_revision = Reader.u64 reader in
+    let runtime_epoch = Reader.u64 reader |> ID.Runtime.Epoch.of_int64 in
+    let base_revision = Reader.u64 reader |> ID.Runtime.Renderer_revision.of_int64 in
+    let target_revision = Reader.u64 reader |> ID.Runtime.Renderer_revision.of_int64 in
     let payload_length = Reader.u32 reader in
     let checksum = Reader.u32 reader in
     let reserved = Reader.u32 reader in
@@ -2354,7 +2436,7 @@ let decode bytes =
       incr operation_count;
       if !operation_count > Generated_protocol.Limits.max_operations
       then fail Too_many_operations "operation limit exceeded";
-      let opcode = Reader.u8 payload in
+      let opcode = Reader.u8 payload |> ID.Protocol.Operation.of_int in
       let body_length = Reader.u32 payload in
       if body_length < 0 then fail Truncated_input "negative operation body length";
       let body = Reader.sub_reader payload body_length in

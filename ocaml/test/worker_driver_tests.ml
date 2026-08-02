@@ -1,5 +1,6 @@
 module Protocol = Bonsai_flutter_protocol
 module Ui = Bonsai_flutter_ui
+module ID = Bonsai_flutter_spec.Id
 
 let fail format = Printf.ksprintf failwith format
 let require condition message = if not condition then fail "%s" message
@@ -9,7 +10,7 @@ let service ~initial_pushes =
     ~push_topic_count:(Int.max 1 initial_pushes)
     ~init:(fun ~emit () ->
       for topic = 0 to initial_pushes - 1 do
-        emit ~topic (Printf.sprintf "push-%d" topic)
+        emit ~topic:(ID.Worker.Push_topic.of_int topic) (Printf.sprintf "push-%d" topic)
       done;
       Ok ())
     ~handle_request:(fun () ~cancelled:_ ~emit:_ request -> Ok request, `Idle)
@@ -131,7 +132,7 @@ let input_batch ~runtime_epoch ~revision (node_id, event_tag, handler_id) =
   Protocol.Inbound_event.
     { runtime_epoch
     ; events =
-        [ { sequence = 1L
+        [ { sequence = ID.Runtime.Event_sequence.of_int64 1L
           ; displayed_revision = revision
           ; node_id
           ; handler_id
@@ -143,7 +144,7 @@ let input_batch ~runtime_epoch ~revision (node_id, event_tag, handler_id) =
 ;;
 
 let test_pump_order_barrier_and_stale_rejection () =
-  let runtime_epoch = 301L in
+  let runtime_epoch = ID.Runtime.Epoch.of_int64 301L in
   let client =
     worker_ok (Worker_runtime.start ~runtime_epoch (service ~initial_pushes:0) ())
   in
@@ -173,17 +174,17 @@ let test_pump_order_barrier_and_stale_rejection () =
   present driver updated ~monotonic_now_ns:1L;
   Worker.For_testing.inject_push
     client
-    ~runtime_epoch:999L
+    ~runtime_epoch:(ID.Runtime.Epoch.of_int64 999L)
     ~worker_generation:(Worker.worker_generation client)
-    ~push_sequence:100L
-    ~topic:0
+    ~push_sequence:(ID.Worker.Push_sequence.of_int64 100L)
+    ~topic:(ID.Worker.Push_topic.of_int 0)
     "stale";
   Worker.For_testing.inject_push
     client
     ~runtime_epoch
-    ~worker_generation:(Int64.succ (Worker.worker_generation client))
-    ~push_sequence:101L
-    ~topic:0
+    ~worker_generation:(ID.Worker.Generation.succ (Worker.worker_generation client))
+    ~push_sequence:(ID.Worker.Push_sequence.of_int64 101L)
+    ~topic:(ID.Worker.Push_topic.of_int 0)
     "stale-generation";
   log := [];
   let stale = ok (Driver.pump driver ~monotonic_now_ns:2L ()) in
@@ -195,8 +196,8 @@ let test_pump_order_barrier_and_stale_rejection () =
     client
     ~runtime_epoch
     ~worker_generation:(Worker.worker_generation client)
-    ~push_sequence:1L
-    ~topic:0
+    ~push_sequence:(ID.Worker.Push_sequence.of_int64 1L)
+    ~topic:(ID.Worker.Push_topic.of_int 0)
     "fresh";
   log := [];
   let fresh = ok (Driver.pump driver ~monotonic_now_ns:3L ()) in
@@ -208,7 +209,7 @@ let test_pump_order_barrier_and_stale_rejection () =
 ;;
 
 let test_bounded_drain () =
-  let runtime_epoch = 302L in
+  let runtime_epoch = ID.Runtime.Epoch.of_int64 302L in
   let client =
     worker_ok (Worker_runtime.start ~runtime_epoch (service ~initial_pushes:65) ())
   in

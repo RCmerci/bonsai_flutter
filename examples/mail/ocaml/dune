@@ -3,6 +3,7 @@
  (wrapped false)
  (modules mail)
  (libraries
+  bonsai_flutter.spec_impl
   base
   core
   bonsai
@@ -16,6 +17,7 @@
  (wrapped false)
  (modules native_embed)
  (libraries
+  bonsai_flutter.spec_impl
   bonsai_flutter_trace
   bonsai_flutter_mail_example
   bonsai_flutter.driver
@@ -26,7 +28,10 @@
  (modules native_embed_debug)
  (enabled_if
   (= %{env:BONSAI_FLUTTER_EMBED_OCAML=disabled} enabled))
- (libraries bonsai_flutter_trace_debug bonsai_flutter_mail_native_embed)
+ (libraries
+  bonsai_flutter.spec_impl
+  bonsai_flutter_trace_debug
+  bonsai_flutter_mail_native_embed)
  (modes
   (native object)))
 
@@ -35,6 +40,9 @@
  (modules native_embed_release)
  (enabled_if
   (= %{env:BONSAI_FLUTTER_EMBED_OCAML=disabled} enabled))
- (libraries bonsai_flutter_trace_release bonsai_flutter_mail_native_embed)
+ (libraries
+  bonsai_flutter.spec_impl
+  bonsai_flutter_trace_release
+  bonsai_flutter_mail_native_embed)
  (modes
   (native object)))

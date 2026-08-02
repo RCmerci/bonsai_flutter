@@ -1,17 +1,26 @@
 (test
  (name core_tests)
  (modules core_tests)
- (libraries bonsai_flutter.ui bonsai_flutter.runtime))
+ (libraries
+  bonsai_flutter.spec_impl
+  bonsai_flutter.ui
+  bonsai_flutter.runtime))
 
 (test
  (name trace_debug_tests)
  (modules trace_debug_tests)
- (libraries bonsai_flutter_trace bonsai_flutter_trace_debug))
+ (libraries
+  bonsai_flutter.spec_impl
+  bonsai_flutter_trace
+  bonsai_flutter_trace_debug))
 
 (test
  (name trace_release_tests)
  (modules trace_release_tests)
- (libraries bonsai_flutter_trace bonsai_flutter_trace_release))
+ (libraries
+  bonsai_flutter.spec_impl
+  bonsai_flutter_trace
+  bonsai_flutter_trace_release))
 
 (test
  (name protocol_tests)
@@ -20,7 +29,7 @@
   ../../protocol/generated/fixtures/counter_full.hex
   ../../protocol/generated/fixtures/counter_press.hex
   ../../protocol/generated/fixtures/legacy_1_12_counter_full.hex)
- (libraries bonsai_flutter.protocol))
+ (libraries bonsai_flutter.spec_impl bonsai_flutter.protocol))
 
 (test
  (name cross_language_fixture_tests)
@@ -30,38 +39,43 @@
   ../../protocol/generated/fixtures/dart_host_response.hex
   ../../protocol/generated/fixtures/dart_text_edit_unicode.hex
   ../../protocol/generated/fixtures/dart_environment_changed.hex)
- (libraries bonsai_flutter.protocol))
+ (libraries bonsai_flutter.spec_impl bonsai_flutter.protocol))
 
 (test
  (name event_dispatch_tests)
  (modules event_dispatch_tests)
  (deps ../../protocol/generated/fixtures/counter_press.hex)
- (libraries bonsai_flutter.ui bonsai_flutter.protocol bonsai_flutter.runtime))
+ (libraries
+  bonsai_flutter.spec_impl
+  bonsai_flutter.ui
+  bonsai_flutter.protocol
+  bonsai_flutter.runtime))
 
 (test
  (name text_editing_tests)
  (modules text_editing_tests)
- (libraries bonsai_flutter.ui))
+ (libraries bonsai_flutter.spec_impl bonsai_flutter.ui))
 
 (test
  (name material_surface_tests)
  (modules material_surface_tests)
- (libraries bonsai_flutter.ui))
+ (libraries bonsai_flutter.spec_impl bonsai_flutter.ui))
 
 (test
  (name core_surface_tests)
  (modules core_surface_tests)
- (libraries bonsai_flutter.ui))
+ (libraries bonsai_flutter.spec_impl bonsai_flutter.ui))
 
 (test
  (name native_widget_tests)
  (modules native_widget_tests)
- (libraries bonsai_flutter.ui))
+ (libraries bonsai_flutter.spec_impl bonsai_flutter.ui))
 
 (test
  (name public_api_tests)
  (modules public_api_tests)
  (libraries
+  bonsai_flutter.spec_impl
   base
   core
   bonsai
@@ -76,6 +90,7 @@
  (name layout_driver_tests)
  (modules layout_driver_tests)
  (libraries
+  bonsai_flutter.spec_impl
   base
   core
   bonsai
@@ -90,6 +105,7 @@
  (name bonsai_runtime_adapter_tests)
  (modules bonsai_runtime_adapter_tests)
  (libraries
+  bonsai_flutter.spec_impl
   base
   core
   bonsai
@@ -102,6 +118,7 @@
  (name frame_driven_pump_tests)
  (modules frame_driven_pump_tests)
  (libraries
+  bonsai_flutter.spec_impl
   base
   core
   bonsai
@@ -117,6 +134,7 @@
  (name driver_counter_tests)
  (modules driver_counter_tests)
  (libraries
+  bonsai_flutter.spec_impl
   base
   core
   bonsai
@@ -132,6 +150,7 @@
  (name test_handle_tests)
  (modules test_handle_tests)
  (libraries
+  bonsai_flutter.spec_impl
   base
   core
   bonsai
@@ -146,6 +165,7 @@
  (name native_backend_tests)
  (modules native_backend_tests)
  (libraries
+  bonsai_flutter.spec_impl
   base
   core
   bonsai
@@ -161,42 +181,43 @@
 (test
  (name runtime_bootstrap_config_tests)
  (modules runtime_bootstrap_config_tests)
- (libraries core bonsai_flutter.driver))
+ (libraries bonsai_flutter.spec_impl core bonsai_flutter.driver))
 
 (test
  (name bounded_mailbox_tests)
  (modules bounded_mailbox_tests)
- (libraries core bonsai_flutter.driver threads))
+ (libraries bonsai_flutter.spec_impl core bonsai_flutter.driver threads))
 
 (test
  (name worker_runtime_tests)
  (modules worker_runtime_tests)
- (libraries core bonsai_flutter.driver threads))
+ (libraries bonsai_flutter.spec_impl core bonsai_flutter.driver threads))
 
 (test
  (name worker_runtime_not_started_shutdown_tests)
  (modules worker_runtime_not_started_shutdown_tests)
- (libraries core bonsai_flutter.driver threads))
+ (libraries bonsai_flutter.spec_impl core bonsai_flutter.driver threads))
 
 (test
  (name worker_runtime_spawn_failure_tests)
  (modules worker_runtime_spawn_failure_tests)
- (libraries core bonsai_flutter.driver threads))
+ (libraries bonsai_flutter.spec_impl core bonsai_flutter.driver threads))
 
 (test
  (name worker_runtime_attached_final_shutdown_tests)
  (modules worker_runtime_attached_final_shutdown_tests)
- (libraries core bonsai_flutter.driver threads))
+ (libraries bonsai_flutter.spec_impl core bonsai_flutter.driver threads))
 
 (test
  (name worker_runtime_cancel_failure_tests)
  (modules worker_runtime_cancel_failure_tests)
- (libraries core bonsai_flutter.driver threads))
+ (libraries bonsai_flutter.spec_impl core bonsai_flutter.driver threads))
 
 (test
  (name worker_driver_tests)
  (modules worker_driver_tests)
  (libraries
+  bonsai_flutter.spec_impl
   base
   core
   bonsai
@@ -213,6 +234,7 @@
  (name native_backend_worker_tests)
  (modules native_backend_worker_tests)
  (libraries
+  bonsai_flutter.spec_impl
   base
   core
   bonsai
@@ -229,12 +251,19 @@
 (test
  (name sqlite_worker_store_tests)
  (modules sqlite_worker_store_tests)
- (libraries core sqlite3 bonsai_flutter_sqlite_worker_example threads unix))
+ (libraries
+  bonsai_flutter.spec_impl
+  core
+  sqlite3
+  bonsai_flutter_sqlite_worker_example
+  threads
+  unix))
 
 (test
  (name sqlite_worker_example_tests)
  (modules sqlite_worker_example_tests)
  (libraries
+  bonsai_flutter.spec_impl
   base
   core
   bonsai
@@ -254,6 +283,7 @@
  (name mail_example_tests)
  (modules mail_example_tests)
  (libraries
+  bonsai_flutter.spec_impl
   base
   core
   bonsai

@@ -3,9 +3,9 @@
 ## Version contract
 
 `bonsai_flutter_native.h` defines native ABI `2.0`. The renderer wire protocol
-remains `1.12`; ABI and protocol versions are queried and validated
-independently. The Dart wrapper requires an exact ABI major and minor match
-before runtime creation.
+is `1.14`; ABI and protocol versions are queried and validated independently.
+The Dart wrapper requires exact ABI and renderer-protocol matches before
+runtime creation.
 
 ABI v2 intentionally has no compatibility fallback for the removed
 `bf_runtime_step` and `bf_runtime_frame_presented` operations.

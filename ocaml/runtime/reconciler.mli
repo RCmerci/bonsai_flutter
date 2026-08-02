@@ -8,12 +8,12 @@ type output =
   ; handler_frame : Handler_registry.Frame.t
   }
 
-val create : runtime_epoch:int64 -> t
+val create : runtime_epoch:Bonsai_flutter_spec.Id.Runtime.epoch -> t
 
 val reconcile
   :  t
-  -> base_revision:int64
-  -> target_revision:int64
+  -> base_revision:Bonsai_flutter_spec.Id.Runtime.renderer_revision
+  -> target_revision:Bonsai_flutter_spec.Id.Runtime.renderer_revision
   -> old:Mounted_tree.t option
   -> base_handler_frame:Handler_registry.Frame.t option
   -> Bonsai_flutter_ui.Widget.t

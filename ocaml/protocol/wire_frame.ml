@@ -1,3 +1,5 @@
+module ID = Bonsai_flutter_spec.Id
+
 type frame_kind =
   | Full_snapshot
   | Incremental_frame
@@ -213,7 +215,7 @@ type animation_curve =
   | Ease_in_out
 
 type animation =
-  { id : int64
+  { id : ID.Ui.animation_id
   ; duration_ms : int
   ; curve : animation_curve
   }
@@ -337,15 +339,15 @@ type props =
       ; enabled : bool
       }
   | Text_input_props of
-      { session_id : int64
-      ; document_revision : int64
+      { session_id : ID.Text_input.session_id
+      ; document_revision : ID.Text_input.document_revision
       ; value : text_editing_value
       ; enabled : bool
       ; read_only : bool
       ; obscure_text : bool
       ; keyboard_type : text_keyboard_type
       ; input_action : text_input_action
-      ; accepted_local_revision : int64
+      ; accepted_local_revision : ID.Text_input.local_revision
       ; update_mode : text_update_mode
       ; autofocus : bool
       }
@@ -353,12 +355,13 @@ type props =
       { alignment : overlay_alignment
       ; dismissible : bool
       }
-  | Navigator_props of { restoration_scope_id : string option }
+  | Navigator_props of
+      { restoration_scope_id : ID.Navigation.restoration_scope_id option }
   | Page_props of
-      { page_key : string
+      { page_key : ID.Navigation.page_key
       ; transition : page_transition
       ; can_pop : bool
-      ; restoration_id : string option
+      ; restoration_id : ID.Navigation.restoration_id option
       }
   | Safe_area_props of
       { left : bool
@@ -373,7 +376,7 @@ type props =
   | Environment_boundary_props
   | Material_dialog_props of { barrier_dismissible : bool }
   | Native_widget_props of
-      { kind_id : int
+      { kind_id : ID.Native_widget.kind_id
       ; version : int
       ; capabilities : int64
       ; payload : bytes
@@ -390,7 +393,7 @@ type save_file_options =
   }
 
 type scroll_to =
-  { node_id : int64
+  { node_id : ID.Ui.node_id
   ; alignment : float
   ; animated : bool
   }
@@ -401,7 +404,7 @@ type size =
   }
 
 type native_menu_item =
-  { item_id : string
+  { item_id : ID.Host.native_menu_item_id
   ; label : string
   ; enabled : bool
   }
@@ -418,7 +421,7 @@ type host_request_payload =
   | Open_url of { uri : string }
   | Pick_file of file_picker_options
   | Save_file of save_file_options
-  | Request_focus of { node_id : int64 }
+  | Request_focus of { node_id : ID.Ui.node_id }
   | Clear_focus
   | Scroll_to of scroll_to
   | Set_window_title of { title : string }
@@ -426,11 +429,11 @@ type host_request_payload =
   | Show_native_menu of { items : native_menu_item list }
   | Haptic_feedback of haptic_kind
   | Platform_information
-  | Measure_layout of { node_id : int64 }
+  | Measure_layout of { node_id : ID.Ui.node_id }
 
 type event_binding =
-  { event_tag : int
-  ; handler_id : int64
+  { event_tag : ID.Protocol.event_tag
+  ; handler_id : ID.Ui.handler_id
   }
 
 type runtime_stats =
@@ -448,37 +451,37 @@ type runtime_stats =
 
 type operation =
   | Create_node of
-      { node_id : int64
+      { node_id : ID.Ui.node_id
       ; kind : node_kind
       ; props : props
       ; event_bindings : event_binding list
       ; parent_data : parent_data
       }
   | Update_props of
-      { node_id : int64
+      { node_id : ID.Ui.node_id
       ; props : props
       }
   | Update_event_bindings of
-      { node_id : int64
+      { node_id : ID.Ui.node_id
       ; event_bindings : event_binding list
       }
   | Set_children of
-      { node_id : int64
-      ; children : int64 list
+      { node_id : ID.Ui.node_id
+      ; children : ID.Ui.node_id list
       }
-  | Set_root of int64
-  | Drop_node of int64
+  | Set_root of ID.Ui.node_id
+  | Drop_node of ID.Ui.node_id
   | Host_request of
-      { request_id : int64
+      { request_id : ID.Host.request_id
       ; payload : host_request_payload
       }
-  | Cancel_host_request of { request_id : int64 }
+  | Cancel_host_request of { request_id : ID.Host.request_id }
   | Runtime_stats of runtime_stats
 
 type t =
-  { runtime_epoch : int64
-  ; base_revision : int64
-  ; target_revision : int64
+  { runtime_epoch : ID.Runtime.epoch
+  ; base_revision : ID.Runtime.renderer_revision
+  ; target_revision : ID.Runtime.renderer_revision
   ; kind : frame_kind
   ; operations : operation list
   }

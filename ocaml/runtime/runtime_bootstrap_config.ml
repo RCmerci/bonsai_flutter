@@ -1,9 +1,11 @@
+module ID = Bonsai_flutter_spec.Id
+
 type launch_policy =
   | Fresh
   | Replace_existing
 
 type t =
-  { entrypoint : string
+  { entrypoint : ID.Application.entrypoint_name
   ; launch_policy : launch_policy
   ; application_payload : bytes
   }
@@ -47,7 +49,7 @@ let validate_entrypoint entrypoint =
   then Error "Startup entrypoint must not contain NUL"
   else if not (String.is_valid_utf_8 entrypoint)
   then Error "Startup entrypoint must be valid UTF-8"
-  else Ok entrypoint
+  else Ok (ID.Application.Entrypoint_name.of_string entrypoint)
 ;;
 
 let decode_legacy bytes =

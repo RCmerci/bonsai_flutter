@@ -3,7 +3,7 @@
     Keys participate in OCaml reconciliation. They are not Flutter keys and
     are never converted into node IDs by hashing. *)
 
-type t
+type t = Bonsai_flutter_spec.Id.Ui.application_key
 
 val string : string -> t
 val int : int -> t

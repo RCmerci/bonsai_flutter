@@ -1,3 +1,5 @@
+module ID = Bonsai_flutter_spec.Id
+
 type state =
   | Not_started
   | Idle
@@ -10,7 +12,7 @@ type diagnostics =
   { state : state
   ; spawn_count : int
   ; join_count : int
-  ; worker_domain_id : Domain.id option
+  ; worker_domain_id : ID.Worker.domain_id option
   ; active_sessions : int
   ; peak_active_sessions : int
   ; idle_wait_count : int
@@ -36,13 +38,13 @@ type control =
   ; mutable final_stop : bool
   ; mutable crash_requested : bool
   ; mutable domain_handle : unit Domain.t option
-  ; mutable worker_domain_id : Domain.id option
+  ; mutable worker_domain_id : ID.Worker.domain_id option
   ; mutable spawn_count : int
   ; mutable join_count : int
   ; mutable active_sessions : int
   ; mutable peak_active_sessions : int
   ; mutable idle_wait_count : int
-  ; mutable next_generation : int64
+  ; mutable next_generation : ID.Worker.generation
   ; mutable fail_next_spawn : exn option
   }
 
@@ -61,7 +63,7 @@ let control =
   ; active_sessions = 0
   ; peak_active_sessions = 0
   ; idle_wait_count = 0
-  ; next_generation = 1L
+  ; next_generation = ID.Worker.Generation.one
   ; fail_next_spawn = None
   }
 ;;
@@ -112,7 +114,7 @@ let set_terminal_from_loop exception_ =
 
 let worker_loop () =
   with_control (fun () ->
-    control.worker_domain_id <- Some (Domain.self ());
+    control.worker_domain_id <- Some (ID.Worker.Domain_id.of_domain_id (Domain.self ()));
     Condition.broadcast control.condition);
   let rec await_action () =
     Mutex.lock control.mutex;
@@ -207,9 +209,9 @@ let ensure_started () =
 let fresh_generation () =
   with_control (fun () ->
     let generation = control.next_generation in
-    if Int64.equal generation Int64.max_int
+    if ID.Worker.Generation.equal generation ID.Worker.Generation.max_value
     then failwith "Worker generation counter exhausted"
-    else control.next_generation <- Int64.succ generation;
+    else control.next_generation <- ID.Worker.Generation.succ generation;
     generation)
 ;;
 

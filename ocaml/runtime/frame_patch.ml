@@ -1,3 +1,4 @@
+module ID = Bonsai_flutter_spec.Id
 module Ui = Bonsai_flutter_ui
 
 module Operation = struct
@@ -35,8 +36,8 @@ type kind =
 
 type t =
   { kind : kind
-  ; base_revision : int64
-  ; target_revision : int64
+  ; base_revision : ID.Runtime.renderer_revision
+  ; target_revision : ID.Runtime.renderer_revision
   ; operations : Operation.t list
   }
 
@@ -104,15 +105,17 @@ let validate ~root_id nodes =
   Hashtbl.iter
     (fun node_id count ->
        if Node_id.equal node_id root_id
-       then (if count <> 0 then patch_error "root node %Ld has a parent" node_id)
+       then (
+         if count <> 0
+         then patch_error "root node %Ld has a parent" (Node_id.to_int64 node_id))
        else if count <> 1
-       then patch_error "node %Ld has %d parents" node_id count)
+       then patch_error "node %Ld has %d parents" (Node_id.to_int64 node_id) count)
     parent_counts;
   let visiting = Hashtbl.create (Hashtbl.length nodes) in
   let visited = Hashtbl.create (Hashtbl.length nodes) in
   let rec visit node_id =
     if Hashtbl.mem visiting node_id
-    then patch_error "cycle includes node %Ld" node_id
+    then patch_error "cycle includes node %Ld" (Node_id.to_int64 node_id)
     else if not (Hashtbl.mem visited node_id)
     then (
       Hashtbl.add visiting node_id ();
@@ -129,7 +132,7 @@ let validate ~root_id nodes =
 
 let apply ~old t =
   try
-    if Int64.compare t.target_revision t.base_revision <= 0
+    if ID.Runtime.Renderer_revision.compare t.target_revision t.base_revision <= 0
     then patch_error "target revision must be greater than base revision";
     let root_id, nodes =
       match t.kind, old with
@@ -143,7 +146,7 @@ let apply ~old t =
       (function
         | Operation.Create_node create ->
           if Hashtbl.mem nodes create.node_id
-          then patch_error "node %Ld already exists" create.node_id;
+          then patch_error "node %Ld already exists" (Node_id.to_int64 create.node_id);
           let node : Mounted_tree.Snapshot.node =
             { node_id = create.node_id
             ; key = create.key
@@ -171,7 +174,8 @@ let apply ~old t =
         | Operation.Set_root node_id -> root_id := Some node_id
         | Operation.Drop_node node_id ->
           if not (Hashtbl.mem nodes node_id)
-          then patch_error "Drop_node references missing node %Ld" node_id;
+          then
+            patch_error "Drop_node references missing node %Ld" (Node_id.to_int64 node_id);
           Hashtbl.remove nodes node_id)
       t.operations;
     let root_id = validate ~root_id:!root_id nodes in

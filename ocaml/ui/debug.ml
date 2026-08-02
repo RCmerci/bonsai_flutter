@@ -1,3 +1,5 @@
+module ID = Bonsai_flutter_spec.Id
+
 let quoted value = Printf.sprintf "%S" value
 
 let write_widget output widget =
@@ -18,7 +20,11 @@ let write_widget output widget =
      Buffer.add_char output ' ';
      Buffer.add_string output (quoted value)
    | Native_widget_props { kind_id; version; _ } ->
-     Printf.bprintf output " native_kind=%d version=%d" kind_id version
+     Printf.bprintf
+       output
+       " native_kind=%d version=%d"
+       (ID.Native_widget.Kind_id.to_int kind_id)
+       version
    | _ -> ());
   if Array.length view.event_bindings > 0
   then (

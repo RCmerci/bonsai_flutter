@@ -3,6 +3,7 @@
  (wrapped false)
  (modules navigation)
  (libraries
+  bonsai_flutter.spec_impl
   base
   bonsai
   bonsai_flutter.ui
@@ -16,6 +17,7 @@
  (enabled_if
   (= %{env:BONSAI_FLUTTER_EMBED_OCAML=disabled} enabled))
  (libraries
+  bonsai_flutter.spec_impl
   bonsai_flutter_navigation_example
   bonsai_flutter.driver
   bonsai_flutter.native_backend)

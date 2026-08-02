@@ -1,4 +1,8 @@
 module Ui = Bonsai_flutter_ui
+module ID = Bonsai_flutter_spec.Id
+
+let home_page_key = ID.Navigation.Page_key.of_string "home"
+let settings_page_key = ID.Navigation.Page_key.of_string "settings"
 
 let component handlers graph =
   let settings_open, set_settings_open =
@@ -22,8 +26,10 @@ let component handlers graph =
       ~equal:( == )
       set_settings_open
       ~f:(fun set_settings_open -> function
-      | Ui.Event.Payload.Route_pop { page_key = "settings"; _ } | Ui.Event.Payload.Unit ->
+      | Ui.Event.Payload.Route_pop { page_key; _ }
+        when ID.Navigation.Page_key.equal page_key settings_page_key ->
         set_settings_open (fun _ -> false)
+      | Ui.Event.Payload.Unit -> set_settings_open (fun _ -> false)
       | _ -> Bonsai.Effect.Ignore)
   in
   let host_effects = Driver.Handler.host_effects handlers in
@@ -59,10 +65,10 @@ let component handlers graph =
     ~f:(fun (settings_open, clipboard) (open_settings, close_settings, read_clipboard) ->
       let home =
         Ui.Widget.page
-          ~page_key:"home"
+          ~page_key:home_page_key
           ~transition:Ui.Navigation.None
           ~can_pop:false
-          ~restoration_id:"home-page"
+          ~restoration_id:(ID.Navigation.Restoration_id.of_string "home-page")
           (Ui.Widget.column
              [ Ui.Widget.text "Host effects and navigation"
              ; Ui.Widget.text clipboard
@@ -81,9 +87,9 @@ let component handlers graph =
         then (
           let settings =
             Ui.Widget.page
-              ~page_key:"settings"
+              ~page_key:settings_page_key
               ~transition:Ui.Navigation.Fade
-              ~restoration_id:"settings-page"
+              ~restoration_id:(ID.Navigation.Restoration_id.of_string "settings-page")
               (Ui.Widget.column
                  [ Ui.Widget.text "Settings"
                  ; Ui.Widget.overlay
@@ -102,7 +108,8 @@ let component handlers graph =
         else [ home ]
       in
       Ui.Widget.navigator
-        ~restoration_scope_id:"host-navigation"
+        ~restoration_scope_id:
+          (ID.Navigation.Restoration_scope_id.of_string "host-navigation")
         ~on_pop:close_settings
         pages)
 ;;
