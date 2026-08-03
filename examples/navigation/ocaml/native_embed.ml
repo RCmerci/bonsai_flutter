@@ -1,1 +1,5 @@
-let () = Native_backend.embed ~name:"navigation" (App.create Navigation.component)
+let () =
+  Native_backend.embed
+    ~name:(Bonsai_flutter_spec.Id.Application.Entrypoint_name.of_string "navigation")
+    (App.create Navigation.component)
+;;

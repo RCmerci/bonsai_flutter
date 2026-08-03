@@ -20,7 +20,7 @@ void main() {
   testWidgets(
     'Flutter button press crosses FFI and applies one OCaml text patch',
     (tester) async {
-      expect(nativeProtocolVersion, const NativeProtocolVersion(1, 12));
+      expect(nativeProtocolVersion, const NativeProtocolVersion(1, 14));
 
       final client = await tester.runAsync(
         () => _bounded(

@@ -146,6 +146,263 @@ let test_virtual_list_handler_path_and_payload_filtering () =
   | None -> failwith "valid virtual-list handler event was filtered"
 ;;
 
+let sparse_extent index extent : Ui.Native_widget.Sparse_extent_list.extent_override =
+  { index; extent }
+;;
+
+let test_sparse_extent_list_contract () =
+  let received = ref None in
+  let items =
+    List.init 6 (fun index ->
+      Ui.Widget.text
+        ~key:(Ui.Key.string (string_of_int (40 + index)))
+        (string_of_int (40 + index)))
+  in
+  let widget =
+    Ui.Native_widget.Sparse_extent_list.create
+      ~key:(Ui.Key.string "sparse-list")
+      ~total_count:50_000
+      ~first_index:40
+      ~default_item_extent:48.
+      ~extent_overrides:[ sparse_extent 3 120.; sparse_extent 42 312. ]
+      ~overscan:5
+      ~items
+      ~on_visible_range:(fun range -> received := Some range)
+      ()
+  in
+  let view = Ui.Widget.Private.view widget in
+  check (Array.length view.children = 6) "sparse list mounted outside its supplied window";
+  (match view.props with
+   | Native_widget_props { kind_id; version; capabilities; payload } ->
+     check (kind_id = native_kind_id 4) "sparse list kind ID";
+     check (version = 1) "sparse list schema version";
+     check (Int64.equal capabilities 23L) "sparse list capabilities";
+     check (Bytes.length payload = 68) "sparse list exact payload length";
+     let props =
+       Ui.Native_widget.Sparse_extent_list.For_testing.decode_props_exn payload
+     in
+     check (props.total_count = 50_000) "sparse total count";
+     check (props.first_index = 40) "sparse first index";
+     check (Float.equal props.default_item_extent 48.) "sparse default extent";
+     check (props.overscan = 5) "sparse overscan";
+     check (props.axis = Ui.Layout.Axis.Vertical) "sparse default axis";
+     check
+       (props.extent_overrides = [ sparse_extent 3 120.; sparse_extent 42 312. ])
+       "sparse overrides did not round trip"
+   | _ -> failwith "sparse list native props");
+  let binding = view.event_bindings.(0) in
+  Ui.Event.Handler.Private.invoke
+    binding.handler
+    (Native_event
+       { kind_id = native_kind_id 4
+       ; version = 1
+       ; event_id = native_event_id 1
+       ; payload =
+           Ui.Native_widget.Sparse_extent_list.For_testing.encode_visible_range
+             ~first_index:41
+             ~last_exclusive:44
+       });
+  match !received with
+  | Some { Ui.Event.Payload.first_index; last_exclusive } ->
+    check (Int64.equal first_index 41L) "sparse visible first index";
+    check (Int64.equal last_exclusive 44L) "sparse visible last index"
+  | None -> failwith "sparse visible range callback"
+;;
+
+let test_sparse_extent_list_transition_contract () =
+  let transition =
+    Ui.Native_widget.Sparse_extent_list.Transition.create
+      ~expand_duration_ms:240
+      ~collapse_duration_ms:190
+      ~expand_curve:Ease_out_cubic
+      ~collapse_curve:Ease_in_out_cubic
+      ()
+  in
+  let widget =
+    Ui.Native_widget.Sparse_extent_list.create
+      ~total_count:20
+      ~first_index:4
+      ~default_item_extent:88.
+      ~extent_overrides:[ sparse_extent 6 320. ]
+      ~overscan:4
+      ~transition
+      ~items:[ Ui.Widget.empty () ]
+      ~on_visible_range:(fun _ -> ())
+      ()
+  in
+  match (Ui.Widget.Private.view widget).props with
+  | Native_widget_props { kind_id; version; payload; _ } ->
+    check (kind_id = native_kind_id 4) "animated sparse list kind ID";
+    check (version = 2) "animated sparse list schema version";
+    check (Bytes.length payload = 64) "animated sparse list exact payload length";
+    let props =
+      Ui.Native_widget.Sparse_extent_list.For_testing.decode_props_exn payload
+    in
+    (match props.transition with
+     | None -> failwith "animated sparse list omitted transition props"
+     | Some decoded ->
+       check decoded.enabled "sparse transition enabled";
+       check (decoded.expand_duration_ms = 240) "sparse expand duration";
+       check (decoded.collapse_duration_ms = 190) "sparse collapse duration";
+       check (decoded.expand_curve = Ease_out_cubic) "sparse expand curve";
+       check (decoded.collapse_curve = Ease_in_out_cubic) "sparse collapse curve")
+  | _ -> failwith "animated sparse list native props"
+;;
+
+let test_morphing_surface_contract () =
+  let widget =
+    Ui.Native_widget.Morphing_surface.create
+      ~expanded:true
+      ~compact_content:(Ui.Widget.text "Compact")
+      ~expanded_content:(Ui.Widget.text "Expanded")
+      ()
+  in
+  let view = Ui.Widget.Private.view widget in
+  check (Array.length view.children = 2) "morphing surface child slots";
+  match view.props with
+  | Native_widget_props { kind_id; version; capabilities; payload } ->
+    check (kind_id = native_kind_id 5) "morphing surface kind ID";
+    check (version = 1) "morphing surface version";
+    check (Int64.equal capabilities 4L) "morphing surface capabilities";
+    let props = Ui.Native_widget.Morphing_surface.For_testing.decode_props_exn payload in
+    check props.expanded "morphing surface expanded state"
+  | _ -> failwith "morphing surface native props"
+;;
+
+let test_sparse_extent_list_validation () =
+  let create
+        ?(total_count = 10)
+        ?(first_index = 0)
+        ?(default_item_extent = 48.)
+        ?(extent_overrides = [])
+        ?(overscan = 2)
+        ?(items = [])
+        ()
+    =
+    Ui.Native_widget.Sparse_extent_list.create
+      ~total_count
+      ~first_index
+      ~default_item_extent
+      ~extent_overrides
+      ~overscan
+      ~items
+      ~on_visible_range:(fun _ -> ())
+      ()
+  in
+  List.iter
+    (fun (build, message) -> expect_invalid_argument build message)
+    [ ( (fun () -> ignore (create ~total_count:(-1) ()))
+      , "sparse list accepted a negative total" )
+    ; ( (fun () -> ignore (create ~first_index:11 ()))
+      , "sparse list accepted an invalid first index" )
+    ; ( (fun () -> ignore (create ~default_item_extent:Float.nan ()))
+      , "sparse list accepted a non-finite default extent" )
+    ; ( (fun () -> ignore (create ~default_item_extent:0. ()))
+      , "sparse list accepted a non-positive default extent" )
+    ; ( (fun () -> ignore (create ~overscan:(-1) ()))
+      , "sparse list accepted negative overscan" )
+    ; ( (fun () -> ignore (create ~extent_overrides:[ sparse_extent (-1) 80. ] ()))
+      , "sparse list accepted a negative override index" )
+    ; ( (fun () -> ignore (create ~extent_overrides:[ sparse_extent 10 80. ] ()))
+      , "sparse list accepted an out-of-bounds override index" )
+    ; ( (fun () ->
+          ignore
+            (create ~extent_overrides:[ sparse_extent 4 80.; sparse_extent 3 90. ] ()))
+      , "sparse list accepted unsorted overrides" )
+    ; ( (fun () ->
+          ignore
+            (create ~extent_overrides:[ sparse_extent 3 80.; sparse_extent 3 90. ] ()))
+      , "sparse list accepted duplicate overrides" )
+    ; ( (fun () -> ignore (create ~extent_overrides:[ sparse_extent 3 Float.infinity ] ()))
+      , "sparse list accepted a non-finite override extent" )
+    ; ( (fun () -> ignore (create ~extent_overrides:[ sparse_extent 3 0. ] ()))
+      , "sparse list accepted a non-positive override extent" )
+    ; ( (fun () ->
+          ignore
+            (create
+               ~total_count:2
+               ~first_index:1
+               ~items:[ Ui.Widget.empty (); Ui.Widget.empty () ]
+               ()))
+      , "sparse list accepted a child window beyond total_count" )
+    ];
+  let valid =
+    Ui.Native_widget.Sparse_extent_list.create
+      ~total_count:8
+      ~first_index:2
+      ~default_item_extent:48.
+      ~extent_overrides:[ sparse_extent 4 96. ]
+      ~items:[ Ui.Widget.empty () ]
+      ~on_visible_range:(fun _ -> ())
+      ()
+  in
+  let payload =
+    match (Ui.Widget.Private.view valid).props with
+    | Native_widget_props { payload; _ } -> payload
+    | _ -> failwith "sparse list native props"
+  in
+  let reject payload message =
+    expect_invalid_argument
+      (fun () ->
+         ignore (Ui.Native_widget.Sparse_extent_list.For_testing.decode_props_exn payload))
+      message
+  in
+  reject
+    (Bytes.sub payload 0 (Bytes.length payload - 1))
+    "truncated sparse payload accepted";
+  let trailing = Bytes.cat payload (Bytes.of_string "\000") in
+  reject trailing "trailing sparse payload byte accepted";
+  let bad_reserved = Bytes.copy payload in
+  Bytes.set bad_reserved 29 '\001';
+  reject bad_reserved "nonzero sparse reserved byte accepted";
+  let bad_axis = Bytes.copy payload in
+  Bytes.set bad_axis 28 '\002';
+  reject bad_axis "invalid sparse axis accepted";
+  let bad_count = Bytes.copy payload in
+  Bytes.set_int32_le bad_count 32 2l;
+  reject bad_count "sparse override count/length mismatch accepted"
+;;
+
+let test_sparse_extent_handler_path_and_payload_filtering () =
+  let received = ref None in
+  let handler =
+    Ui.Event.Handler.create ~name:"sparse-range" (fun payload ->
+      received := Ui.Native_widget.Sparse_extent_list.visible_range_of_payload payload)
+  in
+  let widget =
+    Ui.Native_widget.Sparse_extent_list.create_with_handler
+      ~total_count:40
+      ~first_index:8
+      ~default_item_extent:88.
+      ~extent_overrides:[ sparse_extent 12 320. ]
+      ~items:(List.init 24 (fun index -> Ui.Widget.text (string_of_int index)))
+      ~on_visible_range:handler
+      ()
+  in
+  let binding = (Ui.Widget.Private.view widget).event_bindings.(0) in
+  let invoke kind_id version event_id payload =
+    Ui.Event.Handler.Private.invoke
+      binding.handler
+      (Native_event { kind_id; version; event_id; payload })
+  in
+  let valid =
+    Ui.Native_widget.Sparse_extent_list.For_testing.encode_visible_range
+      ~first_index:12
+      ~last_exclusive:20
+  in
+  invoke (native_kind_id 99) 1 (native_event_id 1) valid;
+  invoke (native_kind_id 4) 3 (native_event_id 1) valid;
+  invoke (native_kind_id 4) 1 (native_event_id 2) valid;
+  invoke (native_kind_id 4) 1 (native_event_id 1) Bytes.empty;
+  check (!received = None) "malformed sparse-list event was accepted";
+  invoke (native_kind_id 4) 1 (native_event_id 1) valid;
+  match !received with
+  | Some { Ui.Event.Payload.first_index; last_exclusive } ->
+    check (Int64.equal first_index 12L) "sparse handler visible first index";
+    check (Int64.equal last_exclusive 20L) "sparse handler visible last index"
+  | None -> failwith "valid sparse-list handler event was filtered"
+;;
+
 let swipe_action
       ?(label = "Archive")
       ?(background = Ui.Style.Color.argb ~alpha:255 ~red:80 ~green:125 ~blue:88)
@@ -377,6 +634,11 @@ let () =
   test_typed_native_widget ();
   test_virtual_list_window ();
   test_virtual_list_handler_path_and_payload_filtering ();
+  test_sparse_extent_list_contract ();
+  test_sparse_extent_list_transition_contract ();
+  test_morphing_surface_contract ();
+  test_sparse_extent_list_validation ();
+  test_sparse_extent_handler_path_and_payload_filtering ();
   test_swipe_action_props_contract ();
   test_swipe_action_omitted_direction_and_validation ();
   test_swipe_action_event_filtering ();

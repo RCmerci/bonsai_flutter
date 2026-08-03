@@ -9,15 +9,19 @@ The example includes:
 
 - twenty initial deterministic fictional messages and endless 20-message
   append pages after a local 750 ms delay;
-- a bounded 24-row OCaml virtual window with an inline loading footer;
+- a bounded 24-row OCaml sparse-extent virtual window with an inline loading
+  footer;
 - read, unread, starred, archived, and trashed state;
 - a rounded search header with a discoverable Menu action;
 - a leading-edge Navigation Drawer for Inbox, Starred, Archived, Trash, and
   an explicit Settings placeholder;
 - a fixed, accessible Mail, Chat, Spaces, and Meet bottom bar whose non-Mail
   destinations are explicit local placeholders;
-- stable keyed inbox rows with Gmail-style bidirectional swipe actions;
-- renderer-local row press feedback before the detail activation;
+- stable keyed inbox rows with bidirectional swipe actions in collapsed and
+  expanded states;
+- a single-open inline outliner card with deterministic two-level summaries;
+- renderer-local row press feedback and bidirectional row-to-card morphing;
+- independent Reply, Open, star, and collapse controls in each expanded card;
 - a Cupertino slide transition with interactive leading-edge back;
 - archive, delete, mark-unread, and platform-back behavior;
 - an optional local attachment tile; and
@@ -27,13 +31,22 @@ All application data, paging state, derived mailbox state, destinations,
 handlers, and route state live in OCaml/Bonsai. Flutter owns the retained
 destination bodies, scroll controller, drawer and Back interpolation, row drag
 frames, pressed feedback, haptics, spinner animation, and post-release settle
-animation. Only visible ranges and settled discrete actions cross the typed
-native-widget boundary.
+animation. Flutter also owns interpolated sparse extents, accordion anchoring,
+and the row/card surface timeline. Reduced motion resolves those transitions
+directly to their committed targets. Only settled visible ranges and discrete
+actions cross the typed native-widget boundary.
 
 Swipe start-to-end to Archive a message. Swipe end-to-start to Mark read or
 Mark unread according to the current row state. Both actions are also exposed
 as custom accessibility actions. Scroll near the loaded tail to append another
 deterministic page without resetting the current offset.
+
+Tap a collapsed row outside its star control to expand it inline. Expansion is
+a preview action: it does not mark the message read or open a route. Only one
+message is expanded at a time. Use Reply for the deterministic out-of-scope
+notice, Open to mark the message read and push its existing detail route, or
+the header and upward chevron to collapse the card. Returning from detail keeps
+the same card expanded and retains the list offset.
 
 ## Run on macOS arm64
 

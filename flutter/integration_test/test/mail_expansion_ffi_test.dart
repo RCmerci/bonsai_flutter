@@ -114,11 +114,25 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 1));
     expect(queue.pendingCount, 1);
-    await _advance(tester, harness, store, queue, 'press to detail');
+    await _advance(tester, harness, store, queue, 'expand inline card');
+    await tester.pumpAndSettle();
     final detailBody = find.textContaining(
       'The guide for Saturday',
       findRichText: true,
     );
+    expect(detailBody, findsNothing);
+    expect(
+      find.text('Everything for the miniature landscape session is attached.'),
+      findsAtLeastNWidgets(1),
+    );
+    final open = find.bySemanticsLabel('Open message from Juniper Works');
+    expect(open, findsOneWidget);
+    final openSize = tester.getSize(open);
+    expect(openSize.width, greaterThanOrEqualTo(48));
+    expect(openSize.height, greaterThanOrEqualTo(48));
+    await tester.tap(open);
+    await tester.pump(const Duration(milliseconds: 80));
+    await _advance(tester, harness, store, queue, 'Open card to detail');
     expect(detailBody, findsOneWidget);
     expect(find.bySemanticsLabel('Mail'), findsOneWidget);
     await tester.pumpAndSettle();
@@ -132,13 +146,26 @@ void main() {
     await _advance(tester, harness, store, queue, 'detail edge pop');
     expect(detailBody, findsNothing);
     expect(find.bySemanticsLabel('Mail'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Open message from Juniper Works'),
+      findsOneWidget,
+      reason: 'Back did not restore the same expanded card',
+    );
+    expect(_sparseProps(store).extentOverrides, hasLength(1));
 
     final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+    scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+    await tester.pump();
     scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
     await tester.pump();
     final offsetBefore = scrollable.position.pixels;
     await _advance(tester, harness, store, queue, 'tail visible range');
     expect(_hasLoadingMoreSemantics(store), isTrue);
+    expect(
+      _sparseProps(store).extentOverrides,
+      hasLength(1),
+      reason: 'pagination dropped the expanded extent override',
+    );
     expect(scrollable.position.pixels, offsetBefore);
 
     await tester.runAsync(
@@ -158,6 +185,19 @@ bool _hasLoadingMoreSemantics(NodeStore store) => store.nodes.values.any(
       node.props is SemanticsProps &&
       (node.props as SemanticsProps).label == 'Loading more messages',
 );
+
+SparseExtentListProps _sparseProps(NodeStore store) {
+  final node = store.nodes.values.singleWhere(
+    (node) =>
+        node.props is NativeWidgetProps &&
+        (node.props as NativeWidgetProps).kindId ==
+            NativeWidgetKind.sparseExtentList,
+  );
+  expect((node.props as NativeWidgetProps).version, 2);
+  return SparseExtentListProps.decode(
+    (node.props as NativeWidgetProps).payload,
+  );
+}
 
 bool _hasTextContaining(NodeStore store, String value) =>
     store.nodes.values.any(

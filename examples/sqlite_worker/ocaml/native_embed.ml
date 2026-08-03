@@ -1,1 +1,5 @@
-let () = Native_backend.embed ~name:"sqlite_worker" Sqlite_worker_example.app
+let () =
+  Native_backend.embed
+    ~name:(Bonsai_flutter_spec.Id.Application.Entrypoint_name.of_string "sqlite_worker")
+    Sqlite_worker_example.app
+;;

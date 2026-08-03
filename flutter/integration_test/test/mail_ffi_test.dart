@@ -120,6 +120,20 @@ void main() {
 
     await tester.tap(find.text('Juniper Works'));
     await tester.pump(const Duration(milliseconds: 80));
+    final expandBatch = queue.takeBatch()!;
+    final expandResponse = await tester.runAsync(
+      () => _bounded(
+        harness.advance(events: EventBatchCodec.encode(expandBatch)),
+        'expand mail card pump',
+      ),
+    );
+    final expandFrame = FrameCodec.decode(expandResponse!.bytes);
+    store.apply(expandFrame);
+    await tester.pump();
+    final open = find.bySemanticsLabel('Open message from Juniper Works');
+    expect(open, findsOneWidget);
+    await tester.tap(open);
+    await tester.pump(const Duration(milliseconds: 80));
     final openBatch = queue.takeBatch()!;
     final openResponse = await tester.runAsync(
       () => _bounded(
@@ -180,6 +194,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(detailBody, findsNothing);
+    expect(open, findsOneWidget);
     expect(
       find.bySemanticsLabel(RegExp(r'^Read message from Juniper Works')),
       findsOneWidget,

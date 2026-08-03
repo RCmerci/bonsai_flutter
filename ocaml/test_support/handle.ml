@@ -58,7 +58,19 @@ let ordered_nodes snapshot =
       fail
         "mounted snapshot references missing node %Ld"
         (Runtime.Node_id.to_int64 node_id)
-    | Some node -> Array.fold_left visit (node :: reversed) node.children
+    | Some node ->
+      let children =
+        match node.props with
+        | Ui.Widget.Private.Native_widget_props { kind_id; payload; _ }
+          when kind_id = Ui.Native_widget.Morphing_surface.kind_id
+               && Array.length node.children = 2 ->
+          let props =
+            Ui.Native_widget.Morphing_surface.For_testing.decode_props_exn payload
+          in
+          [| node.children.(if props.expanded then 1 else 0) |]
+        | _ -> node.children
+      in
+      Array.fold_left visit (node :: reversed) children
   in
   match Runtime.Mounted_tree.Snapshot.root_id snapshot with
   | None -> []

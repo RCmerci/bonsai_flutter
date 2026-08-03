@@ -6,7 +6,9 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
 import '../native_widget/native_widget_registry.dart';
+import '../native_widget/morphing_surface.dart';
 import '../native_widget/navigation_shell.dart';
+import '../native_widget/sparse_extent_list.dart';
 import '../native_widget/swipe_action.dart';
 import '../native_widget/virtual_list.dart';
 import '../protocol/event_batch.dart';
@@ -51,6 +53,8 @@ final class WidgetRegistry {
         NativeWidgetRegistry(capabilityBits: NativeCapability.core);
     if (nativeWidgets == null) {
       registerVirtualList(extensions);
+      registerSparseExtentList(extensions);
+      registerMorphingSurface(extensions);
       registerSwipeAction(extensions);
       registerNavigationShell(extensions);
     }

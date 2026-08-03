@@ -3,6 +3,6 @@ import 'package:test/test.dart';
 
 void main() {
   test('loads the embedded native asset', () {
-    expect(nativeProtocolVersion, const NativeProtocolVersion(1, 12));
+    expect(nativeProtocolVersion, const NativeProtocolVersion(1, 14));
   });
 }

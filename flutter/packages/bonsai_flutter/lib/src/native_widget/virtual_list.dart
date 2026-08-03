@@ -10,6 +10,8 @@ abstract final class NativeWidgetKind {
   static const int virtualList = 1;
   static const int swipeAction = 2;
   static const int navigationShell = 3;
+  static const int sparseExtentList = 4;
+  static const int morphingSurface = 5;
 }
 
 abstract final class VirtualListEvent {

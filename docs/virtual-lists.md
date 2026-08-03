@@ -39,6 +39,57 @@ proves that no more than the window's `NodeHost` widgets are mounted, fast
 scrolling emits logical catch-up ranges, and an overlapping keyed row retains
 its Flutter `Element` when the window advances or logical indexes shift.
 
-The prototype currently requires a fixed `item_extent`. Variable-height rows,
-two-dimensional virtualization, graph canvases, and virtualized tree editors
-belong in separate native extensions.
+`Virtual_list` remains a fixed-`item_extent` contract. Arbitrary self-measuring
+rows, two-dimensional virtualization, graph canvases, and virtualized tree
+editors belong in separate native extensions.
+
+## Sparse known extents
+
+`Native_widget.Sparse_extent_list` is built-in extension kind `4`. Schema
+version `1` retains immediate extent updates. Schema version `2` adds an
+explicit optional transition while retaining the same bounded OCaml child
+window, default extent, and sorted logical-index overrides:
+
+```ocaml
+Native_widget.Sparse_extent_list.create
+  ~total_count:50_000
+  ~first_index:100
+  ~default_item_extent:48.
+  ~extent_overrides:[ { index = 104; extent = 312. } ]
+  ~transition:
+    (Native_widget.Sparse_extent_list.Transition.create
+       ~expand_duration_ms:240
+       ~collapse_duration_ms:190
+       ())
+  ~overscan:4
+  ~items:twenty_keyed_rows
+  ~on_visible_range
+  ()
+```
+
+The payload validates exact length, safe indexes, sorted uniqueness, reserved
+bytes, axis, and finite positive extents on both sides. Flutter uses
+`ListView.builder.itemExtentBuilder`; it does not measure arbitrary child
+heights. Leading offsets and visible ranges come from the default extent plus
+sparse prefix deltas, so an override may remain correct even when its logical
+item is outside the supplied OCaml window.
+
+Version `2` captures current effective extents, interpolates all changed
+indexes on one Flutter-owned timeline, and retargets from the current geometry
+when interrupted. Accordion removal and addition animate concurrently. Extent
+updates preserve a logical anchor and its intra-item offset; a newly expanded
+visible override is preferred, otherwise the old first visible item is
+retained. Direct scrolling releases the animation anchor. Visible-range
+emission is suppressed until the target settles, and reduced motion applies
+the final geometry immediately. No per-frame values cross FFI.
+
+The same per-index progress drives `MorphingSurfaceHost`, which clips and
+interpolates generic compact/expanded surface geometry while retaining outgoing
+visuals. Only committed target content participates in hit testing and
+semantics. The controller, bounded mounts, keyed child identity, and fast
+catch-up behavior remain retained across window updates.
+
+OCaml composes the two endpoint trees with
+`Native_widget.Morphing_surface.create`. The wrapper is placed inside the
+single keyed row or swipe host, so list identity and gesture arbitration remain
+unchanged while both endpoint visuals are available to Flutter.

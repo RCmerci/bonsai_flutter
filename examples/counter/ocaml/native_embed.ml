@@ -1,1 +1,5 @@
-let () = Native_backend.embed ~name:"counter" Counter.app
+let () =
+  Native_backend.embed
+    ~name:(Bonsai_flutter_spec.Id.Application.Entrypoint_name.of_string "counter")
+    Counter.app
+;;

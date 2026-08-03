@@ -111,8 +111,42 @@ typed extension decoder runs. Revision-scoped handler rules still reject stale
 or replaced handlers.
 
 The Gallery contains the complete custom card example and its real FFI test.
-The built-in virtual list, navigation shell, and swipe action use the same
-extension boundary. Pressable is a core protocol node described below.
+The built-in fixed virtual list, sparse-extent list, navigation shell, and swipe
+action use the same extension boundary. Pressable is a core protocol node
+described below.
+
+## Built-in sparse-extent list
+
+`Native_widget.Sparse_extent_list` is built-in extension kind `4`. Schema
+version `1` preserves immediate updates; schema version `2` adds explicit
+enablement, expand/collapse durations, and curves. Its Stateful, Resource,
+Semantics, and Virtualized capabilities match the fixed virtual list, while
+its payload carries a default item extent and sorted
+`(logical index, extent)` overrides. Both versions reuse native event `1` and
+the 16-byte visible-range payload.
+
+Flutter realizes the contract with `ListView.builder.itemExtentBuilder` and a
+retained `ScrollController`. Sparse leading-offset math supports exact initial
+offsets, visible ranges before and inside tall items, bounded OCaml child
+windows, and logical anchor preservation when overrides change. This is a
+known-extent contract, not arbitrary child measurement. Version `2` owns
+interpolation, anchor correction, interruption, settled-range reporting, and
+reduced-motion resolution in Flutter. `MorphingSurfaceHost` consumes the same
+per-item progress for generic surface and content transitions without emitting
+frame events over FFI.
+
+## Built-in morphing surface
+
+`Native_widget.Morphing_surface` is built-in extension kind `5`, schema version
+`1`. Its two children are generic compact and expanded content. The four-byte
+payload carries only committed target state; animation progress is inherited
+locally from the enclosing sparse-extent item and never crosses FFI.
+
+Flutter lays out each child at its endpoint extent, clips both to current list
+geometry, interpolates inset, radius, and elevation, and phases content opacity
+and translation. The outgoing child is excluded from hit testing and semantics,
+while the committed target remains interactive. Outside a sparse list,
+`MorphingSurfaceHost` accepts explicit normalized progress from another parent.
 
 ## Built-in navigation shell
 

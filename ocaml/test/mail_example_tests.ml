@@ -98,16 +98,21 @@ let press handle id =
   Test.Handle.click handle (Test.Query.test_id (Printf.sprintf "mail-pressable-%d" id))
 ;;
 
+let open_card handle id =
+  Test.Handle.present handle;
+  Test.Handle.click handle (Test.Query.test_id (Printf.sprintf "mail-card-open-%d" id))
+;;
+
 let native_visible_range handle ~first_index ~last_exclusive =
   Test.Handle.present handle;
   Test.Handle.native_event
     handle
     (Test.Query.test_id "mail-virtual-list")
-    ~kind_id:Ui.Native_widget.Virtual_list.kind_id
-    ~version:1
-    ~event_id:Ui.Native_widget.Virtual_list.visible_range_event_id
+    ~kind_id:Ui.Native_widget.Sparse_extent_list.kind_id
+    ~version:2
+    ~event_id:Ui.Native_widget.Sparse_extent_list.visible_range_event_id
     ~payload:
-      (Ui.Native_widget.Virtual_list.For_testing.encode_visible_range
+      (Ui.Native_widget.Sparse_extent_list.For_testing.encode_visible_range
          ~first_index
          ~last_exclusive)
 ;;
@@ -235,7 +240,7 @@ let test_star_preserves_keyed_row_identity () =
       "starred state is not exposed semantically")
 ;;
 
-let test_open_marks_read_and_platform_pop_preserves_state () =
+let test_expand_open_and_platform_pop_preserve_state () =
   with_handle (fun handle ->
     let swipe_before =
       require_node
@@ -244,6 +249,19 @@ let test_open_marks_read_and_platform_pop_preserves_state () =
         "mail swipe host 1 is missing before open"
     in
     press handle 1;
+    require_present
+      handle
+      (Test.Query.test_id "mail-card-1")
+      "row press did not expand the inline card";
+    require_absent
+      handle
+      (Test.Query.test_id "mail-detail-page")
+      "row expansion opened the detail page";
+    require_present
+      handle
+      (Test.Query.semantics_label "Unread message from Mara Vale")
+      "row expansion marked the message read";
+    open_card handle 1;
     let swipe_while_open =
       require_node
         handle
@@ -275,6 +293,10 @@ let test_open_marks_read_and_platform_pop_preserves_state () =
       handle
       (Test.Query.test_id "mail-detail-page")
       "platform pop did not return to the inbox";
+    require_present
+      handle
+      (Test.Query.test_id "mail-card-1")
+      "platform pop did not restore the expanded card";
     require_present
       handle
       (Test.Query.semantics_label "Read message from Mara Vale")
@@ -418,6 +440,7 @@ let test_swipe_event_filtering_and_nested_action_isolation () =
 let test_stale_route_pop_is_ignored () =
   with_handle (fun handle ->
     press handle 1;
+    open_card handle 1;
     Test.Handle.present handle;
     Test.Handle.route_pop
       handle
@@ -444,6 +467,7 @@ let test_archive_delete_and_mark_unread () =
   let expect_removed action_id message_id =
     with_handle (fun handle ->
       press handle message_id;
+      open_card handle message_id;
       Test.Handle.present handle;
       Test.Handle.click handle (Test.Query.test_id action_id);
       require_absent
@@ -462,6 +486,7 @@ let test_archive_delete_and_mark_unread () =
   expect_removed "mail-delete" 2;
   with_handle (fun handle ->
     press handle 3;
+    open_card handle 3;
     Test.Handle.present handle;
     Test.Handle.click handle (Test.Query.test_id "mail-mark-unread");
     require_absent
@@ -477,6 +502,7 @@ let test_archive_delete_and_mark_unread () =
 let test_detail_star_attachment_and_reply_notice () =
   with_handle (fun handle ->
     press handle 4;
+    open_card handle 4;
     require_present
       handle
       (Test.Query.test_id "mail-attachment")
@@ -523,9 +549,11 @@ let test_initial_virtual_inbox_has_twenty_unique_pressable_rows () =
     match virtual_list.props with
     | Ui.Widget.Private.Native_widget_props { kind_id; payload; _ } ->
       require
-        (kind_id = Ui.Native_widget.Virtual_list.kind_id)
+        (kind_id = Ui.Native_widget.Sparse_extent_list.kind_id)
         "inbox uses the wrong native kind";
-      let props = Ui.Native_widget.Virtual_list.For_testing.decode_props_exn payload in
+      let props =
+        Ui.Native_widget.Sparse_extent_list.For_testing.decode_props_exn payload
+      in
       require (props.total_count = 20) "initial logical mail count is not twenty";
       require
         (Array.length virtual_list.children <= 24)
@@ -572,7 +600,9 @@ let test_three_sequential_pages_load_once_and_preserve_overlap_identity () =
     in
     (match first_page_list.props with
      | Ui.Widget.Private.Native_widget_props { payload; _ } ->
-       let props = Ui.Native_widget.Virtual_list.For_testing.decode_props_exn payload in
+       let props =
+         Ui.Native_widget.Sparse_extent_list.For_testing.decode_props_exn payload
+       in
        require (props.total_count = 40) "first cursor appended more than one page"
      | _ -> fail "mail virtual list has non-native props");
     let overlap_after =
@@ -685,6 +715,7 @@ let test_drawer_archived_trash_and_inbox_views_are_functional () =
     Test.Handle.present handle;
     Test.Handle.click handle (Test.Query.test_id "mail-drawer-inbox");
     press handle 2;
+    open_card handle 2;
     Test.Handle.present handle;
     Test.Handle.click handle (Test.Query.test_id "mail-delete");
     Test.Handle.present handle;
@@ -745,19 +776,178 @@ let test_bottom_destinations_are_explicit_and_restore_mail_state () =
       "returning to Mail lost loaded messages")
 ;;
 
-let test_pressable_activation_does_not_duplicate_detail () =
+let test_rapid_activation_does_not_duplicate_expansion_or_detail () =
   with_handle (fun handle ->
     Test.Handle.present handle;
     press handle 1;
+    require
+      (List.length (Test.Handle.find_all handle (Test.Query.test_id "mail-card-1")) = 1)
+      "rapid activation created duplicate expanded cards";
+    require_absent
+      handle
+      (Test.Query.test_id "mail-detail-page")
+      "rapid row activation opened detail";
+    open_card handle 1;
     require_present
       handle
       (Test.Query.test_id "mail-detail-page")
-      "valid pressable activation did not open detail";
-    press handle 1;
+      "Open did not open detail";
     require
       (List.length (Test.Handle.find_all handle (Test.Query.test_id "mail-detail-page"))
        = 1)
-      "rapid activation created duplicate detail pages")
+      "Open created duplicate detail pages")
+;;
+
+let sparse_list_props handle =
+  let list =
+    require_node
+      handle
+      (Test.Query.test_id "mail-virtual-list")
+      "mail sparse virtual list is missing"
+  in
+  match list.props with
+  | Ui.Widget.Private.Native_widget_props { kind_id; version; payload; _ } ->
+    require
+      (kind_id = Ui.Native_widget.Sparse_extent_list.kind_id)
+      "mail list does not use Sparse_extent_list kind 4";
+    require (version = 2) "mail list does not opt into sparse transition v2";
+    let props =
+      Ui.Native_widget.Sparse_extent_list.For_testing.decode_props_exn payload
+    in
+    require (Option.is_some props.transition) "mail list omitted its transition spec";
+    props
+  | _ -> fail "mail sparse list has non-native props"
+;;
+
+let test_expansion_accordion_outline_and_collapse () =
+  with_handle (fun handle ->
+    let initial_props = sparse_list_props handle in
+    require
+      (initial_props.extent_overrides = [])
+      "initial mail list contains a stale extent override";
+    press handle 1;
+    let expanded_props = sparse_list_props handle in
+    require
+      (List.length expanded_props.extent_overrides = 1)
+      "expansion did not publish exactly one extent override";
+    let override = List.hd expanded_props.extent_overrides in
+    require (override.index = 0) "expanded message override has the wrong logical index";
+    require
+      (Float.compare override.extent expanded_props.default_item_extent > 0)
+      "expanded message override is not taller than a compact row";
+    List.iter
+      (fun test_id ->
+         require_present
+           handle
+           (Test.Query.test_id test_id)
+           (Printf.sprintf "outline node %s is missing" test_id))
+      [ "mail-outline-1-0"
+      ; "mail-outline-1-1"
+      ; "mail-outline-1-1-0"
+      ; "mail-outline-1-1-1"
+      ; "mail-outline-1-1-2"
+      ; "mail-outline-1-2"
+      ];
+    require_present
+      handle
+      (Test.Query.visible_text "Field notes from the north plot")
+      "outline source order starts with the wrong node";
+    require_present
+      handle
+      (Test.Query.visible_text "Printed notes at the next workshop — Mara")
+      "muted final outline node is missing";
+    press handle 2;
+    require_absent
+      handle
+      (Test.Query.test_id "mail-card-1")
+      "accordion left the previous card expanded";
+    require_present
+      handle
+      (Test.Query.test_id "mail-card-2")
+      "accordion did not expand the newly activated row";
+    let second_props = sparse_list_props handle in
+    require
+      (List.map
+         (fun (override : Ui.Native_widget.Sparse_extent_list.extent_override) ->
+            override.index)
+         second_props.extent_overrides
+       = [ 1 ])
+      "accordion did not atomically replace the extent override";
+    Test.Handle.present handle;
+    Test.Handle.click handle (Test.Query.test_id "mail-card-collapse-2");
+    require_absent
+      handle
+      (Test.Query.test_id "mail-card-2")
+      "expanded header did not collapse the card";
+    require
+      ((sparse_list_props handle).extent_overrides = [])
+      "collapse left an extent override behind")
+;;
+
+let test_expanded_nested_actions_are_isolated () =
+  with_handle (fun handle ->
+    press handle 1;
+    let swipe_before =
+      require_node
+        handle
+        (Test.Query.test_id "mail-swipe-1")
+        "expanded swipe host missing"
+    in
+    Test.Handle.present handle;
+    Test.Handle.click handle (Test.Query.test_id "mail-star-1");
+    require_present handle (Test.Query.test_id "mail-card-1") "star collapsed the card";
+    require_present
+      handle
+      (Test.Query.semantics_label "Not starred message from Mara Vale")
+      "expanded star did not update state";
+    Test.Handle.present handle;
+    Test.Handle.click handle (Test.Query.test_id "mail-card-reply-1");
+    require_present
+      handle
+      (Test.Query.test_id "mail-card-notice-1")
+      "card Reply did not show its deterministic scope notice";
+    require_present handle (Test.Query.test_id "mail-card-1") "Reply collapsed the card";
+    require_absent handle (Test.Query.test_id "mail-detail-page") "Reply opened detail";
+    native_swipe handle 1 1;
+    require_present
+      handle
+      (Test.Query.test_id "mail-card-1")
+      "read swipe collapsed the card";
+    let swipe_after =
+      require_node handle (Test.Query.test_id "mail-swipe-1") "swipe host disappeared"
+    in
+    require
+      (Runtime.Node_id.equal swipe_before.node_id swipe_after.node_id)
+      "expanded state update replaced the keyed swipe host";
+    native_swipe handle 1 0;
+    require_absent handle (Test.Query.test_id "mail-card-1") "archive retained the card";
+    require
+      ((sparse_list_props handle).extent_overrides = [])
+      "archive left the expanded extent override")
+;;
+
+let test_filter_cleanup_and_retained_app_destination () =
+  with_handle (fun handle ->
+    press handle 2;
+    Test.Handle.present handle;
+    Test.Handle.click handle (Test.Query.test_id "mail-destination-chat");
+    Test.Handle.present handle;
+    Test.Handle.click handle (Test.Query.test_id "mail-destination-mail");
+    require_present
+      handle
+      (Test.Query.test_id "mail-card-2")
+      "returning to Mail did not preserve expansion";
+    Test.Handle.present handle;
+    Test.Handle.click handle (Test.Query.test_id "mail-menu");
+    Test.Handle.present handle;
+    Test.Handle.click handle (Test.Query.test_id "mail-drawer-starred");
+    require_absent
+      handle
+      (Test.Query.test_id "mail-card-2")
+      "mailbox change retained an expanded card";
+    require
+      ((sparse_list_props handle).extent_overrides = [])
+      "mailbox change retained a stale extent override")
 ;;
 
 let () =
@@ -765,7 +955,10 @@ let () =
   test_initial_inbox_and_semantics ();
   test_initial_virtual_inbox_has_twenty_unique_pressable_rows ();
   test_star_preserves_keyed_row_identity ();
-  test_open_marks_read_and_platform_pop_preserves_state ();
+  test_expand_open_and_platform_pop_preserve_state ();
+  test_expansion_accordion_outline_and_collapse ();
+  test_expanded_nested_actions_are_isolated ();
+  test_filter_cleanup_and_retained_app_destination ();
   test_swipe_archive_removes_only_target_and_retains_following_identity ();
   test_swipe_read_action_updates_in_place_without_navigation ();
   test_swipe_event_filtering_and_nested_action_isolation ();
@@ -778,5 +971,5 @@ let () =
   test_only_selected_bottom_destination_has_an_icon_indicator ();
   test_navigation_shell_owns_one_colored_bottom_safe_area ();
   test_bottom_destinations_are_explicit_and_restore_mail_state ();
-  test_pressable_activation_does_not_duplicate_detail ()
+  test_rapid_activation_does_not_duplicate_expansion_or_detail ()
 ;;

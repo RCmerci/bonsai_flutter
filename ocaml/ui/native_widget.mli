@@ -99,6 +99,111 @@ module Virtual_list : sig
   end
 end
 
+module Sparse_extent_list : sig
+  module Transition : sig
+    type curve =
+      | Linear
+      | Ease_in
+      | Ease_out
+      | Ease_in_out
+      | Ease_out_cubic
+      | Ease_in_out_cubic
+
+    type t =
+      { enabled : bool
+      ; expand_duration_ms : int
+      ; collapse_duration_ms : int
+      ; expand_curve : curve
+      ; collapse_curve : curve
+      }
+
+    val create
+      :  ?enabled:bool
+      -> expand_duration_ms:int
+      -> collapse_duration_ms:int
+      -> ?expand_curve:curve
+      -> ?collapse_curve:curve
+      -> unit
+      -> t
+  end
+
+  type extent_override =
+    { index : int
+    ; extent : float
+    }
+
+  val kind_id : Bonsai_flutter_spec.Id.Native_widget.kind_id
+  val visible_range_event_id : Bonsai_flutter_spec.Id.Native_widget.event_id
+
+  val create
+    :  ?key:Key.t
+    -> total_count:int
+    -> first_index:int
+    -> default_item_extent:float
+    -> extent_overrides:extent_override list
+    -> ?overscan:int
+    -> ?axis:Layout.Axis.t
+    -> ?transition:Transition.t
+    -> items:Widget.t list
+    -> on_visible_range:(Event.Payload.visible_range -> unit)
+    -> unit
+    -> Widget.t
+
+  val visible_range_of_payload : Event.Payload.t -> Event.Payload.visible_range option
+
+  val create_with_handler
+    :  ?key:Key.t
+    -> total_count:int
+    -> first_index:int
+    -> default_item_extent:float
+    -> extent_overrides:extent_override list
+    -> ?overscan:int
+    -> ?axis:Layout.Axis.t
+    -> ?transition:Transition.t
+    -> items:Widget.t list
+    -> on_visible_range:Event.Handler.t
+    -> unit
+    -> Widget.t
+
+  module For_testing : sig
+    type nonrec extent_override = extent_override =
+      { index : int
+      ; extent : float
+      }
+
+    type props =
+      { total_count : int
+      ; first_index : int
+      ; default_item_extent : float
+      ; extent_overrides : extent_override list
+      ; overscan : int
+      ; axis : Layout.Axis.t
+      ; transition : Transition.t option
+      }
+
+    val decode_props_exn : bytes -> props
+    val encode_visible_range : first_index:int -> last_exclusive:int -> bytes
+  end
+end
+
+module Morphing_surface : sig
+  val kind_id : Bonsai_flutter_spec.Id.Native_widget.kind_id
+
+  val create
+    :  ?key:Key.t
+    -> expanded:bool
+    -> compact_content:Widget.t
+    -> expanded_content:Widget.t
+    -> unit
+    -> Widget.t
+
+  module For_testing : sig
+    type props = { expanded : bool }
+
+    val decode_props_exn : bytes -> props
+  end
+end
+
 module Swipe_action : sig
   type direction =
     | Start_to_end

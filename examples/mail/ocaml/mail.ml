@@ -17,6 +17,16 @@ type attachment =
   ; size : string
   }
 
+type outline_tone =
+  | Default
+  | Muted
+
+type outline_node =
+  { text : string
+  ; tone : outline_tone
+  ; children : outline_node list
+  }
+
 type message =
   { id : int
   ; sender : string
@@ -30,6 +40,7 @@ type message =
   ; mailbox : mailbox
   ; category : category
   ; attachment : attachment option
+  ; outline : outline_node list
   }
 
 type app_destination =
@@ -55,7 +66,9 @@ type load_state =
 type state =
   { messages : message list
   ; selected_id : int option
+  ; expanded_id : int option
   ; notice : string option
+  ; card_notice : string option
   ; selected_app_destination : app_destination
   ; selected_mail_destination : mail_destination
   ; drawer_open : bool
@@ -77,8 +90,20 @@ let message
       ~starred
       ?(category = Primary)
       ?attachment
+      ?outline
       ()
   =
+  let outline =
+    Option.value
+      outline
+      ~default:
+        [ { text = subject
+          ; tone = Default
+          ; children = [ { text = preview; tone = Default; children = [] } ]
+          }
+        ; { text = "Prepared for local review"; tone = Muted; children = [] }
+        ]
+  in
   { id
   ; sender
   ; address
@@ -91,6 +116,7 @@ let message
   ; mailbox = Inbox
   ; category
   ; attachment
+  ; outline
   }
 ;;
 
@@ -113,6 +139,30 @@ let curated_messages =
       "9:42 AM"
       ~read:false
       ~starred:true
+      ~outline:
+        [ { text = "Field notes from the north plot"; tone = Default; children = [] }
+        ; { text = "Highlights"
+          ; tone = Default
+          ; children =
+              [ { text = "Five young maples are ready for wiring"
+                ; tone = Default
+                ; children = []
+                }
+              ; { text = "Cedar bench needs fresh shade cloth"
+                ; tone = Default
+                ; children = []
+                }
+              ; { text = "Move watering to the summer schedule"
+                ; tone = Default
+                ; children = []
+                }
+              ]
+          }
+        ; { text = "Printed notes at the next workshop — Mara"
+          ; tone = Muted
+          ; children = []
+          }
+        ]
       ()
   ; message
       2
@@ -282,6 +332,18 @@ let generated_message id =
        | 0 -> Primary
        | 1 -> Promotions
        | _ -> Updates)
+    ~outline:
+      [ { text = Printf.sprintf "Field dispatch from station %d" id
+        ; tone = Default
+        ; children =
+            [ { text = "A concise station update is ready"
+              ; tone = Default
+              ; children = []
+              }
+            ; { text = "Queued for the next local review"; tone = Muted; children = [] }
+            ]
+        }
+      ]
     ()
 ;;
 
@@ -298,7 +360,9 @@ let messages_for_cursor cursor =
 let initial =
   { messages = initial_messages
   ; selected_id = None
+  ; expanded_id = None
   ; notice = None
+  ; card_notice = None
   ; selected_app_destination = Mail
   ; selected_mail_destination = Inbox_view
   ; drawer_open = false
@@ -322,6 +386,30 @@ let update_message state id update =
 
 let find_message messages id =
   List.find_opt (fun message -> Int.equal message.id id) messages
+;;
+
+let message_is_visible state message =
+  match state.selected_mail_destination with
+  | Inbox_view -> message.mailbox = Inbox
+  | Starred_view -> message.starred
+  | Archived_view -> message.mailbox = Archived
+  | Trash_view -> message.mailbox = Trash
+  | Settings_view -> false
+;;
+
+let clear_expansion state = { state with expanded_id = None; card_notice = None }
+
+let clear_expansion_if state message_id =
+  if state.expanded_id = Some message_id then clear_expansion state else state
+;;
+
+let sanitize_expansion state =
+  match state.expanded_id with
+  | None -> state
+  | Some message_id ->
+    (match find_message state.messages message_id with
+     | Some message when message_is_visible state message -> state
+     | None | Some _ -> clear_expansion state)
 ;;
 
 let category_label = function
@@ -476,7 +564,122 @@ let search_header on_menu =
        ~properties:(Ui.Semantics.create ~label:"Search in mail" ~role:Generic ())
 ;;
 
-let render_mail_row ~toggle_star ~open_message ~swipe_action message =
+let compact_mail_extent = 88.
+let card_outer_vertical_extent = 20.
+let card_header_extent = 88.
+let card_outline_vertical_extent = 16.
+let card_outline_line_extent = 30.
+let card_notice_extent = 48.
+let card_divider_extent = 1.
+let card_footer_extent = 56.
+
+let mail_list_transition =
+  Ui.Native_widget.Sparse_extent_list.Transition.create
+    ~expand_duration_ms:240
+    ~collapse_duration_ms:190
+    ~expand_curve:Ease_out_cubic
+    ~collapse_curve:Ease_in_out_cubic
+    ()
+;;
+
+let rec flatten_outline ?(depth = 0) ?(prefix = []) nodes =
+  List.concat
+    (List.mapi
+       (fun index node ->
+          let path = prefix @ [ index ] in
+          (path, depth, node)
+          :: flatten_outline ~depth:(depth + 1) ~prefix:path node.children)
+       nodes)
+;;
+
+let expanded_mail_extent message ~has_notice =
+  let outline_count = List.length (flatten_outline message.outline) in
+  card_outer_vertical_extent
+  +. card_header_extent
+  +. card_divider_extent
+  +. card_outline_vertical_extent
+  +. (Float.of_int outline_count *. card_outline_line_extent)
+  +. (if has_notice then card_notice_extent else 0.)
+  +. card_divider_extent
+  +. card_footer_extent
+;;
+
+let outline_test_id message_id path =
+  path
+  |> List.map string_of_int
+  |> String.concat "-"
+  |> Printf.sprintf "mail-outline-%d-%s" message_id
+;;
+
+let render_outline_node message_id (path, depth, node) =
+  let connector =
+    if depth = 0
+    then Ui.Widget.sized_box ~width:20. (Ui.Widget.empty ())
+    else
+      Ui.Widget.sized_box
+        ~width:20.
+        ~height:card_outline_line_extent
+        (Ui.Widget.Stack.create
+           [ Ui.Widget.Stack.positioned
+               ~left:0.
+               ~top:0.
+               ~bottom:0.
+               (Ui.Widget.sized_box
+                  ~width:1.
+                  (Ui.Widget.decorated_box
+                     ~decoration:
+                       (Ui.Style.Decoration.create ~background:primary_container ())
+                     (Ui.Widget.empty ())))
+           ; Ui.Widget.Stack.positioned
+               ~left:0.
+               ~top:14.
+               (Ui.Widget.sized_box
+                  ~width:20.
+                  ~height:1.
+                  (Ui.Widget.decorated_box
+                     ~decoration:
+                       (Ui.Style.Decoration.create ~background:primary_container ())
+                     (Ui.Widget.empty ())))
+           ])
+  in
+  let bullet =
+    Ui.Widget.sized_box
+      ~width:8.
+      ~height:8.
+      (Ui.Widget.decorated_box
+         ~decoration:
+           (Ui.Style.Decoration.create
+              ~background:(if node.tone = Muted then text_secondary else primary)
+              ~border_radius:4.
+              ())
+         (Ui.Widget.empty ()))
+  in
+  Ui.Widget.sized_box
+    ~height:card_outline_line_extent
+    (Ui.Widget.Flex.row
+       [ Ui.Widget.Flex.fixed
+           (Ui.Widget.sized_box ~width:(Float.of_int depth *. 28.) (Ui.Widget.empty ()))
+       ; Ui.Widget.Flex.fixed connector
+       ; Ui.Widget.Flex.fixed bullet
+       ; Ui.Widget.Flex.expanded
+           (padding
+              ~horizontal:10.
+              (styled_text
+                 ~size:13.5
+                 ~color:(if node.tone = Muted then text_secondary else text_primary)
+                 ~max_lines:1
+                 ~overflow:Ellipsis
+                 node.text))
+       ])
+  |> Ui.Widget.with_test_id (Ui.Test_id.string (outline_test_id message_id path))
+  |> Ui.Widget.semantics
+       ~properties:
+         (Ui.Semantics.create
+            ~label:(Printf.sprintf "Outline level %d: %s" (depth + 1) node.text)
+            ())
+;;
+
+let collapsed_mail_content ~toggle_star ~expand message =
   let sender_weight = if message.read then Ui.Style.Font_weight.Normal else Semi_bold in
   let text_column =
     Ui.Widget.column
@@ -519,7 +722,7 @@ let render_mail_row ~toggle_star ~open_message ~swipe_action message =
            ~background:(if message.read then surface else unread_surface)
            ())
       (Ui.Widget.sized_box
-         ~height:88.
+         ~height:compact_mail_extent
          (padding
             ~horizontal:16.
             ~vertical:8.
@@ -538,15 +741,179 @@ let render_mail_row ~toggle_star ~open_message ~swipe_action message =
                    "%s message from %s"
                    (if message.read then "Read" else "Unread")
                    message.sender)
-              ~hint:message.subject
-              ~value:(category_label message.category)
-              ~role:Ui.Semantics.Role.Generic
+              ~hint:
+                (Printf.sprintf
+                   "%s, %s"
+                   message.subject
+                   (category_label message.category))
+              ~value:"Collapsed"
+              ~role:Ui.Semantics.Role.Button
+              ~enabled:true
               ())
     |> fun child ->
-    Ui.Widget.pressable ~key:(Ui.Key.int message.id) ~child ~on_press:open_message ()
+    Ui.Widget.pressable ~key:(Ui.Key.int message.id) ~child ~on_press:expand ()
     |> Ui.Widget.with_test_id
          (Ui.Test_id.string (Printf.sprintf "mail-pressable-%d" message.id))
   in
+  content
+;;
+
+let expanded_mail_content ~toggle_star ~collapse ~reply ~open_message ~notice message =
+  let sender_weight = if message.read then Ui.Style.Font_weight.Normal else Semi_bold in
+  let header_text =
+    Ui.Widget.column
+      [ styled_text
+          ~size:15.
+          ~weight:sender_weight
+          ~color:text_primary
+          ~max_lines:1
+          ~overflow:Ellipsis
+          message.sender
+      ; styled_text
+          ~size:13.5
+          ~weight:(if message.read then Normal else Semi_bold)
+          ~color:text_primary
+          ~max_lines:1
+          ~overflow:Ellipsis
+          message.subject
+      ]
+  in
+  let collapsible_header =
+    Ui.Widget.sized_box
+      ~height:card_header_extent
+      (padding
+         ~horizontal:12.
+         ~vertical:8.
+         (Ui.Widget.Flex.row
+            [ Ui.Widget.Flex.fixed (avatar message)
+            ; Ui.Widget.Flex.expanded (padding ~horizontal:12. header_text)
+            ; Ui.Widget.Flex.fixed
+                (styled_text ~size:11.5 ~color:text_secondary message.timestamp)
+            ]))
+    |> Ui.Widget.semantics
+         ~properties:
+           (Ui.Semantics.create
+              ~label:
+                (Printf.sprintf
+                   "%s message from %s"
+                   (if message.read then "Read" else "Unread")
+                   message.sender)
+              ~hint:
+                (Printf.sprintf
+                   "%s, %s"
+                   message.subject
+                   (category_label message.category))
+              ~value:"Expanded"
+              ~role:Ui.Semantics.Role.Button
+              ~enabled:true
+              ())
+    |> fun child ->
+    Ui.Widget.pressable ~child ~on_press:collapse ()
+    |> Ui.Widget.with_test_id
+         (Ui.Test_id.string (Printf.sprintf "mail-card-header-%d" message.id))
+  in
+  let collapse_button =
+    semantic_icon_button
+      ~test_id:(Printf.sprintf "mail-card-collapse-%d" message.id)
+      ~label:(Printf.sprintf "Collapse message from %s" message.sender)
+      ~selected:false
+      ~on_press:collapse
+      ~code_point:0xe5ce
+      ~color:primary
+  in
+  let header =
+    Ui.Widget.Stack.create
+      [ Ui.Widget.Stack.child collapsible_header
+      ; Ui.Widget.Stack.positioned
+          ~right:48.
+          ~bottom:0.
+          (star_control toggle_star message ~detail:false)
+      ; Ui.Widget.Stack.positioned ~right:0. ~bottom:0. collapse_button
+      ]
+  in
+  let outline =
+    message.outline
+    |> flatten_outline
+    |> List.map (render_outline_node message.id)
+    |> Ui.Widget.column
+    |> padding ~horizontal:12. ~vertical:8.
+  in
+  let notice_widget =
+    Option.map
+      (fun notice ->
+         Ui.Widget.sized_box
+           ~height:card_notice_extent
+           (padding
+              ~horizontal:16.
+              ~vertical:6.
+              (Ui.Widget.decorated_box
+                 ~decoration:
+                   (Ui.Style.Decoration.create
+                      ~background:primary_container
+                      ~border_radius:12.
+                      ())
+                 (Ui.Widget.center (styled_text ~size:12.5 ~color:primary notice))))
+         |> Ui.Widget.with_test_id
+              (Ui.Test_id.string (Printf.sprintf "mail-card-notice-%d" message.id))
+         |> Ui.Widget.semantics
+              ~properties:(Ui.Semantics.create ~label:notice ~live_region:true ()))
+      notice
+  in
+  let action ~test_id ~label ~semantic_label handler =
+    Ui.Material.text_button
+      ~on_press:handler
+      ~child:(styled_text ~size:14. ~weight:Medium ~color:primary label)
+      ()
+    |> Ui.Widget.with_test_id (Ui.Test_id.string test_id)
+    |> Ui.Widget.semantics
+         ~properties:
+           (Ui.Semantics.create
+              ~label:semantic_label
+              ~role:Ui.Semantics.Role.Button
+              ~enabled:true
+              ())
+    |> Ui.Widget.sized_box ~height:card_footer_extent
+  in
+  let separator =
+    Ui.Widget.sized_box
+      ~width:1.
+      ~height:card_footer_extent
+      (Ui.Widget.decorated_box
+         ~decoration:(Ui.Style.Decoration.create ~background:primary_container ())
+         (Ui.Widget.empty ()))
+  in
+  let footer =
+    Ui.Widget.Flex.row
+      [ Ui.Widget.Flex.expanded
+          (action
+             ~test_id:(Printf.sprintf "mail-card-reply-%d" message.id)
+             ~label:"Reply"
+             ~semantic_label:(Printf.sprintf "Reply to %s" message.sender)
+             reply)
+      ; Ui.Widget.Flex.fixed separator
+      ; Ui.Widget.Flex.expanded
+          (action
+             ~test_id:(Printf.sprintf "mail-card-open-%d" message.id)
+             ~label:"Open"
+             ~semantic_label:(Printf.sprintf "Open message from %s" message.sender)
+             open_message)
+      ]
+  in
+  let divider =
+    Ui.Widget.sized_box
+      ~height:card_divider_extent
+      (Ui.Material.divider ~thickness:card_divider_extent ())
+  in
+  let blocks =
+    [ Some header; Some divider; Some outline; notice_widget; Some divider; Some footer ]
+    |> List.filter_map Fun.id
+  in
+  let extent = expanded_mail_extent message ~has_notice:(Option.is_some notice) in
+  Ui.Widget.sized_box ~height:extent (Ui.Widget.column blocks)
+  |> Ui.Widget.with_test_id (Ui.Test_id.string (Printf.sprintf "mail-card-%d" message.id))
+;;
+
+let with_swipe_host ~swipe_action message content =
   let archive_icon =
     icon ~size:24. ~color:surface 0xe091
     |> Ui.Widget.with_test_id
@@ -586,7 +953,35 @@ let render_mail_row ~toggle_star ~open_message ~swipe_action message =
        (Ui.Test_id.string (Printf.sprintf "mail-swipe-%d" message.id))
 ;;
 
-let mail_row handlers set_state message_id message _graph =
+let render_mail_row
+      ~toggle_star
+      ~expand
+      ~collapse
+      ~reply
+      ~open_message
+      ~swipe_action
+      ~expanded
+      ~notice
+      message
+  =
+  let content =
+    Ui.Native_widget.Morphing_surface.create
+      ~expanded
+      ~compact_content:(collapsed_mail_content ~toggle_star ~expand message)
+      ~expanded_content:
+        (expanded_mail_content
+           ~toggle_star
+           ~collapse
+           ~reply
+           ~open_message
+           ~notice
+           message)
+      ()
+  in
+  with_swipe_host ~swipe_action message content
+;;
+
+let mail_row handlers set_state message_id row_data _graph =
   let dependencies = Bonsai.Cont.both set_state message_id in
   let equal_dependencies (left_set_state, left_id) (right_set_state, right_id) =
     left_set_state == right_set_state && Int.equal left_id right_id
@@ -600,7 +995,51 @@ let mail_row handlers set_state message_id message _graph =
       ~f:(fun (set_state, message_id) _ ->
         set_state (fun state ->
           update_message state message_id (fun message ->
-            { message with starred = not message.starred })))
+            { message with starred = not message.starred })
+          |> sanitize_expansion))
+  in
+  let expand =
+    Driver.Handler.create
+      handlers
+      ~name:"mail-expand-message"
+      ~equal:equal_dependencies
+      dependencies
+      ~f:(fun (set_state, message_id) payload ->
+        match payload with
+        | Ui.Event.Payload.Unit ->
+          set_state (fun state ->
+            { state with expanded_id = Some message_id; card_notice = None })
+        | _ -> Bonsai.Effect.Ignore)
+  in
+  let collapse =
+    Driver.Handler.create
+      handlers
+      ~name:"mail-collapse-message"
+      ~equal:equal_dependencies
+      dependencies
+      ~f:(fun (set_state, message_id) payload ->
+        match payload with
+        | Ui.Event.Payload.Unit ->
+          set_state (fun state -> clear_expansion_if state message_id)
+        | _ -> Bonsai.Effect.Ignore)
+  in
+  let reply =
+    Driver.Handler.create
+      handlers
+      ~name:"mail-card-reply"
+      ~equal:equal_dependencies
+      dependencies
+      ~f:(fun (set_state, message_id) payload ->
+        match payload with
+        | Ui.Event.Payload.Unit ->
+          set_state (fun state ->
+            if state.expanded_id = Some message_id
+            then
+              { state with
+                card_notice = Some "Composing is outside the scope of this demo."
+              }
+            else state)
+        | _ -> Bonsai.Effect.Ignore)
   in
   let open_message =
     Driver.Handler.create
@@ -613,7 +1052,12 @@ let mail_row handlers set_state message_id message _graph =
         | Ui.Event.Payload.Unit ->
           set_state (fun state ->
             update_message state message_id (fun message -> { message with read = true })
-            |> fun state -> { state with selected_id = Some message_id; notice = None })
+            |> fun state ->
+            { state with
+              selected_id = Some message_id
+            ; notice = None
+            ; card_notice = None
+            })
         | _ -> Bonsai.Effect.Ignore)
   in
   let swipe_action =
@@ -628,7 +1072,8 @@ let mail_row handlers set_state message_id message _graph =
         | Some Start_to_end ->
           set_state (fun state ->
             update_message state message_id (fun message ->
-              { message with mailbox = Archived }))
+              { message with mailbox = Archived })
+            |> fun state -> clear_expansion_if state message_id)
         | Some End_to_start ->
           set_state (fun state ->
             update_message state message_id (fun message ->
@@ -636,16 +1081,58 @@ let mail_row handlers set_state message_id message _graph =
   in
   let events =
     Bonsai.Cont.map2
-      (Bonsai.Cont.both toggle_star open_message)
-      swipe_action
-      ~f:(fun (toggle_star, open_message) swipe_action ->
-        toggle_star, open_message, swipe_action)
+      (Bonsai.Cont.map2
+         (Bonsai.Cont.both toggle_star expand)
+         (Bonsai.Cont.both collapse reply)
+         ~f:(fun (toggle_star, expand) (collapse, reply) ->
+           toggle_star, expand, collapse, reply))
+      (Bonsai.Cont.both open_message swipe_action)
+      ~f:(fun (toggle_star, expand, collapse, reply) (open_message, swipe_action) ->
+        toggle_star, expand, collapse, reply, open_message, swipe_action)
   in
   Bonsai.Cont.map2
-    message
+    row_data
     events
-    ~f:(fun message (toggle_star, open_message, swipe_action) ->
-      render_mail_row ~toggle_star ~open_message ~swipe_action message)
+    ~f:
+      (fun
+        (message, expanded, notice)
+        (toggle_star, expand, collapse, reply, open_message, swipe_action)
+      ->
+      render_mail_row
+        ~toggle_star
+        ~expand
+        ~collapse
+        ~reply
+        ~open_message
+        ~swipe_action
+        ~expanded
+        ~notice
+        message)
+;;
+
+let messages_for_destination state = List.filter (message_is_visible state) state.messages
+
+let expanded_extent_override state =
+  match state.expanded_id with
+  | None -> []
+  | Some expanded_id ->
+    let rec find index = function
+      | [] -> []
+      | message :: tail ->
+        if Int.equal message.id expanded_id
+        then (
+          let override : Ui.Native_widget.Sparse_extent_list.extent_override =
+            { index
+            ; extent =
+                expanded_mail_extent
+                  message
+                  ~has_notice:(Option.is_some state.card_notice)
+            }
+          in
+          [ override ])
+        else find (index + 1) tail
+    in
+    find 0 (messages_for_destination state)
 ;;
 
 let mail_destination_title = function
@@ -722,11 +1209,13 @@ let render_mail_body ~state ~rows ~open_menu ~on_visible_range =
       | _, Settings_view -> 0
     in
     let list =
-      Ui.Native_widget.Virtual_list.create_with_handler
+      Ui.Native_widget.Sparse_extent_list.create_with_handler
         ~total_count
         ~first_index:state.window_first
-        ~item_extent:88.
+        ~default_item_extent:compact_mail_extent
+        ~extent_overrides:(expanded_extent_override state)
         ~overscan:4
+        ~transition:mail_list_transition
         ~items:rows
         ~on_visible_range
         ()
@@ -1117,7 +1606,7 @@ let detail_page handlers set_state message_id detail _graph =
       ~f:(fun set_state _ ->
         set_state (fun state -> { state with selected_id = None; notice = None }))
   in
-  let close name update =
+  let close ?(clear_card = false) name update =
     Driver.Handler.create
       handlers
       ~name
@@ -1126,14 +1615,16 @@ let detail_page handlers set_state message_id detail _graph =
       ~f:(fun (set_state, message_id) _ ->
         set_state (fun state ->
           update state message_id
-          |> fun state -> { state with selected_id = None; notice = None }))
+          |> fun state ->
+          let state = if clear_card then clear_expansion_if state message_id else state in
+          { state with selected_id = None; notice = None }))
   in
   let archive =
-    close "mail-archive" (fun state message_id ->
+    close ~clear_card:true "mail-archive" (fun state message_id ->
       update_message state message_id (fun message -> { message with mailbox = Archived }))
   in
   let delete =
-    close "mail-delete" (fun state message_id ->
+    close ~clear_card:true "mail-delete" (fun state message_id ->
       update_message state message_id (fun message -> { message with mailbox = Trash }))
   in
   let mark_unread =
@@ -1149,7 +1640,8 @@ let detail_page handlers set_state message_id detail _graph =
       ~f:(fun (set_state, message_id) _ ->
         set_state (fun state ->
           update_message state message_id (fun message ->
-            { message with starred = not message.starred })))
+            { message with starred = not message.starred })
+          |> sanitize_expansion))
   in
   let reply =
     Driver.Handler.create
@@ -1196,18 +1688,6 @@ let detail_page handlers set_state message_id detail _graph =
         ~scroll
         ~notice
         message)
-;;
-
-let messages_for_destination state =
-  List.filter
-    (fun message ->
-       match state.selected_mail_destination with
-       | Inbox_view -> message.mailbox = Inbox
-       | Starred_view -> message.starred
-       | Archived_view -> message.mailbox = Archived
-       | Trash_view -> message.mailbox = Trash
-       | Settings_view -> false)
-    state.messages
 ;;
 
 let clamp_window_first state message_count =
@@ -1300,12 +1780,18 @@ let render_mail_page
 let component handlers graph =
   let state, set_state = Bonsai_v017.state ~equal:equal_state initial graph in
   let sleep = Bonsai.Cont.Clock.sleep graph in
-  let visible_messages = Bonsai.Cont.map state ~f:window_messages in
+  let visible_messages =
+    Bonsai.Cont.map state ~f:(fun state ->
+      window_messages state
+      |> List.map (fun message ->
+        let expanded = state.expanded_id = Some message.id in
+        message, expanded, if expanded then state.card_notice else None))
+  in
   let rows =
     Bonsai.Cont.assoc_list
       (module Core.Int)
       visible_messages
-      ~get_key:(fun message -> message.id)
+      ~get_key:(fun (message, _, _) -> message.id)
       ~f:(mail_row handlers set_state)
       graph
   in
@@ -1323,7 +1809,7 @@ let component handlers graph =
         equal_state left right && left_set == right_set && left_sleep == right_sleep)
       visible_range_dependencies
       ~f:(fun (snapshot, set_state, sleep) payload ->
-        match Ui.Native_widget.Virtual_list.visible_range_of_payload payload with
+        match Ui.Native_widget.Sparse_extent_list.visible_range_of_payload payload with
         | None -> Bonsai.Effect.Ignore
         | Some { first_index; last_exclusive } ->
           let count = List.length (messages_for_destination snapshot) in
@@ -1411,6 +1897,8 @@ let component handlers graph =
         { state with
           selected_mail_destination = destination
         ; drawer_open = false
+        ; expanded_id = None
+        ; card_notice = None
         ; window_first = 0
         ; next_generation
         ; load_state

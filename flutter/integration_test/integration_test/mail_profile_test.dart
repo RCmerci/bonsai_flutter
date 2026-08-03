@@ -115,7 +115,12 @@ Future<void> _warmInteractions(WidgetTester tester) async {
 }
 
 Future<void> _openDetail(WidgetTester tester) async {
-  await tester.tap(find.text('Juniper Works'));
+  final open = find.bySemanticsLabel('Open message from Juniper Works');
+  if (open.evaluate().isEmpty) {
+    await tester.tap(find.text('Juniper Works'));
+    await _waitForPresent(tester, open);
+  }
+  await tester.tap(open);
   await _waitForPresent(tester, _detailBody);
   await tester.pumpAndSettle();
 }
