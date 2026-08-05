@@ -26,7 +26,7 @@ before linking when Flutter selects that SDK.
 - Keep the batched C ABI and generated `@Native` bindings.
 - Keep Flutter's `DynamicLoadingBundled` packaging path.
 - Preserve all existing macOS behavior and gates.
-- Build every iPhoneOS dependency from source for iOS 13.0.
+- Build every iPhoneOS dependency from source for iOS 15.0.
 - Never reuse a macOS object for iPhoneOS.
 - Keep signing identities, profiles, private keys, and passwords outside the
   repository.

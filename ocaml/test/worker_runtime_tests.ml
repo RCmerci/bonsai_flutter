@@ -48,9 +48,10 @@ let await_release gate =
   Mutex.unlock gate.mutex
 ;;
 
-let reset_started gate =
+let reset_gate gate =
   Mutex.lock gate.mutex;
   gate.started <- false;
+  gate.released <- false;
   Mutex.unlock gate.mutex
 ;;
 
@@ -91,7 +92,6 @@ type request =
   | Echo of string
   | Hold
   | Mark_dirty of int
-  | Cooperative
   | Emit_push of string
   | Coalesce_push
   | Fail_callback
@@ -99,66 +99,46 @@ type request =
 type config =
   { init_domain_id : Domain.id option Atomic.t
   ; hold_gate : gate
-  ; cooperative_gate : gate
   ; log : callback_log
-  ; cancel_count : int Atomic.t
   ; shutdown_count : int Atomic.t
   }
 
-type state =
-  { config : config
-  ; mutable dirty : bool
-  }
+type state = { config : config }
 
 let service =
   Worker.Service.create
     ~push_topic_count:2
-    ~init:(fun ~emit config ->
+    ~concurrency:Worker.Service.Serial
+    ~init:(fun session config ->
       Atomic.set config.init_domain_id (Some (Domain.self ()));
-      emit ~topic:(ID.Worker.Push_topic.of_int 0) "ready";
-      Ok { config; dirty = false })
-    ~handle_request:(fun state ~cancelled ~emit request ->
+      Worker.Session_context.emit session ~topic:(ID.Worker.Push_topic.of_int 0) "ready";
+      Ok { config })
+    ~handle:(fun context state request ->
       match request with
-      | Echo value -> Ok value, `Idle
+      | Echo value -> Ok value
       | Hold ->
         signal_started state.config.hold_gate;
         await_release state.config.hold_gate;
-        Ok "held", `Idle
+        Ok "held"
       | Mark_dirty value ->
         append_log state.config.log (Printf.sprintf "R%d" value);
-        state.dirty <- true;
-        Ok (Printf.sprintf "marked-%d" value), `Continue
-      | Cooperative ->
-        signal_started state.config.cooperative_gate;
-        while not (cancelled ()) do
-          Domain.cpu_relax ()
-        done;
-        Ok "cooperative-finished", `Idle
+        Ok (Printf.sprintf "marked-%d" value)
       | Emit_push value ->
-        emit ~topic:(ID.Worker.Push_topic.of_int 1) value;
-        Ok "pushed", `Idle
+        Worker.Request_context.emit context ~topic:(ID.Worker.Push_topic.of_int 1) value;
+        Ok "pushed"
       | Coalesce_push ->
-        emit ~topic:(ID.Worker.Push_topic.of_int 1) "old";
-        emit ~topic:(ID.Worker.Push_topic.of_int 1) "new";
-        Ok "coalesced", `Idle
+        Worker.Request_context.emit context ~topic:(ID.Worker.Push_topic.of_int 1) "old";
+        Worker.Request_context.emit context ~topic:(ID.Worker.Push_topic.of_int 1) "new";
+        Ok "coalesced"
       | Fail_callback -> failwith "intentional service callback failure")
-    ~step:(fun state ~cancelled:_ ~emit:_ ->
-      if state.dirty
-      then (
-        append_log state.config.log "S";
-        state.dirty <- false;
-        `Idle)
-      else `Idle)
-    ~cancel:(fun state ~request_id:_ -> Atomic.incr state.config.cancel_count)
     ~shutdown:(fun state -> Atomic.incr state.config.shutdown_count)
+    ()
 ;;
 
 let create_config () =
   { init_domain_id = Atomic.make None
   ; hold_gate = create_gate ()
-  ; cooperative_gate = create_gate ()
   ; log = create_log ()
-  ; cancel_count = Atomic.make 0
   ; shutdown_count = Atomic.make 0
   }
 ;;
@@ -240,12 +220,28 @@ let test_request_push_backpressure_fairness_and_cancellation client config =
     "outstanding response capacity did not return Full";
   release config.hold_gate;
   ignore (drain_until_responses client 32 []);
+  reset_gate config.hold_gate;
   clear_log config.log;
+  ignore (accepted (Worker.send client Hold));
+  await_started config.hold_gate;
+  let cancelled_before_dispatch = accepted (Worker.send client (Mark_dirty 90)) in
+  ignore (accepted (Worker.send client (Mark_dirty 91)));
+  Worker.cancel client ~request_id:cancelled_before_dispatch;
+  release config.hold_gate;
+  ignore (drain_until_responses client 3 []);
+  let priority = await_log_length config.log 1 in
+  require
+    (priority = [ "R91" ])
+    "Cancel control did not run before queued normal request dispatch";
+  clear_log config.log;
+  let yields_before =
+    (Worker_runtime.For_testing.diagnostics ()).coordinator_yield_count
+  in
   for index = 1 to 16 do
     ignore (accepted (Worker.send client (Mark_dirty index)))
   done;
   ignore (drain_until_responses client 16 []);
-  let fairness = await_log_length config.log 18 in
+  let fairness = await_log_length config.log 16 in
   require
     (fairness
      = [ "R1"
@@ -256,7 +252,6 @@ let test_request_push_backpressure_fairness_and_cancellation client config =
        ; "R6"
        ; "R7"
        ; "R8"
-       ; "S"
        ; "R9"
        ; "R10"
        ; "R11"
@@ -265,22 +260,12 @@ let test_request_push_backpressure_fairness_and_cancellation client config =
        ; "R14"
        ; "R15"
        ; "R16"
-       ; "S"
        ])
-    "request/computation fairness exceeded eight requests or starved requests";
-  let cooperative_id = accepted (Worker.send client Cooperative) in
-  await_started config.cooperative_gate;
-  Worker.cancel client ~request_id:cooperative_id;
-  let cancellation = drain_until_responses client 1 [] in
+    "bounded request dispatch reordered or starved requests";
   require
-    (List.exists
-       (function
-         | Worker.Response { request_id; outcome = Cancelled; _ } ->
-           ID.Worker.Request_id.equal request_id cooperative_id
-         | _ -> false)
-       cancellation)
-    "cooperative cancellation did not produce a typed Cancelled response";
-  require (Atomic.get config.cancel_count = 1) "service cancel callback did not run";
+    ((Worker_runtime.For_testing.diagnostics ()).coordinator_yield_count
+     >= yields_before + 2)
+    "Coordinator did not yield after bounded normal request batches";
   ignore (accepted (Worker.send client (Emit_push "unsolicited")));
   let pushed = drain_until_responses client 1 [] in
   require
@@ -326,6 +311,14 @@ let () =
     (first_diagnostics.state = Worker_runtime.Attached)
     "first worker session was not Attached";
   require (first_diagnostics.spawn_count = 1) "first worker session did not spawn once";
+  require
+    (first_diagnostics.backend_run_count = 1 && first_diagnostics.backend_running)
+    "first worker session did not start exactly one live Eio backend";
+  require
+    (first_diagnostics.coordinator_start_count = 1
+     && first_diagnostics.active_coordinators = 1
+     && first_diagnostics.peak_active_coordinators = 1)
+    "first worker session did not start exactly one Coordinator";
   require (first_diagnostics.join_count = 0) "ordinary startup joined the Worker Domain";
   require
     (Atomic.get config.init_domain_id <> Some domain0_id)
@@ -337,13 +330,18 @@ let () =
   test_request_push_backpressure_fairness_and_cancellation first config;
   let first_domain_id = Option.get first_diagnostics.worker_domain_id in
   let first_generation = Worker.worker_generation first in
-  reset_started config.cooperative_gate;
-  ignore (accepted (Worker.send first Cooperative));
-  await_started config.cooperative_gate;
+  reset_gate config.hold_gate;
+  ignore (accepted (Worker.send first Hold));
+  await_started config.hold_gate;
   for index = 1 to 31 do
     ignore (accepted (Worker.send first (Echo (Printf.sprintf "stop-%d" index))))
   done;
-  Worker_runtime.stop first;
+  let stopper = Domain.spawn (fun () -> Worker_runtime.stop first) in
+  while not (Worker.For_testing.is_stopping first) do
+    Domain.cpu_relax ()
+  done;
+  release config.hold_gate;
+  Domain.join stopper;
   let shutdown_events = drain_until_responses first 32 [] in
   require
     (List.for_all
@@ -357,6 +355,12 @@ let () =
   require (after_destroy.state = Worker_runtime.Idle) "ordinary stop did not return Idle";
   require (after_destroy.spawn_count = 1) "ordinary stop respawned the Worker Domain";
   require (after_destroy.join_count = 0) "ordinary stop joined the Worker Domain";
+  require
+    (after_destroy.backend_run_count = 1 && after_destroy.backend_running)
+    "ordinary stop exited or restarted the Eio backend";
+  require
+    (after_destroy.coordinator_start_count = 1 && after_destroy.active_coordinators = 0)
+    "ordinary stop did not finish its Coordinator";
   require
     (Worker.send first (Echo "stale") = Worker.Stopping)
     "stopped client accepted a stale request";
@@ -374,6 +378,14 @@ let () =
     "sequential recreation did not reuse the same Worker Domain";
   require (second_diagnostics.spawn_count = 1) "sequential recreation spawned again";
   require (second_diagnostics.join_count = 0) "sequential recreation joined the Domain";
+  require
+    (second_diagnostics.backend_run_count = 1 && second_diagnostics.backend_running)
+    "sequential recreation did not reuse the live Eio backend";
+  require
+    (second_diagnostics.coordinator_start_count = 2
+     && second_diagnostics.active_coordinators = 1
+     && second_diagnostics.peak_active_coordinators = 1)
+    "sequential recreation overlapped or failed to replace its Coordinator";
   require
     (second_diagnostics.active_sessions = 1 && second_diagnostics.peak_active_sessions = 1)
     "sequential recreation overlapped worker sessions";
@@ -408,6 +420,13 @@ let () =
   require
     ((Worker_runtime.For_testing.diagnostics ()).spawn_count = 1)
     "caught callback failure made the Worker Domain non-reusable";
+  let after_callback_failure = Worker_runtime.For_testing.diagnostics () in
+  require
+    (after_callback_failure.backend_run_count = 1
+     && after_callback_failure.backend_running
+     && after_callback_failure.coordinator_start_count = 2
+     && after_callback_failure.active_coordinators = 0)
+    "caught callback failure escaped the session scope or stopped the Eio backend";
   let third_config = create_config () in
   let third =
     ok
@@ -419,6 +438,9 @@ let () =
   require
     ((Worker_runtime.For_testing.diagnostics ()).worker_domain_id = Some first_domain_id)
     "post-failure session did not reuse the Worker Domain";
+  require
+    ((Worker_runtime.For_testing.diagnostics ()).coordinator_start_count = 3)
+    "post-failure session did not start a fresh Coordinator";
   Worker_runtime.stop third;
   Worker_runtime.For_testing.crash_worker_loop ();
   Worker_runtime.For_testing.await_state Worker_runtime.Terminal;
@@ -434,6 +456,12 @@ let () =
   require (stopped.state = Worker_runtime.Stopped) "final shutdown did not stop subsystem";
   require (stopped.spawn_count = 1) "final shutdown changed spawn count";
   require (stopped.join_count = 1) "final shutdown did not join exactly once";
+  require
+    (stopped.backend_run_count = 1 && not stopped.backend_running)
+    "final shutdown did not exit the single Eio backend";
+  require
+    (stopped.coordinator_start_count = 3 && stopped.active_coordinators = 0)
+    "final shutdown left a Coordinator active";
   Worker_runtime.For_testing.final_shutdown ();
   require
     ((Worker_runtime.For_testing.diagnostics ()).join_count = 1)

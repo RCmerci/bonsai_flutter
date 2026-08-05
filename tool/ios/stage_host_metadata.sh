@@ -27,6 +27,7 @@ host_lib=$(
     opam var --switch="$switch" lib
 )
 target_lib="$switch/_opam/ios-sysroot/lib"
+target_standard_library="$target_lib/ocaml"
 mkdir -p "$target_lib"
 
 find "$host_lib" -mindepth 1 -maxdepth 1 -type d |
@@ -48,5 +49,28 @@ find "$host_lib" -mindepth 1 -maxdepth 1 -type d |
     done
   done
 
+find "$target_standard_library" -mindepth 1 -maxdepth 1 -type d |
+  while IFS= read -r target_standard_package; do
+    test -f "$target_standard_package/META" || continue
+    package_name=${target_standard_package##*/}
+    target_package_directory="$target_lib/$package_name"
+    mkdir -p "$target_package_directory"
+
+    find "$target_standard_package" \
+      -maxdepth 1 \
+      -type f \
+      \( \
+        -name META -o \
+        -name '*.a' -o \
+        -name '*.cma' -o \
+        -name '*.cmi' -o \
+        -name '*.cmti' -o \
+        -name '*.cmx' -o \
+        -name '*.cmxa' -o \
+        -name '*.mli' \
+      \) \
+      -exec cp -f {} "$target_package_directory/" \;
+  done
+
 printf '%s\n' \
-  "iOS $target host metadata staging passed; no host executable was copied"
+  "iOS $target host metadata and target standard-library staging passed"

@@ -170,11 +170,13 @@ macOS arm64 is tested end to end. On the recorded macOS 26.5.2 arm64 host,
 the Counter builds in Debug, Profile, and Release, native symbols and
 signatures are verified, and the cross-language integration suite passes.
 
-iPhoneOS arm64 is supported for unsigned packaging with a minimum iOS 13.0.
+iPhoneOS arm64 is supported with a minimum iOS 15.0.
 The locked OCaml 5.1.1 cross compiler builds every standalone example and the
 aggregate integration entrypoint, and the resulting complete objects are
-audited as platform `IOS`. Signed physical-device execution still requires
-repository-external Apple signing material. iOS Simulator is unsupported.
+audited as platform `IOS`. Development signing, installation, OCaml callback
+execution, and the Eio Worker Phase 0 probe have passed on a physical iPhone.
+Reproduction still requires repository-external Apple signing material. iOS
+Simulator is unsupported.
 
 Linux, Windows, and Android remain architectural targets. Flutter Web is out
 of scope.
@@ -197,7 +199,7 @@ material and a reachable iPhone.
 
 ## Current limitations and roadmap
 
-- macOS arm64 and unsigned iPhoneOS arm64 packaging are the validated targets.
+- macOS arm64 and physical-device iPhoneOS arm64 are the validated targets.
 - The generic virtual-list prototype is intended for cached visible windows,
   not synchronous per-row FFI calls.
 - Platform packaging and integration coverage will expand to Linux, Windows,

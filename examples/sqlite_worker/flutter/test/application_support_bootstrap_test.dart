@@ -38,6 +38,22 @@ final class _NeverRuntimeStarter {
   );
 }
 
+({String databasePath, String applicationSupportDirectory})
+_decodeApplicationPayload(Uint8List payload) {
+  expect(ascii.decode(payload.sublist(0, 4)), 'SWC1');
+  final data = ByteData.sublistView(payload);
+  final databaseLength = data.getUint32(4, Endian.little);
+  final directoryLength = data.getUint32(8, Endian.little);
+  final databaseStart = 12;
+  final directoryStart = databaseStart + databaseLength;
+  return (
+    databasePath: utf8.decode(payload.sublist(databaseStart, directoryStart)),
+    applicationSupportDirectory: utf8.decode(
+      payload.sublist(directoryStart, directoryStart + directoryLength),
+    ),
+  );
+}
+
 void main() {
   test(
     'resolves, creates, and encodes the Application Support database',
@@ -59,10 +75,13 @@ void main() {
       expect(createdPath, expectedDirectory);
       expect(await Directory(expectedDirectory).exists(), isTrue);
       expect(result.databasePath, expectedDatabase);
+      expect(result.applicationSupportDirectory, expectedDirectory);
       final decoded = _decodeConfig(result.runtimeConfig);
       expect(decoded.entrypoint, 'sqlite_worker');
       expect(decoded.policy, RuntimeLaunchPolicy.replaceExisting.index);
-      expect(utf8.decode(decoded.payload), expectedDatabase);
+      final payload = _decodeApplicationPayload(decoded.payload);
+      expect(payload.databasePath, expectedDatabase);
+      expect(payload.applicationSupportDirectory, expectedDirectory);
     },
   );
 
@@ -114,9 +133,16 @@ void main() {
         await tester.pump(const Duration(milliseconds: 16));
       }
       expect(starter.calls, 1);
+      final payload = _decodeApplicationPayload(
+        _decodeConfig(starter.config!).payload,
+      );
       expect(
-        utf8.decode(_decodeConfig(starter.config!).payload),
+        payload.databasePath,
         '/tmp/application-support/sqlite_worker/todos.sqlite3',
+      );
+      expect(
+        payload.applicationSupportDirectory,
+        '/tmp/application-support/sqlite_worker',
       );
     },
   );

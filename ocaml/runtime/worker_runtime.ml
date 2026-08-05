@@ -16,6 +16,31 @@ type diagnostics =
   ; active_sessions : int
   ; peak_active_sessions : int
   ; idle_wait_count : int
+  ; backend_run_count : int
+  ; backend_running : bool
+  ; coordinator_start_count : int
+  ; active_coordinators : int
+  ; peak_active_coordinators : int
+  ; coordinator_yield_count : int
+  ; configured_concurrency_limit : int option
+  ; queued_requests : int
+  ; active_request_fibers : int
+  ; waiting_request_fibers : int
+  ; active_handlers : int
+  ; peak_active_handlers : int
+  ; active_background_fibers : int
+  ; peak_active_background_fibers : int
+  ; logical_live_fibers : int
+  ; request_queue_wait_count : int
+  ; max_request_queue_wait_ns : int64
+  ; handler_wall_count : int
+  ; max_handler_wall_ns : int64
+  ; cancellation_unwind_count : int
+  ; max_cancellation_unwind_ns : int64
+  ; session_cancellation_duration_ns : int64 option
+  ; shutdown_duration_ns : int64 option
+  ; backend_identity : string
+  ; backend_version : string
   }
 
 type startup_reply =
@@ -26,6 +51,7 @@ type startup_reply =
 
 type attachment =
   { startup : Worker.Private.packed_startup
+  ; client : Worker.Private.packed_client
   ; reply : startup_reply
   }
 
@@ -44,6 +70,13 @@ type control =
   ; mutable active_sessions : int
   ; mutable peak_active_sessions : int
   ; mutable idle_wait_count : int
+  ; mutable backend_run_count : int
+  ; mutable backend_running : bool
+  ; mutable coordinator_start_count : int
+  ; mutable active_coordinators : int
+  ; mutable peak_active_coordinators : int
+  ; mutable coordinator_yield_count : int
+  ; mutable last_session_metrics : Worker.Private.metrics option
   ; mutable next_generation : ID.Worker.generation
   ; mutable fail_next_spawn : exn option
   }
@@ -63,6 +96,13 @@ let control =
   ; active_sessions = 0
   ; peak_active_sessions = 0
   ; idle_wait_count = 0
+  ; backend_run_count = 0
+  ; backend_running = false
+  ; coordinator_start_count = 0
+  ; active_coordinators = 0
+  ; peak_active_coordinators = 0
+  ; coordinator_yield_count = 0
+  ; last_session_metrics = None
   ; next_generation = ID.Worker.Generation.one
   ; fail_next_spawn = None
   }
@@ -112,7 +152,59 @@ let set_terminal_from_loop exception_ =
     Condition.broadcast control.condition)
 ;;
 
-let worker_loop () =
+let coordinator_started () =
+  with_control (fun () ->
+    control.coordinator_start_count <- control.coordinator_start_count + 1;
+    control.active_coordinators <- control.active_coordinators + 1;
+    control.peak_active_coordinators
+    <- Int.max control.peak_active_coordinators control.active_coordinators)
+;;
+
+let coordinator_stopped () =
+  with_control (fun () ->
+    control.active_coordinators <- control.active_coordinators - 1;
+    Condition.broadcast control.condition)
+;;
+
+let run_coordinator environment session_switch attachment =
+  coordinator_started ();
+  Fun.protect ~finally:coordinator_stopped (fun () ->
+    Worker.Private.run_session
+      attachment.startup
+      ~environment
+      ~session_switch
+      ~on_startup:(signal_reply attachment.reply)
+      ~on_idle_wait:(fun () ->
+        with_control (fun () ->
+          control.idle_wait_count <- control.idle_wait_count + 1;
+          Condition.broadcast control.condition))
+      ~on_yield:(fun () ->
+        with_control (fun () ->
+          control.coordinator_yield_count <- control.coordinator_yield_count + 1;
+          Condition.broadcast control.condition)))
+;;
+
+let run_session environment attachment =
+  Eio.Switch.run (fun session_switch ->
+    Eio.Fiber.fork_promise ~sw:session_switch (fun () ->
+      run_coordinator environment session_switch attachment)
+    |> Eio.Promise.await_exn)
+;;
+
+let backend_started () =
+  with_control (fun () ->
+    control.backend_run_count <- control.backend_run_count + 1;
+    control.backend_running <- true;
+    Condition.broadcast control.condition)
+;;
+
+let backend_stopped () =
+  with_control (fun () ->
+    control.backend_running <- false;
+    Condition.broadcast control.condition)
+;;
+
+let worker_loop environment =
   with_control (fun () ->
     control.worker_domain_id <- Some (ID.Worker.Domain_id.of_domain_id (Domain.self ()));
     Condition.broadcast control.condition);
@@ -138,16 +230,10 @@ let worker_loop () =
       let attachment = Option.get control.pending_attachment in
       control.pending_attachment <- None;
       Mutex.unlock control.mutex;
-      let result =
-        Worker.Private.run_session
-          attachment.startup
-          ~on_startup:(signal_reply attachment.reply)
-          ~on_idle_wait:(fun () ->
-            with_control (fun () ->
-              control.idle_wait_count <- control.idle_wait_count + 1;
-              Condition.broadcast control.condition))
-      in
+      let result = run_session environment attachment in
+      let session_metrics = Worker.Private.metrics attachment.client in
       with_control (fun () ->
+        control.last_session_metrics <- Some session_metrics;
         control.current_client <- None;
         control.active_sessions <- 0;
         if control.final_stop then control.state <- Stopping else control.state <- Idle;
@@ -162,7 +248,11 @@ let worker_loop () =
 ;;
 
 let worker_entrypoint () =
-  try worker_loop () with
+  try
+    Worker_eio_backend.run (fun environment ->
+      backend_started ();
+      Fun.protect ~finally:backend_stopped (fun () -> worker_loop environment))
+  with
   | exception_ -> set_terminal_from_loop exception_
 ;;
 
@@ -233,7 +323,7 @@ let start ~runtime_epoch service config =
         | Idle ->
           control.state <- Attached;
           control.current_client <- Some packed_client;
-          control.pending_attachment <- Some { startup; reply };
+          control.pending_attachment <- Some { startup; client = packed_client; reply };
           control.active_sessions <- 1;
           control.peak_active_sessions <- Int.max control.peak_active_sessions 1;
           Condition.broadcast control.condition;
@@ -267,6 +357,17 @@ let stop client =
 
 let diagnostics () =
   with_control (fun () ->
+    let current_metrics = Option.map Worker.Private.metrics control.current_client in
+    let session_metrics =
+      match current_metrics, control.last_session_metrics with
+      | Some metrics, _ | None, Some metrics -> Some metrics
+      | None, None -> None
+    in
+    let metric get default = Option.fold ~none:default ~some:get session_metrics in
+    let active_request_fibers = metric (fun metrics -> metrics.active_request_fibers) 0 in
+    let active_background_fibers =
+      metric (fun metrics -> metrics.active_background_fibers) 0
+    in
     { state = control.state
     ; spawn_count = control.spawn_count
     ; join_count = control.join_count
@@ -274,6 +375,44 @@ let diagnostics () =
     ; active_sessions = control.active_sessions
     ; peak_active_sessions = control.peak_active_sessions
     ; idle_wait_count = control.idle_wait_count
+    ; backend_run_count = control.backend_run_count
+    ; backend_running = control.backend_running
+    ; coordinator_start_count = control.coordinator_start_count
+    ; active_coordinators = control.active_coordinators
+    ; peak_active_coordinators = control.peak_active_coordinators
+    ; coordinator_yield_count = control.coordinator_yield_count
+    ; configured_concurrency_limit =
+        Option.map
+          (fun (metrics : Worker.Private.metrics) -> metrics.configured_concurrency_limit)
+          current_metrics
+    ; queued_requests = metric (fun metrics -> metrics.queued_requests) 0
+    ; active_request_fibers
+    ; waiting_request_fibers = metric (fun metrics -> metrics.waiting_request_fibers) 0
+    ; active_handlers = metric (fun metrics -> metrics.active_handlers) 0
+    ; peak_active_handlers = metric (fun metrics -> metrics.peak_active_handlers) 0
+    ; active_background_fibers
+    ; peak_active_background_fibers =
+        metric (fun metrics -> metrics.peak_active_background_fibers) 0
+    ; logical_live_fibers =
+        (if control.backend_running then 1 else 0)
+        + control.active_coordinators
+        + active_request_fibers
+        + active_background_fibers
+    ; request_queue_wait_count =
+        metric (fun metrics -> metrics.request_queue_wait_count) 0
+    ; max_request_queue_wait_ns =
+        metric (fun metrics -> metrics.max_request_queue_wait_ns) 0L
+    ; handler_wall_count = metric (fun metrics -> metrics.handler_wall_count) 0
+    ; max_handler_wall_ns = metric (fun metrics -> metrics.max_handler_wall_ns) 0L
+    ; cancellation_unwind_count =
+        metric (fun metrics -> metrics.cancellation_unwind_count) 0
+    ; max_cancellation_unwind_ns =
+        metric (fun metrics -> metrics.max_cancellation_unwind_ns) 0L
+    ; session_cancellation_duration_ns =
+        metric (fun metrics -> metrics.session_cancellation_duration_ns) None
+    ; shutdown_duration_ns = metric (fun metrics -> metrics.shutdown_duration_ns) None
+    ; backend_identity = "eio_posix"
+    ; backend_version = "1.2"
     })
 ;;
 

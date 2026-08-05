@@ -31,6 +31,12 @@ type state =
   ; error_message : string option
   ; sqlite_open_us : int64 option
   ; startup_timing : Protocol.startup_timing option
+  ; pending_file_request : ID.Worker.request_id option
+  ; file_operation : Protocol.file_operation option
+  ; file_completed_bytes : int
+  ; file_total_bytes : int
+  ; file_checksum : int64 option
+  ; file_status : string option
   }
 
 let summarize todos =
@@ -73,6 +79,12 @@ let initial_state client =
   ; error_message = None
   ; sqlite_open_us = None
   ; startup_timing = None
+  ; pending_file_request = None
+  ; file_operation = None
+  ; file_completed_bytes = 0
+  ; file_total_bytes = 0
+  ; file_checksum = None
+  ; file_status = None
   }
 ;;
 
@@ -95,7 +107,13 @@ let apply_snapshot state snapshot =
   }
 ;;
 
-let apply_response state response =
+let is_pending_file state request_id =
+  match state.pending_file_request with
+  | Some pending -> ID.Worker.Request_id.equal pending request_id
+  | None -> false
+;;
+
+let apply_response state request_id response =
   match response with
   | Protocol.Completed { query_generation; database_revision; payload } ->
     if
@@ -111,14 +129,42 @@ let apply_response state response =
         | Protocol.Snapshot snapshot -> apply_snapshot state snapshot
         | Mutation _ ->
           { state with status = (if state.has_snapshot then `Ready else `Loading) }
+        | File (File_written { total_bytes }) ->
+          { state with
+            status = (if state.has_snapshot then `Ready else `Loading)
+          ; pending_file_request = None
+          ; file_operation = None
+          ; file_completed_bytes = total_bytes
+          ; file_total_bytes = total_bytes
+          ; file_checksum = None
+          ; file_status = Some (Printf.sprintf "Wrote %d bytes" total_bytes)
+          }
+        | File (File_read { total_bytes; checksum }) ->
+          { state with
+            status = (if state.has_snapshot then `Ready else `Loading)
+          ; pending_file_request = None
+          ; file_operation = None
+          ; file_completed_bytes = total_bytes
+          ; file_total_bytes = total_bytes
+          ; file_checksum = Some checksum
+          ; file_status = Some (Printf.sprintf "Read %d bytes" total_bytes)
+          }
       in
       state)
   | Protocol.Failed { error; _ } ->
-    { state with
-      status = `Error
-    ; pending_label = None
-    ; error_message = Some (Protocol.error_to_string error)
-    }
+    if is_pending_file state request_id
+    then
+      { state with
+        pending_file_request = None
+      ; file_operation = None
+      ; file_status = Some (Protocol.error_to_string error)
+      }
+    else
+      { state with
+        status = `Error
+      ; pending_label = None
+      ; error_message = Some (Protocol.error_to_string error)
+      }
 ;;
 
 let apply_push state push_sequence payload =
@@ -153,6 +199,15 @@ let apply_push state push_sequence payload =
         sqlite_open_us = Some startup_timing.sqlite_open_us
       ; startup_timing = Some startup_timing
       }
+    | File_progress { operation; completed_bytes; total_bytes } ->
+      if Option.is_none state.pending_file_request
+      then state
+      else
+        { state with
+          file_operation = Some operation
+        ; file_completed_bytes = completed_bytes
+        ; file_total_bytes = total_bytes
+        }
     | Fatal error ->
       { state with
         status = `Error
@@ -162,12 +217,26 @@ let apply_push state push_sequence payload =
 ;;
 
 let apply_event state = function
-  | Worker.Response { runtime_epoch; worker_generation; outcome; _ }
+  | Worker.Response { runtime_epoch; worker_generation; request_id; outcome }
     when matching_envelope state ~runtime_epoch ~worker_generation ->
     (match outcome with
-     | Worker.Completed response -> apply_response state response
+     | Worker.Completed response -> apply_response state request_id response
      | Failed error ->
-       { state with status = `Error; pending_label = None; error_message = Some error }
+       if is_pending_file state request_id
+       then
+         { state with
+           pending_file_request = None
+         ; file_operation = None
+         ; file_status = Some error
+         }
+       else
+         { state with status = `Error; pending_label = None; error_message = Some error }
+     | Cancelled when is_pending_file state request_id ->
+       { state with
+         pending_file_request = None
+       ; file_operation = None
+       ; file_status = Some "File operation cancelled"
+       }
      | Cancelled | Shutdown -> { state with status = `Terminal; pending_label = None })
   | Push { runtime_epoch; worker_generation; push_sequence; payload; _ }
     when matching_envelope state ~runtime_epoch ~worker_generation ->
@@ -196,6 +265,23 @@ let send client set_state request =
   Bonsai.Effect.bind
     (Bonsai.Effect.of_thunk (fun () -> Worker.send client request))
     ~f:(fun result -> set_state (fun state -> apply_send_result state result))
+;;
+
+let send_file client set_state operation pending_label total_bytes request =
+  Bonsai.Effect.bind
+    (Bonsai.Effect.of_thunk (fun () -> Worker.send client request))
+    ~f:(function
+      | Worker.Accepted request_id ->
+        set_state (fun state ->
+          { state with
+            pending_file_request = Some request_id
+          ; file_operation = Some operation
+          ; file_completed_bytes = 0
+          ; file_total_bytes = total_bytes
+          ; file_checksum = None
+          ; file_status = Some pending_label
+          })
+      | result -> set_state (fun state -> apply_send_result state result))
 ;;
 
 let mutation_id state kind =
@@ -321,6 +407,65 @@ let component client handlers graph =
         Bonsai.Effect.Many
           [ set_state (fun _current -> next); send client set_state request ])
   in
+  let write_file =
+    Driver.Handler.create
+      handlers
+      ~name:"sqlite-worker-write-demo-file"
+      ~equal:equal_dependencies
+      dependencies
+      ~f:(fun (state, set_state) _ ->
+        if Option.is_some state.pending_file_request
+        then Bonsai.Effect.Ignore
+        else (
+          let total_bytes = 4 * 1024 * 1024 in
+          send_file
+            client
+            set_state
+            Protocol.Writing
+            "Writing demo file…"
+            total_bytes
+            Protocol.
+              { query_generation = state.query_generation
+              ; operation = Write_demo_file { total_bytes }
+              }))
+  in
+  let read_file =
+    Driver.Handler.create
+      handlers
+      ~name:"sqlite-worker-read-demo-file"
+      ~equal:equal_dependencies
+      dependencies
+      ~f:(fun (state, set_state) _ ->
+        if Option.is_some state.pending_file_request
+        then Bonsai.Effect.Ignore
+        else
+          send_file
+            client
+            set_state
+            Protocol.Reading
+            "Reading demo file…"
+            0
+            Protocol.
+              { query_generation = state.query_generation; operation = Read_demo_file })
+  in
+  let cancel_file =
+    Driver.Handler.create
+      handlers
+      ~name:"sqlite-worker-cancel-demo-file"
+      ~equal:equal_dependencies
+      dependencies
+      ~f:(fun (state, set_state) _ ->
+        match state.pending_file_request with
+        | None -> Bonsai.Effect.Ignore
+        | Some request_id ->
+          Bonsai.Effect.Many
+            [ Bonsai.Effect.of_thunk (fun () -> Worker.cancel client ~request_id)
+            ; set_state (fun current ->
+                if is_pending_file current request_id
+                then { current with file_status = Some "Cancelling file operation…" }
+                else current)
+            ])
+  in
   let todos = Bonsai.Cont.map state ~f:(fun state -> state.todos) in
   let rows =
     Bonsai.Cont.assoc_list
@@ -395,14 +540,22 @@ let component client handlers graph =
       graph
   in
   let static =
-    Bonsai.Cont.map2
+    Bonsai.Cont.map3
       (Bonsai.Cont.both edit no_op)
       (Bonsai.Cont.both add refresh_handler)
-      ~f:(fun (edit, no_op) (add, refresh_handler) -> edit, no_op, add, refresh_handler)
+      (Bonsai.Cont.map2
+         write_file
+         (Bonsai.Cont.both read_file cancel_file)
+         ~f:(fun write_file (read_file, cancel_file) ->
+           write_file, read_file, cancel_file))
+      ~f:(fun (edit, no_op) (add, refresh_handler) handlers ->
+        edit, no_op, add, refresh_handler, handlers)
   in
   let view =
     Bonsai.Cont.map2 state (Bonsai.Cont.both rows static) ~f:(fun state (rows, static) ->
-      let edit, no_op, add, refresh_handler = static in
+      let edit, no_op, add, refresh_handler, (write_file, read_file, cancel_file) =
+        static
+      in
       let rows =
         match rows with
         | `Ok rows -> rows
@@ -461,6 +614,70 @@ let component client handlers graph =
           ]
         |> Ui.Widget.with_test_id (Ui.Test_id.string "worker-startup-timing")
       in
+      let file_pending = Option.is_some state.pending_file_request in
+      let write_file =
+        Ui.Material.elevated_button
+          ~enabled:(not file_pending)
+          ~on_press:write_file
+          ~child:(Ui.Widget.text "Write 4 MiB demo file")
+          ()
+        |> Ui.Widget.with_test_id (Ui.Test_id.string "write-demo-file")
+      in
+      let read_file =
+        Ui.Material.text_button
+          ~enabled:(not file_pending)
+          ~on_press:read_file
+          ~child:(Ui.Widget.text "Read demo file")
+          ()
+        |> Ui.Widget.with_test_id (Ui.Test_id.string "read-demo-file")
+      in
+      let cancel_file =
+        Ui.Material.text_button
+          ~enabled:file_pending
+          ~on_press:cancel_file
+          ~child:(Ui.Widget.text "Cancel file operation")
+          ()
+        |> Ui.Widget.with_test_id (Ui.Test_id.string "cancel-file-operation")
+      in
+      let progress =
+        if state.file_total_bytes <= 0
+        then 0.
+        else
+          Float.min
+            1.
+            (Float.of_int state.file_completed_bytes
+             /. Float.of_int state.file_total_bytes)
+      in
+      let checksum =
+        match state.file_checksum with
+        | None -> "Checksum: pending"
+        | Some checksum -> Printf.sprintf "Checksum: %Ld" checksum
+      in
+      let operation =
+        match state.file_operation with
+        | None -> "Operation: idle"
+        | Some Writing -> "Operation: writing"
+        | Some Reading -> "Operation: reading"
+      in
+      let file_demo =
+        Ui.Widget.column
+          [ Ui.Widget.text "Eio file demo"
+          ; Ui.Widget.Flex.row
+              [ Ui.Widget.Flex.expanded write_file; Ui.Widget.Flex.expanded read_file ]
+          ; cancel_file
+          ; Ui.Material.circular_progress_indicator ~value:progress ()
+          ; Ui.Widget.text operation
+          ; Ui.Widget.text
+              (Printf.sprintf
+                 "%d / %d bytes"
+                 state.file_completed_bytes
+                 state.file_total_bytes)
+          ; Ui.Widget.text checksum
+          ; Ui.Widget.text
+              (Option.value state.file_status ~default:"No file operation yet")
+          ]
+        |> Ui.Widget.with_test_id (Ui.Test_id.string "file-demo-panel")
+      in
       let messages =
         [ Option.map Ui.Widget.text state.pending_label
         ; Option.map Ui.Widget.text state.error_message
@@ -481,6 +698,7 @@ let component client handlers graph =
               ; Ui.Widget.Flex.row
                   [ Ui.Widget.Flex.expanded add; Ui.Widget.Flex.expanded refresh ]
               ; startup_timing
+              ; file_demo
               ]
               @ messages
               @ rows))
@@ -492,7 +710,7 @@ let component client handlers graph =
 let app =
   App.create_with_worker
     ~name:"SQLite Worker Todo"
-    ~decode_config:(fun payload -> Ok (Bytes.to_string payload))
+    ~decode_config:Sqlite_worker_config.decode
     ~service:Sqlite_worker_service.service
     component
 ;;

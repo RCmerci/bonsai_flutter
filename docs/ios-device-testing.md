@@ -112,14 +112,16 @@ by `pull_request` or `pull_request_target`.
 
 ## Current measured boundary
 
-One attached physical iPhone passed the non-signing hardware preflight. Its
-model, OS version, and identifier are intentionally not recorded because no
-signed application ran on it. No physical iOS version is therefore in the
-supported matrix.
+One attached physical iPhone passed the hardware preflight and a signed
+development Eio Worker probe. The probe validates arm64 iPhoneOS execution,
+DNS, loopback TCP, bounded file I/O, structural cancellation, reuse, cleanup,
+and a real background-to-foreground transition. Device identifiers and signing
+material are intentionally not recorded in this document.
 
-Unsigned iPhoneOS arm64 application builds and final framework audits pass.
-They prove compilation and packaging only. Physical execution, lifecycle,
-hot restart, Release export, and distribution signing remain unproven.
+Unsigned iPhoneOS arm64 application builds and final framework audits also
+pass. The complete canonical lane has not yet been run with the Flutter FFI
+application, so device-side Flutter integration, hot restart, signed Profile
+and Release XCTest, Release export, and distribution signing remain unproven.
 
 App Store distribution and TestFlight are outside the support claim until an
 authorized validation lane completes.

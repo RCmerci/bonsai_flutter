@@ -16,11 +16,11 @@ let component context _graph =
 let worker_service =
   Ui.Worker.Service.create
     ~push_topic_count:1
-    ~init:(fun ~emit:_ () -> Ok ())
-    ~handle_request:(fun () ~cancelled:_ ~emit:_ request -> Ok request, `Idle)
-    ~step:(fun () ~cancelled:_ ~emit:_ -> `Idle)
-    ~cancel:(fun () ~request_id:_ -> ())
+    ~concurrency:Ui.Worker.Service.Serial
+    ~init:(fun _session () -> Ok ())
+    ~handle:(fun _request () request -> Ok request)
     ~shutdown:(fun () -> ())
+    ()
 ;;
 
 let worker_component client _context _graph =

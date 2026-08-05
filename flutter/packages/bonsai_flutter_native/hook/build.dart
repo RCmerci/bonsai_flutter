@@ -57,6 +57,11 @@ void main(List<String> args) async {
           '-Wl,-exported_symbols_list,${exportList.toFilePath()}',
         ],
         if (input.config.code.targetOS == OS.iOS) ...['-framework', 'Security'],
+        if (input.config.code.targetOS == OS.iOS)
+          ...iOSDeploymentTargetFlagsForTesting(
+            input.config.code.iOS.targetVersion,
+            input.userDefines['ios_deployment_target'],
+          ),
         ...systemLinkFlagsForTesting(
           input.config.code.targetOS,
           input.userDefines['link_system_sqlite3'],
@@ -104,6 +109,33 @@ List<String> systemLinkFlagsForTesting(OS targetOS, Object? userDefine) {
   };
 }
 
+String iOSMinimumVersionForTesting(
+  int nativeAssetsTargetVersion,
+  Object? userDefine,
+) {
+  if (userDefine == null) return '$nativeAssetsTargetVersion.0';
+  if (userDefine case final String value
+      when RegExp(r'^[1-9][0-9]*[.][0-9]+$').hasMatch(value)) {
+    return value;
+  }
+  throw FormatException(
+    'ios_deployment_target must be a quoted major.minor version, '
+    'found $userDefine.',
+  );
+}
+
+List<String> iOSDeploymentTargetFlagsForTesting(
+  int nativeAssetsTargetVersion,
+  Object? userDefine,
+) {
+  if (userDefine == null) return const [];
+  final minimumVersion = iOSMinimumVersionForTesting(
+    nativeAssetsTargetVersion,
+    userDefine,
+  );
+  return ['-mios-version-min=$minimumVersion'];
+}
+
 OcamlArtifactTarget? _ocamlTarget(BuildInput input) {
   final config = input.config.code;
   final architecture = switch (config.targetArchitecture) {
@@ -137,7 +169,10 @@ OcamlArtifactTarget? _ocamlTarget(BuildInput input) {
       operatingSystem: OcamlTargetOperatingSystem.iOS,
       architecture: architecture,
       appleSdk: sdk,
-      minimumVersion: '${config.iOS.targetVersion}.0',
+      minimumVersion: iOSMinimumVersionForTesting(
+        config.iOS.targetVersion,
+        input.userDefines['ios_deployment_target'],
+      ),
     );
   }
   return null;

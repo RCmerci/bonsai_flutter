@@ -34,6 +34,9 @@ type error =
   | Todo_not_found of int64
   | Migration_failed of string
   | Storage_error of string
+  | File_unavailable
+  | Invalid_file_size of int
+  | File_error of string
 
 val error_to_string : error -> string
 
@@ -48,6 +51,8 @@ type operation =
       ; todo_id : int64
       ; completed : bool
       }
+  | Write_demo_file of { total_bytes : int }
+  | Read_demo_file
 
 type request =
   { query_generation : int64
@@ -57,6 +62,14 @@ type request =
 type response_payload =
   | Snapshot of snapshot
   | Mutation of mutation_result
+  | File of file_response
+
+and file_response =
+  | File_written of { total_bytes : int }
+  | File_read of
+      { total_bytes : int
+      ; checksum : int64
+      }
 
 type response =
   | Completed of
@@ -91,6 +104,15 @@ type push =
   | Summary_changed of summary
   | Startup_timing of startup_timing
   | Fatal of error
+  | File_progress of
+      { operation : file_operation
+      ; completed_bytes : int
+      ; total_bytes : int
+      }
+
+and file_operation =
+  | Writing
+  | Reading
 
 module Topic : sig
   val ready : Bonsai_flutter_spec.Id.Worker.push_topic
@@ -98,5 +120,6 @@ module Topic : sig
   val summary : Bonsai_flutter_spec.Id.Worker.push_topic
   val fatal : Bonsai_flutter_spec.Id.Worker.push_topic
   val startup_timing : Bonsai_flutter_spec.Id.Worker.push_topic
+  val file_progress : Bonsai_flutter_spec.Id.Worker.push_topic
   val count : int
 end

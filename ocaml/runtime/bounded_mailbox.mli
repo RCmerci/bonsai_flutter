@@ -6,6 +6,7 @@ module Fifo : sig
   val create : capacity:int -> 'a t
   val try_push : 'a t -> 'a -> [ `Ok | `Full | `Closed ]
   val pop : 'a t -> 'a option
+  val length : 'a t -> int
 
   (** Blocks on a condition until an item is available or the mailbox is both
       closed and empty. *)

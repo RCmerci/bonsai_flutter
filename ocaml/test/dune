@@ -209,9 +209,41 @@
  (libraries bonsai_flutter.spec_impl core bonsai_flutter.driver threads))
 
 (test
- (name worker_runtime_cancel_failure_tests)
- (modules worker_runtime_cancel_failure_tests)
- (libraries bonsai_flutter.spec_impl core bonsai_flutter.driver threads))
+ (name worker_eio_service_tests)
+ (modules worker_eio_service_tests)
+ (libraries
+  bonsai_flutter.spec_impl
+  core
+  eio
+  eio.core
+  bonsai_flutter.driver
+  threads
+  unix))
+
+(test
+ (name worker_eio_phase3_tests)
+ (modules worker_eio_phase3_tests)
+ (libraries
+  bonsai_flutter.spec_impl
+  core
+  eio
+  eio.core
+  bonsai_flutter.driver
+  threads
+  unix))
+
+(test
+ (name worker_eio_environment_tests)
+ (modules worker_eio_environment_tests)
+ (libraries
+  bonsai_flutter.spec_impl
+  core
+  eio
+  eio.core
+  eio.unix
+  bonsai_flutter.driver
+  threads
+  unix))
 
 (test
  (name worker_driver_tests)
@@ -255,6 +287,22 @@
   bonsai_flutter.spec_impl
   core
   sqlite3
+  bonsai_flutter_sqlite_worker_example
+  threads
+  unix))
+
+(test
+ (name sqlite_worker_file_demo_tests)
+ (modules sqlite_worker_file_demo_tests)
+ (libraries
+  bonsai_flutter.spec_impl
+  core
+  cstruct
+  eio
+  eio.core
+  eio.unix
+  eio_posix
+  bonsai_flutter.driver
   bonsai_flutter_sqlite_worker_example
   threads
   unix))

@@ -58,7 +58,9 @@ one application process
     +-- one OCaml Worker Domain            |
         |                                  |
         +-- one worker session <-----------+
-        +-- one business loop
+        +-- one process-wide Eio backend loop
+        +-- one session switch and Coordinator fiber
+        +-- bounded request and background fibers
         +-- worker-owned mutable state and native resources
 ```
 
@@ -146,7 +148,7 @@ Not_started | Idle | Attached
 
 `Stopped` is used only by explicit final runtime shutdown in a controlled test or embedding host and does not transition back to `Idle`.
 
-A caught worker service callback failure makes the application worker client terminal, cleans and removes that session, keeps the backend runtime `Active` long enough to render or report the failure, and leaves the process-wide Worker Domain reusable.
+A caught worker handler or background-fiber failure makes the application worker client terminal, structurally cancels and removes that session, keeps the backend runtime `Active` long enough to render or report the failure, and leaves the process-wide Worker Domain reusable.
 
 It does not add a `Terminal` variant to the backend runtime-slot state machine.
 
@@ -216,7 +218,7 @@ Calls from a stale coordinator are rejected by epoch and handle fencing, and the
 | Flutter UI isolate | Flutter widget, element, render-object, plugin, and platform-channel state. |
 | Dart runtime coordinator isolate | The current runtime lease, native output buffers during copying, ordered pump commands, and presentation coordination. |
 | OCaml UI domain 0 | The singleton runtime slot, `Driver.t`, Bonsai driver and effects, handler registry, mounted tree, environment, host effects, and entrypoint registry. |
-| OCaml Worker Domain | The optional worker session, business loop, business mutable state, SQLite connection, prepared statements, transactions, and other worker-only native handles. |
+| OCaml Worker Domain | The process-wide Eio backend, optional session switch, request and background fibers, business mutable state, SQLite connection, prepared statements, transactions, and other worker-only native handles. |
 
 Mutable OCaml values must not be concurrently accessed across Domains.
 
@@ -236,13 +238,29 @@ An App may provide one typed worker service for its singleton runtime instance.
 
 The service defines immutable configuration, request, response, and push message types plus worker-domain-only mutable state.
 
-The service provides bounded operations for initialization, one request, one autonomous computation slice, cancellation, and shutdown.
+The service provides direct-style `init`, `handle`, and `shutdown` operations.
+It has no legacy `computation`, `step`, application cancellation callback, or
+compatibility constructor.
 
-Long computations must be divided into cooperative slices that check cancellation and return control to the worker loop.
+The Worker Domain enters `Eio_posix.run` once for its process lifetime. Every
+attached service owns one session `Switch`; every dispatched request owns a
+nested request `Switch`. Stop fails the session switch, while Cancel fails only
+the matching request switch. Application background work uses
+`Session_context.fork_daemon` and cannot detach from the session lifetime.
+
+`Serial` is the default handler policy. It permits one application handler to
+hold the service semaphore while Eio I/O suspends that fiber, without blocking
+the Coordinator, Cancel, Stop, or background fibers. An explicitly selected
+`Concurrent { max_in_flight }` policy permits bounded fiber interleaving on the
+same Worker Domain; it does not create parallel Domains or make mutable state
+automatically safe.
 
 Out-of-band Stop and Cancel control has priority over normal requests.
 
-The loop provides bounded progress between queued requests and autonomous computation so a request burst cannot permanently starve a dirty computation step and a computation loop cannot permanently starve UI requests.
+The Coordinator processes a bounded request batch before yielding. Stop and
+Cancel remain runnable while a request is suspended in Eio. Synchronous native
+calls, including SQLite statements, must remain short because Eio cannot
+preempt them.
 
 Initialization, migrations, business computation, native handle use, and resource cleanup all execute on the OCaml Worker Domain.
 
@@ -253,6 +271,13 @@ Subscriber closures remain on domain 0 and are never visible to the Worker Domai
 Application code cannot call `Domain.spawn` directly.
 
 Per-request Domain creation is prohibited.
+
+Request and session contexts expose their switch, complete Eio environment,
+monotonic clock, network capability, optional runtime-opened confined data
+directory, and typed push emitter. The complete environment lets application
+code use Eio ecosystem libraries without framework-specific adapters. The
+framework does not own an HTTP client; applications select and configure one
+directly.
 
 ## Communication contract
 
@@ -286,7 +311,10 @@ Responses are never silently dropped.
 
 Snapshot-style pushes may replace an older undelivered push for the same topic, but the replacement retains the newest sequence and business revision.
 
-The Worker Domain waits with `Mutex` and `Condition` when it has no runnable work and never busy-spins.
+The Worker Domain waits in the Eio backend when it has no runnable work and
+never busy-spins. Cross-Domain mailbox publication broadcasts an Eio condition
+as a wake hint; the bounded mailbox and out-of-band control state remain the
+source of truth and are always rechecked after wake-up.
 
 All mailbox lock sections are limited to queue or slot mutation and never contain Bonsai work, SQLite work, message decoding, or business computation.
 
@@ -348,7 +376,8 @@ transition Active -> Destroying
 -> reject new requests and native operations
 -> complete pending domain-0 requests as Shutdown
 -> send out-of-band Stop
--> cooperatively cancel the current bounded worker slice
+-> fail the session switch and structurally cancel request and background fibers
+-> wait for their switch-owned resources to unwind
 -> finalize statements and close worker-owned resources
 -> remove the worker session and return the Worker Domain to Idle
 -> shut down the Driver
@@ -387,7 +416,10 @@ Durable state such as SQLite is closed by the old session and reopened by the ne
 
 ## Failure policy
 
-A worker service catches exceptions at the worker-session boundary, closes its resources, returns the Worker Domain to `Idle`, and emits one terminal application event for the singleton active runtime.
+A worker service catches handler and daemon exceptions at the worker-session
+boundary, fails the session switch, closes its resources, returns the Worker
+Domain to `Idle`, and emits one terminal application event for the singleton
+active runtime. A typed handler `Error` fails only that request.
 
 There is no other worker session to isolate or continue.
 
@@ -467,7 +499,9 @@ An abnormal stale Dart coordinator may exist transiently, but it is not an activ
 
 This is an intentional breaking constraint relative to ADR 0002.
 
-A long worker slice can still delay Stop, worker responses, and autonomous computation, so cooperative bounds remain mandatory.
+A long synchronous native call can still delay Stop and worker responses, so
+SQLite statements, transactions, and other non-suspending work must remain
+bounded. Eio-native waits suspend only their request fiber.
 
 Shared heap collection and unsafe C bindings can still affect UI latency or process stability.
 

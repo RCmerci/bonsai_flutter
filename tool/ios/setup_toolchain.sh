@@ -104,6 +104,7 @@ install_iphoneos() {
   switch=$(switch_path iphoneos)
   sdk_version=$(xcrun --sdk iphoneos --show-sdk-version)
   recipe_marker="$switch/_opam/.bonsai-flutter-ios-recipe"
+  recipe_identity="$OCAML_IOS_RECIPE_REVISION-$IOS_DEPLOYMENT_TARGET"
 
   opam_command update overlay
 
@@ -113,8 +114,8 @@ install_iphoneos() {
     --short \
     "$OCAML_IOS_PACKAGE" |
     grep -Fx ocaml-ios64 >/dev/null 2>&1; then
-    installed_recipe_revision=$(cat "$recipe_marker" 2>/dev/null || true)
-    if test "$installed_recipe_revision" != "$OCAML_IOS_RECIPE_REVISION"; then
+    installed_recipe_identity=$(cat "$recipe_marker" 2>/dev/null || true)
+    if test "$installed_recipe_identity" != "$recipe_identity"; then
       ARCH="$IPHONEOS_ARCH" \
         SUBARCH="$IPHONEOS_SUBARCH" \
         PLATFORM="$IPHONEOS_PLATFORM" \
@@ -122,6 +123,7 @@ install_iphoneos() {
         VER="$IOS_DEPLOYMENT_TARGET" \
         opam_command reinstall \
           --switch="$switch" \
+          conf-ios.4 \
           "$OCAML_IOS_PACKAGE" \
           --yes
     fi
@@ -138,7 +140,7 @@ install_iphoneos() {
         --yes
   fi
 
-  printf '%s\n' "$OCAML_IOS_RECIPE_REVISION" >"$recipe_marker"
+  printf '%s\n' "$recipe_identity" >"$recipe_marker"
 }
 
 verify_switch() {
@@ -147,6 +149,17 @@ verify_switch() {
   installed_version=$(opam_command exec --switch="$switch" -- ocamlc -version)
   test "$installed_version" = "$OCAML_VERSION" ||
     fail "$logical_name switch does not use OCaml $OCAML_VERSION"
+
+  if test "$logical_name" = iphoneos; then
+    target_cflags=$(
+      opam_command exec --switch="$switch" -- \
+        ocamlfind -toolchain ios ocamlc -config |
+        sed -n 's/^ocamlc_cflags: //p'
+    )
+    printf '%s\n' "$target_cflags" |
+      grep -F -- "-miphoneos-version-min=$IOS_DEPLOYMENT_TARGET" >/dev/null ||
+      fail "iphoneos compiler does not target iOS $IOS_DEPLOYMENT_TARGET"
+  fi
 }
 
 require_command git

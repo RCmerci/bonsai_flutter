@@ -29,6 +29,7 @@ expected_platform=IOS
 
 switch="$switch_root/$logical_target"
 output_directory="$repository_root/_build/ios/probes/$logical_target"
+probe_build_source="$output_directory/minimal.ml"
 object="$output_directory/minimal.o"
 app="$output_directory/BonsaiFlutterProbe.app"
 executable="$app/BonsaiFlutterProbe"
@@ -38,6 +39,7 @@ OPAMROOT="$opam_root" opam var --switch="$switch" prefix >/dev/null 2>&1 ||
   fail "missing $logical_target switch; run tool/ios/setup_toolchain.sh $logical_target"
 
 mkdir -p "$output_directory"
+cp "$probe_source" "$probe_build_source"
 
 VER="$IOS_DEPLOYMENT_TARGET" \
   SDK="$sdk_version" \
@@ -45,7 +47,7 @@ VER="$IOS_DEPLOYMENT_TARGET" \
   opam exec --switch="$switch" -- \
   ocamlfind -toolchain ios ocamlopt \
     -output-complete-obj \
-    "$probe_source" \
+    "$probe_build_source" \
     -o "$object"
 
 "$script_directory/verify_macho.sh" \

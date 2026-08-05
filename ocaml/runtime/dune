@@ -42,6 +42,7 @@
   entrypoint
   runtime_bootstrap_config
   bounded_mailbox
+  worker_eio_backend
   worker
   worker_runtime)
  (libraries
@@ -53,8 +54,13 @@
   bonsai_flutter.runtime
   bonsai_flutter.runtime_adapter
   core
+  eio
+  eio.core
+  eio.unix
+  eio_posix
   incr_dom.ui_incr
   incr_dom.ui_time_source
+  mtime.clock
   threads
   virtual_dom.ui_effect
   unix))

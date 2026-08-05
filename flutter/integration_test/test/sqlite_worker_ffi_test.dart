@@ -84,6 +84,12 @@ void registerSqliteWorkerFfiTests({
         throw StateError('SQLite worker bootstrap did not complete');
       }
       final databasePath = bootstrap.databasePath;
+      expect(
+        bootstrap.applicationSupportDirectory,
+        File(databasePath).parent.path,
+      );
+      final storageDirectory = Directory(bootstrap.applicationSupportDirectory);
+      final demoFile = File('${storageDirectory.path}/eio-worker-demo.bin');
       if (deleteApplicationSupportRoot) {
         final supportRoot = File(databasePath).parent.parent;
         addTearDown(() async {
@@ -101,6 +107,17 @@ void registerSqliteWorkerFfiTests({
           if (await file.exists()) await file.delete();
         });
       }
+      await tester.runAsync(() async {
+        if (await demoFile.exists()) await demoFile.delete();
+        await for (final entity in storageDirectory.list()) {
+          if (entity is File && entity.path.endsWith('.tmp')) {
+            await entity.delete();
+          }
+        }
+      });
+      addTearDown(() async {
+        if (await demoFile.exists()) await demoFile.delete();
+      });
       final config = bootstrap.runtimeConfig;
       final first = await _mount(tester, config);
       await _pumpUntil(
@@ -110,6 +127,47 @@ void registerSqliteWorkerFfiTests({
             find.text('0 open · 0 completed').evaluate().isNotEmpty,
         'Ready and initial List',
       );
+      await tester.tap(find.text('Write 4 MiB demo file'));
+      await tester.pump();
+      await _pumpUntil(
+        tester,
+        () => find.text('Writing demo file…').evaluate().isNotEmpty,
+        'file write pending state',
+      );
+      await tester.tap(find.text('Cancel file operation'));
+      await tester.pump();
+      await _pumpUntil(
+        tester,
+        () =>
+            find.text('File operation cancelled').evaluate().isNotEmpty ||
+            find.text('Wrote 4194304 bytes').evaluate().isNotEmpty,
+        'file write Cancel/completion race',
+      );
+      final temporaryAfterCancel = await tester.runAsync(
+        () => storageDirectory
+            .list()
+            .where((entity) => entity.path.endsWith('.tmp'))
+            .toList(),
+      );
+      expect(temporaryAfterCancel, isEmpty);
+      if (find.text('File operation cancelled').evaluate().isNotEmpty) {
+        await tester.tap(find.text('Write 4 MiB demo file'));
+        await tester.pump();
+        await _pumpUntil(
+          tester,
+          () => find.text('Wrote 4194304 bytes').evaluate().isNotEmpty,
+          'file write completion',
+        );
+      }
+      expect(await tester.runAsync(demoFile.length), 4 * 1024 * 1024);
+      await tester.tap(find.text('Read demo file'));
+      await tester.pump();
+      await _pumpUntil(
+        tester,
+        () => find.text('Read 4194304 bytes').evaluate().isNotEmpty,
+        'file read completion',
+      );
+      expect(find.text('Checksum: pending'), findsNothing);
       await tester.enterText(
         find.byType(EditableText),
         'Persisted through FFI',

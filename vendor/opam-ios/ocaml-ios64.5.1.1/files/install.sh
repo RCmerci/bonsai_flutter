@@ -23,13 +23,17 @@ cp compilerlibs/ocamlcommon.cmxa compilerlibs/ocamlcommon.a \
    driver/optmain.cmx driver/optmain.o \
    "${prefix}/ios-sysroot/lib/ocaml/compiler-libs"
 
-for package in bigarray bytes compiler-libs dynlink findlib graphics stdlib str threads unix; do
+for package in bigarray bytes compiler-libs dynlink findlib graphics runtime_events \
+               stdlib str threads unix; do
   if test -f "${prefix}/lib/ocaml/${package}/META"; then
     mkdir -p "${prefix}/ios-sysroot/lib/${package}"
     cp "${prefix}/lib/ocaml/${package}/META" \
       "${prefix}/ios-sysroot/lib/${package}/META"
   fi
 done
+
+cp -f "${prefix}/ios-sysroot/lib/ocaml/runtime_events/"* \
+  "${prefix}/ios-sysroot/lib/runtime_events/"
 
 mkdir -p "${prefix}/lib/findlib.conf.d"
 cp ios.conf "${prefix}/lib/findlib.conf.d"

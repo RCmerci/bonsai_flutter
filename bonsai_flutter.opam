@@ -17,6 +17,9 @@ dev-repo: "git+https://github.com/rcmerci/bonsai_flutter.git"
 depends: [
   "ocaml" {= "5.1.1"}
   "dune" {>= "3.17"}
+  "eio" {= "1.2"}
+  "eio_posix" {= "1.2"}
+  "mtime" {= "2.1.0"}
   "base" {>= "v0.17" & < "v0.18~"}
   "bonsai" {>= "v0.17" & < "v0.18~"}
   "core" {>= "v0.17" & < "v0.18~"}

@@ -10,6 +10,8 @@ fail() {
   exit 1
 }
 
+"$repository_root/tool/test_ios_deployment_target_contract.sh"
+
 require_file() {
   test -f "$1" || fail "missing $1"
 }
@@ -124,6 +126,8 @@ patch_files=$(
 expected_patch_files='./vendor/opam-ios/ocaml-ios64.5.1.1/files/ocamlmklib-failsafe.patch
 ./vendor/patches/basement-macos.patch
 ./vendor/patches/ios/base-host-generator.patch
+./vendor/patches/ios/eio-posix-darwin-protocol-zero.patch
+./vendor/patches/ios/eio-posix-darwin-socktype-hints.patch
 ./vendor/patches/ios/jst-config-host-discover.patch'
 test "$patch_files" = "$expected_patch_files" ||
   fail "upstream patch allowlist changed:
@@ -137,6 +141,12 @@ require_sha256 \
 require_sha256 \
   vendor/patches/ios/base-host-generator.patch \
   e919f3c5ec1e6a546a6e499ed262d309055fd0c856d7c216d3609b7d64ca47b5
+require_sha256 \
+  vendor/patches/ios/eio-posix-darwin-protocol-zero.patch \
+  b6a158f56db6bc1c1e19ad2412625f2d7941a5004274e3a45fe58f6c89e5b963
+require_sha256 \
+  vendor/patches/ios/eio-posix-darwin-socktype-hints.patch \
+  8b5eb1ecc716afeac54f6ebc0792f14df5107dbdac5ebb81da3ea0a31e187e17
 require_sha256 \
   vendor/patches/ios/jst-config-host-discover.patch \
   d1d9fbbf8df8f8e315fad1a834352a5a80e948e62012a104d5362461f195df78
@@ -165,6 +175,19 @@ require_text \
   "$dependency_control_text" \
   'sqlite3' \
   "dependency controls"
+require_text \
+  "$dependency_control_text" \
+  'eio_posix' \
+  "dependency controls"
+for dependency in piaf httpun-eio tls-eio ca-certs-nss openssl-sys-ios; do
+  reject_text \
+    "$(cat bonsai_flutter.opam dune-project vendor/opam-ios/runtime-closure.lock)" \
+    "$dependency" \
+    "Eio Worker dependency controls"
+done
+if find ocaml -type f -print | grep -F '/worker_http/' >/dev/null; then
+  fail "framework still contains the legacy worker_http library"
+fi
 
 dune_package_metadata() {
   awk -v RS='' -v package_name="$1" \
@@ -198,14 +221,59 @@ require_text \
   "$(cat tool/ios/toolchain.lock)" \
   "SQLITE3_VERSION='5.4.0'" \
   "iOS toolchain lock"
+require_text \
+  "$(cat tool/ios/toolchain.lock)" \
+  "EIO_VERSION='1.2'" \
+  "iOS Eio toolchain lock"
+require_text \
+  "$(cat vendor/opam-ios/runtime-closure.lock)" \
+  'eio_posix|1.2|target|https://github.com/ocaml-multicore/eio/releases/download/v1.2/eio-1.2.tbz|3792e912bd8d494bb2e38f73081825e4d212b1970cf2c1f1b2966caa9fd6bc40|eio_posix' \
+  "iOS Eio runtime closure lock"
 ios_closure_verifier=$(cat tool/ios/verify_runtime_closure.sh)
-require_text "$ios_closure_verifier" '= 44 ||' "iOS closure package count"
-require_text "$ios_closure_verifier" '= 71 ||' "iOS closure component count"
+require_text "$ios_closure_verifier" '= 57 ||' "iOS closure package count"
+require_text "$ios_closure_verifier" '= 90 ||' "iOS closure component count"
 require_text "$ios_closure_verifier" 'sqlite3' "iOS closure findlib roots"
+require_text "$ios_closure_verifier" 'eio_posix' "iOS closure Eio findlib root"
 require_text \
   "$(cat tool/ios/setup_host_dependencies.sh)" \
   'sqlite3.$SQLITE3_VERSION' \
   "iOS host SQLite dependency setup"
+require_text \
+  "$(cat tool/ios/setup_host_dependencies.sh)" \
+  'eio_posix.$EIO_VERSION' \
+  "iOS host Eio dependency setup"
+runtime_events_installer=$(cat \
+  vendor/opam-ios/ocaml-ios64.5.1.1/files/install.sh)
+require_text \
+  "$runtime_events_installer" \
+  'runtime_events' \
+  "iOS OCaml 5 runtime-events metadata staging"
+require_text \
+  "$runtime_events_installer" \
+  'ios-sysroot/lib/ocaml/runtime_events/' \
+  "iOS OCaml 5 runtime-events target archive staging"
+ios_toolchain_setup=$(cat tool/ios/setup_toolchain.sh)
+require_text \
+  "$ios_toolchain_setup" \
+  'recipe_identity="$OCAML_IOS_RECIPE_REVISION-$IOS_DEPLOYMENT_TARGET"' \
+  "iOS toolchain recipe identity"
+require_text \
+  "$ios_toolchain_setup" \
+  'conf-ios.4' \
+  "iOS deployment-target toolchain reinstall"
+require_text \
+  "$ios_toolchain_setup" \
+  'miphoneos-version-min=$IOS_DEPLOYMENT_TARGET' \
+  "iOS cross-compiler deployment-target verification"
+ios_metadata_stager=$(cat tool/ios/stage_host_metadata.sh)
+require_text \
+  "$ios_metadata_stager" \
+  'target_standard_library="$target_lib/ocaml"' \
+  "iOS target standard-library staging"
+require_text \
+  "$ios_metadata_stager" \
+  "-name '*.cmxa'" \
+  "iOS target standard-library native archives"
 ios_runtime_package_builder=$(cat tool/ios/build_runtime_package.sh)
 require_text \
   "$ios_runtime_package_builder" \

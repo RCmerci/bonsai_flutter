@@ -14,15 +14,18 @@ incr_dom.ui_incr
 incr_dom.ui_time_source
 virtual_dom.ui_effect
 core
+sqlite3
+eio_posix
 threads
 unix
 ```
 
-The closure contains 42 runtime opam source packages and 70 locked findlib
-components. The compiler supplies `threads` and `unix`, bringing the verified
-root count to 72. The additional `jst-config` row is a `target-build`
-dependency whose generated `config.h` must describe iPhoneOS rather than the
-macOS host.
+The closure contains 56 runtime opam source packages and 90 unique locked
+findlib components. The compiler supplies `runtime_events`, `threads`, and
+`unix`. The `jst-config` row is the only `target-build` dependency; its
+generated `config.h` must describe iPhoneOS rather than the macOS host. Exact
+Eio `1.2` and `eio_posix` `1.2` packages are included in the target runtime
+closure.
 
 Every source URL and SHA-256 digest is immutable. Package ordering is
 topological with respect to the selected runtime components. Host-only PPX

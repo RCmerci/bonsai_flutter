@@ -43,6 +43,19 @@ install_for_switch() {
     "bonsai.$BONSAI_VERSION" \
     "core.$CORE_VERSION" \
     "sqlite3.$SQLITE3_VERSION" \
+    "bigstringaf.$BIGSTRINGAF_VERSION" \
+    "cstruct.$CSTRUCT_VERSION" \
+    "domain-local-await.$DOMAIN_LOCAL_AWAIT_VERSION" \
+    "eio.$EIO_VERSION" \
+    "eio_posix.$EIO_VERSION" \
+    "fmt.$FMT_VERSION" \
+    "hmap.$HMAP_VERSION" \
+    "iomux.$IOMUX_VERSION" \
+    "lwt-dllist.$LWT_DLLIST_VERSION" \
+    "mtime.$MTIME_VERSION" \
+    "optint.$OPTINT_VERSION" \
+    "psq.$PSQ_VERSION" \
+    "thread-table.$THREAD_TABLE_VERSION" \
     --assume-depexts \
     --yes
 

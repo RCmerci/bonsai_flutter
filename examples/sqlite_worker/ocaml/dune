@@ -2,6 +2,8 @@
  (name bonsai_flutter_sqlite_worker_example)
  (wrapped false)
  (modules
+  sqlite_worker_config
+  sqlite_worker_file_demo
   sqlite_worker_protocol
   sqlite_worker_store
   sqlite_worker_service
@@ -13,7 +15,11 @@
   bonsai_flutter.ui
   bonsai_flutter.driver
   core
+  cstruct
+  eio
+  eio.core
   incr_dom.ui_incr
+  optint
   sqlite3
   unix
   virtual_dom.ui_effect))

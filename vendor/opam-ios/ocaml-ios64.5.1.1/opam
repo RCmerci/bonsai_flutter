@@ -39,7 +39,7 @@ depends: [
 extra-files: [
   ["Makefile.cross.in" "md5=c338960cb9c22dff4b6e1b3ecbe2a15a"]
   ["build.sh" "md5=2b44a2448fc0589881b12d2217c308a2"]
-  ["install.sh" "md5=f15d38f5dcb4da3dd5920db8e7dc2381"]
+  ["install.sh" "md5=83563f4f51275d6b91ea5e65957d333f"]
   ["ios.conf.in" "md5=52c667a467d307094d2eba884d408c96"]
   ["m-ios.h" "md5=66a125d352c8ee2271899eae808e5f86"]
   ["remove.sh" "md5=d8660f646b5a3155094e68d25ef00ff9"]

@@ -25,15 +25,28 @@ require_environment IOS_BUNDLE_IDENTIFIER
 test -f "$IOS_PROVISIONING_PROFILE" ||
   fail "provisioning profile does not exist: $IOS_PROVISIONING_PROFILE"
 
-unsigned_app="$repository_root/_build/ios/probes/iphoneos/BonsaiFlutterProbe.app"
+unsigned_app=${IOS_PROBE_APP:-"$repository_root/_build/ios/probes/iphoneos/BonsaiFlutterProbe.app"}
+expected_markers=${IOS_PROBE_EXPECTED_MARKERS:-"BONSAI_FLUTTER_IOS_PROBE_OK result=42"}
+launch_timeout=${IOS_PROBE_LAUNCH_TIMEOUT:-15}
+run_lifecycle=${IOS_PROBE_RUN_LIFECYCLE:-0}
+lifecycle_background_bundle=${IOS_LIFECYCLE_BACKGROUND_BUNDLE:-com.apple.Preferences}
 signed_root="$repository_root/_build/ios/probes/iphoneos/signed"
 
 test -d "$unsigned_app" ||
-  fail "unsigned probe is missing; run tool/ios/build_probe.sh iphoneos"
+  fail "unsigned probe is missing: $unsigned_app"
+
+case "$launch_timeout" in
+  '' | *[!0-9]*) fail "IOS_PROBE_LAUNCH_TIMEOUT must be a positive integer" ;;
+  0) fail "IOS_PROBE_LAUNCH_TIMEOUT must be a positive integer" ;;
+esac
+case "$run_lifecycle" in
+  0 | 1) ;;
+  *) fail "IOS_PROBE_RUN_LIFECYCLE must be 0 or 1" ;;
+esac
 
 mkdir -p "$signed_root"
 run_directory=$(mktemp -d "$signed_root/run.XXXXXX")
-signed_app="$run_directory/BonsaiFlutterProbe.app"
+signed_app="$run_directory/$(basename "$unsigned_app")"
 decoded_profile="$run_directory/profile.plist"
 entitlements="$run_directory/entitlements.plist"
 device_details="$run_directory/device.json"
@@ -88,17 +101,61 @@ xcrun devicectl device install app \
   --json-output "$install_result" \
   "$signed_app"
 
-if ! xcrun devicectl device process launch \
-  --device "$IOS_DEVICE_ID" \
-  --terminate-existing \
-  --console \
-  --timeout 15 \
-  --json-output "$launch_result" \
-  "$IOS_BUNDLE_IDENTIFIER" > "$launch_log" 2>&1; then
-  :
+wait_for_marker() {
+  marker=$1
+  deadline=$(( $(date +%s) + launch_timeout ))
+  while ! grep -F -- "$marker" "$launch_log" >/dev/null 2>&1; do
+    if test "$(date +%s)" -ge "$deadline"; then
+      sed -n '1,240p' "$launch_log" >&2
+      fail "timed out waiting for lifecycle marker: $marker"
+    fi
+    sleep 1
+  done
+}
+
+if test "$run_lifecycle" = 1; then
+  xcrun devicectl device process launch \
+    --device "$IOS_DEVICE_ID" \
+    --terminate-existing \
+    --console \
+    --timeout "$launch_timeout" \
+    --json-output "$launch_result" \
+    "$IOS_BUNDLE_IDENTIFIER" > "$launch_log" 2>&1 &
+  launcher_pid=$!
+  trap 'kill "$launcher_pid" 2>/dev/null || true' EXIT HUP INT TERM
+
+  wait_for_marker "BONSAI_FLUTTER_EIO_DEVICE_PROBE_OK"
+  xcrun devicectl device process launch \
+    --device "$IOS_DEVICE_ID" \
+    "$lifecycle_background_bundle" >/dev/null
+  wait_for_marker "BONSAI_FLUTTER_EIO_DEVICE_PROBE_BACKGROUND"
+  xcrun devicectl device process launch \
+    --device "$IOS_DEVICE_ID" \
+    "$IOS_BUNDLE_IDENTIFIER" >/dev/null
+  wait_for_marker "BONSAI_FLUTTER_EIO_DEVICE_PROBE_RESUME_OK"
+
+  kill "$launcher_pid" 2>/dev/null || true
+  wait "$launcher_pid" 2>/dev/null || true
+  trap - EXIT HUP INT TERM
+else
+  if ! xcrun devicectl device process launch \
+    --device "$IOS_DEVICE_ID" \
+    --terminate-existing \
+    --console \
+    --timeout "$launch_timeout" \
+    --json-output "$launch_result" \
+    "$IOS_BUNDLE_IDENTIFIER" > "$launch_log" 2>&1; then
+    :
+  fi
 fi
 
-grep -F -- "BONSAI_FLUTTER_IOS_PROBE_OK result=42" "$launch_log" >/dev/null ||
-  fail "physical device did not execute the OCaml probe callback"
+printf '%s\n' "$expected_markers" |
+  while IFS= read -r expected_marker; do
+    test -n "$expected_marker" || continue
+    if ! grep -F -- "$expected_marker" "$launch_log" >/dev/null; then
+      sed -n '1,240p' "$launch_log" >&2
+      fail "physical device log did not contain: $expected_marker"
+    fi
+  done
 
 printf '%s\n' "iOS physical-device OCaml probe passed"

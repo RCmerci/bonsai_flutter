@@ -1,6 +1,6 @@
 # Upstream baseline
 
-This baseline was revalidated on 2026-07-30 in Asia/Shanghai. Versions are
+This baseline was revalidated on 2026-08-04 in Asia/Shanghai. Versions are
 recorded build inputs rather than floating branch references.
 
 ## Host toolchain
@@ -16,7 +16,7 @@ recorded build inputs rather than floating branch references.
 | Apple clang | 17.0.0 | Target `arm64-apple-darwin25.5.0` |
 | Flutter SDK | 3.44.8 | Stable revision `058e0af2c2b57e369d905a03ac9748b0ebf543c6` |
 | Dart SDK | 3.12.2 | Bundled by Flutter 3.44.8 |
-| iPhoneOS object | arm64, iOS 13.0 | Unsigned build and audit passed |
+| iPhoneOS object | arm64, iOS 15.0 | Unsigned build and audit passed |
 
 ## Jane Street release line
 
@@ -88,22 +88,26 @@ The isolated cross environments pin:
   `8380b52b0154752c26c6e221c04fbced3320aa48`;
 - Dune 3.23.1;
 - Bonsai v0.17.0 and the complete Jane Street v0.17.x runtime closure;
-- iPhoneOS arm64 with minimum iOS 13.0.
+- iPhoneOS arm64 with minimum iOS 15.0.
 
 The repository-owned `ocaml-ios64.5.1.1` overlay derives from the locked
 opam-cross-ios recipe and installs an `ios-cc` wrapper carrying the iPhoneOS
 architecture, sysroot, and minimum-version flags. Target objects therefore
 retain `LC_BUILD_VERSION platform IOS` metadata even for package C stubs.
 
-The runtime closure contains 42 runtime source packages, 70 locked findlib
-components, compiler-provided `threads` and `unix`, and one target-build
-`jst-config` package. Host PPX executables remain macOS processes. A focused
-Base generator patch keeps its configure-time generator in the host context.
+The runtime closure contains 56 runtime source packages and 90 unique findlib
+components, compiler-provided `runtime_events`, `threads`, and `unix`, and one
+target-build package, `jst-config`. It includes exact Eio `1.2` and
+`eio_posix` `1.2`. Host PPX executables remain macOS processes. Focused build
+patches keep configure-time generators and Topkg build tools in the host
+context while target runtime code remains iPhoneOS arm64.
 
-All standalone examples and the aggregate integration entrypoint build as
-arm64 iPhoneOS complete objects. The Clock object is verified as iPhoneOS,
-arm64, and minimum iOS 13.0. iOS Simulator remains outside the repository
-support boundary.
+All standalone examples and the aggregate integration entrypoint build as 12
+arm64 iPhoneOS complete objects, including separate Mail debug and release
+objects. Every object is verified as iPhoneOS arm64 with minimum iOS 15.0. An
+unsigned Counter application build and its embedded native framework pass the
+final bundle audit. iOS Simulator remains outside the repository support
+boundary.
 
 ## Verification boundary
 

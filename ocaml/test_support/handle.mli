@@ -76,6 +76,9 @@ val respond_to_host_effect
 
 val present : t -> unit
 
+(** Runs one logical pump using the handle's next monotonic timestamp. *)
+val pump_next : t -> ?events:Bonsai_flutter_protocol.Inbound_event.batch -> unit -> unit
+
 (** Runs one deterministic logical pump using runtime-relative monotonic time.
     Unlike [present], these helpers expose the ABI v2 presentation transaction
     directly. *)

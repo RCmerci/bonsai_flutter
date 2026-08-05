@@ -178,13 +178,24 @@ The following ownership rules are process-wide:
 | Flutter UI isolate | Widgets, render objects, plugins, platform channels, and platform path resolution. |
 | Dart runtime coordinator isolate | The singleton coordinator lease, ordered FFI calls, presentation coordination, and native buffers while copying. |
 | OCaml UI domain 0 | The singleton runtime state machine, one active `bf_runtime`, one `Driver.t`, Bonsai state and effects, reconciliation, handlers, and worker-client endpoint. |
-| OCaml Worker Domain | Zero or one worker session, business computation, SQLite connection, statements, migrations, transactions, and worker-only cleanup. |
+| OCaml Worker Domain | One process-wide Eio backend, zero or one session switch, bounded request/background fibers, business computation, SQLite and confined-file resources, and worker-only cleanup. |
 
 UI-only and worker-backed applications occupy the same singleton runtime and
 Driver slot. The Worker Domain is spawned lazily, reused across sequential
 worker sessions, and is never selected by `Domain.recommended_domain_count`.
 An actual spawn failure is terminal for worker-backed startup; work never
 falls back to domain 0.
+
+Worker services use only the direct-style `init`/`handle`/`shutdown` API.
+Each dispatched request has a nested Eio switch, and session daemons remain
+children of the session switch. `Serial` is the default handler policy;
+bounded `Concurrent` permits fiber interleaving on the same Domain. There is
+no `step` scheduler, application cancellation callback, legacy runner, or
+compatibility service path. Request and session contexts expose the Worker
+Domain's Eio environment so applications can use ecosystem libraries directly.
+The framework contains no HTTP client abstraction. File I/O can still use the
+separate runtime-opened confined directory capability when ambient filesystem
+access is unnecessary.
 
 Each runtime has:
 

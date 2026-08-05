@@ -15,7 +15,7 @@ const _iPhoneOSTarget = OcamlArtifactTarget(
   operatingSystem: OcamlTargetOperatingSystem.iOS,
   architecture: OcamlTargetArchitecture.arm64,
   appleSdk: OcamlAppleSdk.iPhoneOS,
-  minimumVersion: '13.0',
+  minimumVersion: '15.0',
 );
 
 void main() {
@@ -78,7 +78,7 @@ void main() {
               platform: OcamlMachOPlatform.iOS,
               architecture: OcamlTargetArchitecture.arm64,
               appleSdk: OcamlAppleSdk.iPhoneOS,
-              minimumVersion: '13.0',
+              minimumVersion: '15.0',
             ),
           ).resolve(
             nativeArtifactRoot: temporaryDirectory.uri,
@@ -148,7 +148,7 @@ void main() {
               .having(
                 (error) => error.message,
                 'message',
-                allOf(contains('iOS'), contains('arm64'), contains('13.0')),
+                allOf(contains('iOS'), contains('arm64'), contains('15.0')),
               ),
         ),
       );
@@ -174,7 +174,7 @@ void main() {
           platform: OcamlMachOPlatform.iOS,
           architecture: OcamlTargetArchitecture.x86_64,
           appleSdk: OcamlAppleSdk.iPhoneOS,
-          minimumVersion: '13.0',
+          minimumVersion: '15.0',
         ),
         contains('architecture'),
       );
@@ -232,7 +232,7 @@ const _deviceMetadata = OcamlArtifactMetadata(
   platform: OcamlMachOPlatform.iOS,
   architecture: OcamlTargetArchitecture.arm64,
   appleSdk: OcamlAppleSdk.iPhoneOS,
-  minimumVersion: '13.0',
+  minimumVersion: '15.0',
 );
 
 OcamlArtifactResolver _resolverFor(OcamlArtifactMetadata metadata) =>
@@ -264,7 +264,7 @@ Future<void> _expectMetadataFailure(
           .having(
             (error) => error.message,
             'message',
-            allOf(contains('iPhoneOS'), contains('arm64'), contains('13.0')),
+            allOf(contains('iPhoneOS'), contains('arm64'), contains('15.0')),
           ),
     ),
   );

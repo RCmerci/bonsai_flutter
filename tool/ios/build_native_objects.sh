@@ -5,6 +5,9 @@ set -eu
 script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repository_root=$(CDPATH= cd -- "$script_directory/../.." && pwd)
 
+# shellcheck source=tool/ios/toolchain.lock
+. "$script_directory/toolchain.lock"
+
 fail() {
   printf '%s\n' "iOS native-object build failure: $1" >&2
   exit 1
@@ -16,7 +19,7 @@ test "$#" -eq 1 ||
 target=$1
 test "$target" = iphoneos || fail "expected iphoneos"
 expected_platform=IOS
-minimum_version=13.0
+minimum_version=$IOS_DEPLOYMENT_TARGET
 
 switch="$repository_root/_build/ios/switches/$target"
 opam_root="$repository_root/_build/ios/opam-root"
@@ -46,6 +49,18 @@ done
 targets="$targets examples/mail/ocaml/native_embed_debug.exe.o"
 targets="$targets examples/mail/ocaml/native_embed_release.exe.o"
 targets="$targets flutter/integration_test/ocaml/native_integration_embed.exe.o"
+
+stage_object() {
+  source_object=$1
+  destination_object=$2
+  mkdir -p "$(dirname "$destination_object")"
+  cp -f "$source_object" "$destination_object"
+  "$script_directory/verify_complete_object.sh" \
+    "$destination_object" \
+    "$expected_platform" \
+    "$minimum_version" \
+    arm64
+}
 
 # BUILD_PATH_PREFIX_MAP removes checkout-specific paths from OCaml metadata.
 OPAMROOT="$opam_root" \
@@ -77,38 +92,20 @@ do
   source_object="$build_directory/default.ios/examples/$example/ocaml/native_embed.exe.o"
   destination_directory="$artifact_root/$example/ios/$target/arm64"
   destination_object="$destination_directory/native_embed.exe.o"
-  mkdir -p "$destination_directory"
-  cp -f "$source_object" "$destination_object"
-  "$script_directory/verify_complete_object.sh" \
-    "$destination_object" \
-    "$expected_platform" \
-    "$minimum_version" \
-    arm64
+  stage_object "$source_object" "$destination_object"
 done
 
 for variant in debug release; do
   source_object="$build_directory/default.ios/examples/mail/ocaml/native_embed_$variant.exe.o"
   destination_directory="$artifact_root/mail/ios/$target/arm64/$variant"
   destination_object="$destination_directory/native_embed.exe.o"
-  mkdir -p "$destination_directory"
-  cp -f "$source_object" "$destination_object"
-  "$script_directory/verify_complete_object.sh" \
-    "$destination_object" \
-    "$expected_platform" \
-    "$minimum_version" \
-    arm64
+  stage_object "$source_object" "$destination_object"
 done
 
 source_object="$build_directory/default.ios/flutter/integration_test/ocaml/native_integration_embed.exe.o"
 destination_directory="$artifact_root/integration_test/ios/$target/arm64"
 destination_object="$destination_directory/native_embed.exe.o"
-mkdir -p "$destination_directory"
-cp -f "$source_object" "$destination_object"
-"$script_directory/verify_complete_object.sh" \
-  "$destination_object" \
-  "$expected_platform" \
-  "$minimum_version" \
-  arm64
+stage_object "$source_object" "$destination_object"
 
 printf '%s\n' \
   "iOS $target native-object build passed at minimum $minimum_version"

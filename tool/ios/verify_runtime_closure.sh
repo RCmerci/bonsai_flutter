@@ -70,12 +70,12 @@ awk -F '|' '
 ' components_file="$locked_components" "$closure_lock" >"$locked_packages" ||
   fail "closure lock has an invalid row"
 
-test "$(wc -l <"$locked_packages" | tr -d ' ')" = 44 ||
-  fail "closure lock must contain 43 runtime and one target-build package"
-test "$(sort -u "$locked_packages" | wc -l | tr -d ' ')" = 44 ||
+test "$(wc -l <"$locked_packages" | tr -d ' ')" = 57 ||
+  fail "closure lock must contain 56 runtime and one target-build package"
+test "$(sort -u "$locked_packages" | wc -l | tr -d ' ')" = 57 ||
   fail "closure lock contains a duplicate source package"
-test "$(sort -u "$locked_components" | wc -l | tr -d ' ')" = 71 ||
-  fail "closure lock must contain exactly 71 package findlib components"
+test "$(sort -u "$locked_components" | wc -l | tr -d ' ')" = 90 ||
+  fail "closure lock must contain exactly 90 package findlib components"
 
 opam exec --switch="$host_switch" -- \
   ocamlfind query -recursive -p-format \
@@ -86,9 +86,10 @@ opam exec --switch="$host_switch" -- \
   virtual_dom.ui_effect \
   core \
   sqlite3 \
+  eio_posix \
   threads \
   unix |
-  grep -Ev '^(threads|unix)$' |
+  grep -Ev '^(runtime_events|seq|threads(\.posix)?|unix)$' |
   sort -u >"$resolved_components"
 sort -u "$locked_components" -o "$locked_components"
 
@@ -119,4 +120,4 @@ cmp -s "$locked_packages" "$resolved_packages" ||
   fail "locked package versions differ from the host switch"
 
 printf '%s\n' \
-  "iOS runtime closure verification passed: 43 runtime packages, 71 components, 1 target-build package"
+  "iOS runtime closure verification passed: 56 runtime packages, 90 components, 1 target-build package"

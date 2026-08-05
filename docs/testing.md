@@ -84,9 +84,12 @@ UI-only or worker-backed runtime occupies the process-wide slot, replacement
 never overlaps Drivers or sessions, sequential recreation reuses the same
 Worker Domain identifier, ordinary destroy performs zero joins, and final
 shutdown joins a successfully spawned Domain exactly once. They also cover
-spawn and service failures, out-of-band Stop and Cancel, request/computation
-fairness, backpressure, stale fencing, response reservation, push coalescing,
-and idle waiting without polling.
+spawn and service failures, out-of-band Stop and Cancel, bounded request
+dispatch, backpressure, stale fencing, response reservation, push coalescing,
+and idle waiting without polling. Direct-style Eio suites additionally cover
+request-switch cancellation before dispatch, while waiting for a permit, and
+while suspended; bounded concurrent handlers; session daemons; daemon/init
+races; exactly-once outcomes; lifecycle duration metrics; and backend reuse.
 
 SQLite store tests use temporary on-disk databases and a real worker session.
 They cover migration and reopen, Unicode prepared values, list bounds, title
@@ -95,6 +98,9 @@ corruption, unopenable paths, finite lock contention, explicit close, and
 same-path recreation. Service and application tests verify Ready, List, Add,
 Toggle, Refresh, response-before-push ordering, snapshot and summary pushes,
 persistence, and fresh mutation identities after process epoch changes.
+The file demonstration tests bounded 64 KiB streaming, 16 MiB limits,
+controlled suspension, cancellation at every chunk boundary, atomic rename,
+temporary-file cleanup, progress, and checksum stability.
 
 ## Dart
 

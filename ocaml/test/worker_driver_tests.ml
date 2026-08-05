@@ -8,15 +8,18 @@ let require condition message = if not condition then fail "%s" message
 let service ~initial_pushes =
   Worker.Service.create
     ~push_topic_count:(Int.max 1 initial_pushes)
-    ~init:(fun ~emit () ->
+    ~concurrency:Worker.Service.Serial
+    ~init:(fun session () ->
       for topic = 0 to initial_pushes - 1 do
-        emit ~topic:(ID.Worker.Push_topic.of_int topic) (Printf.sprintf "push-%d" topic)
+        Worker.Session_context.emit
+          session
+          ~topic:(ID.Worker.Push_topic.of_int topic)
+          (Printf.sprintf "push-%d" topic)
       done;
       Ok ())
-    ~handle_request:(fun () ~cancelled:_ ~emit:_ request -> Ok request, `Idle)
-    ~step:(fun () ~cancelled:_ ~emit:_ -> `Idle)
-    ~cancel:(fun () ~request_id:_ -> ())
+    ~handle:(fun _context () request -> Ok request)
     ~shutdown:(fun () -> ())
+    ()
 ;;
 
 let ok = function

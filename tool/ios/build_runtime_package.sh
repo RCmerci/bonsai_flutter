@@ -156,14 +156,43 @@ if test "$package_name" = jst-config; then
     fail "jst-config still aliases its host discovery executable"
 fi
 
+if test "$package_name" = eio_posix; then
+  if grep -F '| 6 -> Some (`Tcp' \
+    "$source_directory/lib_eio_posix/net.ml" >/dev/null; then
+    patch \
+      --batch \
+      --forward \
+      -d "$source_directory" \
+      -p1 \
+      <"$repository_root/vendor/patches/ios/eio-posix-darwin-protocol-zero.patch"
+  fi
+  grep -F '| 6 -> Some (`Tcp' \
+    "$source_directory/lib_eio_posix/net.ml" >/dev/null &&
+    fail "eio_posix still drops Darwin address records with protocol zero"
+  if grep -F 'Unix.getaddrinfo node service []' \
+    "$source_directory/lib_eio_posix/net.ml" >/dev/null; then
+    patch \
+      --batch \
+      --forward \
+      -d "$source_directory" \
+      -p1 \
+      <"$repository_root/vendor/patches/ios/eio-posix-darwin-socktype-hints.patch"
+  fi
+  grep -F 'Unix.getaddrinfo node service []' \
+    "$source_directory/lib_eio_posix/net.ml" >/dev/null &&
+    fail "eio_posix still resolves Darwin addresses without socket type hints"
+fi
+
 sdk_version=$(xcrun --sdk "$target" --show-sdk-version)
 sdk_root=$(xcrun --sdk "$target" --show-sdk-path)
+target_archiver=$(xcrun --sdk "$target" --find ar)
 target_pkg_config_path="$repository_root/vendor/pkgconfig/$target"
 test -f "$target_pkg_config_path/sqlite3.pc" ||
   fail "missing target SQLite pkg-config metadata"
 export PKG_CONFIG_PATH="$target_pkg_config_path"
 export PKG_CONFIG_SYSROOT_DIR="$sdk_root"
 export SQLITE3_DISABLE_LOADABLE_EXTENSIONS=1
+
 host_lib=$(
   OPAMROOT="$opam_root" \
     opam var --switch="$switch" lib
@@ -180,6 +209,166 @@ for metadata_name in META dune-package opam; do
   fi
 done
 
+case "$package_name" in
+  fmt | hmap | mtime)
+    require_command opam-installer
+    topkg_build_directory="$source_directory/_build-ios"
+    topkg_arguments=
+    if test "$package_name" = fmt; then
+      topkg_arguments="--with-base-unix false --with-cmdliner false"
+    fi
+    (
+      cd "$source_directory"
+      OPAMROOT="$opam_root" \
+        SDK="$sdk_version" \
+        VER="$IOS_DEPLOYMENT_TARGET" \
+        opam exec --switch="$switch" -- \
+        ocaml \
+          pkg/pkg.ml \
+          build \
+          --build-dir _build-ios \
+          --debug false \
+          --tests false \
+          --toolchain ios \
+          $topkg_arguments
+
+      install_manifest="$package_name.install"
+      case "$package_name" in
+        fmt | mtime)
+          install_manifest="$package_name.runtime.install"
+          awk '
+            /_build-ios\/src\/top\// ||
+            /_build-ios\/src\/mtime_top_init\.ml/ {
+              if ($0 ~ /\][[:space:]]*$/) print "]"
+              next
+            }
+            { print }
+          ' "$package_name.install" >"$install_manifest"
+          ;;
+      esac
+      opam-installer \
+        --name "$package_name" \
+        --prefix "$switch/_opam/ios-sysroot" \
+        --libdir "$target_lib" \
+        "$install_manifest"
+    )
+
+    case "$package_name" in
+      fmt | mtime)
+        test ! -e "$target_package_root/top" ||
+          fail "$package_name staged an unrelated toplevel library"
+        ;;
+    esac
+    if test "$package_name" = mtime; then
+      test ! -e "$target_package_root/mtime_top_init.ml" ||
+        fail "mtime staged an unrelated toplevel initializer"
+    fi
+
+    printf '%s\n' "$package_components" |
+      tr ',' '\n' |
+      while IFS= read -r component; do
+        OPAMROOT="$opam_root" \
+          opam exec --switch="$switch" -- \
+          ocamlfind -toolchain ios query -predicates=native "$component" \
+          >/dev/null ||
+          fail "staged component is not visible to findlib: $component"
+      done
+
+    primary_topkg_object="$topkg_build_directory/src/$package_name.o"
+    if test -f "$primary_topkg_object"; then
+      representative_object=$primary_topkg_object
+    else
+      representative_object=$(
+        find "$topkg_build_directory" \
+          -type f \
+          -name '*.o' \
+          ! -name 'myocamlbuild.o' |
+          sort |
+          sed -n '1p'
+      )
+    fi
+    test -n "$representative_object" ||
+      fail "no representative target object was produced for $package_name"
+    "$script_directory/verify_macho.sh" \
+      "$representative_object" \
+      "$expected_platform" \
+      arm64 \
+      "$expected_minimum"
+
+    if rg -a -l \
+      '/opt/homebrew|/usr/local|MacOSX[0-9]|/private/tmp/bonsai-flutter-opam|-mpopcnt' \
+      "$target_package_root" >/dev/null; then
+      fail "$package_name staged a prohibited host path or CPU flag"
+    fi
+
+    printf '%s\n' \
+      "iOS $target runtime package build passed: $package_name $package_version"
+    exit 0
+    ;;
+esac
+
+if test "$package_name" = domain-local-await; then
+  manual_build_directory="$build_directory/manual"
+  mkdir -p "$manual_build_directory"
+
+  compile_manual() {
+    OPAMROOT="$opam_root" \
+      SDK="$sdk_version" \
+      VER="$IOS_DEPLOYMENT_TARGET" \
+      opam exec --switch="$switch" -- \
+      ocamlfind -toolchain ios ocamlopt \
+        -package thread-table \
+        -I "$manual_build_directory" \
+        "$@"
+  }
+
+  compile_manual \
+    -c \
+    -o "$manual_build_directory/Thread_intf.cmx" \
+    "$source_directory/src/Thread_intf.ml"
+  compile_manual \
+    -c \
+    -o "$manual_build_directory/Domain_local_await.cmi" \
+    "$source_directory/src/Domain_local_await.mli"
+  compile_manual \
+    -c \
+    -o "$manual_build_directory/Domain_local_await.cmx" \
+    "$source_directory/src/Domain_local_await.ml"
+  compile_manual \
+    -a \
+    -o "$manual_build_directory/Domain_local_await.cmxa" \
+    "$manual_build_directory/Thread_intf.cmx" \
+    "$manual_build_directory/Domain_local_await.cmx"
+
+  find "$manual_build_directory" \
+    -maxdepth 1 \
+    -type f \
+    \( -name '*.a' -o -name '*.cmi' -o -name '*.cmx' -o -name '*.cmxa' \) \
+    -exec cp -f {} "$target_package_root/" \;
+
+  OPAMROOT="$opam_root" \
+    opam exec --switch="$switch" -- \
+    ocamlfind -toolchain ios query -predicates=native domain-local-await \
+    >/dev/null ||
+    fail "staged component is not visible to findlib: domain-local-await"
+
+  "$script_directory/verify_macho.sh" \
+    "$manual_build_directory/Domain_local_await.o" \
+    "$expected_platform" \
+    arm64 \
+    "$expected_minimum"
+
+  if rg -a -l \
+    '/opt/homebrew|/usr/local|MacOSX[0-9]|/private/tmp/bonsai-flutter-opam|-mpopcnt' \
+    "$target_package_root" >/dev/null; then
+    fail "$package_name staged a prohibited host path or CPU flag"
+  fi
+
+  printf '%s\n' \
+    "iOS $target runtime package build passed: $package_name $package_version"
+  exit 0
+fi
+
 printf '%s\n' "$package_components" |
   tr ',' '\n' |
   while IFS= read -r component; do
@@ -189,8 +378,16 @@ printf '%s\n' "$package_components" |
         ocamlfind query \
           -predicates=native \
           -format '%d|%a' \
-          "$component"
+        "$component"
     )
+    if test -z "$component_query"; then
+      component_host_directory=$(
+        OPAMROOT="$opam_root" \
+          opam exec --switch="$switch" -- \
+          ocamlfind query "$component"
+      )
+      component_query="$component_host_directory|"
+    fi
     component_host_directory=${component_query%%|*}
     component_archives=${component_query#*|}
     component_relative_path=${component_host_directory#"$host_lib/"}
@@ -201,10 +398,14 @@ printf '%s\n' "$package_components" |
     # stubs. Copy installed headers first so target-generated headers, such as
     # jst-config's config.h, replace any host-generated version below.
     find "$component_host_directory" \
-      -maxdepth 1 \
       \( -type f -o -type l \) \
-      -name '*.h' \
-      -exec cp -f {} "$target_component_directory/" \;
+      -name '*.h' |
+      while IFS= read -r header; do
+        header_relative=${header#"$component_host_directory/"}
+        header_destination="$target_component_directory/$header_relative"
+        mkdir -p "$(dirname "$header_destination")"
+        cp -f "$header" "$header_destination"
+      done
 
     if test -z "$component_archives"; then
       find "$component_host_directory" \
@@ -247,13 +448,11 @@ printf '%s\n' "$package_components" |
         if test "$source_component_relative" = "$source_component_directory"; then
           source_component_relative=.
         fi
-
         if test "$source_component_relative" = .; then
           dune_target=$archive_name
         else
           dune_target="$source_component_relative/$archive_name"
         fi
-
         OPAMROOT="$opam_root" \
           SDK="$sdk_version" \
           VER="$IOS_DEPLOYMENT_TARGET" \
@@ -300,6 +499,9 @@ printf '%s\n' "$package_components" |
               test "$package_name" = sqlite3 ||
                 fail "$component unexpectedly depends on system SQLite"
               ;;
+            -L*)
+              fail "$component uses unsupported library path $extra_c_object"
+              ;;
             -l*)
               static_archive="lib${extra_c_object#-l}.a"
               if test "$source_component_relative" = .; then
@@ -307,17 +509,37 @@ printf '%s\n' "$package_components" |
               else
                 static_archive_target="$source_component_relative/$static_archive"
               fi
-              OPAMROOT="$opam_root" \
-                SDK="$sdk_version" \
-                VER="$IOS_DEPLOYMENT_TARGET" \
-                opam exec --switch="$switch" -- \
-                dune build \
-                  --root="$source_directory" \
-                  --build-dir="$build_directory" \
-                  --profile=release \
-                  -j "${JOBS:-4}" \
-                  -x ios \
-                  "$static_archive_target"
+              if test ! -f \
+                "$build_directory/default.ios/$static_archive_target"; then
+                stub_objects=$(
+                  find "$build_component_directory" \
+                    -maxdepth 1 \
+                    -type f \
+                    -name '*.o' \
+                    -print
+                )
+                if test -n "$stub_objects"; then
+                  "$target_archiver" \
+                    rcs \
+                    "$build_directory/default.ios/$static_archive_target" \
+                    $stub_objects
+                else
+                  OPAMROOT="$opam_root" \
+                    SDK="$sdk_version" \
+                    VER="$IOS_DEPLOYMENT_TARGET" \
+                    opam exec --switch="$switch" -- \
+                    dune build \
+                      --root="$source_directory" \
+                      --build-dir="$build_directory" \
+                      --profile=release \
+                      -j "${JOBS:-4}" \
+                      -x ios \
+                      "$static_archive_target"
+                fi
+                test -f \
+                  "$build_directory/default.ios/$static_archive_target" ||
+                  fail "$component did not produce target C stubs $static_archive"
+              fi
               ;;
             *)
               fail "$component uses unsupported extra C object $extra_c_object"

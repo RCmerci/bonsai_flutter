@@ -6,11 +6,11 @@ let shutdown_count = Atomic.make 0
 let service =
   Worker.Service.create
     ~push_topic_count:1
-    ~init:(fun ~emit:_ () -> Ok ())
-    ~handle_request:(fun () ~cancelled:_ ~emit:_ request -> Ok request, `Idle)
-    ~step:(fun () ~cancelled:_ ~emit:_ -> `Idle)
-    ~cancel:(fun () ~request_id:_ -> ())
+    ~concurrency:Worker.Service.Serial
+    ~init:(fun _session () -> Ok ())
+    ~handle:(fun _context () request -> Ok request)
     ~shutdown:(fun () -> Atomic.incr shutdown_count)
+    ()
 ;;
 
 let () =
@@ -21,12 +21,23 @@ let () =
     | Ok client -> client
     | Error error -> failwith error
   in
+  let attached = Worker_runtime.For_testing.diagnostics () in
+  require
+    (attached.backend_run_count = 1
+     && attached.backend_running
+     && attached.active_coordinators = 1)
+    "attached session did not run inside one live Eio Coordinator";
   ignore (Worker.send client "pending");
   Worker_runtime.For_testing.final_shutdown ();
   let diagnostics = Worker_runtime.For_testing.diagnostics () in
   require
     (diagnostics.state = Worker_runtime.Stopped)
     "attached final shutdown did not stop";
+  require
+    (diagnostics.backend_run_count = 1
+     && (not diagnostics.backend_running)
+     && diagnostics.active_coordinators = 0)
+    "attached final shutdown did not unwind the Coordinator and Eio backend";
   require (diagnostics.spawn_count = 1) "attached final shutdown changed spawn count";
   require (diagnostics.join_count = 1) "attached final shutdown did not join once";
   require (diagnostics.active_sessions = 0) "attached final shutdown retained session";

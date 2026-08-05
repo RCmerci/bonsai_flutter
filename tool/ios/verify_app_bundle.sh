@@ -6,6 +6,9 @@ script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repository_root=$(CDPATH= cd -- "$script_directory/../.." && pwd)
 export_list="$repository_root/flutter/packages/bonsai_flutter_native/src/bonsai_flutter_exports.txt"
 
+# shellcheck source=tool/ios/toolchain.lock
+. "$script_directory/toolchain.lock"
+
 fail() {
   printf '%s\n' "iOS app-bundle verification failure: $1" >&2
   exit 1
@@ -45,7 +48,11 @@ test -f "$binary_path" || fail "native framework does not exist: $binary_path"
 test -f "$manifest_path" || fail "Native Assets manifest is missing"
 test -f "$privacy_manifest" || fail "application privacy manifest is missing"
 
-"$script_directory/verify_macho.sh" "$binary_path" IOS arm64 13.0
+"$script_directory/verify_macho.sh" \
+  "$binary_path" \
+  IOS \
+  arm64 \
+  "$IOS_DEPLOYMENT_TARGET"
 
 install_name=$(
   xcrun otool -D "$binary_path" |

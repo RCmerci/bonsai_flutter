@@ -19,6 +19,12 @@ Domain boundary. SQLite connections, prepared statements, migrations,
 transactions, and cleanup never leave the Worker Domain. Worker output becomes
 visible to Bonsai only at an accepted domain-0 pump boundary.
 
+The same direct-style Worker Service also contains a bounded file demonstration.
+It writes or reads `eio-worker-demo.bin` through a confined Eio directory
+capability, reports latest-wins progress, and uses ordinary Worker request
+cancellation. There is no legacy callback, `step`, or compatibility service
+path.
+
 ## Run on macOS
 
 From the repository root, build and stage the application-specific complete
@@ -35,7 +41,9 @@ Run the focused OCaml and Flutter tests with:
 
 ```sh
 dune runtest ocaml/test/sqlite_worker_store_tests.exe \
-  ocaml/test/sqlite_worker_example_tests.exe
+  ocaml/test/sqlite_worker_example_tests.exe \
+  ocaml/test/sqlite_worker_file_demo_tests.exe \
+  ocaml/test/worker_eio_environment_tests.exe
 cd examples/sqlite_worker/flutter
 flutter test
 ```
@@ -60,7 +68,7 @@ authority, Worker ordering, renderer protocol, or FFI boundary.
 ## Build for iPhoneOS
 
 The supported Apple mobile artifact is physical-device arm64 iPhoneOS with a
-minimum deployment target of iOS 13.0. iOS Simulator is not supported.
+minimum deployment target of iOS 15.0. iOS Simulator is not supported.
 
 ```sh
 make ios-device-native-objects
@@ -79,11 +87,14 @@ make ci-ios-device IOS_DEVICE_ID=<physical-device-id>
 ## Storage and persistence
 
 The Flutter UI isolate resolves the platform Application Support directory,
-creates a `sqlite_worker` child directory, and passes the absolute database
-path through the startup envelope. The resulting paths are:
+creates a `sqlite_worker` child directory, and passes both that absolute
+directory and the absolute database path through the versioned `SWC1` startup
+envelope. The OCaml decoder validates the envelope and both paths before
+starting the Worker Service. The resulting paths are:
 
 - macOS: `<Application Support>/sqlite_worker/todos.sqlite3`
 - iOS: `<Application Support>/sqlite_worker/todos.sqlite3`
+- file demo: `<Application Support>/sqlite_worker/eio-worker-demo.bin`
 
 The exact platform prefix is chosen by `path_provider` and may vary by bundle
 identifier, sandbox container, user, device, and OS version. The application
@@ -95,6 +106,22 @@ replacing the logical runtime stops the worker session, finalizes statements,
 and closes SQLite before another runtime can open the same file. Sequential
 runtime recreation and normal application relaunch therefore recover committed
 Todos and their database revision.
+
+## File demonstration
+
+The panel can generate a deterministic 4 MiB file, read it back, display its
+rolling checksum, or cancel the current file request. File operations use 64
+KiB chunks and reject generated or existing files larger than 16 MiB. Each
+chunk yields to the Eio scheduler so cancellation and Worker control remain
+runnable even when the operating system page cache makes file calls complete
+immediately.
+
+A write first creates `eio-worker-demo.<request-id>.tmp` in the same confined
+directory. Only a completely successful write renames that file to
+`eio-worker-demo.bin`. Cancellation and normal failures remove the temporary
+file and preserve any older completed demo file. Reads stream through a bounded
+buffer and never load an unbounded file into one string. File operations do not
+change the Todo database revision.
 
 ## Support boundary
 

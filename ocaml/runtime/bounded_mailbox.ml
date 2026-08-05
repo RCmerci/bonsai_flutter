@@ -47,6 +47,8 @@ module Fifo = struct
       if Queue.is_empty t.queue then None else Some (Queue.take t.queue))
   ;;
 
+  let length t = with_lock t (fun () -> Queue.length t.queue)
+
   let wait_pop t =
     with_lock t (fun () ->
       while Queue.is_empty t.queue && not t.closed do

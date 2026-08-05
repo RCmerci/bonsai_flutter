@@ -34,6 +34,9 @@ type error =
   | Todo_not_found of int64
   | Migration_failed of string
   | Storage_error of string
+  | File_unavailable
+  | Invalid_file_size of int
+  | File_error of string
 
 let error_to_string = function
   | Invalid_title -> "Todo title must not be empty"
@@ -49,6 +52,9 @@ let error_to_string = function
   | Todo_not_found todo_id -> Printf.sprintf "Todo %Ld does not exist" todo_id
   | Migration_failed message -> Printf.sprintf "Database migration failed: %s" message
   | Storage_error message -> Printf.sprintf "Database error: %s" message
+  | File_unavailable -> "Demo file storage is unavailable"
+  | Invalid_file_size size -> Printf.sprintf "Invalid demo file size: %d bytes" size
+  | File_error message -> Printf.sprintf "Demo file error: %s" message
 ;;
 
 type operation =
@@ -62,6 +68,8 @@ type operation =
       ; todo_id : int64
       ; completed : bool
       }
+  | Write_demo_file of { total_bytes : int }
+  | Read_demo_file
 
 type request =
   { query_generation : int64
@@ -71,6 +79,14 @@ type request =
 type response_payload =
   | Snapshot of snapshot
   | Mutation of mutation_result
+  | File of file_response
+
+and file_response =
+  | File_written of { total_bytes : int }
+  | File_read of
+      { total_bytes : int
+      ; checksum : int64
+      }
 
 type response =
   | Completed of
@@ -105,6 +121,15 @@ type push =
   | Summary_changed of summary
   | Startup_timing of startup_timing
   | Fatal of error
+  | File_progress of
+      { operation : file_operation
+      ; completed_bytes : int
+      ; total_bytes : int
+      }
+
+and file_operation =
+  | Writing
+  | Reading
 
 module Topic = struct
   let ready = ID.Worker.Push_topic.of_int 0
@@ -112,5 +137,6 @@ module Topic = struct
   let summary = ID.Worker.Push_topic.of_int 2
   let fatal = ID.Worker.Push_topic.of_int 3
   let startup_timing = ID.Worker.Push_topic.of_int 4
-  let count = 5
+  let file_progress = ID.Worker.Push_topic.of_int 5
+  let count = 6
 end

@@ -2,12 +2,16 @@
 
 Measured on 2026-07-26 in Asia/Shanghai.
 
+The project deployment baseline was subsequently raised to iOS 15.0. The
+toolchain, artifacts, and current support documentation use that newer floor;
+the remaining measurements in this report describe the original delivery.
+
 ## Supported platform scope
 
 The repository targets:
 
 - macOS arm64;
-- physical iPhone arm64 with an iOS 13.0 deployment target.
+- physical iPhone arm64 with the then-current deployment target.
 
 iOS Simulator is intentionally unsupported. The build hook reports a clear
 error when Flutter requests that SDK.
@@ -20,7 +24,7 @@ The iPhoneOS toolchain is isolated below ignored `_build/ios` paths and pins:
 - `ocaml-ios64.5.3.0`;
 - opam-cross-ios commit `8380b52b0154752c26c6e221c04fbced3320aa48`;
 - Bonsai and Core `v0.18~preview.130.106+341`;
-- iPhoneOS arm64 at minimum iOS 13.0.
+- iPhoneOS arm64 at the then-current minimum version.
 
 The exact runtime closure is recorded in
 `vendor/opam-ios/runtime-closure.lock`. Host PPX executables remain macOS
@@ -56,10 +60,6 @@ A Development-signed application can be installed and launched from Xcode or
 the Flutter command line. Distribution signing was not configured because the
 current Apple team role cannot create an Apple Distribution certificate and
 the requested scope is Development testing.
-
-The Flutter integration-test host currently disconnects from its local
-WebSocket after installation. This occurs after signing and installation and
-is tracked as a separate runtime-test issue.
 
 ## Commands
 

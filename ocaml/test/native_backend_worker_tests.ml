@@ -40,18 +40,18 @@ let shutdown_count = Atomic.make 0
 let service =
   Worker.Service.create
     ~push_topic_count:1
-    ~init:(fun ~emit config ->
+    ~concurrency:Worker.Service.Serial
+    ~init:(fun session config ->
       if String.equal config "fail-init"
       then Error "intentional init failure"
       else (
-        emit ~topic:(ID.Worker.Push_topic.of_int 0) "ready";
+        Worker.Session_context.emit session ~topic:(ID.Worker.Push_topic.of_int 0) "ready";
         Ok ()))
-    ~handle_request:(fun () ~cancelled:_ ~emit:_ -> function
-       | Echo value -> Ok value, `Idle
+    ~handle:(fun _context () -> function
+       | Echo value -> Ok value
        | Fail -> failwith "intentional backend service failure")
-    ~step:(fun () ~cancelled:_ ~emit:_ -> `Idle)
-    ~cancel:(fun () ~request_id:_ -> ())
     ~shutdown:(fun () -> Atomic.incr shutdown_count)
+    ()
 ;;
 
 let live_client : (request, string, string) Worker.client option ref = ref None

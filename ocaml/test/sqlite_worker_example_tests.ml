@@ -1,4 +1,5 @@
 module Protocol = Sqlite_worker_protocol
+module Config = Sqlite_worker_config
 module Test = Bonsai_flutter_test
 module ID = Bonsai_flutter_spec.Id
 
@@ -11,9 +12,8 @@ let with_temporary_database test =
   Unix.mkdir marker 0o700;
   let path = Filename.concat marker "todos.sqlite3" in
   let cleanup () =
-    List.iter
-      (fun candidate -> if Sys.file_exists candidate then Sys.remove candidate)
-      [ path; path ^ "-journal" ];
+    Sys.readdir marker
+    |> Array.iter (fun name -> Sys.remove (Filename.concat marker name));
     Unix.rmdir marker
   in
   Fun.protect ~finally:cleanup (fun () -> test path)
@@ -23,10 +23,9 @@ let worker_idle_wait_count () =
   (Worker_runtime.For_testing.diagnostics ()).idle_wait_count
 ;;
 
-let pump_worker handle monotonic_now_ns =
+let pump_worker handle =
   Test.Handle.present handle;
-  ignore (Test.Handle.pump handle ~monotonic_now_ns ());
-  Int64.succ monotonic_now_ns
+  Test.Handle.pump_next handle ()
 ;;
 
 let require_present handle test_id message =
@@ -45,23 +44,29 @@ let create_handle ~runtime_epoch path =
     ~runtime_epoch:(ID.Runtime.Epoch.of_int64 runtime_epoch)
     ~time_source
     Sqlite_worker_example.app
-    ~application_payload:(Bytes.of_string path)
+    ~application_payload:
+      (Config.encode
+         { database_path = path; application_support_directory = Filename.dirname path })
+;;
+
+let config path =
+  Config.{ database_path = path; application_support_directory = Filename.dirname path }
 ;;
 
 let settle_initial handle =
-  let rec settle attempts time =
+  let rec settle attempts =
     if attempts = 0
     then fail "worker did not settle its initial List request"
     else (
       let idle_before_pump = worker_idle_wait_count () in
-      let next_time = pump_worker handle time in
+      pump_worker handle;
       if Option.is_some (Test.Handle.find handle (Test.Query.visible_text "Ready"))
       then ()
       else (
         Worker_runtime.For_testing.await_idle_wait_count (idle_before_pump + 1);
-        settle (attempts - 1) next_time))
+        settle (attempts - 1)))
   in
-  settle 3 1L
+  settle 3
 ;;
 
 let worker_ok = function
@@ -108,7 +113,7 @@ let test_service_ready_response_before_autonomous_pushes path =
       (Worker_runtime.start
          ~runtime_epoch:(ID.Runtime.Epoch.of_int64 700L)
          Sqlite_worker_service.service
-         path)
+         (config path))
   in
   Worker.For_testing.await_output client;
   let initial = Worker.For_testing.drain_events client ~max_events:64 in
@@ -162,7 +167,7 @@ let test_service_reports_worker_startup_timings path =
       (Worker_runtime.start
          ~runtime_epoch:(ID.Runtime.Epoch.of_int64 699L)
          Sqlite_worker_service.service
-         path)
+         (config path))
   in
   Worker.For_testing.await_output client;
   let initial = Worker.For_testing.drain_events client ~max_events:64 in
@@ -226,6 +231,67 @@ let test_ready_crud_pushes_and_persistence () =
     require_present first "todo-title-input" "Todo title input is missing";
     require_present first "add-todo" "Add action is missing";
     require_present first "refresh-todos" "Refresh action is missing";
+    require_present first "file-demo-panel" "file demo panel is missing";
+    require_present first "write-demo-file" "file write action is missing";
+    require_present first "read-demo-file" "file read action is missing";
+    require_text first "Write 4 MiB demo file" "file write label is missing";
+    require_text first "Read demo file" "file read label is missing";
+    Test.Handle.present first;
+    Test.Handle.click first (Test.Query.test_id "write-demo-file");
+    require_present
+      first
+      "cancel-file-operation"
+      "active file operation cannot be cancelled";
+    require_text first "Writing demo file…" "file write did not render pending status";
+    Test.Handle.present first;
+    Test.Handle.click first (Test.Query.test_id "cancel-file-operation");
+    require_text
+      first
+      "Cancelling file operation…"
+      "file cancel did not render pending status";
+    let rec settle_cancel attempts =
+      if attempts = 0
+      then fail "file cancellation did not settle"
+      else (
+        Unix.sleepf 0.001;
+        pump_worker first;
+        if
+          Option.is_some
+            (Test.Handle.find first (Test.Query.visible_text "File operation cancelled"))
+        then ()
+        else settle_cancel (attempts - 1))
+    in
+    settle_cancel 500;
+    Test.Handle.present first;
+    Test.Handle.click first (Test.Query.test_id "write-demo-file");
+    let rec settle_file attempts =
+      if attempts = 0
+      then fail "file write did not settle"
+      else (
+        Unix.sleepf 0.001;
+        pump_worker first;
+        if
+          Option.is_some
+            (Test.Handle.find first (Test.Query.visible_text "Wrote 4194304 bytes"))
+        then ()
+        else settle_file (attempts - 1))
+    in
+    settle_file 500;
+    Test.Handle.present first;
+    Test.Handle.click first (Test.Query.test_id "read-demo-file");
+    let rec settle_read attempts =
+      if attempts = 0
+      then fail "file read did not settle"
+      else (
+        Unix.sleepf 0.001;
+        pump_worker first;
+        if
+          Option.is_some
+            (Test.Handle.find first (Test.Query.visible_text "Read 4194304 bytes"))
+        then ()
+        else settle_read (attempts - 1))
+    in
+    settle_read 500;
     Test.Handle.present first;
     Test.Handle.input_text first (Test.Query.test_id "todo-title-input") "Persistent 🌳";
     Test.Handle.present first;
@@ -233,7 +299,7 @@ let test_ready_crud_pushes_and_persistence () =
     Test.Handle.click first (Test.Query.test_id "add-todo");
     require_text first "Adding…" "Add did not render a pending state";
     Worker_runtime.For_testing.await_idle_wait_count (idle_before_add + 1);
-    ignore (pump_worker first 4L);
+    pump_worker first;
     require_present first "todo-row-1" "Add response/push did not render Todo row";
     require_text first "Persistent 🌳" "added Todo title is missing";
     require_text
@@ -244,7 +310,7 @@ let test_ready_crud_pushes_and_persistence () =
     let idle_before_toggle = worker_idle_wait_count () in
     Test.Handle.click first (Test.Query.test_id "todo-toggle-1");
     Worker_runtime.For_testing.await_idle_wait_count (idle_before_toggle + 1);
-    ignore (pump_worker first 6L);
+    pump_worker first;
     require_text first "0 open · 1 completed" "Toggle did not update pushed summary";
     Test.Handle.shutdown first;
     require
@@ -270,7 +336,7 @@ let test_add_uses_a_fresh_mutation_id_after_process_epoch_reset () =
     let idle_before_first_add = worker_idle_wait_count () in
     Test.Handle.click first (Test.Query.test_id "add-todo");
     Worker_runtime.For_testing.await_idle_wait_count (idle_before_first_add + 1);
-    ignore (pump_worker first 4L);
+    pump_worker first;
     require_present first "todo-row-1" "first process did not add its Todo";
     Test.Handle.shutdown first;
     let second = create_handle ~runtime_epoch:711L path in
@@ -281,7 +347,7 @@ let test_add_uses_a_fresh_mutation_id_after_process_epoch_reset () =
     let idle_before_second_add = worker_idle_wait_count () in
     Test.Handle.click second (Test.Query.test_id "add-todo");
     Worker_runtime.For_testing.await_idle_wait_count (idle_before_second_add + 1);
-    ignore (pump_worker second 8L);
+    pump_worker second;
     require_present
       second
       "todo-row-2"
@@ -310,7 +376,7 @@ let test_toggle_uses_a_fresh_mutation_id_after_process_epoch_reset () =
     let idle_before_first_toggle = worker_idle_wait_count () in
     Test.Handle.click first (Test.Query.test_id "todo-toggle-1");
     Worker_runtime.For_testing.await_idle_wait_count (idle_before_first_toggle + 1);
-    ignore (pump_worker first 4L);
+    pump_worker first;
     require_text first "0 open · 1 completed" "first process did not complete its Todo";
     Test.Handle.shutdown first;
     let second = create_handle ~runtime_epoch:712L path in
@@ -319,7 +385,7 @@ let test_toggle_uses_a_fresh_mutation_id_after_process_epoch_reset () =
     let idle_before_second_toggle = worker_idle_wait_count () in
     Test.Handle.click second (Test.Query.test_id "todo-toggle-1");
     Worker_runtime.For_testing.await_idle_wait_count (idle_before_second_toggle + 1);
-    ignore (pump_worker second 8L);
+    pump_worker second;
     require_text
       second
       "1 open · 0 completed"

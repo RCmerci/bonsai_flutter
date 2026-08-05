@@ -45,6 +45,8 @@ let logical_pump t ?events () =
   t.last_pump_result <- Some result
 ;;
 
+let pump_next = logical_pump
+
 let snapshot t =
   match Driver.For_testing.snapshot t.driver with
   | Some snapshot -> snapshot

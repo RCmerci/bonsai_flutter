@@ -17,7 +17,7 @@ The build hook resolves one of these paths below an application-specific
 | Target | Relative complete-object path | Measured minimum |
 | --- | --- | --- |
 | macOS arm64 | `macos/arm64/native_embed.exe.o` | macOS 26.0 |
-| iPhoneOS arm64 | `ios/iphoneos/arm64/native_embed.exe.o` | iOS 13.0 |
+| iPhoneOS arm64 | `ios/iphoneos/arm64/native_embed.exe.o` | iOS 15.0 |
 
 A consuming workspace configures the root and makes the real backend
 mandatory:
@@ -27,8 +27,15 @@ hooks:
   user_defines:
     bonsai_flutter_native:
       native_artifact_root: ../../../_build/native-artifacts/counter/
+      ios_deployment_target: '15.0'
       require_ocaml_backend: true
 ```
+
+Flutter 3.44.8 reports its SDK-level iOS native-assets default to build hooks
+instead of the Runner target's `IPHONEOS_DEPLOYMENT_TARGET`. Every repository
+workspace therefore passes the quoted `ios_deployment_target` explicitly. The
+hook uses it both for C/linker deployment flags and complete-object metadata
+validation. It must match `tool/ios/toolchain.lock` and every Runner target.
 
 The resolver inspects the real Mach-O load commands with Apple tools before
 linking. It rejects a missing object, wrong architecture, wrong platform,
@@ -42,6 +49,7 @@ hooks:
   user_defines:
     bonsai_flutter_native:
       native_artifact_root: ../../../_build/native-artifacts/sqlite_worker/
+      ios_deployment_target: '15.0'
       require_ocaml_backend: true
       link_system_sqlite3: true
 ```
@@ -94,7 +102,7 @@ SDK-aware pkg-config metadata selects Apple headers and the system library and
 is audited against Homebrew, `/usr/local`, macOS SDK, loadable-extension, and
 bundled-engine leakage.
 
-The iPhoneOS output is a real arm64 `IOS` complete object with minimum 13.0.
+The iPhoneOS output is a real arm64 `IOS` complete object with minimum 15.0.
 iOS Simulator is intentionally unsupported; use a registered physical iPhone
 for iOS execution.
 

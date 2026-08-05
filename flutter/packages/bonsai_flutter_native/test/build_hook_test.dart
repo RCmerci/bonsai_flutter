@@ -57,4 +57,27 @@ void main() {
       );
     });
   });
+
+  group('iOS deployment target override', () {
+    test('uses the workspace deployment target for native compilation', () {
+      expect(build_hook.iOSMinimumVersionForTesting(14, '15.0'), '15.0');
+      expect(build_hook.iOSDeploymentTargetFlagsForTesting(14, '15.0'), [
+        '-mios-version-min=15.0',
+      ]);
+    });
+
+    test('falls back to the Flutter native-assets target', () {
+      expect(build_hook.iOSMinimumVersionForTesting(14, null), '14.0');
+      expect(build_hook.iOSDeploymentTargetFlagsForTesting(14, null), isEmpty);
+    });
+
+    test('rejects malformed workspace deployment targets', () {
+      for (final value in <Object>['15', '15.x', 15, true]) {
+        expect(
+          () => build_hook.iOSMinimumVersionForTesting(14, value),
+          throwsA(isA<FormatException>()),
+        );
+      }
+    });
+  });
 }

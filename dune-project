@@ -14,6 +14,9 @@
  (depends
   (ocaml (= 5.1.1))
   (dune (>= 3.17))
+  (eio (= 1.2))
+  (eio_posix (= 1.2))
+  (mtime (= 2.1.0))
   (base (and (>= v0.17) (< v0.18~)))
   (bonsai (and (>= v0.17) (< v0.18~)))
   (core (and (>= v0.17) (< v0.18~)))

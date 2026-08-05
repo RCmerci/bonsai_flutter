@@ -16,6 +16,31 @@ type diagnostics =
   ; active_sessions : int
   ; peak_active_sessions : int
   ; idle_wait_count : int
+  ; backend_run_count : int
+  ; backend_running : bool
+  ; coordinator_start_count : int
+  ; active_coordinators : int
+  ; peak_active_coordinators : int
+  ; coordinator_yield_count : int
+  ; configured_concurrency_limit : int option
+  ; queued_requests : int
+  ; active_request_fibers : int
+  ; waiting_request_fibers : int
+  ; active_handlers : int
+  ; peak_active_handlers : int
+  ; active_background_fibers : int
+  ; peak_active_background_fibers : int
+  ; logical_live_fibers : int
+  ; request_queue_wait_count : int
+  ; max_request_queue_wait_ns : int64
+  ; handler_wall_count : int
+  ; max_handler_wall_ns : int64
+  ; cancellation_unwind_count : int
+  ; max_cancellation_unwind_ns : int64
+  ; session_cancellation_duration_ns : int64 option
+  ; shutdown_duration_ns : int64 option
+  ; backend_identity : string
+  ; backend_version : string
   }
 
 val start

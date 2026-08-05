@@ -154,11 +154,13 @@ The selected public `Bonsai_driver` has no dedicated destroy operation.
 
 Destroying a worker-backed runtime first tombstones its lease and rejects new
 requests, then completes pending requests as shutdown and sends out-of-band
-Stop. The Worker Domain cooperatively cancels bounded work, finalizes SQLite
-statements, closes the connection, removes the session, and returns to
-`Idle`. Only then does domain 0 shut down the Driver and clear the singleton
-slot. Ordinary destroy and replacement never call `Domain.join`; later
-sessions reuse the same Worker Domain.
+Stop. The Worker Domain fails the session Eio switch, structurally cancels
+request and background fibers, waits for switch-owned Eio resources to unwind,
+finalizes SQLite statements, closes the connection, removes the session, and
+returns to `Idle`. Only then does domain 0 shut down the Driver
+and clear the singleton slot. Ordinary destroy and replacement never call
+`Domain.join`; later sessions reuse the same Worker Domain and process-wide
+Eio backend loop.
 
 Controlled tests and embedders may invoke final runtime shutdown. It destroys
 an active runtime if necessary, moves the backend slot to the absorbing
