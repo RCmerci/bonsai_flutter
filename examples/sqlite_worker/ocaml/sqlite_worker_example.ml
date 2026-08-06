@@ -707,10 +707,12 @@ let component client handlers graph =
   Bonsai.Cont.map2 event_subscription view ~f:(fun () view -> view)
 ;;
 
-let app =
+let create_app ~service =
   App.create_with_worker
     ~name:"SQLite Worker Todo"
     ~decode_config:Sqlite_worker_config.decode
-    ~service:Sqlite_worker_service.service
+    ~service
     component
 ;;
+
+let app = create_app ~service:Sqlite_worker_service.service

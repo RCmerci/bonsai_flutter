@@ -90,13 +90,27 @@ make ios-device-native-objects
 
 `tool/ios/toolchain.lock` pins OCaml 5.1.1, opam-cross-ios, target triples,
 deployment settings, and the Jane Street v0.17 release line.
-`vendor/opam-ios/runtime-closure.lock` pins the exact runtime
-closure by source URL and SHA-256 digest. Host PPX executables and generators
-remain native macOS processes; only target metadata and selected target
-runtime components enter the iOS sysroot.
+The application SDK resolves each application's pinned opam metadata and Dune
+libraries into a deterministic closure lock. The lock pins every version,
+source commit or archive, SHA-256 digest, target component, host-only package,
+capability, and target dependency. `vendor/opam-ios/runtime-closure.lock` is
+the checked-in DataScript SQLite fixture result and verification baseline, not
+a fixed union imposed on every application. Host PPX executables and
+generators remain native macOS processes. Their locked descriptions are
+available to Dune's cross context, but only resolved target components enter
+the iOS artifact set.
 
-The SQLite OCaml binding is pinned exactly to `sqlite3` 5.4.0. The target
-closure stages the arm64 iPhoneOS `libsqlite3_stubs.a` binding archive and
+Supported pure OCaml packages using Dune or Topkg are cross-compiled without a
+framework package allowlist entry. Platform-sensitive packages require an
+explicit cross-build recipe in `tool/ios/closure_capabilities.lock` and a
+matching feature. An unsupported capability is rejected during closure
+resolution, before compilation. The SDK cache key includes canonical features,
+the application closure digest, and the toolchain lock digest.
+
+The SQLite OCaml binding is pinned exactly to `sqlite3` 5.4.0. With the
+`sqlite` feature, the resolver also accepts the pinned DataScript native
+SQLite stack and all of its pure OCaml dependencies. The target closure stages
+the arm64 iPhoneOS `libsqlite3_stubs.a` and DataScript stub archives and
 metadata containing `-lsqlite3`; it does not stage a `libsqlite3.a` engine.
 SDK-aware pkg-config metadata selects Apple headers and the system library and
 is audited against Homebrew, `/usr/local`, macOS SDK, loadable-extension, and

@@ -84,6 +84,28 @@ repository-external Apple signing material and an available physical iPhone:
 make ci-ios-device IOS_DEVICE_ID=<physical-device-id>
 ```
 
+The DataScript-specific physical-device slice resolves the fixture
+application's pinned opam metadata and Dune libraries into its own closure
+lock, builds the feature-qualified SDK, signs the application, and launches it
+twice:
+
+```sh
+IOS_DEVICE_ID=<physical-device-id> \
+IOS_DEVELOPMENT_TEAM=<team-id> \
+IOS_DEVELOPMENT_PROFILE_SPECIFIER=<development-profile> \
+IOS_BUNDLE_IDENTIFIER=<unique-bundle-id> \
+tool/ios/test_datascript_worker_device.sh
+```
+
+The first launch opens an app-private database through `Datascript_sqlite`,
+persists one typed fact, closes the Worker runtime, and emits the
+`BONSAI_DATASCRIPT_WORKER_PERSISTED` and
+`BONSAI_DATASCRIPT_WORKER_SHUTDOWN` markers. The second launch must emit
+`BONSAI_DATASCRIPT_WORKER_RESTORED` for the same fact before shutdown. The
+test also requires the host runtime start/dispose markers, an arm64 iPhoneOS
+complete object, system `sqlite3` imports, a valid app signature, and the
+repository bundle audit.
+
 ## Storage and persistence
 
 The Flutter UI isolate resolves the platform Application Support directory,

@@ -233,7 +233,7 @@ require_text \
   "bonsai_flutter_test opam dependencies"
 require_text \
   "$(cat vendor/opam-ios/runtime-closure.lock)" \
-  'sqlite3|5.4.0|target|https://github.com/mmottl/sqlite3-ocaml/releases/download/5.4.0/sqlite3-5.4.0.tbz|f0069532f78ac24f16d79262af01434952d0481f8bf80ae541dff4a56cc4e9ff|sqlite3' \
+  'sqlite3|5.4.0|target-package|System_sqlite|dune|https://github.com/mmottl/sqlite3-ocaml/releases/download/5.4.0/sqlite3-5.4.0.tbz|f0069532f78ac24f16d79262af01434952d0481f8bf80ae541dff4a56cc4e9ff|sqlite3|-' \
   "iOS runtime closure lock"
 require_text \
   "$(cat tool/ios/toolchain.lock)" \
@@ -245,16 +245,19 @@ require_text \
   "iOS Eio toolchain lock"
 require_text \
   "$(cat vendor/opam-ios/runtime-closure.lock)" \
-  'eio_posix|1.2|target|https://github.com/ocaml-multicore/eio/releases/download/v1.2/eio-1.2.tbz|3792e912bd8d494bb2e38f73081825e4d212b1970cf2c1f1b2966caa9fd6bc40|eio_posix' \
+  'eio_posix|1.2|target-package|Filesystem|dune|https://github.com/ocaml-multicore/eio/releases/download/v1.2/eio-1.2.tbz|3792e912bd8d494bb2e38f73081825e4d212b1970cf2c1f1b2966caa9fd6bc40|eio_posix|' \
   "iOS Eio runtime closure lock"
 ios_closure_verifier=$(cat tool/ios/verify_runtime_closure.sh)
 require_text \
   "$ios_closure_verifier" \
-  'closure lock must contain 88 runtime and two target-build packages' \
-  "iOS closure package count"
-require_text "$ios_closure_verifier" '= 128 ||' "iOS closure component count"
-require_text "$ios_closure_verifier" 'sqlite3' "iOS closure findlib roots"
-require_text "$ios_closure_verifier" 'eio_posix' "iOS closure Eio findlib root"
+  'metadata package-count' \
+  "lock-derived iOS closure package count"
+require_text \
+  "$ios_closure_verifier" \
+  'metadata component-count' \
+  "lock-derived iOS closure component count"
+require_text "$ios_closure_verifier" 'System_sqlite)' "iOS SQLite capability gate"
+require_text "$ios_closure_verifier" 'Filesystem)' "iOS filesystem capability gate"
 require_text \
   "$(cat tool/ios/setup_host_dependencies.sh)" \
   'sqlite3.$SQLITE3_VERSION' \
@@ -304,10 +307,10 @@ require_text \
   "$ios_runtime_package_builder" \
   '-lsqlite3' \
   "iOS target system SQLite dependency"
-reject_text \
+require_text \
   "$ios_runtime_package_builder" \
-  'libsqlite3.a' \
-  "iOS target runtime package builder"
+  'test ! -f "$target_package_root/libsqlite3.a"' \
+  "iOS bundled SQLite rejection"
 reject_pattern \
   "$dependency_control_text" \
   'opam[[:space:]]+pin[[:space:]]+add[[:space:]]+(bonsai|incremental|incr_dom)' \

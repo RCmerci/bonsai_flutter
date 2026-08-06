@@ -183,7 +183,7 @@ let sync_host check =
 let sdk_build target features =
   let* framework_root = Assets.find_framework_root () in
   let* features = parse_features features in
-  Sdk.build_from_source ~framework_root ~target ~features
+  Sdk.build_from_source ~framework_root ~project_root:None ~target ~features
 ;;
 
 let sdk_verify target =

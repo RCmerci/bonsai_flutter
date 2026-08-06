@@ -95,12 +95,16 @@ opam-cross-ios recipe and installs an `ios-cc` wrapper carrying the iPhoneOS
 architecture, sysroot, and minimum-version flags. Target objects therefore
 retain `LC_BUILD_VERSION platform IOS` metadata even for package C stubs.
 
-The runtime closure contains 56 runtime source packages and 90 unique findlib
-components, compiler-provided `runtime_events`, `threads`, and `unix`, and one
-target-build package, `jst-config`. It includes exact Eio `1.2` and
-`eio_posix` `1.2`. Host PPX executables remain macOS processes. Focused build
-patches keep configure-time generators and Topkg build tools in the host
-context while target runtime code remains iPhoneOS arm64.
+The target closure is resolved per application from pinned opam metadata and
+Dune library roots. The checked-in DataScript SQLite fixture lock currently
+contains 121 packages: 69 target packages, 51 host-only packages, one
+target-build package, and 106 target findlib components. Those values are
+lock-derived metadata that the verifier recomputes, not fixed policy. The
+fixture includes exact Eio `1.2`, `eio_posix` `1.2`, SQLite `5.4.0`, the pinned
+DataScript native stack, and an extra pure OCaml `astring` root. Host PPX
+executables remain macOS processes. Supported Dune and Topkg pure OCaml
+packages compile generically; platform capabilities require an explicit
+iPhoneOS recipe and feature gate.
 
 All standalone examples and the aggregate integration entrypoint build as 12
 arm64 iPhoneOS complete objects, including separate Mail debug and release

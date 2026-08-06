@@ -2,8 +2,9 @@ module Protocol = Sqlite_worker_protocol
 module Store = Sqlite_worker_store
 module File_demo = Sqlite_worker_file_demo
 
-type state =
+type 'persistence state =
   { store : Store.t
+  ; persistence : 'persistence
   ; startup_started_us : int64
   ; sqlite_open_us : int64
   ; mutable startup_timing_pending : bool
@@ -120,7 +121,12 @@ let read_demo_file context state request =
      | Error error -> Ok (file_failure request (Protocol.File_error error)))
 ;;
 
-let service =
+type 'persistence persistence_probe =
+  { open_ : Sqlite_worker_config.t -> ('persistence, string) result
+  ; close : 'persistence -> unit
+  }
+
+let create_with_persistence_probe persistence_probe =
   Worker.Service.create
     ~push_topic_count:Protocol.Topic.count
     ~concurrency:Worker.Service.Serial
@@ -131,16 +137,27 @@ let service =
       match Store.open_ ~path:config.Sqlite_worker_config.database_path with
       | Error error -> Error (Protocol.error_to_string error)
       | Ok store ->
-        let sqlite_open_us = elapsed_us startup_started_us in
-        Worker.Session_context.emit
-          session
-          ~topic:Protocol.Topic.ready
-          (Protocol.Ready
-             { schema_version = Store.schema_version store
-             ; database_revision = Store.database_revision store
+        (match persistence_probe.open_ config with
+         | Error message ->
+           Store.close store;
+           Error message
+         | Ok persistence ->
+           let sqlite_open_us = elapsed_us startup_started_us in
+           Worker.Session_context.emit
+             session
+             ~topic:Protocol.Topic.ready
+             (Protocol.Ready
+                { schema_version = Store.schema_version store
+                ; database_revision = Store.database_revision store
+                ; sqlite_open_us
+                });
+           Ok
+             { store
+             ; persistence
+             ; startup_started_us
              ; sqlite_open_us
-             });
-        Ok { store; startup_started_us; sqlite_open_us; startup_timing_pending = true })
+             ; startup_timing_pending = true
+             }))
     ~handle:(fun context state request ->
       match request.Protocol.operation with
       | Protocol.List_todos ->
@@ -191,6 +208,13 @@ let service =
       | Write_demo_file { total_bytes } ->
         write_demo_file context state request total_bytes
       | Read_demo_file -> read_demo_file context state request)
-    ~shutdown:(fun state -> Store.close state.store)
+    ~shutdown:(fun state ->
+      Fun.protect
+        ~finally:(fun () -> Store.close state.store)
+        (fun () -> persistence_probe.close state.persistence))
     ()
+;;
+
+let service =
+  create_with_persistence_probe { open_ = (fun _config -> Ok ()); close = (fun () -> ()) }
 ;;

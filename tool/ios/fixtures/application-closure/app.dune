@@ -1,0 +1,34 @@
+(executable
+ (name datascript_fixture)
+ (modules datascript_fixture)
+ (modes
+  (native object))
+ (libraries
+  astring
+  datascript-ocaml-native
+  datascript-ocaml-native.sqlite
+  uutf
+  uunf
+  uucp)
+ (link_flags
+  (:standard -cclib -L%{env:BONSAI_FLUTTER_APPLE_SDK_ROOT=}/usr/lib)))
+
+(executable
+ (name datascript_worker_native_embed)
+ (modules
+  datascript_worker_probe
+  datascript_worker_native_embed)
+ (modes
+  (native object))
+ (libraries
+  bonsai_flutter.spec_impl
+  bonsai_flutter.driver
+  bonsai_flutter.native_backend
+  bonsai_flutter_sqlite_worker_example
+  datascript-ocaml-native
+  datascript-ocaml-native.sqlite
+  uutf
+  uunf
+  uucp)
+ (link_flags
+  (:standard -cclib -L%{env:BONSAI_FLUTTER_APPLE_SDK_ROOT=}/usr/lib)))

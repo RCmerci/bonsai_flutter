@@ -86,10 +86,12 @@ Run the signed physical-device probe with:
 
 The current probe complete object is an arm64 iPhoneOS object measuring
 9,525,848 bytes. The product network complete object is 25,888,424 bytes. The
-locked closure contains 88 runtime packages, two target-build packages, and 128
-unique findlib components. Cross-compilation and native linking pass, and the
-objects contain the Apple `arc4random_buf` entropy entry point but no OpenSSL,
-`libssl`, `libcrypto`, or Secure Transport wrapper symbols.
+application closure is generated from the network example's pinned opam
+metadata and Dune libraries. Package and component counts are recorded as
+lock-derived metadata and recomputed by `verify_runtime_closure.sh`; they are
+not fixed framework constants. Cross-compilation and native linking pass, and
+the objects contain the Apple `arc4random_buf` entropy entry point but no
+OpenSSL, `libssl`, `libcrypto`, or Secure Transport wrapper symbols.
 
 The signed physical-device run completes verified loopback TLS, HTTPS,
 cancellation, WSS echo, disconnect, NSS trust rejection, wrong-host rejection,

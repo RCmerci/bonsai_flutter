@@ -86,6 +86,9 @@ ios-device-native-objects:
 
 ci-contract:
 	tool/test_ci_contract.sh
+	tool/test_ios_application_closure.sh
+	tool/test_ios_closure_lock.sh
+	tool/test_datascript_worker_contract.sh
 
 ci-ocaml:
 	opam install . --deps-only --with-test --yes
@@ -168,6 +171,7 @@ ci-ios-device:
 	@test -n "$(IOS_DEVICE_ID)" || (echo "IOS_DEVICE_ID is required" >&2; exit 1)
 	@tool/ios/run_device_tests.sh "$(IOS_DEVICE_ID)" --debug --profile --release
 	@tool/network_spike/test_ios_device_probe.sh
+	@tool/ios/test_datascript_worker_device.sh
 
 ci-sanitizers:
 	mkdir -p _build/ci

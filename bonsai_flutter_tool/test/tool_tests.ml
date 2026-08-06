@@ -275,6 +275,7 @@ let test_command_plans () =
 let test_feature_validation () =
   let core = [ Config.Feature.Core ] in
   let network = [ Config.Feature.Core; Config.Feature.Network ] in
+  let sqlite = [ Config.Feature.Core; Config.Feature.Sqlite ] in
   Feature.validate_packages
     ~target:Plan.Iphoneos
     ~features:network
@@ -285,8 +286,43 @@ let test_feature_validation () =
   |> check_error_contains "requires the network feature";
   Feature.validate_packages ~target:Plan.Iphoneos ~features:network [ "openssl" ]
   |> check_error_contains "prohibited TLS backend";
-  Feature.validate_packages ~target:Plan.Iphoneos ~features:core [ "unknown-package" ]
-  |> check_error_contains "not available in the iPhoneOS SDK"
+  Feature.validate_packages
+    ~target:Plan.Iphoneos
+    ~features:core
+    [ "mirage-crypto-rng.unix" ]
+  |> check_error_contains "requires the network feature for entropy";
+  Feature.validate_packages ~target:Plan.Iphoneos ~features:core [ "eio_posix" ]
+  |> get_ok
+  |> ignore;
+  Feature.validate_packages
+    ~target:Plan.Iphoneos
+    ~features:core
+    [ "datascript-ocaml-native.sqlite" ]
+  |> check_error_contains "requires the sqlite feature";
+  Feature.validate_packages
+    ~target:Plan.Iphoneos
+    ~features:sqlite
+    [ "datascript-ocaml-native"
+    ; "datascript-ocaml-native.sqlite"
+    ; "datascript_ocaml"
+    ; "persistent_sorted_set_ocaml"
+    ; "melange-transit-native"
+    ; "melange-transit-core"
+    ; "melange-edn-native"
+    ; "melange-edn-core"
+    ; "sqlite3"
+    ; "uutf"
+    ; "uunf"
+    ; "uucp"
+    ]
+  |> get_ok
+  |> ignore;
+  Feature.validate_packages
+    ~target:Plan.Iphoneos
+    ~features:core
+    [ "astring"; "bigstringaf"; "cstruct"; "ptime" ]
+  |> get_ok
+  |> ignore
 ;;
 
 let test_cache_keys () =

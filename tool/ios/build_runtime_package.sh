@@ -8,7 +8,8 @@ repository_root=$(CDPATH= cd -- "$script_directory/../.." && pwd)
 # shellcheck source=tool/ios/toolchain.lock
 . "$script_directory/toolchain.lock"
 
-closure_lock="$repository_root/vendor/opam-ios/runtime-closure.lock"
+RUNTIME_CLOSURE_LOCK=${RUNTIME_CLOSURE_LOCK:-"$repository_root/vendor/opam-ios/runtime-closure.lock"}
+closure_lock=$RUNTIME_CLOSURE_LOCK
 opam_root="$repository_root/_build/ios/opam-root"
 switch_root="$repository_root/_build/ios/switches"
 package_root="$repository_root/_build/ios/packages"
@@ -80,26 +81,56 @@ IFS=$old_ifs
 package_name=$1
 package_version=$2
 package_role=$3
-source_url=$4
-source_sha256=$5
-package_components=$6
+package_capability=$4
+package_build_mechanism=$5
+source_url=$6
+source_sha256=$7
+package_components=$8
+package_dependencies=$9
 
 test "$package_name" = "$requested_package" ||
   fail "resolved the wrong package row"
 case "$package_role" in
-  target | dual | target-build) ;;
+  target-package | target-build) ;;
   *) fail "invalid package role for $package_name: $package_role" ;;
 esac
 
-work_root="$package_root/$target/$package_name/$package_version/recipe-$IOS_RUNTIME_RECIPE_REVISION"
+work_root="$package_root/$target/$package_name/$package_version/$source_sha256/recipe-$IOS_RUNTIME_RECIPE_REVISION"
 source_archive="$work_root/source.archive"
 partial_archive="$work_root/source.archive.partial"
 source_directory="$work_root/source"
 source_marker="$work_root/source.prepared"
 build_directory="$work_root/build"
-target_lib="$switch/_opam/ios-sysroot/lib"
-
+baseline_target_lib="$switch/_opam/ios-sysroot/lib"
+standard_target_lib="$baseline_target_lib/ocaml"
+target_lib=${TARGET_LIB:-$baseline_target_lib}
+target_prefix=$(dirname -- "$target_lib")
+findlib_conf="$work_root/findlib.conf"
 mkdir -p "$work_root"
+if test "$target_lib" != "$baseline_target_lib"; then
+  test -f "$baseline_target_lib/seq/META" ||
+    fail "iPhoneOS seq compatibility metadata is missing"
+  mkdir -p "$target_lib/seq"
+  cp -f "$baseline_target_lib/seq/META" "$target_lib/seq/META"
+fi
+{
+  cat "$switch/_opam/lib/findlib.conf"
+  awk \
+    -v target_lib="$target_lib" \
+    -v standard_target_lib="$standard_target_lib" '
+      /^path\(ios\)/ {
+        printf "path(ios) = \"%s:%s\"\n", target_lib, standard_target_lib
+        next
+      }
+      /^destdir\(ios\)/ {
+        printf "destdir(ios) = \"%s\"\n", target_lib
+        next
+      }
+      { print }
+    ' "$switch/_opam/lib/findlib.conf.d/ios.conf"
+} >"$findlib_conf"
+export OCAMLFIND_CONF="$findlib_conf"
+unset OCAMLPATH
 
 if test ! -f "$source_archive"; then
   rm -f "$partial_archive"
@@ -142,6 +173,53 @@ if test ! -f "$source_marker"; then
       <"$repository_root/vendor/patches/ios/jst-config-host-discover.patch"
   fi
   : >"$source_marker"
+fi
+
+detect_build_mechanism() {
+  if test -f "$source_directory/dune-project"; then
+    printf '%s\n' dune
+  elif test -f "$source_directory/pkg/pkg.ml"; then
+    printf '%s\n' topkg
+  else
+    printf '%s\n' unsupported
+  fi
+}
+
+detected_build_mechanism=$(detect_build_mechanism)
+if test "$package_name" != gmp-sys-ios && \
+   test "$detected_build_mechanism" != "$package_build_mechanism"; then
+  fail "$package_name uses unsupported capability build-system; required cross-build recipe: expected $package_build_mechanism, detected $detected_build_mechanism"
+fi
+if test "$package_capability" = Pure_ocaml; then
+  rm -f "$work_root/foreign-stubs"
+  printf '%s\n' "$package_components" | tr ',' '\n' |
+    while IFS= read -r component; do
+      archives=$(
+        OPAMROOT="$opam_root" opam exec --switch="$switch" -- \
+          ocamlfind query -predicates native -a-format "$component" 2>/dev/null || true
+      )
+      for archive in $archives; do
+        test -f "$archive" || continue
+        if OPAMROOT="$opam_root" opam exec --switch="$switch" -- \
+          ocamlobjinfo "$archive" 2>/dev/null |
+          grep -E '^Extra C object files:[[:space:]]+[^[:space:]]' >/dev/null; then
+          printf '%s\n' foreign >"$work_root/foreign-stubs"
+        fi
+      done
+    done
+  printf '%s\n' "$package_components" | tr ',' '\n' |
+    while IFS= read -r component; do
+      rg --files-with-matches --fixed-strings "(public_name $component)" \
+        "$source_directory" --glob dune |
+        while IFS= read -r component_dune; do
+          if rg '\(foreign_stubs|\(foreign_archives|\(c_library_flags|ctypes|cargo|rustc' \
+            "$component_dune" >/dev/null; then
+            printf '%s\n' foreign >"$work_root/foreign-stubs"
+          fi
+        done
+    done
+  test ! -f "$work_root/foreign-stubs" ||
+    fail "$package_name uses unsupported capability foreign_stubs; required cross-build recipe: add an explicit capability recipe"
 fi
 
 if test "$package_name" = jst-config; then
@@ -377,16 +455,32 @@ if test "$package_name" = zarith; then
   exit 0
 fi
 
-case "$package_name" in
-  fmt | hmap | mtime | logs | ptime)
+case "$package_build_mechanism" in
+  topkg)
     require_command opam-installer
     topkg_build_directory="$source_directory/_build-ios"
+    topkg_driver="$source_directory/pkg/pkg-ios.ml"
+    grep -E '^#use "topfind";*$' "$source_directory/pkg/pkg.ml" >/dev/null ||
+      fail "$package_name has an unsupported Topkg driver; required cross-build recipe: load host Topkg explicitly"
+    grep -E '^#require "topkg";*$' "$source_directory/pkg/pkg.ml" >/dev/null ||
+      fail "$package_name has an unsupported Topkg driver; required cross-build recipe: load host Topkg explicitly"
+    sed '/^#use "topfind";*$/d; /^#require "topkg";*$/d' \
+      "$source_directory/pkg/pkg.ml" >"$topkg_driver"
     topkg_arguments=
     if test "$package_name" = fmt; then
       topkg_arguments="--with-base-unix false --with-cmdliner false"
     fi
     if test "$package_name" = logs; then
       topkg_arguments="--with-base-threads false --with-cmdliner false --with-fmt false --with-js_of_ocaml-compiler false --with-lwt false"
+    fi
+    if test "$package_name" = uucp; then
+      topkg_arguments="--with-uunf false --with-cmdliner false"
+    fi
+    if test "$package_name" = uunf; then
+      topkg_arguments="--with-uutf false --with-cmdliner false"
+    fi
+    if test "$package_name" = uutf; then
+      topkg_arguments="--with-cmdliner false"
     fi
     (
       cd "$source_directory"
@@ -395,7 +489,9 @@ case "$package_name" in
         VER="$IOS_DEPLOYMENT_TARGET" \
         opam exec --switch="$switch" -- \
         ocaml \
-          pkg/pkg.ml \
+          -I "$host_lib/topkg" \
+          "$host_lib/topkg/topkg.cma" \
+          pkg/pkg-ios.ml \
           build \
           --build-dir _build-ios \
           --debug false \
@@ -419,7 +515,7 @@ case "$package_name" in
       esac
       opam-installer \
         --name "$package_name" \
-        --prefix "$switch/_opam/ios-sysroot" \
+        --prefix "$target_prefix" \
         --libdir "$target_lib" \
         "$install_manifest"
     )
@@ -540,9 +636,22 @@ if test "$package_name" = domain-local-await; then
   exit 0
 fi
 
-printf '%s\n' "$package_components" |
-  tr ',' '\n' |
+component_order_file="$work_root/components.ordered"
+: >"$component_order_file.unsorted"
+printf '%s\n' "$package_components" | tr ',' '\n' |
   while IFS= read -r component; do
+    component_archives=$(
+      OPAMROOT="$opam_root" \
+        opam exec --switch="$switch" -- \
+        ocamlfind query -predicates=native -format '%a' "$component"
+    )
+    if test -n "$component_archives"; then priority=0; else priority=1; fi
+    printf '%s|%s\n' "$priority" "$component"
+  done >"$component_order_file.unsorted"
+sort -t '|' -k1,1 -k2,2 "$component_order_file.unsorted" |
+  sed 's/^[^|]*|//' >"$component_order_file"
+
+while IFS= read -r component; do
     component_query=$(
       OPAMROOT="$opam_root" \
         opam exec --switch="$switch" -- \
@@ -579,11 +688,71 @@ printf '%s\n' "$package_components" |
       done
 
     if test -z "$component_archives"; then
+      dune_file=$(
+        rg \
+          --files-with-matches \
+          --fixed-strings \
+          "(public_name $component)" \
+          "$source_directory" \
+          --glob dune |
+          sed -n '1p'
+      )
+      test -n "$dune_file" ||
+        fail "could not locate the virtual Dune library for $component"
+      source_component_directory=$(dirname -- "$dune_file")
+      source_component_relative=${source_component_directory#"$source_directory/"}
+      if test "$source_component_relative" = "$source_component_directory"; then
+        source_component_relative=.
+      fi
+      dune_name=$(sed -n 's/^[[:space:]]*(name[[:space:]]\([^ )]*\)).*/\1/p' "$dune_file" | sed -n '1p')
+      test -n "$dune_name" ||
+        fail "could not resolve the Dune name for virtual component $component"
+      build_component_directory="$build_directory/default.ios/$source_component_relative"
+      object_directory="$build_component_directory/.$dune_name.objs"
+      if test "$source_component_relative" = .; then
+        virtual_target_prefix=".$dune_name.objs"
+      else
+        virtual_target_prefix="$source_component_relative/.$dune_name.objs"
+      fi
+      OPAMROOT="$opam_root" \
+        SDK="$sdk_version" \
+        VER="$IOS_DEPLOYMENT_TARGET" \
+        opam exec --switch="$switch" -- \
+        dune build \
+          --root="$source_directory" \
+          --build-dir="$build_directory" \
+          --profile=release \
+          -j "${JOBS:-4}" \
+          -x ios \
+          "$virtual_target_prefix/byte/$dune_name.cmi" \
+          "$virtual_target_prefix/native/$dune_name.cmx"
       find "$component_host_directory" \
         -maxdepth 1 \
         \( -type f -o -type l \) \
         \( -name '*.ml' -o -name '*.mli' \) \
         -exec cp -f {} "$target_component_directory/" \;
+      for object_mode in byte native; do
+        test -d "$object_directory/$object_mode" || continue
+        find "$object_directory/$object_mode" \
+          -maxdepth 1 \
+          -type f \
+          \( \
+            -name '*.cmi' -o \
+            -name '*.cmt' -o \
+            -name '*.cmti' -o \
+            -name '*.cmx' -o \
+            -name '*.o' \
+          \) \
+          -exec cp -f {} "$target_component_directory/" \;
+      done
+      find "$build_component_directory" \
+        -maxdepth 1 \
+        -type f \
+        \( -name '*.ml' -o -name '*.mli' -o -name '*.ml-gen' \) \
+        -exec cp -f {} "$target_component_directory/" \;
+      find "$target_component_directory" -maxdepth 1 -type f -name '*.cmi' |
+        grep . >/dev/null ||
+        fail "virtual component $component has no target interface artifacts"
       continue
     fi
 
@@ -667,7 +836,7 @@ printf '%s\n' "$package_components" |
         for extra_c_object in $extra_c_objects; do
           case "$extra_c_object" in
             -lsqlite3)
-              test "$package_name" = sqlite3 ||
+              test "$package_capability" = System_sqlite ||
                 fail "$component unexpectedly depends on system SQLite"
               ;;
             -L*)
@@ -753,22 +922,59 @@ printf '%s\n' "$package_components" |
       ocamlfind -toolchain ios query -predicates=native "$component" \
       >/dev/null ||
       fail "staged component is not visible to findlib: $component"
-  done
+done <"$component_order_file"
 
-if test "$package_name" = sqlite3; then
-  test -f "$target_package_root/libsqlite3_stubs.a" ||
-    fail "sqlite3 target stubs archive is missing"
-  bundled_sqlite_archive="lib${package_name}.a"
-  test ! -f "$target_package_root/$bundled_sqlite_archive" ||
-    fail "a bundled SQLite implementation was staged"
-  sqlite_link_metadata=$(
-    OPAMROOT="$opam_root" \
-      opam exec --switch="$switch" -- \
-      ocamlobjinfo "$target_package_root/sqlite3.cmxa"
-  )
-  printf '%s\n' "$sqlite_link_metadata" |
-    grep -F -- '-lsqlite3_stubs -lsqlite3' >/dev/null ||
-    fail "sqlite3 target archive lost its external system link requirement"
+# Dune implementation packages install the public interfaces and native
+# metadata of their virtual library beside the implementation archive. Use
+# the host installation only as the expected filename inventory; every copied
+# artifact must come from this package's iPhoneOS build directory.
+if find "$target_package_root" -maxdepth 1 -type f -name '*.cmxa' | grep . >/dev/null; then
+  find "$host_package_root" \
+    -maxdepth 1 \
+    -type f \
+    \( -name '*.cmi' -o -name '*.cmt' -o -name '*.cmti' -o -name '*.cmx' \) |
+    while IFS= read -r host_metadata_artifact; do
+      artifact_name=${host_metadata_artifact##*/}
+      test ! -f "$target_package_root/$artifact_name" || continue
+      target_candidates="$work_root/$artifact_name.target-candidates"
+      find "$build_directory/default.ios" -type f -name "$artifact_name" \
+        >"$target_candidates"
+      candidate_count=$(wc -l <"$target_candidates" | tr -d ' ')
+      if test "$candidate_count" -eq 0; then
+        case "$artifact_name" in
+          *.cmt | *.cmti) continue ;;
+          *) fail "$package_name cannot resolve a target build artifact for $artifact_name" ;;
+        esac
+      fi
+      candidate_digest_count=$(
+        while IFS= read -r target_candidate; do
+          shasum -a 256 "$target_candidate" | awk '{ print $1 }'
+        done <"$target_candidates" | sort -u | wc -l | tr -d ' '
+      )
+      test "$candidate_digest_count" -eq 1 ||
+        fail "$package_name has conflicting target build artifacts for $artifact_name"
+      target_candidate=$(sed -n '1p' "$target_candidates")
+      cp -f "$target_candidate" "$target_package_root/$artifact_name"
+    done
+fi
+
+if test "$package_capability" = System_sqlite; then
+  sqlite_link_found=false
+  find "$target_package_root" -type f -name '*.cmxa' -print |
+    while IFS= read -r sqlite_archive; do
+      if OPAMROOT="$opam_root" opam exec --switch="$switch" -- \
+        ocamlobjinfo "$sqlite_archive" | grep -F -- '-lsqlite3' >/dev/null; then
+        printf '%s\n' "$sqlite_archive" >"$work_root/system-sqlite-link"
+      fi
+    done
+  test -f "$work_root/system-sqlite-link" ||
+    fail "$package_name target archive lost its external system -lsqlite3 requirement"
+  if test "$package_name" = sqlite3; then
+    test -f "$target_package_root/libsqlite3_stubs.a" ||
+      fail "sqlite3 target stubs archive is missing"
+    test ! -f "$target_package_root/libsqlite3.a" ||
+      fail "a bundled SQLite implementation was staged"
+  fi
 fi
 
 representative_object=$(

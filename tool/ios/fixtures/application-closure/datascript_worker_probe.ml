@@ -1,0 +1,72 @@
+open Datascript
+
+type t = Datascript_sqlite.session
+
+let indexed_string =
+  { cardinality = One
+  ; unique = Some Identity
+  ; indexed = true
+  ; is_component = false
+  ; no_history = false
+  ; doc = None
+  ; value_type = Some StringType
+  ; tuple_attrs = None
+  ; tuple_types = None
+  }
+;;
+
+let fact_id = "physical-iphone-worker"
+let fact_value = "typed-datascript-worker-fact"
+
+let marker value =
+  Printf.printf "%s\n%!" value;
+  prerr_endline value
+;;
+
+let require condition message = if not condition then failwith message
+
+let validate_fact db =
+  let entity =
+    match entity db (Lookup_ref ("fact/id", String fact_id)) with
+    | Some entity -> entity
+    | None -> failwith "expected the persisted DataScript Worker fact"
+  in
+  require
+    (entity_attr entity "fact/value" = Some (One_value (String fact_value)))
+    "restored DataScript Worker fact does not match"
+;;
+
+let open_ (config : Sqlite_worker_config.t) =
+  let path =
+    Filename.concat config.application_support_directory "datascript-worker-probe.sqlite3"
+  in
+  try
+    let session = Datascript_sqlite.open_session path in
+    let storage = Datascript_sqlite.storage session in
+    (match Datascript.restore storage with
+     | Some db ->
+       validate_fact db;
+       marker "BONSAI_DATASCRIPT_WORKER_RESTORED"
+     | None ->
+       let db = empty_db ~schema:[ "fact/id", indexed_string ] ~storage () in
+       let report =
+         transact
+           db
+           [ Add (Temp_id fact_id, "fact/id", String fact_id)
+           ; Add (Temp_id fact_id, "fact/value", String fact_value)
+           ]
+       in
+       Datascript.store ~storage report.db_after;
+       validate_fact report.db_after;
+       marker "BONSAI_DATASCRIPT_WORKER_PERSISTED");
+    Ok session
+  with
+  | exn -> Error ("DataScript Worker probe failed: " ^ Printexc.to_string exn)
+;;
+
+let close session =
+  Datascript_sqlite.close session;
+  marker "BONSAI_DATASCRIPT_WORKER_SHUTDOWN"
+;;
+
+let persistence_probe : t Sqlite_worker_service.persistence_probe = { open_; close }

@@ -218,13 +218,14 @@ replacement for the application's Dune dependencies.
 
 ### `core`
 
-The implicit `core` profile contains the pinned OCaml, Bonsai, Eio, and Bonsai
-Flutter runtime closure required by every application.
+The implicit `core` profile enables the pinned OCaml, Bonsai, Eio, and Bonsai
+Flutter platform recipes. The actual target closure is computed from each
+application's pinned opam metadata and Dune libraries.
 
 ### `network`
 
-The `network` profile makes the validated pure-OCaml TLS, HTTPS, and WSS
-packages available to target builds, including:
+The `network` profile authorizes validated iPhoneOS recipes when an
+application's resolved closure includes TLS, HTTPS, or WSS packages, including:
 
 - `tls` and `tls-eio`;
 - `ca-certs-nss` and `x509`;
@@ -239,22 +240,27 @@ in the application OCaml modules.
 
 ### `sqlite`
 
-The `sqlite` profile makes the OCaml SQLite package available and requests the
-Apple system `libsqlite3` link flag from the Native Assets hook.
+The `sqlite` profile authorizes the `sqlite3` and DataScript native SQLite C
+stubs and requests the Apple system `libsqlite3` link flag from the Native
+Assets hook. It does not add either package unless the application closure
+requires it.
 
 ### Profile validation
 
-The CLI must fail early when application dependencies require a capability not
-present in the selected profile. It must also reject packages that are not in a
-validated target closure:
+The CLI fails during closure resolution when application dependencies require
+a capability not present in the selected profile. Pure OCaml libraries using a
+supported Dune or Topkg build mechanism are accepted without a package
+allowlist. A package that requires an unregistered platform recipe fails before
+compilation:
 
 ```text
-Package foo is not available in the iPhoneOS SDK.
-Supported feature profiles: core, network, sqlite.
+Package foo uses unsupported capability foreign stubs.
+Required cross-build recipe: add an explicit entry to closure_capabilities.lock.
 ```
 
-The first version may use an explicit package-to-feature map rather than trying
-to infer all semantics from Dune metadata.
+The generated lock separates host-only PPX executables and generators from
+target libraries. Its digest, canonical selected features, and the toolchain
+lock digest form the SDK cache identity.
 
 ## Command-line interface
 

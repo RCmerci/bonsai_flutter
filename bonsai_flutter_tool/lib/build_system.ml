@@ -66,6 +66,7 @@ let build_iphoneos ~framework_root ~project_root ~config ~profile =
   let* () =
     Sdk.build_from_source
       ~framework_root
+      ~project_root:(Some project_root)
       ~target:Plan.Iphoneos
       ~features:config.Config.features
   in
@@ -87,6 +88,7 @@ let build_iphoneos ~framework_root ~project_root ~config ~profile =
     in
     let opam_root = Filename.concat framework_root "_build/ios/opam-root" in
     let switch = Filename.concat framework_root "_build/ios/switches/iphoneos" in
+    let* findlib_conf = Sdk.application_findlib_conf ~framework_root ~project_root in
     let build_directory = Filename.concat framework_root ("_build/ios/external/" ^ key) in
     Scaffold.ensure_directory (Filename.dirname build_directory);
     let external_target =
@@ -110,6 +112,7 @@ let build_iphoneos ~framework_root ~project_root ~config ~profile =
       ; working_directory = framework_root
       ; environment =
           [ "OPAMROOT", opam_root
+          ; "OCAMLFIND_CONF", findlib_conf
           ; "BUILD_PATH_PREFIX_MAP", project_root ^ "=."
           ; "BONSAI_FLUTTER_APPLE_SDK_ROOT", sdk_root
           ; "SDK", sdk_version

@@ -15,8 +15,7 @@ fail() {
 
 expected_version=15.0
 legacy_major=13
-legacy_version="$legacy_major.0"
-legacy_version_pattern="$legacy_major[.]0"
+legacy_version_pattern="iOS[[:space:]-]?$legacy_major|ios$legacy_major|IPHONEOS_DEPLOYMENT_TARGET[[:space:]=:\"']*$legacy_major[.]0|ios_deployment_target[[:space:]=:\"']*$legacy_major[.]0|arm64-apple-ios$legacy_major[.]0|miphoneos-version-min=$legacy_major[.]0"
 
 test "$IOS_DEPLOYMENT_TARGET" = "$expected_version" ||
   fail "toolchain target is $IOS_DEPLOYMENT_TARGET, expected $expected_version"
@@ -101,7 +100,7 @@ legacy_hits=$(
     --glob '!_build/**' \
     --glob '!.git/**' \
     --glob '!tool/test_ios_deployment_target_contract.sh' \
-    "$legacy_version_pattern|iOS[[:space:]-]?$legacy_major|ios$legacy_major" \
+    "$legacy_version_pattern" \
     "$repository_root" || true
 )
 test -z "$legacy_hits" ||
