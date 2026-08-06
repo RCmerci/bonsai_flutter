@@ -298,25 +298,13 @@ let test_feature_validation () =
     ~target:Plan.Iphoneos
     ~features:core
     [ "datascript-ocaml-native.sqlite" ]
-  |> check_error_contains "requires the sqlite feature";
-  Feature.validate_packages
-    ~target:Plan.Iphoneos
-    ~features:sqlite
-    [ "datascript-ocaml-native"
-    ; "datascript-ocaml-native.sqlite"
-    ; "datascript_ocaml"
-    ; "persistent_sorted_set_ocaml"
-    ; "melange-transit-native"
-    ; "melange-transit-core"
-    ; "melange-edn-native"
-    ; "melange-edn-core"
-    ; "sqlite3"
-    ; "uutf"
-    ; "uunf"
-    ; "uucp"
-    ]
   |> get_ok
   |> ignore;
+  Feature.validate_packages ~target:Plan.Iphoneos ~features:sqlite [ "sqlite3" ]
+  |> get_ok
+  |> ignore;
+  Feature.validate_packages ~target:Plan.Iphoneos ~features:core [ "sqlite3" ]
+  |> check_error_contains "requires the sqlite feature";
   Feature.validate_packages
     ~target:Plan.Iphoneos
     ~features:core

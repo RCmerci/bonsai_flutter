@@ -37,17 +37,19 @@ archives, plugins, objects, and executables are not staged.
 Packages detected as pure OCaml and built by the supported Dune or Topkg
 mechanisms do not need a package allowlist entry. Packages with C or Rust
 stubs, networking, entropy, filesystem behavior, system libraries, or another
-platform capability must have an explicit entry in
-`tool/ios/closure_capabilities.lock`. Resolution fails before compilation with
-the package, unsupported capability, and required cross-build recipe when no
-safe recipe exists.
+platform capability must match a supported artifact-derived capability or an
+explicit entry in `tool/ios/closure_capabilities.lock`. Resolution fails before
+compilation with the package, unsupported capability, and required cross-build
+recipe when no safe recipe exists.
 
-The `sqlite` feature gates both `sqlite3` and
-`datascript-ocaml-native.sqlite`. The reference lock pins the unchanged
-DataScript source at commit
+The resolver discovers system SQLite use from the selected native archives'
+`-lsqlite3` linker dependency and gates every matching package with the
+`sqlite` feature. This rule is independent of package names. The reference
+application metadata and generated closure lock pin the unchanged DataScript
+source at commit
 `b1029d6a7210baae15aa2189293bd126b746bad4`, plus the exact persistent sorted
-set, Melange EDN, and Melange Transit commits recorded in the lock and
-`tool/ios/toolchain.lock`.
+set, Melange EDN, and Melange Transit commits. The framework toolchain lock and
+host dependency setup contain no DataScript sources or package list.
 
 The host and target use OCaml 5.1.1 and the same Jane Street v0.17.x release
 line. Host executables are never copied into the iOS sysroot or executed as

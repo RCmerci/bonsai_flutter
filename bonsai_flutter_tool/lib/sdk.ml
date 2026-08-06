@@ -99,7 +99,7 @@ let verify_lock ~framework_root ~lock ~features ~target_lib =
     [ "--lock"; lock; "--features"; features_string features; "--target-lib"; target_lib ]
 ;;
 
-let verify ~framework_root ~target =
+let verify ~framework_root ~project_root ~features ~target =
   match target with
   | Plan.Macos -> Ok ()
   | Plan.Iphoneos ->
@@ -109,15 +109,13 @@ let verify ~framework_root ~target =
       Error
         "The iPhoneOS SDK is not cached. Run: bonsai-flutter sdk build-from-source \
          --target iphoneos"
-    else
-      command
-        ~framework_root
-        ~environment:[ "HOST_OCAML_SWITCH", switch ]
-        "tool/ios/verify_runtime_closure.sh"
-        [ "--check-lock-only"
-        ; "--lock"
-        ; Filename.concat framework_root "vendor/opam-ios/runtime-closure.lock"
-        ]
+    else (
+      let lock = closure_lock_path project_root in
+      if not (Sys.file_exists lock)
+      then Error "The application iPhoneOS closure lock is missing; build its SDK first"
+      else
+        let* target_lib = application_target_lib ~framework_root ~project_root in
+        verify_lock ~framework_root ~lock ~features ~target_lib)
 ;;
 
 let resolve_application_lock
@@ -207,19 +205,9 @@ let build_from_source ~framework_root ~project_root ~target ~features =
   | Plan.Iphoneos, Some project_root ->
     build_application_sdk ~framework_root ~project_root ~features
   | Plan.Iphoneos, None ->
-    let steps =
-      [ "tool/ios/setup_toolchain.sh", [ "iphoneos" ]
-      ; "tool/ios/setup_host_dependencies.sh", [ "iphoneos" ]
-      ; "tool/ios/build_runtime_closure.sh", [ "iphoneos" ]
-      ]
-    in
-    List.fold_left
-      (fun result (program, arguments) ->
-         match result with
-         | Error _ -> result
-         | Ok () -> command ~framework_root program arguments)
-      (Ok ())
-      steps
+    Error
+      "An iPhoneOS SDK build requires an application project root with pinned opam \
+       metadata"
 ;;
 
 let fetch ~target:_ ~features:_ =

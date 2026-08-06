@@ -1,6 +1,5 @@
 # package-or-component|capability|required-feature|cross-build-recipe
 sqlite3|System_sqlite|sqlite|dune-ios-system-sqlite
-datascript-ocaml-native.sqlite|System_sqlite|sqlite|dune-ios-system-sqlite
 tls|Network|network|dune-ios-network
 tls-eio|Network|network|dune-ios-network
 ca-certs-nss|Network|network|dune-ios-network

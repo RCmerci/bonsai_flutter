@@ -34,9 +34,6 @@ switch_path() {
 
 pin_application_dependencies() {
   switch=$1
-  test -n "$APPLICATION_OPAM_FILE" || return 0
-  test -f "$APPLICATION_OPAM_FILE" ||
-    fail "APPLICATION_OPAM_FILE does not exist: $APPLICATION_OPAM_FILE"
 
   # Application pin-depends is the authority for source identities. Ignore
   # pin-depends advertised by those sources so an upstream development branch
@@ -66,35 +63,8 @@ has_feature() {
   esac
 }
 
-pin_locked_datascript_dependencies() {
-  switch=$1
-  has_feature sqlite || return 0
-  test -n "$APPLICATION_OPAM_FILE" && return 0
-
-  opam_command pin add --switch="$switch" --no-action --ignore-pin-depends --yes \
-    "datascript_ocaml.$DATASCRIPT_OCAML_VERSION" \
-    "git+https://github.com/logseq/datascript-ocaml.git#$DATASCRIPT_OCAML_COMMIT"
-  opam_command pin add --switch="$switch" --no-action --ignore-pin-depends --yes \
-    "datascript-ocaml-native.$DATASCRIPT_OCAML_VERSION" \
-    "git+https://github.com/logseq/datascript-ocaml.git#$DATASCRIPT_OCAML_COMMIT"
-  opam_command pin add --switch="$switch" --no-action --ignore-pin-depends --yes \
-    "persistent_sorted_set_ocaml.$PERSISTENT_SORTED_SET_VERSION" \
-    "git+https://github.com/logseq/persistent-sorted-set-ocaml.git#$PERSISTENT_SORTED_SET_COMMIT"
-  for package in melange-edn-core melange-edn-native; do
-    opam_command pin add --switch="$switch" --no-action --ignore-pin-depends --yes \
-      "$package.$MELANGE_EDN_VERSION" \
-      "git+https://github.com/RCmerci/melange-edn.git#$MELANGE_EDN_COMMIT"
-  done
-  for package in melange-transit-core melange-transit-native; do
-    opam_command pin add --switch="$switch" --no-action --ignore-pin-depends --yes \
-      "$package.$MELANGE_TRANSIT_VERSION" \
-      "git+https://github.com/RCmerci/melange-transit.git#$MELANGE_TRANSIT_COMMIT"
-  done
-}
-
 install_application_dependencies() {
   switch=$1
-  test -n "$APPLICATION_OPAM_FILE" || return 0
   opam_command install \
     --switch="$switch" \
     --deps-only \
@@ -109,7 +79,6 @@ install_for_switch() {
   test -x "$switch/_opam/bin/ocamlc" ||
     fail "missing $logical_name switch; run tool/ios/setup_toolchain.sh first"
 
-  pin_locked_datascript_dependencies "$switch"
   pin_application_dependencies "$switch"
 
   opam_command install \
@@ -155,33 +124,6 @@ install_for_switch() {
       --yes
   fi
 
-  if has_feature sqlite; then
-    opam_command install \
-      --switch="$switch" \
-      "sqlite3.$SQLITE3_VERSION" \
-      "melange.$MELANGE_VERSION" \
-      "datascript_ocaml.$DATASCRIPT_OCAML_VERSION" \
-      "datascript-ocaml-native.$DATASCRIPT_OCAML_VERSION" \
-      "persistent_sorted_set_ocaml.$PERSISTENT_SORTED_SET_VERSION" \
-      "melange-edn-core.$MELANGE_EDN_VERSION" \
-      "melange-edn-native.$MELANGE_EDN_VERSION" \
-      "melange-transit-core.$MELANGE_TRANSIT_VERSION" \
-      "melange-transit-native.$MELANGE_TRANSIT_VERSION" \
-      --assume-depexts \
-      --yes
-
-    if test -z "$APPLICATION_OPAM_FILE"; then
-      opam_command install \
-        --switch="$switch" \
-        "uutf.$UUTF_VERSION" \
-        "uunf.$UUNF_VERSION" \
-        "uucp.$UUCP_VERSION" \
-        "yojson.$YOJSON_VERSION" \
-        --assume-depexts \
-        --yes
-    fi
-  fi
-
   install_application_dependencies "$switch"
 
   if test "${SKIP_CLOSURE_VERIFY:-false}" != true; then
@@ -199,6 +141,9 @@ install_for_switch() {
 }
 
 require_command opam
+test -n "$APPLICATION_OPAM_FILE" || fail "APPLICATION_OPAM_FILE is required"
+test -f "$APPLICATION_OPAM_FILE" ||
+  fail "APPLICATION_OPAM_FILE does not exist: $APPLICATION_OPAM_FILE"
 
 requested_target=${1:-all}
 case "$requested_target" in

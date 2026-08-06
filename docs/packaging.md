@@ -102,16 +102,19 @@ the iOS artifact set.
 
 Supported pure OCaml packages using Dune or Topkg are cross-compiled without a
 framework package allowlist entry. Platform-sensitive packages require an
-explicit cross-build recipe in `tool/ios/closure_capabilities.lock` and a
-matching feature. An unsupported capability is rejected during closure
-resolution, before compilation. The SDK cache key includes canonical features,
-the application closure digest, and the toolchain lock digest.
+artifact-derived supported recipe or an explicit recipe in
+`tool/ios/closure_capabilities.lock`, plus a matching feature. An unsupported
+capability is rejected during closure resolution, before compilation. The SDK
+cache key includes canonical features, the application closure digest, and the
+toolchain lock digest.
 
-The SQLite OCaml binding is pinned exactly to `sqlite3` 5.4.0. With the
-`sqlite` feature, the resolver also accepts the pinned DataScript native
-SQLite stack and all of its pure OCaml dependencies. The target closure stages
-the arm64 iPhoneOS `libsqlite3_stubs.a` and DataScript stub archives and
-metadata containing `-lsqlite3`; it does not stage a `libsqlite3.a` engine.
+The reference application's metadata pins the SQLite OCaml binding exactly to
+`sqlite3` 5.4.0 and pins its DataScript stack independently of the framework.
+The resolver recognizes `-lsqlite3` in any selected native archive as the
+`System_sqlite` capability and requires the `sqlite` feature without checking
+the package name. The target closure stages the arm64 iPhoneOS
+`libsqlite3_stubs.a` and application-selected stub archives and metadata
+containing `-lsqlite3`; it does not stage a `libsqlite3.a` engine.
 SDK-aware pkg-config metadata selects Apple headers and the system library and
 is audited against Homebrew, `/usr/local`, macOS SDK, loadable-extension, and
 bundled-engine leakage.

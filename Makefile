@@ -20,6 +20,8 @@ NATIVE_OBJECT_TARGETS = \
 	examples/sqlite_worker/ocaml/native_embed.exe.o \
 	examples/text_input/ocaml/native_embed.exe.o \
 	examples/todo/ocaml/native_embed.exe.o
+IOS_REFERENCE_OPAM = $(CURDIR)/tool/ios/fixtures/application-closure/bonsai_flutter_ios_closure_fixture.opam
+IOS_REFERENCE_CLOSURE = $(CURDIR)/vendor/opam-ios/runtime-closure.lock
 
 build:
 	dune build @all
@@ -82,7 +84,7 @@ ios-cross-probes: ios-toolchains
 	tool/ios/build_probe.sh iphoneos
 
 ios-device-native-objects:
-	tool/ios/build_native_objects.sh iphoneos
+	APPLICATION_OPAM_FILE="$(IOS_REFERENCE_OPAM)" RUNTIME_CLOSURE_LOCK="$(IOS_REFERENCE_CLOSURE)" BONSAI_FLUTTER_FEATURES=core,network,sqlite tool/ios/build_native_objects.sh iphoneos
 
 ci-contract:
 	tool/test_ci_contract.sh

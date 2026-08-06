@@ -506,6 +506,26 @@ capability_for_package() {
     printf '%s\n' "$capability_row"
     return
   fi
+  # A system SQLite linker dependency is a capability of the selected
+  # artifacts, not an identity assigned to a particular package name.
+  for component in $(printf '%s\n' "$components" | tr ',' ' '); do
+    archives=$(
+      OPAMROOT="$opam_root" opam exec --switch="$host_switch" -- \
+        ocamlfind query -predicates native -a-format "$component" 2>/dev/null || true
+    )
+    for archive in $archives; do
+      test -f "$archive" || continue
+      if OPAMROOT="$opam_root" opam exec --switch="$host_switch" -- \
+        ocamlobjinfo "$archive" 2>/dev/null |
+        sed -n 's/^Extra C object files:[[:space:]]*//p' |
+        tr ' ' '\n' |
+        grep -Fx -- '-lsqlite3' >/dev/null
+      then
+        printf '%s|System_sqlite|sqlite|dune-ios-system-sqlite\n' "$package"
+        return
+      fi
+    done
+  done
   printf '%s\n' "$components" | tr ',' '\n' |
     while IFS= read -r component; do
       OPAMROOT="$opam_root" opam exec --switch="$host_switch" -- \

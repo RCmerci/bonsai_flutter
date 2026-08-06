@@ -5,6 +5,10 @@ set -eu
 script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repository_root=$(CDPATH= cd -- "$script_directory/../.." && pwd)
 target=iphoneos
+APPLICATION_OPAM_FILE="$repository_root/tool/ios/fixtures/application-closure/bonsai_flutter_ios_closure_fixture.opam"
+RUNTIME_CLOSURE_LOCK="$repository_root/vendor/opam-ios/runtime-closure.lock"
+BONSAI_FLUTTER_FEATURES=core,network,sqlite
+export APPLICATION_OPAM_FILE RUNTIME_CLOSURE_LOCK BONSAI_FLUTTER_FEATURES
 
 # shellcheck source=tool/ios/toolchain.lock
 . "$repository_root/tool/ios/toolchain.lock"

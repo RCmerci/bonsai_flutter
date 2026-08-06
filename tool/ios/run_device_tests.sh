@@ -64,7 +64,10 @@ fi
 "$repository_root/tool/ci/ios_device_preflight.sh" \
   "$device_id" \
   --require-signing
-"$repository_root/tool/ios/build_native_objects.sh" iphoneos
+APPLICATION_OPAM_FILE="$repository_root/tool/ios/fixtures/application-closure/bonsai_flutter_ios_closure_fixture.opam" \
+  RUNTIME_CLOSURE_LOCK="$repository_root/vendor/opam-ios/runtime-closure.lock" \
+  BONSAI_FLUTTER_FEATURES=core,network,sqlite \
+  "$repository_root/tool/ios/build_native_objects.sh" iphoneos
 
 result_root="$repository_root/_build/ios/device-results"
 mkdir -p "$result_root"

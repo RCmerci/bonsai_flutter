@@ -240,10 +240,10 @@ in the application OCaml modules.
 
 ### `sqlite`
 
-The `sqlite` profile authorizes the `sqlite3` and DataScript native SQLite C
-stubs and requests the Apple system `libsqlite3` link flag from the Native
-Assets hook. It does not add either package unless the application closure
-requires it.
+The `sqlite` profile authorizes any selected native archive whose linker
+metadata requests Apple system `libsqlite3`. Capability discovery inspects the
+artifact for `-lsqlite3`; it does not check for `sqlite3`, DataScript, or any
+other package name, and it does not add packages to the application closure.
 
 ### Profile validation
 

@@ -258,10 +258,10 @@ require_text \
   "lock-derived iOS closure component count"
 require_text "$ios_closure_verifier" 'System_sqlite)' "iOS SQLite capability gate"
 require_text "$ios_closure_verifier" 'Filesystem)' "iOS filesystem capability gate"
-require_text \
+reject_text \
   "$(cat tool/ios/setup_host_dependencies.sh)" \
   'sqlite3.$SQLITE3_VERSION' \
-  "iOS host SQLite dependency setup"
+  "application-owned iOS host SQLite dependency setup"
 require_text \
   "$(cat tool/ios/setup_host_dependencies.sh)" \
   'eio_posix.$EIO_VERSION' \

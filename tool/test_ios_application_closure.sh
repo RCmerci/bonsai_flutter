@@ -34,12 +34,63 @@ reject_pattern() {
   fi
 }
 
+temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/bonsai-flutter-host-setup-test.XXXXXX")
+cleanup() {
+  rm -rf "$temporary_directory"
+}
+trap cleanup EXIT HUP INT TERM
+
+exercise_host_setup() {
+  application_opam_file=$1
+  fake_repository="$temporary_directory/repository"
+  fake_bin="$temporary_directory/bin"
+  fake_log="$temporary_directory/opam.log"
+  rm -rf "$fake_repository" "$fake_bin"
+  mkdir -p \
+    "$fake_repository/tool/ios" \
+    "$fake_repository/_build/ios/switches/host/_opam/bin" \
+    "$fake_bin"
+  cp tool/ios/setup_host_dependencies.sh "$fake_repository/tool/ios/"
+  cp tool/ios/toolchain.lock "$fake_repository/tool/ios/"
+  : >"$fake_repository/_build/ios/switches/host/_opam/bin/ocamlc"
+  chmod +x "$fake_repository/_build/ios/switches/host/_opam/bin/ocamlc"
+  cat >"$fake_bin/opam" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >>"$FAKE_OPAM_LOG"
+EOF
+  chmod +x "$fake_bin/opam"
+  : >"$fake_log"
+
+  if test -n "$application_opam_file"; then
+    PATH="$fake_bin:$PATH" \
+      FAKE_OPAM_LOG="$fake_log" \
+      APPLICATION_OPAM_FILE="$application_opam_file" \
+      BONSAI_FLUTTER_FEATURES=core,sqlite \
+      SKIP_CLOSURE_VERIFY=true \
+      "$fake_repository/tool/ios/setup_host_dependencies.sh" host
+  else
+    PATH="$fake_bin:$PATH" \
+      FAKE_OPAM_LOG="$fake_log" \
+      BONSAI_FLUTTER_FEATURES=core,sqlite \
+      SKIP_CLOSURE_VERIFY=true \
+      "$fake_repository/tool/ios/setup_host_dependencies.sh" host
+  fi
+}
+
 resolver=tool/ios/resolve_application_closure.sh
 require_file "$resolver"
 require_file tool/ios/closure_capabilities.lock
 resolver_source=$(cat "$resolver")
 require_text "$resolver_source" 'Extra C object files' "foreign-stub archive preflight"
 require_text "$resolver_source" 'Unix platform APIs' "Unix capability preflight"
+require_text \
+  "$resolver_source" \
+  'system SQLite linker dependency' \
+  "generic system SQLite capability discovery"
+require_text \
+  "$resolver_source" \
+  '-lsqlite3' \
+  "generic system SQLite linker inspection"
 require_text \
   "$(cat tool/ios/closure_capabilities.lock)" \
   'ptime|Foreign_stubs|core|topkg-ios-cc' \
@@ -76,10 +127,10 @@ done
 reject_pattern "$fixture_opam" '#main([^0-9a-f]|$)' "application closure fixture pins"
 
 feature_source=$(cat bonsai_flutter_tool/lib/feature.ml)
-require_text \
+reject_pattern \
   "$feature_source" \
-  'datascript-ocaml-native.sqlite' \
-  "DataScript SQLite feature gate"
+  'datascript' \
+  "package-independent feature policy"
 require_text "$feature_source" 'Pure_ocaml' "pure OCaml capability"
 require_text "$feature_source" 'required cross-build recipe' "unsupported capability diagnostic"
 
@@ -90,6 +141,18 @@ require_text "$sdk_source" 'features_digest' "SDK feature digest identity"
 require_text "$sdk_source" '_build/ios/sdk-cache' "SDK cache separation"
 require_text "$sdk_source" 'write_findlib_conf.sh' "SDK target findlib configuration"
 require_text "$sdk_source" 'application_findlib_conf' "application target findlib configuration"
+require_text \
+  "$(cat bonsai_flutter_tool/bin/main.ml)" \
+  '~project_root:(Some project_root)' \
+  "SDK command application closure root"
+reject_pattern \
+  "$sdk_source" \
+  'vendor/opam-ios/runtime-closure.lock' \
+  "application-specific SDK verification"
+require_text \
+  "$sdk_source" \
+  'requires an application project root' \
+  "SDK missing application metadata diagnostic"
 
 build_system=$(cat bonsai_flutter_tool/lib/build_system.ml)
 require_text "$build_system" 'OCAMLFIND_CONF' "application Dune target compiler selection"
@@ -102,6 +165,45 @@ require_text \
   '--ignore-pin-depends' \
   "application pins must not follow upstream floating pin-depends"
 require_text "$host_setup" 'HOST_OCAML_SWITCH' "host-only build dependency switch"
+reject_pattern \
+  "$host_setup" \
+  'datascript|persistent.sorted.set|melange.edn|melange.transit' \
+  "application-independent host dependency setup"
+
+if exercise_host_setup "" >"$temporary_directory/missing-metadata.out" 2>&1; then
+  fail "host dependency setup accepts a missing application opam metadata file"
+else
+  require_text \
+    "$(cat "$temporary_directory/missing-metadata.out")" \
+    'APPLICATION_OPAM_FILE is required' \
+    "missing application metadata diagnostic"
+fi
+
+pure_application_opam="$temporary_directory/pure-application.opam"
+cat >"$pure_application_opam" <<'EOF'
+opam-version: "2.0"
+name: "pure-application"
+version: "0.1.0"
+depends: [
+  "ocaml" {= "5.1.1"}
+  "dune" {= "3.23.1"}
+  "astring" {= "0.8.5"}
+]
+EOF
+if ! exercise_host_setup "$pure_application_opam" \
+  >"$temporary_directory/pure-metadata.out" 2>&1
+then
+  fail "host dependency setup rejects application-owned pure OCaml metadata"
+fi
+host_setup_invocations=$(cat "$temporary_directory/opam.log")
+require_text \
+  "$host_setup_invocations" \
+  "$pure_application_opam" \
+  "application metadata dependency installation"
+reject_pattern \
+  "$host_setup_invocations" \
+  'datascript|persistent.sorted.set|melange.edn|melange.transit' \
+  "application-owned dependency installation"
 
 closure_builder=$(cat tool/ios/build_runtime_closure.sh)
 require_text "$closure_builder" 'RUNTIME_CLOSURE_LOCK' "per-application closure build"
@@ -169,16 +271,28 @@ require_text "$runtime_lock" "$package" "pinned DataScript target closure"
 done
 require_text \
   "$runtime_lock" \
+  'datascript-ocaml-native|dev|target-package|System_sqlite|' \
+  "DataScript SQLite capability is discovered from artifacts"
+require_text \
+  "$runtime_lock" \
+  'sqlite3|5.4.0|target-package|System_sqlite|' \
+  "SQLite package owns the system sqlite capability"
+require_text \
+  "$runtime_lock" \
   'ppx_optcomp|v0.17.0|host-package|Host_only|' \
   "host-only PPX dependency lock"
 require_text \
   "$runtime_lock" \
   'jst-config|v0.17.0|target-build|Foreign_stubs|' \
   "target build dependency lock"
-require_text "$toolchain_lock" 'DATASCRIPT_OCAML_COMMIT' "DataScript source commit"
-require_text "$toolchain_lock" 'PERSISTENT_SORTED_SET_COMMIT' "persistent set source commit"
-require_text "$toolchain_lock" 'MELANGE_EDN_COMMIT' "EDN source commit"
-require_text "$toolchain_lock" 'MELANGE_TRANSIT_COMMIT' "Transit source commit"
+reject_pattern \
+  "$toolchain_lock" \
+  'DATASCRIPT|PERSISTENT_SORTED_SET|MELANGE_EDN|MELANGE_TRANSIT' \
+  "application-independent toolchain lock"
+reject_pattern \
+  "$(cat tool/ios/closure_capabilities.lock)" \
+  'datascript' \
+  "package-independent capability registry"
 reject_pattern \
   "$runtime_lock\n$toolchain_lock" \
   '(refs/heads/main|#main([^0-9a-f]|$)|archive/main)' \

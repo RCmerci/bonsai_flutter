@@ -23,7 +23,7 @@ let network_packages =
   ]
 ;;
 
-let sqlite_packages = [ "sqlite3"; "datascript-ocaml-native.sqlite" ]
+let sqlite_packages = [ "sqlite3" ]
 let prohibited = [ "openssl"; "conf-openssl"; "eio-ssl"; "piaf" ]
 let has_feature features feature = List.exists (Config.Feature.equal feature) features
 
