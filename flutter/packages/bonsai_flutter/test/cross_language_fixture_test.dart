@@ -167,6 +167,48 @@ void main() {
       );
     });
 
+    test('decodes a bounded text input introduced in protocol 1.15', () {
+      final frame = decodeOcamlFixture('ocaml_bounded_text_input.hex');
+      final update = frame.operations.single as UpdateProps;
+      final props = update.props as TextInputProps;
+
+      expect(update.nodeId, 12);
+      expect(props.maxUtf8Bytes, 64);
+      expect(props.value.text, '拼😀音');
+      expectFixtureMatchesDartEncoding(
+        'ocaml_bounded_text_input.hex',
+        const Frame(
+          runtimeEpoch: 10,
+          baseRevision: 4,
+          targetRevision: 5,
+          kind: FrameKind.incremental,
+          operations: [
+            UpdateProps(
+              nodeId: 12,
+              props: TextInputProps(
+                sessionId: 7,
+                documentRevision: 9,
+                value: TextEditingStateValue(
+                  text: '拼😀音',
+                  selection: TextRangeValue(startUtf16: 4, endUtf16: 4),
+                  composing: TextRangeValue(startUtf16: 0, endUtf16: 4),
+                ),
+                enabled: true,
+                readOnly: false,
+                obscureText: false,
+                keyboardType: TextKeyboardType.text,
+                inputAction: TextInputActionKind.done,
+                acceptedLocalRevision: 11,
+                updateMode: TextUpdateMode.correction,
+                autofocus: true,
+                maxUtf8Bytes: 64,
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+
     test('shared incremental fixture enforces epoch and revision', () {
       final fixture = decodeOcamlFixture('ocaml_unicode_update.hex');
       final wrongEpochStore = NodeStore()

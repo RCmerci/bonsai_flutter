@@ -54,6 +54,7 @@ val text_field
   -> ?keyboard_type:Text_editing.keyboard_type
   -> ?input_action:Text_editing.input_action
   -> ?autofocus:bool
+  -> ?max_utf8_bytes:int
   -> session_id:Bonsai_flutter_spec.Id.Text_input.session_id
   -> document_revision:Bonsai_flutter_spec.Id.Text_input.document_revision
   -> accepted_local_revision:Bonsai_flutter_spec.Id.Text_input.local_revision
@@ -62,6 +63,7 @@ val text_field
   -> on_edit:Event.Handler.t
   -> on_submit:Event.Handler.t
   -> on_focus_changed:Event.Handler.t
+  -> ?on_limit_reached:Event.Handler.t
   -> unit
   -> Widget.t
 

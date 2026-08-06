@@ -3,7 +3,7 @@
 module ID = Bonsai_flutter_spec.Id
 
 let protocol_major = 1
-let protocol_minor = 14
+let protocol_minor = 15
 
 module Limits = struct
   let header_bytes = 48
@@ -195,6 +195,7 @@ module Event_tag = struct
   let native_event = ID.Protocol.Event_tag.of_int 21
   let semantics_action = ID.Protocol.Event_tag.of_int 22
   let resync_requested = ID.Protocol.Event_tag.of_int 23
+  let text_limit_reached = ID.Protocol.Event_tag.of_int 24
 
   let debug_name id =
     match ID.Protocol.Event_tag.to_int id with
@@ -221,6 +222,7 @@ module Event_tag = struct
     | 21 -> Some "native_event"
     | 22 -> Some "semantics_action"
     | 23 -> Some "resync_requested"
+    | 24 -> Some "text_limit_reached"
     | _ -> None
   ;;
 end
@@ -789,6 +791,7 @@ module Text_input_prop = struct
   let accepted_local_revision = ID.Protocol.Property.of_int 9
   let update_mode = ID.Protocol.Property.of_int 10
   let autofocus = ID.Protocol.Property.of_int 11
+  let max_utf8_bytes = ID.Protocol.Property.of_int 12
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
@@ -803,6 +806,7 @@ module Text_input_prop = struct
     | 9 -> Some "accepted_local_revision"
     | 10 -> Some "update_mode"
     | 11 -> Some "autofocus"
+    | 12 -> Some "max_utf8_bytes"
     | _ -> None
   ;;
 end

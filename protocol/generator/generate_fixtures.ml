@@ -144,6 +144,36 @@ let fixtures : (string * Protocol.Wire_frame.t) list =
               }
           ]
       } )
+  ; ( "ocaml_bounded_text_input.hex"
+    , { runtime_epoch = epoch 10L
+      ; base_revision = revision 4L
+      ; target_revision = revision 5L
+      ; kind = Incremental_frame
+      ; operations =
+          [ Update_props
+              { node_id = node 12L
+              ; props =
+                  Text_input_props
+                    { session_id = ID.Text_input.Session_id.of_int64 7L
+                    ; document_revision = ID.Text_input.Document_revision.of_int64 9L
+                    ; value =
+                        { text = "拼😀音"
+                        ; selection = { start_utf16 = 4; end_utf16 = 4 }
+                        ; composing = Some { start_utf16 = 0; end_utf16 = 4 }
+                        }
+                    ; enabled = true
+                    ; read_only = false
+                    ; obscure_text = false
+                    ; keyboard_type = Keyboard_text
+                    ; input_action = Done
+                    ; accepted_local_revision = ID.Text_input.Local_revision.of_int64 11L
+                    ; update_mode = Correction
+                    ; autofocus = true
+                    ; max_utf8_bytes = Some 64
+                    }
+              }
+          ]
+      } )
   ]
 ;;
 

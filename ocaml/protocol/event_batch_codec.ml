@@ -295,6 +295,7 @@ let read_payload reader event_tag =
     event_tag = Generated_protocol.Event_tag.press
     || event_tag = Generated_protocol.Event_tag.long_press
     || event_tag = Generated_protocol.Event_tag.resync_requested
+    || event_tag = Generated_protocol.Event_tag.text_limit_reached
   then Inbound_event.Unit
   else if
     event_tag = Generated_protocol.Event_tag.tap
@@ -534,6 +535,7 @@ let write_payload writer event_tag payload =
       event_tag <> Generated_protocol.Event_tag.press
       && event_tag <> Generated_protocol.Event_tag.long_press
       && event_tag <> Generated_protocol.Event_tag.resync_requested
+      && event_tag <> Generated_protocol.Event_tag.text_limit_reached
     then fail Invalid_payload "unit payload does not match event tag"
   | Bool value ->
     if

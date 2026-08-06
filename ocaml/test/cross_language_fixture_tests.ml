@@ -130,6 +130,23 @@ let test_text_edit_unicode () =
     }
 ;;
 
+let test_text_limit_reached () =
+  let open Protocol.Inbound_event in
+  expect_fixture
+    "dart_text_limit_reached.hex"
+    { runtime_epoch = epoch 22L
+    ; events =
+        [ { sequence = sequence 4L
+          ; displayed_revision = revision 2L
+          ; node_id = node 4L
+          ; handler_id = handler 45L
+          ; event_tag = Protocol.Generated_protocol.Event_tag.text_limit_reached
+          ; payload = Unit
+          }
+        ]
+    }
+;;
+
 let test_environment_changed () =
   let open Protocol.Inbound_event in
   expect_fixture
@@ -170,6 +187,7 @@ let () =
   test_counter_press ();
   test_host_response ();
   test_text_edit_unicode ();
+  test_text_limit_reached ();
   test_environment_changed ();
   print_endline "cross-language fixture tests passed"
 ;;

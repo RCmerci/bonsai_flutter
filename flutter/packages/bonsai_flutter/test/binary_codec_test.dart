@@ -263,6 +263,7 @@ void main() {
         acceptedLocalRevision: 11,
         updateMode: TextUpdateMode.correction,
         autofocus: true,
+        maxUtf8Bytes: 12,
       );
       const frame = Frame(
         runtimeEpoch: 10,
@@ -276,6 +277,60 @@ void main() {
 
       expect((decoded.operations.single as UpdateProps).props, props);
     });
+
+    test(
+      'rejects invalid UTF-8 byte limits while preserving unlimited input',
+      () {
+        TextInputProps propsWithLimit(int? maxUtf8Bytes) => TextInputProps(
+          sessionId: 7,
+          documentRevision: 9,
+          value: const TextEditingStateValue(
+            text: '',
+            selection: TextRangeValue(startUtf16: 0, endUtf16: 0),
+            composing: null,
+          ),
+          enabled: true,
+          readOnly: false,
+          obscureText: false,
+          keyboardType: TextKeyboardType.text,
+          inputAction: TextInputActionKind.done,
+          acceptedLocalRevision: 0,
+          updateMode: TextUpdateMode.ack,
+          autofocus: false,
+          maxUtf8Bytes: maxUtf8Bytes,
+        );
+
+        Frame frame(TextInputProps props) => Frame(
+          runtimeEpoch: 10,
+          baseRevision: 4,
+          targetRevision: 5,
+          kind: FrameKind.incremental,
+          operations: [UpdateProps(nodeId: 12, props: props)],
+        );
+
+        final unlimited = propsWithLimit(null);
+        expect(
+          (FrameCodec.decode(
+                    FrameCodec.encode(frame(unlimited)),
+                  ).operations.single
+                  as UpdateProps)
+              .props,
+          unlimited,
+        );
+        for (final invalid in [
+          0,
+          -1,
+          ProtocolLimits.maxStringBytes + 1,
+          0x100000000,
+        ]) {
+          expect(
+            () => FrameCodec.encode(frame(propsWithLimit(invalid))),
+            throwsA(isA<ProtocolException>()),
+            reason: 'maxUtf8Bytes=$invalid must be protocol-invalid',
+          );
+        }
+      },
+    );
 
     test('decoded full snapshot can be applied atomically', () {
       final decoded = FrameCodec.decode(readHexFixture('counter_full.hex'));

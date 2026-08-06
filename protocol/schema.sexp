@@ -1,7 +1,7 @@
 ((protocol
   (name bonsai_flutter)
   (major 1)
-  (minor 14)
+  (minor 15)
   (endianness little)
   (header_bytes 48)
   (max_frame_bytes 16777216)
@@ -223,7 +223,8 @@
      (input_action 8 input_action)
      (accepted_local_revision 9 u64)
      (update_mode 10 text_update_mode)
-     (autofocus 11 bool)))
+     (autofocus 11 bool)
+     (max_utf8_bytes 12 optional_u32)))
    (overlay
     ((alignment 1 overlay_alignment)
      (dismissible 2 bool)))
@@ -274,7 +275,8 @@
    (environment_changed 20 environment)
    (native_event 21 native_event)
    (semantics_action 22 u64)
-   (resync_requested 23 unit)))
+   (resync_requested 23 unit)
+   (text_limit_reached 24 unit)))
 
  (host_requests
   ((clipboard_read 1 unit string_result)

@@ -665,7 +665,8 @@ abstract final class EventBatchCodec {
   ) {
     if ((eventTag == EventTagId.press ||
             eventTag == EventTagId.longPress ||
-            eventTag == EventTagId.resyncRequested) &&
+            eventTag == EventTagId.resyncRequested ||
+            eventTag == EventTagId.textLimitReached) &&
         payload is UnitEventPayload) {
       return;
     }
@@ -886,7 +887,8 @@ abstract final class EventBatchCodec {
   static EventPayload _readPayload(_EventReader reader, int eventTag) {
     if (eventTag == EventTagId.press ||
         eventTag == EventTagId.longPress ||
-        eventTag == EventTagId.resyncRequested) {
+        eventTag == EventTagId.resyncRequested ||
+        eventTag == EventTagId.textLimitReached) {
       return const UnitEventPayload();
     }
     if (eventTag == EventTagId.tap || eventTag == EventTagId.doubleTap) {

@@ -757,6 +757,7 @@ final class TextInputProps extends UiProps {
     required this.acceptedLocalRevision,
     required this.updateMode,
     required this.autofocus,
+    this.maxUtf8Bytes,
   });
 
   final int sessionId;
@@ -770,6 +771,7 @@ final class TextInputProps extends UiProps {
   final int acceptedLocalRevision;
   final TextUpdateMode updateMode;
   final bool autofocus;
+  final int? maxUtf8Bytes;
 
   @override
   bool operator ==(Object other) =>
@@ -784,7 +786,8 @@ final class TextInputProps extends UiProps {
       other.inputAction == inputAction &&
       other.acceptedLocalRevision == acceptedLocalRevision &&
       other.updateMode == updateMode &&
-      other.autofocus == autofocus;
+      other.autofocus == autofocus &&
+      other.maxUtf8Bytes == maxUtf8Bytes;
 
   @override
   int get hashCode => Object.hash(
@@ -800,6 +803,7 @@ final class TextInputProps extends UiProps {
     acceptedLocalRevision,
     updateMode,
     autofocus,
+    maxUtf8Bytes,
   );
 }
 

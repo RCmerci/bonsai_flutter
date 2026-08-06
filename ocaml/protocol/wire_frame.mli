@@ -352,6 +352,7 @@ type props =
       ; accepted_local_revision : Bonsai_flutter_spec.Id.Text_input.local_revision
       ; update_mode : text_update_mode
       ; autofocus : bool
+      ; max_utf8_bytes : int option
       }
   | Overlay_props of
       { alignment : overlay_alignment

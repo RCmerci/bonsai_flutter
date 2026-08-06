@@ -204,6 +204,7 @@ let protocol_tag =
   | Focus_changed -> Tag.focus_changed
   | Text_edit -> Tag.text_edit
   | Text_submit -> Tag.text_submit
+  | Text_limit_reached -> Tag.text_limit_reached
   | Scroll_notification -> Tag.scroll_notification
   | Visible_range_changed -> Tag.visible_range_changed
   | Animation_completed -> Tag.animation_completed

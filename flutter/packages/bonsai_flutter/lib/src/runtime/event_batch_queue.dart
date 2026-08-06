@@ -184,7 +184,8 @@ final class EventBatchQueue {
 
 bool _isCoalescible(int eventTag) =>
     eventTag == EventTagId.scrollNotification ||
-    eventTag == EventTagId.visibleRangeChanged;
+    eventTag == EventTagId.visibleRangeChanged ||
+    eventTag == EventTagId.textLimitReached;
 
 bool _isRuntimeControl(int eventTag) =>
     eventTag == EventTagId.hostResponse ||

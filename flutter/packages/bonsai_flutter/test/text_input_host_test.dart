@@ -3,6 +3,199 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final boundaryCase
+      in <({String name, int limit, String below, String equal, String above})>[
+        (name: 'ASCII', limit: 3, below: 'ab', equal: 'abc', above: 'abcd'),
+        (name: 'CJK', limit: 6, below: '拼', equal: '拼音', above: '拼音a'),
+        (
+          name: 'emoji surrogate pair',
+          limit: 4,
+          below: 'a',
+          equal: '😀',
+          above: '😀a',
+        ),
+        (
+          name: 'combining mark',
+          limit: 3,
+          below: 'e',
+          equal: 'é',
+          above: 'éa',
+        ),
+      ]) {
+    testWidgets(
+      'enforces ${boundaryCase.name} below, equal, and above UTF-8 byte boundaries',
+      (tester) async {
+        final store = NodeStore()
+          ..apply(
+            textInputSnapshot(
+              maxUtf8Bytes: boundaryCase.limit,
+              text: '',
+              selectionOffset: 0,
+            ),
+          );
+        final events = <RendererEvent>[];
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: BonsaiFlutterView(store: store, onEvent: events.add),
+            ),
+          ),
+        );
+        final controller = tester
+            .widget<EditableText>(find.byType(EditableText))
+            .controller;
+
+        controller.value = TextEditingValue(
+          text: boundaryCase.below,
+          selection: TextSelection.collapsed(offset: boundaryCase.below.length),
+        );
+        controller.value = TextEditingValue(
+          text: boundaryCase.equal,
+          selection: TextSelection.collapsed(offset: boundaryCase.equal.length),
+        );
+        controller.value = TextEditingValue(
+          text: boundaryCase.above,
+          selection: TextSelection.collapsed(offset: boundaryCase.above.length),
+        );
+        await tester.pump();
+
+        expect(controller.text, boundaryCase.equal);
+        final edits = events
+            .where((event) => event.eventTag == EventTagId.textEdit)
+            .toList();
+        expect(
+          edits.map((event) => (event.payload as TextEditEventPayload).text),
+          [boundaryCase.below, boundaryCase.equal],
+        );
+        final limits = events
+            .where((event) => event.eventTag == EventTagId.textLimitReached)
+            .toList();
+        expect(limits, hasLength(1));
+        expect(limits.single.payload, const UnitEventPayload());
+      },
+    );
+  }
+
+  testWidgets('oversized paste never enters an EventBatch', (tester) async {
+    final store = NodeStore()
+      ..apply(
+        textInputSnapshot(maxUtf8Bytes: 8, text: 'valid', selectionOffset: 5),
+      );
+    final queue = EventBatchQueue(
+      runtimeEpoch: 91,
+      displayedRevision: () => store.revision,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BonsaiFlutterView(store: store, onEvent: queue.enqueue),
+        ),
+      ),
+    );
+    final controller = tester
+        .widget<EditableText>(find.byType(EditableText))
+        .controller;
+    final oversizedPaste = '😀' * (ProtocolLimits.maxStringBytes ~/ 4 + 1);
+
+    expect(
+      () => controller.value = TextEditingValue(
+        text: oversizedPaste,
+        selection: TextSelection.collapsed(offset: oversizedPaste.length),
+      ),
+      returnsNormally,
+    );
+
+    expect(controller.text, 'valid');
+    final prepared = queue.prepareBatch();
+    expect(prepared.encodedBytes.length, lessThan(128));
+    final events = EventBatchCodec.decode(prepared.encodedBytes).events;
+    expect(events, hasLength(1));
+    expect(events.single.eventTag, EventTagId.textLimitReached);
+    expect(events.single.payload, const UnitEventPayload());
+  });
+
+  testWidgets(
+    'oversized active IME composition restores the complete valid value',
+    (tester) async {
+      final store = NodeStore()
+        ..apply(
+          textInputSnapshot(maxUtf8Bytes: 4, text: '', selectionOffset: 0),
+        );
+      final events = <RendererEvent>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BonsaiFlutterView(store: store, onEvent: events.add),
+          ),
+        ),
+      );
+      final controller = tester
+          .widget<EditableText>(find.byType(EditableText))
+          .controller;
+      const lastValid = TextEditingValue(
+        text: '拼a',
+        selection: TextSelection(baseOffset: 1, extentOffset: 2),
+        composing: TextRange(start: 0, end: 2),
+      );
+      controller.value = lastValid;
+
+      expect(
+        () => controller.value = const TextEditingValue(
+          text: '拼音',
+          selection: TextSelection.collapsed(offset: 2),
+          composing: TextRange(start: 0, end: 2),
+        ),
+        returnsNormally,
+      );
+      await tester.pump();
+
+      expect(controller.value, lastValid);
+      expect(
+        events.where((event) => event.eventTag == EventTagId.textEdit),
+        hasLength(1),
+      );
+      expect(
+        events.where((event) => event.eventTag == EventTagId.textLimitReached),
+        hasLength(1),
+      );
+    },
+  );
+
+  testWidgets('unlimited text input remains backward compatible', (
+    tester,
+  ) async {
+    final store = NodeStore()
+      ..apply(textInputSnapshot(text: '', selectionOffset: 0));
+    final events = <RendererEvent>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BonsaiFlutterView(store: store, onEvent: events.add),
+        ),
+      ),
+    );
+    final controller = tester
+        .widget<EditableText>(find.byType(EditableText))
+        .controller;
+    final text = 'ASCII 拼音 😀 é ' * 1000;
+
+    controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    await tester.pump();
+
+    expect(controller.text, text);
+    expect(
+      events.where((event) => event.eventTag == EventTagId.textEdit),
+      hasLength(1),
+    );
+    expect(
+      events.where((event) => event.eventTag == EventTagId.textLimitReached),
+      isEmpty,
+    );
+  });
+
   testWidgets(
     'text input preserves local echo and rejects a stale correction',
     (tester) async {
@@ -509,7 +702,11 @@ void main() {
   });
 }
 
-Frame textInputSnapshot() => Frame(
+Frame textInputSnapshot({
+  int? maxUtf8Bytes,
+  String text = '拼',
+  int selectionOffset = 1,
+}) => Frame(
   runtimeEpoch: 91,
   baseRevision: 0,
   targetRevision: 1,
@@ -518,11 +715,16 @@ Frame textInputSnapshot() => Frame(
     CreateNode(
       nodeId: 1,
       kind: NodeKind.textInput,
-      props: textInputProps(),
+      props: textInputProps(
+        maxUtf8Bytes: maxUtf8Bytes,
+        text: text,
+        selectionOffset: selectionOffset,
+      ),
       eventBindings: const [
         EventBinding(eventTag: EventTagId.textEdit, handlerId: 101),
         EventBinding(eventTag: EventTagId.textSubmit, handlerId: 102),
         EventBinding(eventTag: EventTagId.focusChanged, handlerId: 103),
+        EventBinding(eventTag: EventTagId.textLimitReached, handlerId: 104),
       ],
     ),
     const SetRoot(1),
@@ -548,6 +750,7 @@ TextInputProps textInputProps({
   TextUpdateMode updateMode = TextUpdateMode.forceReplace,
   String text = '拼',
   int selectionOffset = 1,
+  int? maxUtf8Bytes,
 }) => TextInputProps(
   sessionId: sessionId,
   documentRevision: documentRevision,
@@ -567,4 +770,5 @@ TextInputProps textInputProps({
   keyboardType: TextKeyboardType.text,
   inputAction: TextInputActionKind.done,
   autofocus: false,
+  maxUtf8Bytes: maxUtf8Bytes,
 );

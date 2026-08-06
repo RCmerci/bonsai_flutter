@@ -14,6 +14,7 @@ module Tag = struct
     | Focus_changed
     | Text_edit
     | Text_submit
+    | Text_limit_reached
     | Scroll_notification
     | Visible_range_changed
     | Animation_completed
@@ -39,6 +40,7 @@ module Tag = struct
     | Focus_changed -> "focus_changed"
     | Text_edit -> "text_edit"
     | Text_submit -> "text_submit"
+    | Text_limit_reached -> "text_limit_reached"
     | Scroll_notification -> "scroll_notification"
     | Visible_range_changed -> "visible_range_changed"
     | Animation_completed -> "animation_completed"

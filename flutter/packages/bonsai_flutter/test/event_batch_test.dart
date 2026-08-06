@@ -100,6 +100,30 @@ void main() {
       expect(encoded, hasLength(90));
     });
 
+    test('matches the bounded text limit fixture byte for byte', () {
+      final batch = EventBatch(
+        runtimeEpoch: 22,
+        events: const [
+          UiEvent(
+            sequence: 4,
+            displayedRevision: 2,
+            nodeId: 4,
+            handlerId: 45,
+            eventTag: EventTagId.textLimitReached,
+            payload: UnitEventPayload(),
+          ),
+        ],
+      );
+
+      final encoded = EventBatchCodec.encode(batch);
+
+      expect(
+        encoded,
+        orderedEquals(readHexFixture('dart_text_limit_reached.hex')),
+      );
+      expect(encoded.length, lessThan(128));
+    });
+
     test('round trips all implemented typed payload layouts', () {
       final batch = EventBatch(
         runtimeEpoch: 21,
@@ -215,13 +239,21 @@ void main() {
               modifiers: 3,
             ),
           ),
+          const UiEvent(
+            sequence: 14,
+            displayedRevision: 3,
+            nodeId: 20,
+            handlerId: 30,
+            eventTag: EventTagId.textLimitReached,
+            payload: UnitEventPayload(),
+          ),
         ],
       );
 
       final decoded = EventBatchCodec.decode(EventBatchCodec.encode(batch));
 
       expect(decoded.runtimeEpoch, 21);
-      expect(decoded.events, hasLength(10));
+      expect(decoded.events, hasLength(11));
       expect(decoded.events[0].payload, const BoolEventPayload(true));
       expect(decoded.events[1].payload, const BoolEventPayload(false));
       expect(
@@ -250,6 +282,7 @@ void main() {
       expect(decoded.events[7].payload, batch.events[7].payload);
       expect(decoded.events[8].payload, batch.events[8].payload);
       expect(decoded.events[9].payload, batch.events[9].payload);
+      expect(decoded.events[10].payload, const UnitEventPayload());
     });
 
     test('rejects malformed event batches before allocation', () {
@@ -348,6 +381,32 @@ void main() {
   });
 
   group('event batch queue', () {
+    test(
+      'coalesces bounded text limit notifications without text payloads',
+      () {
+        final queue = EventBatchQueue(
+          runtimeEpoch: 21,
+          displayedRevision: () => 7,
+          maxPendingEvents: 1,
+        );
+        final notification = rendererEvent(
+          eventTag: EventTagId.textLimitReached,
+          payload: const UnitEventPayload(),
+        );
+
+        queue.enqueue(notification);
+        queue.enqueue(notification);
+
+        final prepared = queue.prepareBatch();
+        final events = EventBatchCodec.decode(prepared.encodedBytes).events;
+        expect(events, hasLength(1));
+        expect(events.single.eventTag, EventTagId.textLimitReached);
+        expect(events.single.payload, const UnitEventPayload());
+        expect(prepared.encodedBytes.length, lessThan(128));
+        expect(queue.coalescedCount, 1);
+      },
+    );
+
     test('never coalesces ordered press events and applies backpressure', () {
       final queue = EventBatchQueue(
         runtimeEpoch: 21,

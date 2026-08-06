@@ -335,6 +335,7 @@ let test_text_input_props_round_trip () =
                     ; accepted_local_revision = local_revision 11L
                     ; update_mode = Correction
                     ; autofocus = true
+                    ; max_utf8_bytes = Some 64
                     }
               }
           ]
@@ -375,6 +376,7 @@ let test_text_input_rejects_split_surrogate_range () =
                     ; accepted_local_revision = local_revision 0L
                     ; update_mode = Ack
                     ; autofocus = false
+                    ; max_utf8_bytes = None
                     }
               }
           ]
@@ -426,6 +428,75 @@ let test_event_batch_fixture () =
     expect (event.event_tag = Generated_protocol.Event_tag.press) "unexpected tag";
     expect (event.payload = Unit) "unexpected payload"
   | Ok _ -> fail "unexpected event batch shape"
+;;
+
+let test_text_limit_reached_event_round_trip () =
+  let batch : Inbound_event.batch =
+    { runtime_epoch = epoch 21L
+    ; events =
+        [ { sequence = sequence 9L
+          ; displayed_revision = revision 4L
+          ; node_id = node 12L
+          ; handler_id = handler 104L
+          ; event_tag = Generated_protocol.Event_tag.text_limit_reached
+          ; payload = Unit
+          }
+        ]
+    }
+  in
+  match Event_batch_codec.encode batch with
+  | Error error -> fail "text limit event encode failed: %s" error.message
+  | Ok encoded ->
+    expect (Bytes.length encoded < 128) "text limit event payload is not bounded";
+    (match Event_batch_codec.decode encoded with
+     | Error error -> fail "text limit event decode failed: %s" error.message
+     | Ok decoded -> expect (decoded = batch) "text limit event changed during round trip")
+;;
+
+let test_text_input_rejects_invalid_utf8_byte_limits () =
+  let encode max_utf8_bytes =
+    Binary_codec.encode
+      Wire_frame.
+        { runtime_epoch = epoch 10L
+        ; base_revision = revision 4L
+        ; target_revision = revision 5L
+        ; kind = Incremental_frame
+        ; operations =
+            [ Update_props
+                { node_id = node 12L
+                ; props =
+                    Text_input_props
+                      { session_id = session 7L
+                      ; document_revision = document_revision 9L
+                      ; value =
+                          { text = ""
+                          ; selection = { start_utf16 = 0; end_utf16 = 0 }
+                          ; composing = None
+                          }
+                      ; enabled = true
+                      ; read_only = false
+                      ; obscure_text = false
+                      ; keyboard_type = Keyboard_text
+                      ; input_action = Done
+                      ; accepted_local_revision = local_revision 0L
+                      ; update_mode = Ack
+                      ; autofocus = false
+                      ; max_utf8_bytes
+                      }
+                }
+            ]
+        }
+  in
+  List.iter
+    (fun value ->
+       match encode (Some value) with
+       | Error { code = Invalid_props; _ } -> ()
+       | Error error -> fail "unexpected byte limit error: %s" error.message
+       | Ok _ -> fail "invalid max_utf8_bytes=%d unexpectedly encoded" value)
+    [ 0; -1; 1_048_577; 0x1_0000_0000 ];
+  match encode None with
+  | Error error -> fail "unlimited text input failed: %s" error.message
+  | Ok _ -> ()
 ;;
 
 let test_unknown_event_tag () =
@@ -985,6 +1056,8 @@ let () =
   test_text_input_rejects_split_surrogate_range ();
   test_malformed_frames ();
   test_event_batch_fixture ();
+  test_text_limit_reached_event_round_trip ();
+  test_text_input_rejects_invalid_utf8_byte_limits ();
   test_unknown_event_tag ();
   test_interaction_props_round_trip ();
   test_interaction_event_round_trip ();

@@ -28,7 +28,7 @@ let load_schema () =
 let test_schema_values () =
   let schema = load_schema () in
   expect (schema.major = 1) "unexpected protocol major";
-  expect (schema.minor = 14) "unexpected protocol minor";
+  expect (schema.minor = 15) "unexpected protocol minor";
   expect (schema.limits.header_bytes = 48) "unexpected header size";
   expect
     (List.exists
@@ -54,7 +54,26 @@ let test_schema_values () =
           && property.id = 1
           && String.equal property.encoding "edge_insets")
        padding.properties)
-    "padding property schema was not parsed"
+    "padding property schema was not parsed";
+  let text_input =
+    List.find
+      (fun (group : Schema.property_group) -> String.equal group.name "text_input")
+      schema.kind_props
+  in
+  expect
+    (List.exists
+       (fun (property : Schema.property) ->
+          String.equal property.name "max_utf8_bytes"
+          && property.id = 12
+          && String.equal property.encoding "optional_u32")
+       text_input.properties)
+    "text input UTF-8 byte limit schema was not parsed";
+  expect
+    (List.exists
+       (fun (entry : Schema.entry) ->
+          String.equal entry.name "text_limit_reached" && entry.id = 24)
+       schema.event_tags)
+    "text input limit event schema was not parsed"
 ;;
 
 let test_duplicate_ids_are_rejected () =
@@ -109,8 +128,10 @@ let test_all_targets_are_rendered_from_one_model () =
   expect_contains outputs.dart "abstract final class PaddingPropId";
   expect_contains outputs.dart "abstract final class MaterialCheckboxPropId";
   expect_contains outputs.dart "static const int acceptedLocalRevision = 9;";
+  expect_contains outputs.dart "static const int maxUtf8Bytes = 12;";
   expect_contains outputs.dart "static const int hostResponse = 19;";
   expect_contains outputs.dart "static const int nativeEvent = 21;";
+  expect_contains outputs.dart "static const int textLimitReached = 24;";
   expect_contains outputs.dart "static const int nativeWidget = 128;";
   expect_contains outputs.dart "abstract final class PagePropId";
   expect_contains outputs.dart "static String? debugName(int id)";

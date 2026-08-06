@@ -114,6 +114,7 @@ module Event_tag : sig
   val native_event : Bonsai_flutter_spec.Id.Protocol.event_tag
   val semantics_action : Bonsai_flutter_spec.Id.Protocol.event_tag
   val resync_requested : Bonsai_flutter_spec.Id.Protocol.event_tag
+  val text_limit_reached : Bonsai_flutter_spec.Id.Protocol.event_tag
   val debug_name : Bonsai_flutter_spec.Id.Protocol.event_tag -> string option
 end
 
@@ -405,6 +406,7 @@ module Text_input_prop : sig
   val accepted_local_revision : Bonsai_flutter_spec.Id.Protocol.property
   val update_mode : Bonsai_flutter_spec.Id.Protocol.property
   val autofocus : Bonsai_flutter_spec.Id.Protocol.property
+  val max_utf8_bytes : Bonsai_flutter_spec.Id.Protocol.property
   val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
 end
 

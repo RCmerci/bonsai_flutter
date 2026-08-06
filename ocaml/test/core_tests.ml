@@ -1501,6 +1501,71 @@ let test_text_input_props_and_typed_edit_are_incremental () =
   apply_and_compare ~old_snapshot:(Some (Mounted_tree.snapshot first.mounted_tree)) second
 ;;
 
+let test_text_input_utf8_limit_contract () =
+  let handler = Event.Handler.create (fun _ -> ()) in
+  let value =
+    Ui.Text_editing.Value.create
+      ~text:""
+      ~selection:(Ui.Text_editing.Range.create ~text:"" ~start_utf16:0 ~end_utf16:0)
+      ()
+  in
+  let create_widget max_utf8_bytes =
+    Widget.text_input
+      ~max_utf8_bytes
+      ~session_id:(ID.Text_input.Session_id.of_int64 7L)
+      ~document_revision:(ID.Text_input.Document_revision.of_int64 9L)
+      ~accepted_local_revision:(ID.Text_input.Local_revision.of_int64 0L)
+      ~update_mode:Ui.Text_editing.Ack
+      ~value
+      ~on_edit:handler
+      ~on_submit:handler
+      ~on_focus_changed:handler
+      ~on_limit_reached:handler
+      ()
+  in
+  let widget = create_widget 64 in
+  let view = Widget.Private.view widget in
+  (match view.props with
+   | Widget.Private.Text_input_props { max_utf8_bytes = Some 64; _ } -> ()
+   | _ -> fail "text input did not retain max_utf8_bytes");
+  check
+    (Array.exists
+       (fun binding ->
+          Event.Tag.equal binding.Widget.Private.tag Event.Tag.Text_limit_reached)
+       view.event_bindings)
+    "text input did not bind on_limit_reached";
+  ignore
+    (Ui.Material.text_field
+       ~max_utf8_bytes:64
+       ~session_id:(ID.Text_input.Session_id.of_int64 7L)
+       ~document_revision:(ID.Text_input.Document_revision.of_int64 9L)
+       ~accepted_local_revision:(ID.Text_input.Local_revision.of_int64 0L)
+       ~update_mode:Ui.Text_editing.Ack
+       ~value
+       ~on_edit:handler
+       ~on_submit:handler
+       ~on_focus_changed:handler
+       ~on_limit_reached:handler
+       ());
+  List.iter
+    (fun max_utf8_bytes ->
+       expect_invalid_argument
+         (fun () -> ignore (create_widget max_utf8_bytes))
+         "text input accepted an invalid UTF-8 byte limit")
+    [ 0; -1; 0x1_0000_0000 ];
+  ignore
+    (Widget.text_input
+       ~session_id:(ID.Text_input.Session_id.of_int64 7L)
+       ~document_revision:(ID.Text_input.Document_revision.of_int64 9L)
+       ~accepted_local_revision:(ID.Text_input.Local_revision.of_int64 0L)
+       ~update_mode:Ui.Text_editing.Ack
+       ~value
+       ~on_edit:handler
+       ~on_submit:handler
+       ~on_focus_changed:handler
+       ())
+;;
+
 let tests =
   [ "pressable is a typed core widget", test_pressable_is_a_typed_core_widget
   ; "initial mount is a full snapshot", test_initial_mount_is_full_snapshot
@@ -1542,6 +1607,7 @@ let tests =
     , test_layout_material_and_semantics_widgets_are_incremental )
   ; ( "text input props and typed edit are incremental"
     , test_text_input_props_and_typed_edit_are_incremental )
+  ; "text input UTF-8 limit contract", test_text_input_utf8_limit_contract
   ]
 ;;
 

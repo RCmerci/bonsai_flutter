@@ -14,6 +14,7 @@ module Tag : sig
     | Focus_changed
     | Text_edit
     | Text_submit
+    | Text_limit_reached
     | Scroll_notification
     | Visible_range_changed
     | Animation_completed

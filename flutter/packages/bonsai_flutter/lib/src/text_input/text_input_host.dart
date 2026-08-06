@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../protocol/event_batch.dart';
@@ -27,6 +29,7 @@ final class TextInputHost extends StatefulWidget {
 
 final class _TextInputHostState extends State<TextInputHost> {
   late TextInputResourceHandle _resource;
+  late TextEditingValue _lastValidValue;
   bool _applyingRemote = false;
 
   @override
@@ -46,6 +49,7 @@ final class _TextInputHostState extends State<TextInputHost> {
       _applyingRemote = true;
       try {
         _resource.applyRemote(widget.props);
+        _lastValidValue = _resource.controller.value;
       } finally {
         _applyingRemote = false;
       }
@@ -60,6 +64,7 @@ final class _TextInputHostState extends State<TextInputHost> {
 
   void _acquire() {
     _resource = widget.resources.acquireTextInput(widget.node.id, widget.props);
+    _lastValidValue = _resource.controller.value;
     _resource.controller.addListener(_onControllerChanged);
     _resource.focusNode.addListener(_onFocusChanged);
   }
@@ -72,8 +77,20 @@ final class _TextInputHostState extends State<TextInputHost> {
 
   void _onControllerChanged() {
     if (_applyingRemote || _resource.disposed) return;
-    _resource.localRevision += 1;
     final value = _resource.controller.value;
+    final maxUtf8Bytes = widget.props.maxUtf8Bytes;
+    if (maxUtf8Bytes != null && utf8.encode(value.text).length > maxUtf8Bytes) {
+      _applyingRemote = true;
+      try {
+        _resource.controller.value = _lastValidValue;
+      } finally {
+        _applyingRemote = false;
+      }
+      _emit(EventTagId.textLimitReached, const UnitEventPayload());
+      return;
+    }
+    _lastValidValue = value;
+    _resource.localRevision += 1;
     final selection = _normalizeSelection(value.text, value.selection);
     final composing = _normalizeComposing(value.text, value.composing);
     _emit(

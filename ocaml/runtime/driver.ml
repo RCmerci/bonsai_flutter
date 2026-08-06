@@ -469,6 +469,7 @@ let wire_props = function
       ; accepted_local_revision
       ; update_mode
       ; autofocus
+      ; max_utf8_bytes
       } ->
     let wire_range range =
       Protocol.Wire_frame.
@@ -521,6 +522,7 @@ let wire_props = function
          ; accepted_local_revision
          ; update_mode
          ; autofocus
+         ; max_utf8_bytes
          })
   | Overlay_props { alignment; dismissible } ->
     let alignment =
@@ -602,6 +604,7 @@ let wire_event_tag =
   | Focus_changed -> Tag.focus_changed
   | Text_edit -> Tag.text_edit
   | Text_submit -> Tag.text_submit
+  | Text_limit_reached -> Tag.text_limit_reached
   | Scroll_notification -> Tag.scroll_notification
   | Visible_range_changed -> Tag.visible_range_changed
   | Animation_completed -> Tag.animation_completed

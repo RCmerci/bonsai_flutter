@@ -2,7 +2,7 @@
 
 abstract final class ProtocolVersion {
   static const int protocolMajor = 1;
-  static const int protocolMinor = 14;
+  static const int protocolMinor = 15;
 }
 
 abstract final class ProtocolLimits {
@@ -192,6 +192,7 @@ abstract final class EventTagId {
   static const int nativeEvent = 21;
   static const int semanticsAction = 22;
   static const int resyncRequested = 23;
+  static const int textLimitReached = 24;
 
   static String? debugName(int id) => switch (id) {
     1 => 'press',
@@ -217,6 +218,7 @@ abstract final class EventTagId {
     21 => 'native_event',
     22 => 'semantics_action',
     23 => 'resync_requested',
+    24 => 'text_limit_reached',
     _ => null,
   };
 }
@@ -745,6 +747,7 @@ abstract final class TextInputPropId {
   static const int acceptedLocalRevision = 9;
   static const int updateMode = 10;
   static const int autofocus = 11;
+  static const int maxUtf8Bytes = 12;
 
   static String? debugName(int id) => switch (id) {
     1 => 'session_id',
@@ -758,6 +761,7 @@ abstract final class TextInputPropId {
     9 => 'accepted_local_revision',
     10 => 'update_mode',
     11 => 'autofocus',
+    12 => 'max_utf8_bytes',
     _ => null,
   };
 }

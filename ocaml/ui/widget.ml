@@ -275,6 +275,7 @@ type props =
       ; accepted_local_revision : ID.Text_input.local_revision
       ; update_mode : Text_editing.update_mode
       ; autofocus : bool
+      ; max_utf8_bytes : int option
       }
   | Overlay_props of
       { alignment : Navigation.overlay_alignment
@@ -458,6 +459,7 @@ let props_equal left right =
          right.accepted_local_revision
     && left.update_mode = right.update_mode
     && Bool.equal left.autofocus right.autofocus
+    && Option.equal Int.equal left.max_utf8_bytes right.max_utf8_bytes
   | Overlay_props left, Overlay_props right ->
     left.alignment = right.alignment && Bool.equal left.dismissible right.dismissible
   | Navigator_props left, Navigator_props right ->
@@ -1202,6 +1204,7 @@ let text_input
       ?(keyboard_type = Text_editing.Text)
       ?(input_action = Text_editing.Done)
       ?(autofocus = false)
+      ?max_utf8_bytes
       ~session_id
       ~document_revision
       ~accepted_local_revision
@@ -1210,6 +1213,7 @@ let text_input
       ~on_edit
       ~on_submit
       ~on_focus_changed
+      ?on_limit_reached
       ()
   =
   if ID.Text_input.Session_id.compare session_id ID.Text_input.Session_id.zero < 0
@@ -1226,6 +1230,10 @@ let text_input
       ID.Text_input.Local_revision.zero
     < 0
   then invalid_arg "Widget.text_input: accepted_local_revision must be non-negative";
+  (match max_utf8_bytes with
+   | Some value when value <= 0 || value > 0xffff_ffff ->
+     invalid_arg "Widget.text_input: max_utf8_bytes must fit positive uint32"
+   | None | Some _ -> ());
   create
     ~key
     ~kind:Kind.Text_input
@@ -1242,12 +1250,18 @@ let text_input
          ; accepted_local_revision
          ; update_mode
          ; autofocus
+         ; max_utf8_bytes
          })
     ~event_bindings:
-      [| { tag = Event.Tag.Text_edit; handler = on_edit }
-       ; { tag = Event.Tag.Text_submit; handler = on_submit }
-       ; { tag = Event.Tag.Focus_changed; handler = on_focus_changed }
-      |]
+      (Array.of_list
+         ([ { tag = Event.Tag.Text_edit; handler = on_edit }
+          ; { tag = Event.Tag.Text_submit; handler = on_submit }
+          ; { tag = Event.Tag.Focus_changed; handler = on_focus_changed }
+          ]
+          @
+          match on_limit_reached with
+          | None -> []
+          | Some handler -> [ { tag = Event.Tag.Text_limit_reached; handler } ]))
     ~children:[||]
 ;;
 
@@ -1480,6 +1494,7 @@ module Private = struct
         ; accepted_local_revision : ID.Text_input.local_revision
         ; update_mode : Text_editing.update_mode
         ; autofocus : bool
+        ; max_utf8_bytes : int option
         }
     | Overlay_props of
         { alignment : Navigation.overlay_alignment

@@ -16,6 +16,7 @@ void main(List<String> arguments) {
     'counter_press.hex': counterPress,
     'dart_host_response.hex': hostResponse,
     'dart_text_edit_unicode.hex': textEditUnicode,
+    'dart_text_limit_reached.hex': textLimitReached,
     'dart_environment_changed.hex': environmentChanged,
   };
   final stale = <String>[];
@@ -157,6 +158,20 @@ final environmentChanged = EventBatch(
           pointerKinds: 10,
         ),
       ),
+    ),
+  ],
+);
+
+final textLimitReached = EventBatch(
+  runtimeEpoch: 22,
+  events: const [
+    UiEvent(
+      sequence: 4,
+      displayedRevision: 2,
+      nodeId: 4,
+      handlerId: 45,
+      eventTag: EventTagId.textLimitReached,
+      payload: UnitEventPayload(),
     ),
   ],
 );

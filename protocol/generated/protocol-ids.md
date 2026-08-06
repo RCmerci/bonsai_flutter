@@ -2,7 +2,7 @@
 
 # Protocol IDs
 
-Protocol version: `1.14`
+Protocol version: `1.15`
 
 ## Frame kind
 
@@ -113,6 +113,7 @@ Protocol version: `1.14`
 | `native_event` | 21 |
 | `semantics_action` | 22 |
 | `resync_requested` | 23 |
+| `text_limit_reached` | 24 |
 
 ## Host request
 
@@ -445,6 +446,7 @@ Protocol version: `1.14`
 | `accepted_local_revision` | 9 | `u64` |
 | `update_mode` | 10 | `text_update_mode` |
 | `autofocus` | 11 | `bool` |
+| `max_utf8_bytes` | 12 | `optional_u32` |
 
 ## Overlay properties
 

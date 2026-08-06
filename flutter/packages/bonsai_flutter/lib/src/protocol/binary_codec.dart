@@ -944,10 +944,15 @@ abstract final class FrameCodec {
     final kind = _readNodeKind(reader);
     final changedFields = reader.uint64();
     final props = _readProps(reader, kind, protocolMinor: protocolMinor);
-    final expectedChangedFields =
-        kind == NodeKind.text && protocolMinor < _styledTextProtocolMinor
-        ? _fieldMask(TextPropId.value)
-        : _changedFields(props);
+    final expectedChangedFields = switch (kind) {
+      NodeKind.text when protocolMinor < _styledTextProtocolMinor => _fieldMask(
+        TextPropId.value,
+      ),
+      NodeKind.textInput
+          when protocolMinor < _textInputUtf8LimitProtocolMinor =>
+        _changedFields(props) & ~_fieldMask(TextInputPropId.maxUtf8Bytes),
+      _ => _changedFields(props),
+    };
     if (changedFields != expectedChangedFields) {
       _fail(
         ProtocolErrorCode.invalidProps,
@@ -1108,7 +1113,10 @@ abstract final class FrameCodec {
       value: reader.boolean(),
       enabled: reader.boolean(),
     ),
-    NodeKind.textInput => _readTextInputProps(reader),
+    NodeKind.textInput => _readTextInputProps(
+      reader,
+      protocolMinor: protocolMinor,
+    ),
     NodeKind.overlay => OverlayProps(
       alignment: _enumValue(
         OverlayAlignment.values,
@@ -1567,7 +1575,8 @@ int _changedFields(UiProps props) => switch (props) {
         _fieldMask(TextInputPropId.inputAction) |
         _fieldMask(TextInputPropId.acceptedLocalRevision) |
         _fieldMask(TextInputPropId.updateMode) |
-        _fieldMask(TextInputPropId.autofocus),
+        _fieldMask(TextInputPropId.autofocus) |
+        _fieldMask(TextInputPropId.maxUtf8Bytes),
   OverlayProps() =>
     _fieldMask(OverlayPropId.alignment) | _fieldMask(OverlayPropId.dismissible),
   NavigatorProps() => _fieldMask(NavigatorPropId.restorationScopeId),
@@ -2049,9 +2058,29 @@ void _writeTextInputProps(_Writer writer, TextInputProps props) {
     ..uint64(props.acceptedLocalRevision)
     ..uint8(props.updateMode.index)
     ..uint8(props.autofocus ? 1 : 0);
+  final maxUtf8Bytes = props.maxUtf8Bytes;
+  if (maxUtf8Bytes == null) {
+    writer.uint8(0);
+  } else {
+    if (maxUtf8Bytes <= 0 || maxUtf8Bytes > ProtocolLimits.maxStringBytes) {
+      _fail(
+        ProtocolErrorCode.invalidProps,
+        'Text input max UTF-8 bytes must be within '
+        '1..${ProtocolLimits.maxStringBytes}',
+      );
+    }
+    writer
+      ..uint8(1)
+      ..uint32(maxUtf8Bytes);
+  }
 }
 
-TextInputProps _readTextInputProps(_Reader reader) {
+const _textInputUtf8LimitProtocolMinor = 15;
+
+TextInputProps _readTextInputProps(
+  _Reader reader, {
+  required int protocolMinor,
+}) {
   final sessionId = reader.uint64();
   final documentRevision = reader.uint64();
   final text = reader.string();
@@ -2084,6 +2113,23 @@ TextInputProps _readTextInputProps(_Reader reader) {
     'text update mode',
   );
   final autofocus = reader.boolean();
+  final maxUtf8Bytes = protocolMinor < _textInputUtf8LimitProtocolMinor
+      ? null
+      : switch (reader.uint8()) {
+          0 => null,
+          1 => reader.uint32(),
+          final tag => _fail(
+            ProtocolErrorCode.invalidProps,
+            'Invalid optional text input max UTF-8 bytes tag $tag',
+          ),
+        };
+  if (maxUtf8Bytes != null &&
+      (maxUtf8Bytes == 0 || maxUtf8Bytes > ProtocolLimits.maxStringBytes)) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Text input max UTF-8 bytes is outside the protocol string limit',
+    );
+  }
   return TextInputProps(
     sessionId: sessionId,
     documentRevision: documentRevision,
@@ -2100,6 +2146,7 @@ TextInputProps _readTextInputProps(_Reader reader) {
     acceptedLocalRevision: acceptedLocalRevision,
     updateMode: updateMode,
     autofocus: autofocus,
+    maxUtf8Bytes: maxUtf8Bytes,
   );
 }
 

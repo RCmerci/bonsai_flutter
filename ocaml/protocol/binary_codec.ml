@@ -554,6 +554,7 @@ let write_props writer kind props =
         ; accepted_local_revision
         ; update_mode
         ; autofocus
+        ; max_utf8_bytes
         } ) ->
     let session_id = ID.Text_input.Session_id.to_int64 session_id in
     let document_revision = ID.Text_input.Document_revision.to_int64 document_revision in
@@ -573,7 +574,12 @@ let write_props writer kind props =
     Writer.u8 writer (text_input_action_id input_action);
     Writer.u64 writer accepted_local_revision;
     Writer.u8 writer (text_update_mode_id update_mode);
-    write_bool writer autofocus
+    write_bool writer autofocus;
+    (match max_utf8_bytes with
+     | Some value when value > Generated_protocol.Limits.max_string_bytes ->
+       fail Invalid_props "text input max UTF-8 bytes exceeds the protocol string limit"
+     | None | Some _ -> ());
+    write_optional_u32 writer "text input max UTF-8 bytes" max_utf8_bytes
   | Overlay, Overlay_props { alignment; dismissible } ->
     Writer.u8 writer (overlay_alignment_id alignment);
     write_bool writer dismissible
@@ -850,6 +856,7 @@ let changed_fields = function
       ; field_mask Generated_protocol.Text_input_prop.accepted_local_revision
       ; field_mask Generated_protocol.Text_input_prop.update_mode
       ; field_mask Generated_protocol.Text_input_prop.autofocus
+      ; field_mask Generated_protocol.Text_input_prop.max_utf8_bytes
       ]
   | Overlay_props _ ->
     Int64.logor
@@ -1040,6 +1047,7 @@ let write_update_props writer props =
       ; accepted_local_revision
       ; update_mode
       ; autofocus
+      ; max_utf8_bytes
       } ->
     let session_id = ID.Text_input.Session_id.to_int64 session_id in
     let document_revision = ID.Text_input.Document_revision.to_int64 document_revision in
@@ -1059,7 +1067,12 @@ let write_update_props writer props =
     Writer.u8 writer (text_input_action_id input_action);
     Writer.u64 writer accepted_local_revision;
     Writer.u8 writer (text_update_mode_id update_mode);
-    write_bool writer autofocus
+    write_bool writer autofocus;
+    (match max_utf8_bytes with
+     | Some value when value > Generated_protocol.Limits.max_string_bytes ->
+       fail Invalid_props "text input max UTF-8 bytes exceeds the protocol string limit"
+     | None | Some _ -> ());
+    write_optional_u32 writer "text input max UTF-8 bytes" max_utf8_bytes
   | Overlay_props { alignment; dismissible } ->
     Writer.u8 writer (overlay_alignment_id alignment);
     write_bool writer dismissible
@@ -1714,6 +1727,7 @@ let read_text_overflow reader =
 ;;
 
 let styled_text_protocol_minor = 13
+let text_input_utf8_limit_protocol_minor = 15
 
 let read_text_props reader ~protocol_minor =
   let value = read_string reader in
@@ -2092,6 +2106,15 @@ let read_props reader kind ~protocol_minor =
       | value -> fail Invalid_props "invalid text update mode %d" value
     in
     let autofocus = read_bool reader in
+    let max_utf8_bytes =
+      if protocol_minor < text_input_utf8_limit_protocol_minor
+      then None
+      else read_optional_positive_u32 reader "text input max UTF-8 bytes"
+    in
+    (match max_utf8_bytes with
+     | Some value when value > Generated_protocol.Limits.max_string_bytes ->
+       fail Invalid_props "text input max UTF-8 bytes exceeds the protocol string limit"
+     | None | Some _ -> ());
     Text_input_props
       { session_id
       ; document_revision
@@ -2104,6 +2127,7 @@ let read_props reader kind ~protocol_minor =
       ; accepted_local_revision
       ; update_mode
       ; autofocus
+      ; max_utf8_bytes
       }
   | Overlay ->
     let alignment =
@@ -2178,6 +2202,11 @@ let read_update_props reader ~protocol_minor =
     match props with
     | Wire_frame.Text_props _ when protocol_minor < styled_text_protocol_minor ->
       field_mask Generated_protocol.Text_prop.value
+    | Wire_frame.Text_input_props _
+      when protocol_minor < text_input_utf8_limit_protocol_minor ->
+      Int64.logand
+        (changed_fields props)
+        (Int64.lognot (field_mask Generated_protocol.Text_input_prop.max_utf8_bytes))
     | _ -> changed_fields props
   in
   if changed <> expected then fail Invalid_props "unsupported changed-field bitset";
