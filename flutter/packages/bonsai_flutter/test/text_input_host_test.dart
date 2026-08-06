@@ -161,7 +161,7 @@ void main() {
     },
   );
 
-  testWidgets('unlimited text input remains backward compatible', (
+  testWidgets('unlimited text input has no application-specific limit', (
     tester,
   ) async {
     final store = NodeStore()

@@ -948,9 +948,6 @@ abstract final class FrameCodec {
       NodeKind.text when protocolMinor < _styledTextProtocolMinor => _fieldMask(
         TextPropId.value,
       ),
-      NodeKind.textInput
-          when protocolMinor < _textInputUtf8LimitProtocolMinor =>
-        _changedFields(props) & ~_fieldMask(TextInputPropId.maxUtf8Bytes),
       _ => _changedFields(props),
     };
     if (changedFields != expectedChangedFields) {
@@ -1113,10 +1110,7 @@ abstract final class FrameCodec {
       value: reader.boolean(),
       enabled: reader.boolean(),
     ),
-    NodeKind.textInput => _readTextInputProps(
-      reader,
-      protocolMinor: protocolMinor,
-    ),
+    NodeKind.textInput => _readTextInputProps(reader),
     NodeKind.overlay => OverlayProps(
       alignment: _enumValue(
         OverlayAlignment.values,
@@ -2075,12 +2069,7 @@ void _writeTextInputProps(_Writer writer, TextInputProps props) {
   }
 }
 
-const _textInputUtf8LimitProtocolMinor = 15;
-
-TextInputProps _readTextInputProps(
-  _Reader reader, {
-  required int protocolMinor,
-}) {
+TextInputProps _readTextInputProps(_Reader reader) {
   final sessionId = reader.uint64();
   final documentRevision = reader.uint64();
   final text = reader.string();
@@ -2113,16 +2102,14 @@ TextInputProps _readTextInputProps(
     'text update mode',
   );
   final autofocus = reader.boolean();
-  final maxUtf8Bytes = protocolMinor < _textInputUtf8LimitProtocolMinor
-      ? null
-      : switch (reader.uint8()) {
-          0 => null,
-          1 => reader.uint32(),
-          final tag => _fail(
-            ProtocolErrorCode.invalidProps,
-            'Invalid optional text input max UTF-8 bytes tag $tag',
-          ),
-        };
+  final maxUtf8Bytes = switch (reader.uint8()) {
+    0 => null,
+    1 => reader.uint32(),
+    final tag => _fail(
+      ProtocolErrorCode.invalidProps,
+      'Invalid optional text input max UTF-8 bytes tag $tag',
+    ),
+  };
   if (maxUtf8Bytes != null &&
       (maxUtf8Bytes == 0 || maxUtf8Bytes > ProtocolLimits.maxStringBytes)) {
     _fail(

@@ -332,6 +332,60 @@ void main() {
       },
     );
 
+    test('rejects the obsolete TextInput wire layout', () {
+      const frame = Frame(
+        runtimeEpoch: 10,
+        baseRevision: 0,
+        targetRevision: 1,
+        kind: FrameKind.fullSnapshot,
+        operations: [
+          CreateNode(
+            nodeId: 12,
+            kind: NodeKind.textInput,
+            props: TextInputProps(
+              sessionId: 7,
+              documentRevision: 9,
+              value: TextEditingStateValue(
+                text: '',
+                selection: TextRangeValue(startUtf16: 0, endUtf16: 0),
+                composing: null,
+              ),
+              enabled: true,
+              readOnly: false,
+              obscureText: false,
+              keyboardType: TextKeyboardType.text,
+              inputAction: TextInputActionKind.done,
+              acceptedLocalRevision: 0,
+              updateMode: TextUpdateMode.ack,
+              autofocus: false,
+            ),
+            eventBindings: [],
+          ),
+        ],
+      );
+      final current = FrameCodec.encode(frame);
+      const operationOffset = ProtocolLimits.headerBytes + 5;
+      final bodyLength = readUint32(current, operationOffset + 1);
+      final bodyStart = operationOffset + 5;
+      final maxUtf8BytesTagOffset = bodyStart + bodyLength - 4;
+      final obsolete = Uint8List(current.length - 1)
+        ..setRange(0, maxUtf8BytesTagOffset, current)
+        ..setRange(
+          maxUtf8BytesTagOffset,
+          current.length - 1,
+          current,
+          maxUtf8BytesTagOffset + 1,
+        );
+      ByteData.sublistView(obsolete).setUint16(6, 14, Endian.little);
+      writeUint32(obsolete, operationOffset + 1, bodyLength - 1);
+      writeUint32(obsolete, 36, readUint32(current, 36) - 1);
+
+      expect(
+        () => FrameCodec.decode(obsolete),
+        throwsA(isA<ProtocolException>()),
+      );
+    });
+
     test('decoded full snapshot can be applied atomically', () {
       final decoded = FrameCodec.decode(readHexFixture('counter_full.hex'));
       final store = NodeStore()..apply(decoded);

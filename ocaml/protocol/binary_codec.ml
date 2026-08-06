@@ -1727,7 +1727,6 @@ let read_text_overflow reader =
 ;;
 
 let styled_text_protocol_minor = 13
-let text_input_utf8_limit_protocol_minor = 15
 
 let read_text_props reader ~protocol_minor =
   let value = read_string reader in
@@ -2106,11 +2105,7 @@ let read_props reader kind ~protocol_minor =
       | value -> fail Invalid_props "invalid text update mode %d" value
     in
     let autofocus = read_bool reader in
-    let max_utf8_bytes =
-      if protocol_minor < text_input_utf8_limit_protocol_minor
-      then None
-      else read_optional_positive_u32 reader "text input max UTF-8 bytes"
-    in
+    let max_utf8_bytes = read_optional_positive_u32 reader "text input max UTF-8 bytes" in
     (match max_utf8_bytes with
      | Some value when value > Generated_protocol.Limits.max_string_bytes ->
        fail Invalid_props "text input max UTF-8 bytes exceeds the protocol string limit"
@@ -2202,11 +2197,6 @@ let read_update_props reader ~protocol_minor =
     match props with
     | Wire_frame.Text_props _ when protocol_minor < styled_text_protocol_minor ->
       field_mask Generated_protocol.Text_prop.value
-    | Wire_frame.Text_input_props _
-      when protocol_minor < text_input_utf8_limit_protocol_minor ->
-      Int64.logand
-        (changed_fields props)
-        (Int64.lognot (field_mask Generated_protocol.Text_input_prop.max_utf8_bytes))
     | _ -> changed_fields props
   in
   if changed <> expected then fail Invalid_props "unsupported changed-field bitset";
