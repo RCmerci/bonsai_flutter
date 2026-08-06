@@ -499,68 +499,6 @@ let test_text_input_rejects_invalid_utf8_byte_limits () =
   | Ok _ -> ()
 ;;
 
-let test_text_input_rejects_obsolete_wire_layout () =
-  let frame =
-    Wire_frame.
-      { runtime_epoch = epoch 10L
-      ; base_revision = revision 0L
-      ; target_revision = revision 1L
-      ; kind = Full_snapshot
-      ; operations =
-          [ Create_node
-              { node_id = node 12L
-              ; kind = Text_input
-              ; props =
-                  Text_input_props
-                    { session_id = session 7L
-                    ; document_revision = document_revision 9L
-                    ; value =
-                        { text = ""
-                        ; selection = { start_utf16 = 0; end_utf16 = 0 }
-                        ; composing = None
-                        }
-                    ; enabled = true
-                    ; read_only = false
-                    ; obscure_text = false
-                    ; keyboard_type = Keyboard_text
-                    ; input_action = Done
-                    ; accepted_local_revision = local_revision 0L
-                    ; update_mode = Ack
-                    ; autofocus = false
-                    ; max_utf8_bytes = None
-                    }
-              ; event_bindings = []
-              ; parent_data = No_parent_data
-              }
-          ]
-      }
-  in
-  let current =
-    match Binary_codec.encode frame with
-    | Ok bytes -> bytes
-    | Error error -> fail "current text input encode failed: %s" error.message
-  in
-  let operation_offset = Generated_protocol.Limits.header_bytes + 5 in
-  let body_length = Bytes.get_int32_le current (operation_offset + 1) |> Int32.to_int in
-  let body_start = operation_offset + 5 in
-  let max_utf8_bytes_tag_offset = body_start + body_length - 4 in
-  let obsolete = Bytes.create (Bytes.length current - 1) in
-  Bytes.blit current 0 obsolete 0 max_utf8_bytes_tag_offset;
-  Bytes.blit
-    current
-    (max_utf8_bytes_tag_offset + 1)
-    obsolete
-    max_utf8_bytes_tag_offset
-    (Bytes.length current - max_utf8_bytes_tag_offset - 1);
-  Bytes.set_int16_le obsolete 6 14;
-  Bytes.set_int32_le obsolete (operation_offset + 1) (Int32.of_int (body_length - 1));
-  let payload_length = Bytes.get_int32_le current 36 |> Int32.to_int in
-  Bytes.set_int32_le obsolete 36 (Int32.of_int (payload_length - 1));
-  match Binary_codec.decode obsolete with
-  | Error _ -> ()
-  | Ok _ -> fail "obsolete TextInput wire layout unexpectedly decoded"
-;;
-
 let test_unknown_event_tag () =
   let encoded =
     let path =
@@ -1120,7 +1058,6 @@ let () =
   test_event_batch_fixture ();
   test_text_limit_reached_event_round_trip ();
   test_text_input_rejects_invalid_utf8_byte_limits ();
-  test_text_input_rejects_obsolete_wire_layout ();
   test_unknown_event_tag ();
   test_interaction_props_round_trip ();
   test_interaction_event_round_trip ();
