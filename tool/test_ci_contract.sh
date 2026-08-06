@@ -11,6 +11,7 @@ fail() {
 }
 
 "$repository_root/tool/test_ios_deployment_target_contract.sh"
+"$repository_root/tool/test_network_ios_contract.sh"
 
 require_file() {
   test -f "$1" || fail "missing $1"
@@ -79,6 +80,13 @@ require_exact_installed_version core v0.17.2
 require_exact_installed_version incr_dom v0.17.0
 require_exact_installed_version incremental v0.17.0
 require_exact_installed_version sqlite3 5.4.0
+require_exact_installed_version tls 2.1.2
+require_exact_installed_version tls-eio 2.1.2
+require_exact_installed_version ca-certs-nss 3.126
+require_exact_installed_version httpun 0.2.0
+require_exact_installed_version httpun-eio 0.2.0
+require_exact_installed_version httpun-ws 0.2.0
+require_exact_installed_version gluten-eio 0.5.2
 require_exact_installed_version virtual_dom v0.17.0
 for package in bonsai incr_dom incremental virtual_dom; do
   require_opam_release_source "$package" v0.17.0
@@ -128,7 +136,8 @@ expected_patch_files='./vendor/opam-ios/ocaml-ios64.5.1.1/files/ocamlmklib-fails
 ./vendor/patches/ios/base-host-generator.patch
 ./vendor/patches/ios/eio-posix-darwin-protocol-zero.patch
 ./vendor/patches/ios/eio-posix-darwin-socktype-hints.patch
-./vendor/patches/ios/jst-config-host-discover.patch'
+./vendor/patches/ios/jst-config-host-discover.patch
+./vendor/patches/ios/mirage-crypto-rng-apple-entropy.patch'
 test "$patch_files" = "$expected_patch_files" ||
   fail "upstream patch allowlist changed:
 $patch_files"
@@ -150,6 +159,9 @@ require_sha256 \
 require_sha256 \
   vendor/patches/ios/jst-config-host-discover.patch \
   d1d9fbbf8df8f8e315fad1a834352a5a80e948e62012a104d5362461f195df78
+require_sha256 \
+  vendor/patches/ios/mirage-crypto-rng-apple-entropy.patch \
+  898002b98bddd3a6f212441a7bba32a45ad26f0cb40ab175b2fe0f762e4adea2
 
 if find vendor \
   -type d \
@@ -179,11 +191,17 @@ require_text \
   "$dependency_control_text" \
   'eio_posix' \
   "dependency controls"
-for dependency in piaf httpun-eio tls-eio ca-certs-nss openssl-sys-ios; do
+for dependency in httpun-eio tls-eio ca-certs-nss; do
   reject_text \
-    "$(cat bonsai_flutter.opam dune-project vendor/opam-ios/runtime-closure.lock)" \
+    "$(cat bonsai_flutter.opam)" \
     "$dependency" \
-    "Eio Worker dependency controls"
+    "core package dependency controls"
+done
+for dependency in piaf eio-ssl cohttp-eio openssl-sys-ios; do
+  reject_text \
+    "$(cat bonsai_flutter.opam bonsai_flutter_network_example.opam dune-project)" \
+    "$dependency" \
+    "network dependency controls"
 done
 if find ocaml -type f -print | grep -F '/worker_http/' >/dev/null; then
   fail "framework still contains the legacy worker_http library"
@@ -230,8 +248,11 @@ require_text \
   'eio_posix|1.2|target|https://github.com/ocaml-multicore/eio/releases/download/v1.2/eio-1.2.tbz|3792e912bd8d494bb2e38f73081825e4d212b1970cf2c1f1b2966caa9fd6bc40|eio_posix' \
   "iOS Eio runtime closure lock"
 ios_closure_verifier=$(cat tool/ios/verify_runtime_closure.sh)
-require_text "$ios_closure_verifier" '= 57 ||' "iOS closure package count"
-require_text "$ios_closure_verifier" '= 90 ||' "iOS closure component count"
+require_text \
+  "$ios_closure_verifier" \
+  'closure lock must contain 88 runtime and two target-build packages' \
+  "iOS closure package count"
+require_text "$ios_closure_verifier" '= 128 ||' "iOS closure component count"
 require_text "$ios_closure_verifier" 'sqlite3' "iOS closure findlib roots"
 require_text "$ios_closure_verifier" 'eio_posix' "iOS closure Eio findlib root"
 require_text \
@@ -346,6 +367,7 @@ require_text \
   "dart format --output=none --set-exit-if-changed benchmark integration_test lib test" \
   "ci-flutter"
 require_text "$flutter_commands" "cd flutter/integration_test && flutter analyze" "ci-flutter"
+require_text "$flutter_commands" "clock counter todo text_input host_effects navigation gallery host_navigation mail sqlite_worker network" "ci-flutter network example"
 
 fixture_commands=$(dry_run_target protocol-fixtures-check)
 require_text "$fixture_commands" "dune exec protocol/generator/generate_fixtures.exe -- --check" "protocol-fixtures-check"
@@ -358,6 +380,7 @@ require_text "$macos_commands" "flutter build macos --profile" "ci-macos"
 require_text "$macos_commands" "flutter build macos --release" "ci-macos"
 require_text "$macos_commands" "make integration-native-object" "ci-macos"
 require_text "$macos_commands" "flutter test" "ci-macos"
+require_text "$macos_commands" "examples/network/flutter" "ci-macos network example"
 
 ios_device_object_commands=$(dry_run_target ios-device-native-objects)
 require_text \
@@ -371,6 +394,7 @@ require_text "$ios_commands" "flutter build ios --profile --no-codesign" "ci-ios
 require_text "$ios_commands" "flutter build ios --release --no-codesign" "ci-ios"
 require_text "$ios_commands" "tool/ios/verify_app_bundle.sh" "ci-ios"
 require_text "$ios_commands" "examples/sqlite_worker/flutter" "ci-ios"
+require_text "$ios_commands" "examples/network/flutter" "ci-ios network example"
 require_text "$ios_commands" "verify_app_bundle.sh" "ci-ios SQLite bundle audit"
 require_text "$ios_commands" "require-sqlite" "ci-ios SQLite bundle audit"
 reject_text "$ios_commands" "simulator" "ci-ios"
@@ -402,6 +426,10 @@ require_text \
 ios_device_commands=$(dry_run_target ci-ios-device)
 require_text "$ios_device_commands" "IOS_DEVICE_ID" "ci-ios-device"
 require_text "$ios_device_commands" "tool/ios/run_device_tests.sh" "ci-ios-device"
+require_text \
+  "$ios_device_commands" \
+  "tool/network_spike/test_ios_device_probe.sh" \
+  "ci-ios-device network probe"
 require_text "$ios_device_commands" "--debug" "ci-ios-device"
 require_text "$ios_device_commands" "--profile" "ci-ios-device"
 require_text "$ios_device_commands" "--release" "ci-ios-device"
@@ -421,6 +449,66 @@ require_text \
   "$single_native_object_commands" \
   "tool/macos/stage_native_objects.sh example mail" \
   "native-object"
+require_text \
+  "$native_object_commands" \
+  "examples/network/ocaml/native_embed.exe.o" \
+  "native-objects network example"
+network_stager=$(cat tool/macos/stage_native_objects.sh)
+require_text "$network_stager" "libgmp.a" "network macOS static GMP staging"
+require_text "$network_stager" "nm -u" "network macOS unresolved symbol audit"
+require_text "$network_stager" "openssl" "network macOS prohibited TLS audit"
+require_file bonsai_flutter_network_example.opam
+require_file examples/network/README.md
+require_file examples/network/ocaml/network_example.ml
+require_file examples/network/ocaml/network_service.ml
+require_file examples/network/ocaml/network_http.ml
+require_file examples/network/ocaml/network_websocket.ml
+require_file examples/network/ocaml/network_smoke_cli.ml
+require_file examples/network/ocaml/native_embed.ml
+require_file examples/network/flutter/lib/main.dart
+require_file examples/network/flutter/test/network_host_test.dart
+require_file examples/network/flutter/ios/Runner/PrivacyInfo.xcprivacy
+network_readme=$(cat examples/network/README.md)
+require_text \
+  "$network_readme" \
+  "dune exec examples/network/ocaml/network_smoke_cli.exe" \
+  "network manual public smoke documentation"
+reject_text \
+  "$(dry_run_target ci-ocaml)$(dry_run_target ci-flutter)$(dry_run_target ci-macos)" \
+  "network_smoke_cli" \
+  "network public smoke CI isolation"
+network_manifest=$(cat bonsai_flutter_network_example.opam)
+for dependency in \
+  '"tls" {= "2.1.2"}' \
+  '"tls-eio" {= "2.1.2"}' \
+  '"ca-certs-nss" {= "3.126"}' \
+  '"httpun" {= "0.2.0"}' \
+  '"httpun-eio" {= "0.2.0"}' \
+  '"httpun-ws" {= "0.2.0"}' \
+  '"gluten-eio" {= "0.5.2"}'
+do
+  require_text "$network_manifest" "$dependency" "network example opam dependencies"
+done
+network_source=$(cat examples/network/ocaml/*.ml examples/network/flutter/lib/*.dart)
+reject_pattern \
+  "$network_source" \
+  'allow_insecure|certificate[^[:space:]]*bypass|badCertificateCallback' \
+  "network example source"
+network_dart_source=$(cat examples/network/flutter/lib/*.dart)
+reject_pattern \
+  "$network_dart_source" \
+  'SecurityContext|HttpClient|dart:io|dart:html|WebSocket[.]connect' \
+  "network Flutter source"
+network_debug_entitlements=$(cat examples/network/flutter/macos/Runner/DebugProfile.entitlements)
+network_release_entitlements=$(cat examples/network/flutter/macos/Runner/Release.entitlements)
+require_text \
+  "$network_debug_entitlements" \
+  "com.apple.security.network.client" \
+  "network macOS Debug entitlements"
+require_text \
+  "$network_release_entitlements" \
+  "com.apple.security.network.client" \
+  "network macOS Release entitlements"
 require_file examples/clock/README.md
 require_file examples/clock/ocaml/clock.ml
 require_file examples/clock/ocaml/clock.mli
@@ -461,7 +549,7 @@ reject_text \
   "$native_backend_test_dune" \
   "bonsai_flutter_mail_example" \
   "generic native backend test dependencies"
-for example in clock counter gallery host_effects host_navigation mail navigation sqlite_worker text_input todo; do
+for example in clock counter gallery host_effects host_navigation mail navigation network sqlite_worker text_input todo; do
   require_file "examples/$example/ocaml/native_embed.ml"
   if test "$example" = mail; then
     require_text \

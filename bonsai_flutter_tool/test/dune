@@ -1,0 +1,3 @@
+(test
+ (name tool_tests)
+ (libraries alcotest bonsai_flutter_tool str unix))

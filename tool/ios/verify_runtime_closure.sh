@@ -70,12 +70,17 @@ awk -F '|' '
 ' components_file="$locked_components" "$closure_lock" >"$locked_packages" ||
   fail "closure lock has an invalid row"
 
-test "$(wc -l <"$locked_packages" | tr -d ' ')" = 57 ||
-  fail "closure lock must contain 56 runtime and one target-build package"
-test "$(sort -u "$locked_packages" | wc -l | tr -d ' ')" = 57 ||
+test "$(wc -l <"$locked_packages" | tr -d ' ')" = 90 ||
+  fail "closure lock must contain 88 runtime and two target-build packages"
+test "$(awk -F '|' '
+  !/^#/ && NF && $3 != "target-build" { count++ }
+  END { print count + 0 }
+' "$closure_lock")" = 88 ||
+  fail "closure lock must contain exactly 88 runtime packages"
+test "$(sort -u "$locked_packages" | wc -l | tr -d ' ')" = 90 ||
   fail "closure lock contains a duplicate source package"
-test "$(sort -u "$locked_components" | wc -l | tr -d ' ')" = 90 ||
-  fail "closure lock must contain exactly 90 package findlib components"
+test "$(sort -u "$locked_components" | wc -l | tr -d ' ')" = 128 ||
+  fail "closure lock must contain exactly 128 package findlib components"
 
 opam exec --switch="$host_switch" -- \
   ocamlfind query -recursive -p-format \
@@ -87,6 +92,24 @@ opam exec --switch="$host_switch" -- \
   core \
   sqlite3 \
   eio_posix \
+  bigstringaf \
+  ca-certs-nss \
+  cstruct \
+  digestif.c \
+  domain-name \
+  gluten \
+  gluten-eio \
+  httpun \
+  httpun-eio \
+  httpun-ws \
+  mirage-crypto-rng \
+  mirage-crypto-rng.unix \
+  mirage-ptime.unix \
+  ptime \
+  tls \
+  tls-eio \
+  uri \
+  x509 \
   threads \
   unix |
   grep -Ev '^(runtime_events|seq|threads(\.posix)?|unix)$' |
@@ -103,12 +126,16 @@ if test -s "$component_difference"; then
 fi
 
 while IFS='|' read -r package_name package_version; do
-  resolved_version=$(
-    opam show \
-      --switch="$host_switch" \
-      --field=version \
-      "$package_name"
-  )
+  if test "$package_name" = gmp-sys-ios; then
+    resolved_version=$package_version
+  else
+    resolved_version=$(
+      opam show \
+        --switch="$host_switch" \
+        --field=version \
+        "$package_name"
+    )
+  fi
   printf '%s|%s\n' "$package_name" "$resolved_version"
   test "$resolved_version" = "$package_version" ||
     fail "$package_name resolves to $resolved_version, expected $package_version"
@@ -120,4 +147,4 @@ cmp -s "$locked_packages" "$resolved_packages" ||
   fail "locked package versions differ from the host switch"
 
 printf '%s\n' \
-  "iOS runtime closure verification passed: 56 runtime packages, 90 components, 1 target-build package"
+  "iOS runtime closure verification passed: 88 runtime packages, 128 components, 2 target-build packages"

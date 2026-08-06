@@ -105,6 +105,41 @@ approximate, and manually sampled logical time, one-shot timers, all four
 `Bonsai.Clock.every` policies, and presentation-aware frame waits. Its Dart
 shell remains mechanical; OCaml owns the schedules, statuses, history, and UI.
 
+## OCaml-first application tooling
+
+The `bonsai_flutter_tool` opam package installs the `bonsai-flutter`
+executable. A development checkout can pin the framework and tool together:
+
+```sh
+opam pin add --no-action bonsai_flutter .
+opam pin add --no-action bonsai_flutter_tool .
+opam install bonsai_flutter bonsai_flutter_tool
+```
+
+Initialize an external OCaml workspace and its managed macOS/iOS Flutter host:
+
+```sh
+mkdir my_app && cd my_app
+bonsai-flutter init --name my_app --ios-deployment-target 15.0
+dune runtest
+bonsai-flutter doctor --target macos
+bonsai-flutter build macos --profile release
+```
+
+The iPhoneOS source SDK and unsigned application build use explicit commands:
+
+```sh
+bonsai-flutter sdk build-from-source --target iphoneos
+bonsai-flutter sdk verify --target iphoneos
+bonsai-flutter build ios --profile release --no-codesign
+```
+
+`bonsai-flutter sync-host --check` verifies generated Dart, Native Assets
+configuration, the Apple privacy manifest, and its Xcode resource reference
+without modifying the application. The generated host depends only on the
+public renderer package; the renderer brings in `bonsai_flutter_native`
+transitively. Application behavior remains in OCaml.
+
 ## Testing
 
 Run the complete OCaml 5.1.1 gate:
@@ -184,8 +219,8 @@ of scope.
 ## Examples
 
 The repository contains OCaml-owned Counter, Clock, Todo, Text Input, Host
-Effects, Navigation, Host Navigation, Gallery, Bonsai Mail, and SQLite Worker
-Todo applications under [`examples`](examples). Their Flutter directories
+Effects, Navigation, Host Navigation, Gallery, Bonsai Mail, SQLite Worker Todo,
+and Secure Network Lab applications under [`examples`](examples). Their Flutter directories
 contain only host setup, renderer registration, native-library initialization,
 and platform bootstrap such as Application Support path discovery.
 
@@ -196,6 +231,12 @@ Apple artifacts link the system `libsqlite3` without bundling another SQLite
 implementation. macOS arm64 and unsigned physical-device iPhoneOS arm64
 packaging are validated; signed device execution requires external signing
 material and a reachable iPhone.
+
+The [Secure Network Lab](examples/network/README.md) keeps verified HTTPS and
+WSS connections in the OCaml Worker Domain using `tls-eio`, `ca-certs-nss`,
+`httpun-eio`, and `httpun-ws`. Its deterministic tests use loopback TLS servers;
+public endpoints are used only for explicit manual smoke tests. The macOS
+complete object statically absorbs GMP and introduces no OpenSSL dependency.
 
 ## Current limitations and roadmap
 

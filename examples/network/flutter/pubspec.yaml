@@ -1,0 +1,31 @@
+name: bonsai_flutter_network_example
+description: Mechanical Flutter host for the OCaml-owned secure network example.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=3.44.0"
+
+hooks:
+  user_defines:
+    bonsai_flutter_native:
+      native_artifact_root: ../../../_build/native-artifacts/network/
+      ios_deployment_target: '15.0'
+      require_ocaml_backend: true
+
+dependencies:
+  bonsai_flutter:
+    path: ../../../flutter/packages/bonsai_flutter
+  bonsai_flutter_native:
+    path: ../../../flutter/packages/bonsai_flutter_native
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

@@ -40,6 +40,7 @@ for example in \
   host_effects \
   host_navigation \
   navigation \
+  network \
   sqlite_worker \
   text_input \
   todo
@@ -60,6 +61,19 @@ stage_object() {
     "$expected_platform" \
     "$minimum_version" \
     arm64
+}
+
+audit_network_object() {
+  network_object=$1
+  prohibited_symbols=$(
+    nm -u "$network_object" |
+      awk '{ print $1 }' |
+      grep -Ei \
+        'openssl|libssl|libcrypto|securetransport|^_SSL_|^_CRYPTO_' ||
+      true
+  )
+  test -z "$prohibited_symbols" ||
+    fail "network object references a prohibited TLS backend: $prohibited_symbols"
 }
 
 # BUILD_PATH_PREFIX_MAP removes checkout-specific paths from OCaml metadata.
@@ -85,6 +99,7 @@ for example in \
   host_effects \
   host_navigation \
   navigation \
+  network \
   sqlite_worker \
   text_input \
   todo
@@ -93,6 +108,9 @@ do
   destination_directory="$artifact_root/$example/ios/$target/arm64"
   destination_object="$destination_directory/native_embed.exe.o"
   stage_object "$source_object" "$destination_object"
+  if test "$example" = network; then
+    audit_network_object "$destination_object"
+  fi
 done
 
 for variant in debug release; do

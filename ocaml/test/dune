@@ -343,3 +343,112 @@
   incr_dom.ui_incr
   incr_dom.ui_time_source
   virtual_dom.ui_effect))
+
+(test
+ (name network_policy_tests)
+ (modules network_policy_tests)
+ (libraries alcotest bonsai_flutter.spec_impl bonsai_flutter_network_example))
+
+(test
+ (name network_tls_tests)
+ (modules network_tls_tests)
+ (deps
+  ../../tool/network_spike/localhost-cert.pem
+  ../../tool/network_spike/localhost-key.pem)
+ (libraries
+  alcotest
+  bonsai_flutter.spec_impl
+  bonsai_flutter_network_example
+  cstruct
+  eio
+  eio.core
+  eio.unix
+  eio_posix
+  ptime
+  tls
+  tls-eio
+  x509))
+
+(test
+ (name network_http_tests)
+ (modules network_http_tests)
+ (deps
+  ../../tool/network_spike/localhost-cert.pem
+  ../../tool/network_spike/localhost-key.pem)
+ (libraries
+  alcotest
+  bonsai_flutter.spec_impl
+  bonsai_flutter.driver
+  bonsai_flutter_network_example
+  cstruct
+  eio
+  eio.core
+  eio.unix
+  eio_posix
+  tls
+  tls-eio
+  x509))
+
+(test
+ (name network_websocket_tests)
+ (modules network_websocket_tests)
+ (deps
+  ../../tool/network_spike/localhost-cert.pem
+  ../../tool/network_spike/localhost-key.pem)
+ (libraries
+  alcotest
+  bigstringaf
+  bonsai_flutter.spec_impl
+  bonsai_flutter.driver
+  bonsai_flutter_network_example
+  cstruct
+  digestif
+  eio
+  eio.core
+  eio.unix
+  eio_posix
+  gluten
+  httpun
+  httpun-eio
+  httpun-ws
+  tls
+  tls-eio
+  x509))
+
+(test
+ (name network_service_tests)
+ (modules network_service_tests)
+ (libraries
+  alcotest
+  bonsai
+  bonsai_flutter.spec_impl
+  bonsai_flutter.driver
+  bonsai_flutter_network_example
+  core
+  eio
+  eio.core
+  threads
+  unix
+  virtual_dom.ui_effect))
+
+(test
+ (name network_example_tests)
+ (modules network_example_tests)
+ (libraries
+  alcotest
+  base
+  bonsai
+  bonsai_flutter.spec_impl
+  bonsai_flutter.ui
+  bonsai_flutter.runtime
+  bonsai_flutter.driver
+  bonsai_flutter_test
+  bonsai_flutter_network_example
+  core
+  eio
+  eio.core
+  incr_dom.ui_incr
+  incr_dom.ui_time_source
+  threads
+  unix
+  virtual_dom.ui_effect))

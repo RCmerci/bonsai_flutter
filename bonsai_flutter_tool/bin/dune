@@ -1,0 +1,5 @@
+(executable
+ (name main)
+ (public_name bonsai-flutter)
+ (package bonsai_flutter_tool)
+ (libraries bonsai_flutter_tool cmdliner unix))

@@ -56,6 +56,20 @@ install_for_switch() {
     "optint.$OPTINT_VERSION" \
     "psq.$PSQ_VERSION" \
     "thread-table.$THREAD_TABLE_VERSION" \
+    "ca-certs-nss.$CA_CERTS_NSS_VERSION" \
+    "digestif.$DIGESTIF_VERSION" \
+    "domain-name.$DOMAIN_NAME_VERSION" \
+    "gluten.$GLUTEN_VERSION" \
+    "gluten-eio.$GLUTEN_EIO_VERSION" \
+    "httpun.$HTTPUN_VERSION" \
+    "httpun-eio.$HTTPUN_EIO_VERSION" \
+    "httpun-ws.$HTTPUN_WS_VERSION" \
+    "mirage-crypto-rng.$MIRAGE_CRYPTO_VERSION" \
+    "ptime.$PTIME_VERSION" \
+    "tls.$TLS_VERSION" \
+    "tls-eio.$TLS_VERSION" \
+    "uri.$URI_VERSION" \
+    "x509.$X509_VERSION" \
     --assume-depexts \
     --yes
 

@@ -39,9 +39,11 @@ require_command curl
 require_command dirname
 require_command find
 require_command grep
+require_command ln
 require_command mkdir
 require_command mv
 require_command opam
+require_command make
 require_command patch
 require_command pkg-config
 require_command rg
@@ -89,7 +91,7 @@ case "$package_role" in
   *) fail "invalid package role for $package_name: $package_role" ;;
 esac
 
-work_root="$package_root/$target/$package_name/$package_version/recipe-$OCAML_IOS_RECIPE_REVISION"
+work_root="$package_root/$target/$package_name/$package_version/recipe-$IOS_RUNTIME_RECIPE_REVISION"
 source_archive="$work_root/source.archive"
 partial_archive="$work_root/source.archive.partial"
 source_directory="$work_root/source"
@@ -183,6 +185,22 @@ if test "$package_name" = eio_posix; then
     fail "eio_posix still resolves Darwin addresses without socket type hints"
 fi
 
+if test "$package_name" = mirage-crypto-rng; then
+  entropy_source="$source_directory/rng/unix/mc_getrandom_stubs.c"
+  if grep -F '#include <sys/random.h>' "$entropy_source" >/dev/null; then
+    patch \
+      --batch \
+      --forward \
+      -d "$source_directory" \
+      -p1 \
+      <"$repository_root/vendor/patches/ios/mirage-crypto-rng-apple-entropy.patch"
+  fi
+  grep -F '#include <sys/random.h>' "$entropy_source" >/dev/null &&
+    fail "mirage-crypto-rng still includes unavailable Apple sys/random.h"
+  grep -F 'arc4random_buf(data, len);' "$entropy_source" >/dev/null ||
+    fail "mirage-crypto-rng does not use the Apple system entropy source"
+fi
+
 sdk_version=$(xcrun --sdk "$target" --show-sdk-version)
 sdk_root=$(xcrun --sdk "$target" --show-sdk-path)
 target_archiver=$(xcrun --sdk "$target" --find ar)
@@ -192,6 +210,58 @@ test -f "$target_pkg_config_path/sqlite3.pc" ||
 export PKG_CONFIG_PATH="$target_pkg_config_path"
 export PKG_CONFIG_SYSROOT_DIR="$sdk_root"
 export SQLITE3_DISABLE_LOADABLE_EXTENSIONS=1
+
+if test "$package_name" = gmp-sys-ios; then
+  target_dependency_root="$switch/_opam/ios-deps/gmp"
+  gmp_build_directory="$build_directory/gmp"
+  target_cc="$switch/_opam/ios-sysroot/bin/ios-cc"
+  target_cflags="-O2 -arch arm64 -isysroot $sdk_root -miphoneos-version-min=$IOS_DEPLOYMENT_TARGET"
+  target_ldflags="-Wl,-syslibroot,$sdk_root -miphoneos-version-min=$IOS_DEPLOYMENT_TARGET"
+
+  test -x "$target_cc" ||
+    fail "missing iPhoneOS C compiler wrapper: $target_cc"
+  mkdir -p "$gmp_build_directory" "$target_dependency_root"
+  if test ! -f "$gmp_build_directory/Makefile"; then
+    (
+      cd "$gmp_build_directory"
+      CC="$target_cc" \
+        CFLAGS="$target_cflags" \
+        CPPFLAGS="-arch arm64 -isysroot $sdk_root -miphoneos-version-min=$IOS_DEPLOYMENT_TARGET" \
+        LDFLAGS="$target_ldflags" \
+        "$source_directory/configure" \
+          --host=aarch64-apple-darwin \
+          --prefix="$target_dependency_root" \
+          --disable-shared \
+          --enable-static \
+          --with-pic
+    )
+  fi
+  make -C "$gmp_build_directory" -j "${JOBS:-4}"
+
+  target_gmp_archive="$target_dependency_root/lib/libgmp.a"
+  mkdir -p \
+    "$target_dependency_root/include" \
+    "$target_dependency_root/lib/pkgconfig"
+  cp -f "$gmp_build_directory/.libs/libgmp.a" "$target_gmp_archive"
+  cp -f "$gmp_build_directory/gmp.h" "$target_dependency_root/include/gmp.h"
+  cp -f \
+    "$gmp_build_directory/gmp.pc" \
+    "$target_dependency_root/lib/pkgconfig/gmp.pc"
+  test -f "$target_gmp_archive" || fail "target static GMP archive is missing"
+  test "$(xcrun lipo -archs "$target_gmp_archive")" = arm64 ||
+    fail "target static GMP archive is not arm64-only"
+  if rg -a -l \
+    '/opt/homebrew|/usr/local|MacOSX[0-9]|/private/tmp/bonsai-flutter-opam|-mpopcnt' \
+    "$target_dependency_root/include" \
+    "$target_dependency_root/lib/libgmp.a" \
+    "$target_dependency_root/lib/pkgconfig/gmp.pc" >/dev/null; then
+    fail "$package_name staged a prohibited host path or CPU flag"
+  fi
+
+  printf '%s\n' \
+    "iOS $target runtime package build passed: $package_name $package_version"
+  exit 0
+fi
 
 host_lib=$(
   OPAMROOT="$opam_root" \
@@ -209,13 +279,114 @@ for metadata_name in META dune-package opam; do
   fi
 done
 
+if test "$package_name" = zarith; then
+  gmp_root="$switch/_opam/ios-deps/gmp"
+  zarith_tool_directory="$build_directory/toolchain"
+  test -f "$gmp_root/include/gmp.h" ||
+    fail "target GMP headers are missing; build gmp-sys-ios first"
+  test -f "$gmp_root/lib/libgmp.a" ||
+    fail "target static GMP archive is missing; build gmp-sys-ios first"
+  mkdir -p "$zarith_tool_directory"
+  ln -sf "$switch/_opam/bin/ocaml" "$zarith_tool_directory/ocaml"
+  ln -sf "$switch/_opam/bin/ocamlfind" "$zarith_tool_directory/ocamlfind"
+  for target_tool in ocamlc ocamldep ocamlmklib ocamlopt; do
+    ln -sf \
+      "$switch/_opam/ios-sysroot/bin/$target_tool" \
+      "$zarith_tool_directory/$target_tool"
+  done
+
+  (
+    cd "$source_directory"
+    OPAMROOT="$opam_root" \
+      SDK="$sdk_version" \
+      VER="$IOS_DEPLOYMENT_TARGET" \
+      OCAMLFIND_TOOLCHAIN=ios \
+      opam exec --switch="$switch" -- \
+      env \
+        "PATH=$zarith_tool_directory:$switch/_opam/bin:$PATH" \
+        "PKG_CONFIG_PATH=$gmp_root/lib/pkgconfig" \
+        PKG_CONFIG_SYSROOT_DIR= \
+        CFLAGS=-O2 \
+        "CPPFLAGS=-I$gmp_root/include" \
+        "LDFLAGS=-L$gmp_root/lib" \
+        ./configure \
+          -installdir "$target_package_root" \
+          -gmp
+    OPAMROOT="$opam_root" \
+      SDK="$sdk_version" \
+      VER="$IOS_DEPLOYMENT_TARGET" \
+      OCAMLFIND_TOOLCHAIN=ios \
+      opam exec --switch="$switch" -- \
+      env \
+        "PATH=$zarith_tool_directory:$switch/_opam/bin:$PATH" \
+        make -j "${JOBS:-4}" \
+          zarith_version.cmx \
+          z.cmx \
+          q.cmx \
+          big_int_Z.cmx \
+          libzarith.a
+
+    "$zarith_tool_directory/ocamlopt" \
+      -a \
+      -o zarith.cmxa \
+      zarith_version.cmx \
+      z.cmx \
+      q.cmx \
+      big_int_Z.cmx \
+      -cclib -lzarith \
+      -cclib "-L$gmp_root/lib" \
+      -cclib -lgmp
+  )
+
+  find "$source_directory" \
+    -maxdepth 1 \
+    -type f \
+    \( \
+      -name '*.a' -o \
+      -name '*.cmi' -o \
+      -name '*.cmx' -o \
+      -name '*.cmxa' -o \
+      -name '*.h' -o \
+      -name '*.mli' \
+    \) \
+    -exec cp -f {} "$target_package_root/" \;
+
+  OPAMROOT="$opam_root" \
+    opam exec --switch="$switch" -- \
+    ocamlfind -toolchain ios query -predicates=native zarith >/dev/null ||
+    fail "staged component is not visible to findlib: zarith"
+  "$script_directory/verify_macho.sh" \
+    "$source_directory/z.o" \
+    "$expected_platform" \
+    arm64 \
+    "$expected_minimum"
+  "$script_directory/verify_macho.sh" \
+    "$source_directory/caml_z.o" \
+    "$expected_platform" \
+    arm64 \
+    "$expected_minimum"
+
+  if rg -a -l \
+    '/opt/homebrew|/usr/local|MacOSX[0-9]|/private/tmp/bonsai-flutter-opam|-mpopcnt' \
+    "$target_package_root" >/dev/null; then
+    fail "$package_name staged a prohibited host path or CPU flag"
+  fi
+
+  printf '%s\n' \
+    "iOS $target runtime package build passed: $package_name $package_version"
+  exit 0
+fi
+
 case "$package_name" in
-  fmt | hmap | mtime)
+  fmt | hmap | mtime | logs | ptime)
     require_command opam-installer
     topkg_build_directory="$source_directory/_build-ios"
     topkg_arguments=
     if test "$package_name" = fmt; then
       topkg_arguments="--with-base-unix false --with-cmdliner false"
+    fi
+    if test "$package_name" = logs; then
+      topkg_arguments="--with-base-threads false --with-cmdliner false --with-fmt false --with-js_of_ocaml-compiler false --with-lwt false"
     fi
     (
       cd "$source_directory"

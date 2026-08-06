@@ -16,6 +16,7 @@ NATIVE_OBJECT_TARGETS = \
 	examples/mail/ocaml/native_embed_debug.exe.o \
 	examples/mail/ocaml/native_embed_release.exe.o \
 	examples/navigation/ocaml/native_embed.exe.o \
+	examples/network/ocaml/native_embed.exe.o \
 	examples/sqlite_worker/ocaml/native_embed.exe.o \
 	examples/text_input/ocaml/native_embed.exe.o \
 	examples/todo/ocaml/native_embed.exe.o
@@ -94,7 +95,7 @@ ci-ocaml:
 	dune exec protocol/generator/generate.exe -- --check
 	dune exec protocol/generator/generate_fixtures.exe -- --check
 	dune build --profile release ocaml/bench/runtime_bench.exe
-	opam lint bonsai_flutter.opam bonsai_flutter_test.opam
+	opam lint bonsai_flutter.opam bonsai_flutter_test.opam bonsai_flutter_network_example.opam
 
 ci-flutter:
 	cd flutter/packages/bonsai_flutter && flutter pub get
@@ -111,7 +112,7 @@ ci-flutter:
 	cd flutter/integration_test && flutter pub get
 	cd flutter/integration_test && dart format --output=none --set-exit-if-changed benchmark integration_test lib test test_driver
 	cd flutter/integration_test && flutter analyze
-	@set -e; for example in clock counter todo text_input host_effects navigation gallery host_navigation mail sqlite_worker; do \
+	@set -e; for example in clock counter todo text_input host_effects navigation gallery host_navigation mail sqlite_worker network; do \
 	  (cd "examples/$$example/flutter" && \
 	    flutter pub get && \
 	    dart format --output=none --set-exit-if-changed lib && \
@@ -130,6 +131,11 @@ ci-macos: ci-ocaml
 	cd examples/counter/flutter && flutter build macos --debug
 	cd examples/counter/flutter && flutter build macos --profile
 	cd examples/counter/flutter && flutter build macos --release
+	cd examples/network/flutter && flutter pub get
+	cd examples/network/flutter && NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost flutter test
+	cd examples/network/flutter && flutter build macos --debug
+	cd examples/network/flutter && flutter build macos --profile
+	cd examples/network/flutter && flutter build macos --release
 	$(MAKE) integration-native-object
 	cd flutter/integration_test && flutter pub get
 	cd flutter/integration_test && NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost flutter test
@@ -150,10 +156,18 @@ ci-ios:
 	tool/ios/verify_app_bundle.sh examples/sqlite_worker/flutter/build/ios/iphoneos/Runner.app examples/sqlite_worker/flutter/build/ios/Profile-iphoneos/bonsai_flutter_native.framework.dSYM require-sqlite
 	cd examples/sqlite_worker/flutter && flutter build ios --release --no-codesign
 	tool/ios/verify_app_bundle.sh examples/sqlite_worker/flutter/build/ios/iphoneos/Runner.app examples/sqlite_worker/flutter/build/ios/Release-iphoneos/bonsai_flutter_native.framework.dSYM require-sqlite
+	cd examples/network/flutter && flutter pub get
+	cd examples/network/flutter && flutter build ios --debug --no-codesign
+	tool/ios/verify_app_bundle.sh examples/network/flutter/build/ios/iphoneos/Runner.app
+	cd examples/network/flutter && flutter build ios --profile --no-codesign
+	tool/ios/verify_app_bundle.sh examples/network/flutter/build/ios/iphoneos/Runner.app examples/network/flutter/build/ios/Profile-iphoneos/bonsai_flutter_native.framework.dSYM
+	cd examples/network/flutter && flutter build ios --release --no-codesign
+	tool/ios/verify_app_bundle.sh examples/network/flutter/build/ios/iphoneos/Runner.app examples/network/flutter/build/ios/Release-iphoneos/bonsai_flutter_native.framework.dSYM
 
 ci-ios-device:
 	@test -n "$(IOS_DEVICE_ID)" || (echo "IOS_DEVICE_ID is required" >&2; exit 1)
 	@tool/ios/run_device_tests.sh "$(IOS_DEVICE_ID)" --debug --profile --release
+	@tool/network_spike/test_ios_device_probe.sh
 
 ci-sanitizers:
 	mkdir -p _build/ci

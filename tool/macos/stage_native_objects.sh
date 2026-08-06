@@ -33,6 +33,32 @@ stage_object() {
     arm64
 }
 
+stage_network_object() {
+  source_object=$1
+  command -v pkg-config >/dev/null 2>&1 ||
+    fail "pkg-config is required to locate the static GMP archive"
+  gmp_libdir=$(pkg-config --variable=libdir gmp 2>/dev/null) ||
+    fail "pkg-config could not locate GMP"
+  gmp_archive="$gmp_libdir/libgmp.a"
+  test -f "$gmp_archive" ||
+    fail "static GMP archive is missing: $gmp_archive"
+  merge_directory=$(mktemp -d)
+  merged_object="$merge_directory/native_embed.exe.o"
+  sdk_root=$(xcrun --sdk macosx --show-sdk-path)
+  clang \
+    -r \
+    -target arm64-apple-macos26 \
+    -isysroot "$sdk_root" \
+    "$source_object" \
+    "$gmp_archive" \
+    -o "$merged_object"
+  if nm -u "$merged_object" | grep -Ei 'gmp|openssl|libssl|libcrypto|securetransport'; then
+    fail "network complete object has unresolved GMP or prohibited TLS symbols"
+  fi
+  stage_object network "$merged_object"
+  rm -rf "$merge_directory"
+}
+
 test "$#" -ge 1 && test "$#" -le 2 ||
   fail "usage: tool/macos/stage_native_objects.sh <examples|integration|example NAME>"
 
@@ -48,6 +74,7 @@ case "$1" in
       host_navigation \
       mail \
       navigation \
+      network \
       sqlite_worker \
       text_input \
       todo
@@ -61,6 +88,9 @@ case "$1" in
           mail \
           "$source_root/examples/mail/ocaml/native_embed_release.exe.o" \
           release
+      elif test "$example" = network; then
+        stage_network_object \
+          "$source_root/examples/network/ocaml/native_embed.exe.o"
       else
         stage_object \
           "$example" \
@@ -88,6 +118,10 @@ case "$1" in
           mail \
           "$source_root/examples/mail/ocaml/native_embed_release.exe.o" \
           release
+        ;;
+      network)
+        stage_network_object \
+          "$source_root/examples/network/ocaml/native_embed.exe.o"
         ;;
       clock | counter | gallery | host_effects | host_navigation | navigation | sqlite_worker | text_input | todo)
         stage_object \
