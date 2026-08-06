@@ -15,6 +15,7 @@ export 'src/protocol/event_batch.dart';
 export 'src/protocol/frame.dart';
 export 'src/protocol/generated_protocol.dart';
 export 'src/root/bonsai_flutter_root.dart';
+export 'src/root/bonsai_flutter_host_adapter.dart';
 export 'src/renderer/node_host.dart';
 export 'src/renderer/renderer_resource_store.dart';
 export 'src/renderer/widget_registry.dart';

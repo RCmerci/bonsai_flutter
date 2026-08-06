@@ -53,33 +53,104 @@ flutter:
     prefix
 ;;
 
-let main_dart config =
+let strip_lib_prefix path = String.sub path 4 (String.length path - 4)
+
+let dart_single_quoted value =
+  let buffer = Buffer.create (String.length value + 2) in
+  Buffer.add_char buffer '\'';
+  String.iter
+    (function
+      | '\\' -> Buffer.add_string buffer "\\\\"
+      | '\'' -> Buffer.add_string buffer "\\'"
+      | '$' -> Buffer.add_string buffer "\\$"
+      | character -> Buffer.add_char buffer character)
+    value;
+  Buffer.add_char buffer '\'';
+  Buffer.contents buffer
+;;
+
+let managed_main_dart config adapter =
+  let launch_policy =
+    match adapter.Config.launch_policy with
+    | Config.Fresh -> "fresh"
+    | Config.Replace_existing -> "replaceExisting"
+  in
   Printf.sprintf
-    {|import 'dart:convert';
-import 'dart:typed_data';
+    {|import 'dart:typed_data';
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:flutter/material.dart';
 
+import '%s' as application;
+
 void main() {
-  runApp(const BonsaiFlutterHost());
+  final adapter = application.createBonsaiFlutterHostAdapter();
+  runApp(BonsaiFlutterHost(adapter: adapter));
 }
 
-final class BonsaiFlutterHost extends StatelessWidget {
-  const BonsaiFlutterHost({super.key});
+final class BonsaiFlutterHost extends StatefulWidget {
+  const BonsaiFlutterHost({required this.adapter, super.key});
+
+  final BonsaiFlutterHostAdapter adapter;
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: '%s',
-    home: BonsaiFlutterRoot(
-      config: Uint8List.fromList(utf8.encode('%s')),
-    ),
+  State<BonsaiFlutterHost> createState() => _BonsaiFlutterHostState();
+}
+
+final class _BonsaiFlutterHostState extends State<BonsaiFlutterHost> {
+  late Future<Uint8List> _runtimeConfig;
+
+  @override
+  void initState() {
+    super.initState();
+    _runtimeConfig = _createRuntimeConfig();
+  }
+
+  @override
+  void didUpdateWidget(covariant BonsaiFlutterHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(widget.adapter, oldWidget.adapter)) {
+      _runtimeConfig = _createRuntimeConfig();
+    }
+  }
+
+  Future<Uint8List> _createRuntimeConfig() async {
+    final applicationPayload = await widget.adapter.createApplicationPayload();
+    return RuntimeBootstrapConfig(
+      entrypoint: %s,
+      launchPolicy: RuntimeLaunchPolicy.%s,
+      applicationPayload: applicationPayload,
+    ).encode();
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Uint8List>(
+    future: _runtimeConfig,
+    builder: (context, snapshot) {
+      final runtimeConfig = snapshot.data;
+      final Widget home;
+      if (snapshot.error case final error?) {
+        home = Center(child: Text('Unable to prepare application: $error'));
+      } else if (runtimeConfig == null) {
+        home = const Center(child: CircularProgressIndicator());
+      } else {
+        home = BonsaiFlutterRoot(config: runtimeConfig);
+      }
+      return widget.adapter.buildHost(
+        context: context,
+        child: MaterialApp(title: %s, home: home),
+      );
+    },
   );
 }
 |}
-    config.Config.name
-    config.name
+    (strip_lib_prefix adapter.adapter)
+    (dart_single_quoted adapter.entrypoint)
+    launch_policy
+    (dart_single_quoted config.Config.name)
 ;;
+
+let main_dart config = managed_main_dart config config.Config.host
 
 let privacy_manifest =
   {|<?xml version="1.0" encoding="UTF-8"?>
@@ -114,19 +185,27 @@ let privacy_manifest =
 |}
 ;;
 
-let host_test config =
+let managed_host_test config adapter =
   Printf.sprintf
-    {|import 'package:bonsai_flutter_%s_host/main.dart';
+    {|import 'package:bonsai_flutter_%s_host/%s' as application;
+import 'package:bonsai_flutter_%s_host/main.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('mechanical host can be constructed', () {
-    expect(const BonsaiFlutterHost(), isNotNull);
+  test('managed host can be constructed', () {
+    expect(
+      BonsaiFlutterHost(adapter: application.createBonsaiFlutterHostAdapter()),
+      isNotNull,
+    );
   });
 }
 |}
     config.Config.name
+    (strip_lib_prefix adapter.Config.adapter)
+    config.name
 ;;
+
+let host_test config = managed_host_test config config.Config.host
 
 let render ~config =
   [ Filename.concat config.Config.flutter_root "pubspec.yaml", pubspec config

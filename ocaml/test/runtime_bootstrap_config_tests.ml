@@ -78,6 +78,14 @@ let () =
   require_error
     (envelope ~entrypoint:"counter" (Bytes.make ((1024 * 1024) + 1) 'x'))
     "1 MiB";
+  let maximum_payload = Bytes.make (1024 * 1024) 'x' in
+  let maximum = decoded (envelope ~entrypoint:"counter" maximum_payload) in
+  require
+    (Bytes.equal maximum.application_payload maximum_payload)
+    "1 MiB application payload changed";
+  let oversized_declaration = envelope ~entrypoint:"counter" Bytes.empty in
+  set_u32_le oversized_declaration 16 ((1024 * 1024) + 1);
+  require_error oversized_declaration "1 MiB";
   let trailing =
     Bytes.cat (envelope ~entrypoint:"counter" Bytes.empty) (Bytes.of_string "x")
   in

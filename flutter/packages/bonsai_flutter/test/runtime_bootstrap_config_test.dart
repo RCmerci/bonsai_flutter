@@ -75,6 +75,26 @@ void main() {
     expect(second[20], ascii.encode('c').single);
   });
 
+  test('accepts and preserves an opaque payload at the exact 1 MiB limit', () {
+    final payload = Uint8List(1024 * 1024);
+    payload[0] = 0xff;
+    payload[payload.length - 1] = 0x7f;
+
+    final encoded = RuntimeBootstrapConfig(
+      entrypoint: 'managed',
+      launchPolicy: RuntimeLaunchPolicy.replaceExisting,
+      applicationPayload: payload,
+    ).encode();
+    final data = ByteData.sublistView(encoded);
+    final entrypointLength = utf8.encode('managed').length;
+
+    expect(encoded.sublist(0, 4), ascii.encode('BFR1'));
+    expect(data.getUint32(16, Endian.little), 1024 * 1024);
+    expect(encoded.length, 20 + entrypointLength + (1024 * 1024));
+    expect(encoded[20 + entrypointLength], 0xff);
+    expect(encoded.last, 0x7f);
+  });
+
   test('rejects invalid entrypoints and oversized payloads', () {
     expect(
       () => RuntimeBootstrapConfig(

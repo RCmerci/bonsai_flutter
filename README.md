@@ -140,6 +140,27 @@ without modifying the application. The generated host depends only on the
 public renderer package; the renderer brings in `bonsai_flutter_native`
 transitively. Application behavior remains in OCaml.
 
+Applications configure their asynchronous, application-owned bootstrap
+payload through the required managed adapter host:
+
+```lisp
+(host
+ (mode managed_adapter)
+ (adapter lib/application_host_adapter.dart)
+ (entrypoint my_app)
+ (launch_policy replace_existing))
+```
+
+The adapter file exports `createBonsaiFlutterHostAdapter()`, implements
+`BonsaiFlutterHostAdapter`, and remains application-owned. Synchronization
+continues to replace the generated `lib/main.dart`, but it never modifies the
+adapter. Fresh initialization creates a starter only when the configured file
+does not exist. The generated host awaits the payload, wraps it in the
+versioned `RuntimeBootstrapConfig` (`BFR1`) envelope, and passes the encoded
+bytes to `BonsaiFlutterRoot`. A configuration without `host` is rejected with
+a migration error. See the renderer package README for a complete adapter
+example.
+
 ## Testing
 
 Run the complete OCaml 5.1.1 gate:

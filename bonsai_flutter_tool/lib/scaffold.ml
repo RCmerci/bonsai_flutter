@@ -109,6 +109,11 @@ let configuration_text ~name ~features ~macos_minimum_version ~ios_minimum_versi
  (flutter_root flutter)
  (native_target app/native_embed.exe.o)
 %s
+ (host
+  (mode managed_adapter)
+  (adapter lib/application_host_adapter.dart)
+  (entrypoint %s)
+  (launch_policy replace_existing))
  (macos
   (minimum_version %s))
  (ios
@@ -117,8 +122,31 @@ let configuration_text ~name ~features ~macos_minimum_version ~ios_minimum_versi
 |}
     name
     feature_line
+    name
     macos_minimum_version
     ios_minimum_version
+;;
+
+let application_host_adapter =
+  {|import 'dart:typed_data';
+
+import 'package:bonsai_flutter/bonsai_flutter.dart';
+import 'package:flutter/widgets.dart';
+
+BonsaiFlutterHostAdapter createBonsaiFlutterHostAdapter() =>
+    ApplicationHostAdapter();
+
+final class ApplicationHostAdapter implements BonsaiFlutterHostAdapter {
+  @override
+  Future<Uint8List> createApplicationPayload() async => Uint8List(0);
+
+  @override
+  Widget buildHost({
+    required BuildContext context,
+    required Widget child,
+  }) => child;
+}
+|}
 ;;
 
 let dune_project name =
@@ -185,6 +213,11 @@ let initialize ~project_root ~config =
       (Filename.concat app_directory "native_embed.ml")
       (native_embed config.name);
     write_if_missing (Filename.concat app_directory "dune") app_dune;
+    write_if_missing
+      (Filename.concat
+         (Filename.concat project_root config.Config.flutter_root)
+         config.host.adapter)
+      application_host_adapter;
     List.iter
       (fun (relative_path, contents) ->
          write_if_missing (Filename.concat project_root relative_path) contents)

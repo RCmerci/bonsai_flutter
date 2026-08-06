@@ -27,11 +27,22 @@ type ios =
   ; architectures : string list
   }
 
+type launch_policy =
+  | Fresh
+  | Replace_existing
+
+type managed_adapter =
+  { adapter : string
+  ; entrypoint : string
+  ; launch_policy : launch_policy
+  }
+
 type t =
   { name : string
   ; flutter_root : string
   ; native_target : string
   ; features : Feature.t list
+  ; host : managed_adapter
   ; macos : platform
   ; ios : ios
   }
@@ -112,6 +123,73 @@ let validate_name value =
   then invalid "Invalid application name: %s" value
 ;;
 
+let validate_host_entrypoint value =
+  if value = "" then invalid "host.entrypoint must not be empty";
+  if String.length value > 255
+  then invalid "host.entrypoint must be at most 255 UTF-8 bytes";
+  if not (String.is_valid_utf_8 value) then invalid "host.entrypoint must be valid UTF-8";
+  String.iter
+    (fun character ->
+       if Char.code character < 32 || Char.code character = 127
+       then invalid "host.entrypoint must not contain control characters")
+    value
+;;
+
+let validate_adapter_path value =
+  if String.contains value '\\' then invalid "host.adapter must use forward slashes";
+  validate_relative_path ~field:"host.adapter" value;
+  if not (String.starts_with ~prefix:"lib/" value)
+  then invalid "host.adapter must be inside flutter lib";
+  if String.equal value "lib/main.dart"
+  then invalid "host.adapter must not be the generated host";
+  if not (String.ends_with ~suffix:".dart" value)
+  then invalid "host.adapter must name a .dart file";
+  let valid_component component =
+    String.length component > 0
+    && (match component.[0] with
+        | 'a' .. 'z' -> true
+        | _ -> false)
+    && String.for_all
+         (function
+           | 'a' .. 'z' | '0' .. '9' | '_' -> true
+           | _ -> false)
+         component
+  in
+  let components = String.split_on_char '/' value in
+  let directories, filename =
+    match List.rev components with
+    | filename :: directories -> List.rev directories, filename
+    | [] -> assert false
+  in
+  let basename = Filename.remove_extension filename in
+  if
+    not
+      (List.for_all valid_component directories
+       && valid_component basename
+       && String.equal (Filename.extension filename) ".dart")
+  then invalid "host.adapter must use lower_snake_case path components"
+;;
+
+let parse_host values =
+  let scope = "host" in
+  let fields = named_fields ~scope values in
+  reject_unknown ~scope ~known:[ "mode"; "adapter"; "entrypoint"; "launch_policy" ] fields;
+  let mode = single_atom ~scope ~name:"mode" fields in
+  if not (String.equal mode "managed_adapter")
+  then invalid "Unsupported host mode: %s" mode;
+  let adapter = single_atom ~scope ~name:"adapter" fields in
+  validate_adapter_path adapter;
+  let entrypoint = single_atom ~scope ~name:"entrypoint" fields in
+  validate_host_entrypoint entrypoint;
+  let launch_policy =
+    match single_atom ~scope ~name:"launch_policy" fields with
+    | "fresh" -> Fresh
+    | "replace_existing" -> Replace_existing
+    | value -> invalid "Unsupported host launch policy: %s" value
+  in
+  { adapter; entrypoint; launch_policy }
+;;
+
 let parse_platform ~scope values =
   let fields = named_fields ~scope values in
   reject_unknown ~scope ~known:[ "minimum_version" ] fields;
@@ -163,7 +241,7 @@ let parse_app values =
   let fields = named_fields ~scope values in
   reject_unknown
     ~scope
-    ~known:[ "name"; "flutter_root"; "native_target"; "features"; "macos"; "ios" ]
+    ~known:[ "name"; "flutter_root"; "native_target"; "features"; "host"; "macos"; "ios" ]
     fields;
   let name = single_atom ~scope ~name:"name" fields in
   validate_name name;
@@ -174,9 +252,14 @@ let parse_app values =
   if not (String.ends_with ~suffix:".exe.o" native_target)
   then invalid "native_target must end in .exe.o";
   let features = parse_features (take_field ~scope ~name:"features" fields) in
+  let host =
+    match List.assoc_opt "host" fields with
+    | None -> invalid "app.host is required; configure managed_adapter"
+    | Some values -> parse_host values
+  in
   let macos = parse_platform ~scope:"macos" (take_field ~scope ~name:"macos" fields) in
   let ios = parse_ios (take_field ~scope ~name:"ios" fields) in
-  { name; flutter_root; native_target; features; macos; ios }
+  { name; flutter_root; native_target; features; host; macos; ios }
 ;;
 
 let parse_string input =

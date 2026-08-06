@@ -39,6 +39,52 @@ unless an application supplies the opt-in linked OCaml complete object. The
 macOS arm64 integration workspace exercises that real backend. This package is
 not production ready.
 
+## Managed host adapters
+
+`BonsaiFlutterHostAdapter` is the application-owned extension point used by a
+tool-generated managed host. Its payload method may resolve platform paths,
+capture application state, or call an application-owned codec asynchronously.
+Its widget method may install application-owned platform and lifecycle
+services around the generated host.
+
+For a configuration that names
+`lib/application_host_adapter.dart`, that file must export the fixed factory
+and contract below:
+
+```dart
+import 'dart:typed_data';
+
+import 'package:bonsai_flutter/bonsai_flutter.dart';
+import 'package:flutter/widgets.dart';
+
+BonsaiFlutterHostAdapter createBonsaiFlutterHostAdapter() =>
+    ApplicationHostAdapter();
+
+final class ApplicationHostAdapter implements BonsaiFlutterHostAdapter {
+  @override
+  Future<Uint8List> createApplicationPayload() async {
+    // Resolve platform data and encode the application-specific payload here.
+    return Uint8List.fromList([1, 2, 3]);
+  }
+
+  @override
+  Widget buildHost({
+    required BuildContext context,
+    required Widget child,
+  }) {
+    // Return an application-owned lifecycle or platform-service wrapper here.
+    return child;
+  }
+}
+```
+
+The payload is opaque to `bonsai_flutter`; application codecs and validation
+remain in the application repository. `RuntimeBootstrapConfig` defensively
+copies the bytes and rejects payloads larger than 1 MiB. The generated host
+owns the `BFR1` outer envelope, configured entrypoint and launch policy, and
+`BonsaiFlutterRoot`. Adapter implementations must not encode a second `BFR1`
+envelope.
+
 Run the package checks with:
 
 ```sh

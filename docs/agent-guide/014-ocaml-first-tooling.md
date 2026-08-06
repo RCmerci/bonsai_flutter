@@ -158,6 +158,11 @@ The project uses a checked-in S-expression file named
  (flutter_root flutter)
  (native_target app/native_embed.exe.o)
  (features network)
+ (host
+  (mode managed_adapter)
+  (adapter lib/application_host_adapter.dart)
+  (entrypoint my_app)
+  (launch_policy replace_existing))
  (macos
   (minimum_version 13.0))
  (ios
@@ -174,6 +179,37 @@ and SQLite writes:
 
 Unknown fields, duplicate fields, unsupported schema versions, invalid target
 names, and unsupported architectures must fail before any build starts.
+
+### Managed host adapter mode
+
+Every configuration selects the managed adapter mode explicitly:
+
+```lisp
+(host
+ (mode managed_adapter)
+ (adapter lib/application_host_adapter.dart)
+ (entrypoint my_app)
+ (launch_policy replace_existing))
+```
+
+The contract is intentionally small and deterministic:
+
+- `mode` must be `managed_adapter`;
+- `adapter` is relative to `flutter_root`, must be a lower-snake-case `.dart`
+  path below `lib/`, and must not be `lib/main.dart`;
+- `entrypoint` is a non-empty, valid UTF-8 runtime entrypoint of at most 255
+  bytes without control characters; and
+- `launch_policy` is `fresh` or `replace_existing`.
+
+Absolute paths, parent traversal, backslashes, generated-host ownership,
+missing fields, duplicate fields, and unknown fields or enum values are
+rejected during configuration parsing. The adapter must export
+`BonsaiFlutterHostAdapter createBonsaiFlutterHostAdapter()`. The tool owns
+`lib/main.dart` and `test/widget_test.dart`; the application owns the adapter
+and every service or codec reachable from it. Fresh `init` creates a minimal
+starter only if the configured adapter does not exist. Repeated `init` and
+every `sync-host` invocation preserve it byte-for-byte. A configuration that
+omits `host` is rejected with an explicit managed-adapter migration error.
 
 ## Feature profiles
 
@@ -486,6 +522,33 @@ When the `sqlite` feature is selected, the tool also emits:
 The generated `lib/main.dart` selects the configured native entrypoint and
 mounts the standard Bonsai Flutter host. It contains no application model,
 network client, database policy, retry state, or transport state.
+
+In `managed_adapter` mode, generated startup is equivalent to:
+
+```dart
+final applicationPayload = await adapter.createApplicationPayload();
+final runtimeConfig = RuntimeBootstrapConfig(
+  entrypoint: 'my_app',
+  launchPolicy: RuntimeLaunchPolicy.replaceExisting,
+  applicationPayload: applicationPayload,
+).encode();
+
+final root = BonsaiFlutterRoot(config: runtimeConfig);
+return adapter.buildHost(context: context, child: root);
+```
+
+The actual generated wrapper supplies loading and bootstrap-error UI and puts
+the root in its generated `MaterialApp`. The application payload remains
+opaque and may contain any bytes up to the 1 MiB boundary. Application-owned
+code validates its inner format. The generated host alone creates the exact
+`BFR1` outer envelope, so adapters return only the inner application payload.
+This separation leaves Application Support lookup, platform snapshots,
+locale/time-zone observation, and application codecs in the application
+repository.
+
+Synchronization renders the same managed files for check and write modes.
+Repeated writes are idempotent, check mode reports drift without modifying
+files, and the configured adapter is never part of the generated output set.
 
 ## Continuous integration
 

@@ -9,6 +9,33 @@ let valid_config =
  (flutter_root flutter)
  (native_target app/native_embed.exe.o)
  (features network sqlite)
+ (host
+  (mode managed_adapter)
+  (adapter lib/application_host_adapter.dart)
+  (entrypoint journal)
+  (launch_policy replace_existing))
+ (macos
+  (minimum_version 13.0))
+ (ios
+  (minimum_version 15.0)
+  (architectures arm64)))
+|}
+;;
+
+let managed_adapter_config =
+  {|
+(lang 1)
+
+(app
+ (name journal)
+ (flutter_root flutter)
+ (native_target app/native_embed.exe.o)
+ (features network sqlite)
+ (host
+  (mode managed_adapter)
+  (adapter lib/application_host_adapter.dart)
+  (entrypoint journal_runtime)
+  (launch_policy replace_existing))
  (macos
   (minimum_version 13.0))
  (ios
@@ -38,6 +65,20 @@ let check_error_contains expected = function
 let replace_once source ~pattern ~replacement =
   let regexp = Str.regexp_string pattern in
   Str.replace_first regexp replacement source
+;;
+
+let read_file path =
+  let channel = open_in_bin path in
+  let contents = really_input_string channel (in_channel_length channel) in
+  close_in channel;
+  contents
+;;
+
+let write_file path contents =
+  Scaffold.ensure_directory (Filename.dirname path);
+  let channel = open_out_bin path in
+  output_string channel contents;
+  close_out channel
 ;;
 
 let test_parse_valid_config () =
@@ -108,6 +149,93 @@ let test_invalid_configs () =
       Alcotest.(check bool) name true !found
     | Error message -> Alcotest.failf "%s: unexpected error: %s" name message
     | Ok _ -> Alcotest.failf "%s: expected an error" name)
+;;
+
+let test_managed_adapter_config_validation () =
+  let invalid =
+    [ ( "unknown mode"
+      , replace_once
+          managed_adapter_config
+          ~pattern:"(mode managed_adapter)"
+          ~replacement:"(mode application_owned)"
+      , "Unsupported host mode" )
+    ; ( "unknown field"
+      , replace_once
+          managed_adapter_config
+          ~pattern:"(entrypoint journal_runtime)"
+          ~replacement:"(entrypoint journal_runtime) (mystery true)"
+      , "Unknown host field" )
+    ; ( "absolute adapter"
+      , replace_once
+          managed_adapter_config
+          ~pattern:"lib/application_host_adapter.dart"
+          ~replacement:"/tmp/application_host_adapter.dart"
+      , "host.adapter must be a relative path" )
+    ; ( "traversing adapter"
+      , replace_once
+          managed_adapter_config
+          ~pattern:"lib/application_host_adapter.dart"
+          ~replacement:"lib/../application_host_adapter.dart"
+      , "host.adapter must not contain parent traversal" )
+    ; ( "adapter outside lib"
+      , replace_once
+          managed_adapter_config
+          ~pattern:"lib/application_host_adapter.dart"
+          ~replacement:"application_host_adapter.dart"
+      , "host.adapter must be inside flutter lib" )
+    ; ( "generated main ownership"
+      , replace_once
+          managed_adapter_config
+          ~pattern:"lib/application_host_adapter.dart"
+          ~replacement:"lib/main.dart"
+      , "host.adapter must not be the generated host" )
+    ; ( "backslash adapter"
+      , replace_once
+          managed_adapter_config
+          ~pattern:"lib/application_host_adapter.dart"
+          ~replacement:"lib\\application_host_adapter.dart"
+      , "host.adapter must use forward slashes" )
+    ; ( "unknown launch policy"
+      , replace_once
+          managed_adapter_config
+          ~pattern:"(launch_policy replace_existing)"
+          ~replacement:"(launch_policy restart)"
+      , "Unsupported host launch policy" )
+    ; ( "empty entrypoint"
+      , replace_once
+          managed_adapter_config
+          ~pattern:"(entrypoint journal_runtime)"
+          ~replacement:"(entrypoint \"\")"
+      , "host.entrypoint must not be empty" )
+    ]
+  in
+  List.iter
+    (fun (name, input, expected) ->
+       match Config.parse_string input with
+       | Error message -> Alcotest.(check bool) name true (contains message expected)
+       | Ok _ -> Alcotest.failf "%s: expected an error containing %S" name expected)
+    invalid
+;;
+
+let test_missing_host_requires_migration () =
+  let without_host =
+    {|
+(lang 1)
+
+(app
+ (name journal)
+ (flutter_root flutter)
+ (native_target app/native_embed.exe.o)
+ (features network sqlite)
+ (macos
+  (minimum_version 13.0))
+ (ios
+  (minimum_version 15.0)
+  (architectures arm64)))
+|}
+  in
+  Config.parse_string without_host
+  |> check_error_contains "app.host is required; configure managed_adapter"
 ;;
 
 let test_command_plans () =
@@ -207,6 +335,40 @@ let test_generated_host () =
      | Not_found -> false)
 ;;
 
+let test_generated_managed_adapter_host () =
+  let config = Config.parse_string managed_adapter_config |> get_ok in
+  let files = Host.render ~config in
+  let main = List.assoc "flutter/lib/main.dart" files in
+  let widget_test = List.assoc "flutter/test/widget_test.dart" files in
+  [ "import 'application_host_adapter.dart' as application;"
+  ; "application.createBonsaiFlutterHostAdapter()"
+  ; "await widget.adapter.createApplicationPayload()"
+  ; "RuntimeBootstrapConfig("
+  ; "entrypoint: 'journal_runtime'"
+  ; "launchPolicy: RuntimeLaunchPolicy.replaceExisting"
+  ; "applicationPayload: applicationPayload"
+  ; ").encode()"
+  ; "BonsaiFlutterRoot(config: runtimeConfig)"
+  ; "widget.adapter.buildHost("
+  ]
+  |> List.iter (fun expected ->
+    Alcotest.(check bool) expected true (contains main expected));
+  Alcotest.(check bool)
+    "raw entrypoint is absent"
+    false
+    (contains main "utf8.encode('journal')");
+  Alcotest.(check bool)
+    "generated Flutter construction test imports adapter"
+    true
+    (contains widget_test "application_host_adapter.dart");
+  Alcotest.(check bool)
+    "generated Flutter construction test constructs adapter host"
+    true
+    (contains
+       widget_test
+       "BonsaiFlutterHost(adapter: application.createBonsaiFlutterHostAdapter())")
+;;
+
 let test_ios_privacy_manifest () =
   let config = Config.parse_string valid_config |> get_ok in
   let files = Host.render ~config in
@@ -249,7 +411,19 @@ let test_scaffold_preserves_user_source () =
   Alcotest.(check bool)
     "missing native embed created"
     true
-    (Sys.file_exists (Filename.concat app_dir "native_embed.ml"))
+    (Sys.file_exists (Filename.concat app_dir "native_embed.ml"));
+  let adapter_path = Filename.concat root "flutter/lib/application_host_adapter.dart" in
+  Alcotest.(check bool)
+    "missing application-owned adapter created"
+    true
+    (Sys.file_exists adapter_path);
+  let application_owned = "// application-owned after init\n" in
+  write_file adapter_path application_owned;
+  Scaffold.initialize ~project_root:root ~config |> get_ok;
+  Alcotest.(check string)
+    "repeated init preserves application-owned adapter"
+    application_owned
+    (read_file adapter_path)
 ;;
 
 let test_project_root_discovery () =
@@ -283,6 +457,44 @@ let test_host_sync_check () =
   Alcotest.(check string) "check does not modify" "// drift" still_drifted;
   let repaired = Host.sync ~project_root:root ~config ~mode:Host.Write |> get_ok in
   Alcotest.(check (list string)) "repairs only drift" [ "flutter/lib/main.dart" ] repaired
+;;
+
+let test_managed_adapter_sync_preserves_application_code () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "managed-sync" in
+  let config = Config.parse_string managed_adapter_config |> get_ok in
+  let adapter_path = Filename.concat root "flutter/lib/application_host_adapter.dart" in
+  let application_owned = "// application-owned adapter\nfinal sentinel = 42;\n" in
+  write_file adapter_path application_owned;
+  let first = Host.sync ~project_root:root ~config ~mode:Host.Write |> get_ok in
+  Alcotest.(check bool)
+    "adapter is not a generated output"
+    false
+    (List.mem "flutter/lib/application_host_adapter.dart" first);
+  Alcotest.(check string)
+    "first sync preserves adapter"
+    application_owned
+    (read_file adapter_path);
+  let second = Host.sync ~project_root:root ~config ~mode:Host.Write |> get_ok in
+  Alcotest.(check (list string)) "second sync is idempotent" [] second;
+  Host.sync ~project_root:root ~config ~mode:Host.Check |> get_ok |> ignore;
+  Alcotest.(check string)
+    "check preserves adapter"
+    application_owned
+    (read_file adapter_path);
+  Host.render ~config
+  |> List.iter (fun (relative, expected) ->
+    Alcotest.(check string)
+      ("write/render parity for " ^ relative)
+      expected
+      (read_file (Filename.concat root relative)));
+  let main_path = Filename.concat root "flutter/lib/main.dart" in
+  write_file main_path "// generated host drift\n";
+  Host.sync ~project_root:root ~config ~mode:Host.Check
+  |> check_error_contains "flutter/lib/main.dart";
+  Alcotest.(check string)
+    "drift check does not touch adapter"
+    application_owned
+    (read_file adapter_path)
 ;;
 
 let test_flutter_plans () =
@@ -346,18 +558,38 @@ let () =
     [ ( "config"
       , [ Alcotest.test_case "valid" `Quick test_parse_valid_config
         ; Alcotest.test_case "invalid" `Quick test_invalid_configs
+        ; Alcotest.test_case
+            "managed adapter validation"
+            `Quick
+            test_managed_adapter_config_validation
+        ; Alcotest.test_case
+            "missing host migration"
+            `Quick
+            test_missing_host_requires_migration
         ] )
     ; "plan", [ Alcotest.test_case "stable commands" `Quick test_command_plans ]
     ; "features", [ Alcotest.test_case "target closure" `Quick test_feature_validation ]
     ; "cache", [ Alcotest.test_case "deterministic keys" `Quick test_cache_keys ]
-    ; "host", [ Alcotest.test_case "generated host" `Quick test_generated_host ]
+    ; ( "host"
+      , [ Alcotest.test_case "generated host" `Quick test_generated_host
+        ; Alcotest.test_case
+            "generated managed adapter host"
+            `Quick
+            test_generated_managed_adapter_host
+        ] )
     ; ( "ios-host"
       , [ Alcotest.test_case "privacy manifest" `Quick test_ios_privacy_manifest ] )
     ; ( "init"
       , [ Alcotest.test_case "preserves source" `Quick test_scaffold_preserves_user_source
         ] )
     ; "project", [ Alcotest.test_case "find root" `Quick test_project_root_discovery ]
-    ; "sync", [ Alcotest.test_case "check and repair" `Quick test_host_sync_check ]
+    ; ( "sync"
+      , [ Alcotest.test_case "check and repair" `Quick test_host_sync_check
+        ; Alcotest.test_case
+            "managed adapter preservation"
+            `Quick
+            test_managed_adapter_sync_preserves_application_code
+        ] )
     ; "flutter", [ Alcotest.test_case "command plans" `Quick test_flutter_plans ]
     ; "artifact", [ Alcotest.test_case "layout" `Quick test_artifact_layout ]
     ]
