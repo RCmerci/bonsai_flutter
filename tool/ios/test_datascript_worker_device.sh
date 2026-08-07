@@ -42,6 +42,9 @@ cp "$fixture_root/datascript_worker_probe.ml" "$application_source/datascript_wo
 cp "$fixture_root/datascript_worker_native_embed.ml" \
   "$application_source/datascript_worker_native_embed.ml"
 cp "$fixture_root/bonsai_flutter_ios_closure_fixture.opam" "$application_opam"
+cp "$fixture_root/dune-project.fixture" "$application_root/dune-project"
+dune_closure_helper="$repository_root/_build/default/bonsai_flutter_tool/bin/main.exe"
+(cd "$repository_root" && dune build bonsai_flutter_tool/bin/main.exe)
 
 APPLICATION_OPAM_FILE="$application_opam" \
 BONSAI_FLUTTER_FEATURES=core,sqlite \
@@ -56,6 +59,8 @@ OPAMROOT="$opam_root" \
 HOST_OCAML_SWITCH="$switch" \
 APPLICATION_OPAM_FILE="$application_opam" \
 BONSAI_FLUTTER_FEATURES=core,sqlite \
+BONSAI_FLUTTER_DUNE_CLOSURE_HELPER="$dune_closure_helper" \
+BONSAI_FLUTTER_NATIVE_TARGET=app/datascript_worker_native_embed.exe.o \
   "$script_directory/resolve_application_closure.sh" \
     iphoneos \
     "$application_root" \

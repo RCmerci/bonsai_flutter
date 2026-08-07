@@ -81,6 +81,31 @@ let application_findlib_conf ~framework_root ~project_root =
   Ok (Filename.concat sdk_root "findlib.conf")
 ;;
 
+let current_executable () =
+  let executable = Sys.executable_name in
+  let candidates =
+    if Filename.is_relative executable && not (String.contains executable '/')
+    then
+      Sys.getenv_opt "PATH"
+      |> Option.value ~default:""
+      |> String.split_on_char ':'
+      |> List.map (fun directory ->
+        Filename.concat (if directory = "" then Sys.getcwd () else directory) executable)
+    else [ executable ]
+  in
+  let rec find = function
+    | [] ->
+      Error (Printf.sprintf "The running executable cannot be located: %s" executable)
+    | candidate :: rest ->
+      (try
+         Unix.access candidate [ Unix.X_OK ];
+         Ok (Unix.realpath candidate)
+       with
+       | Unix.Unix_error _ -> find rest)
+  in
+  find candidates
+;;
+
 let identity ~framework_root ~lock ~features =
   let features = features_string features in
   Process_runner.capture
@@ -121,17 +146,21 @@ let verify ~framework_root ~project_root ~features ~target =
 let resolve_application_lock
       ~framework_root
       ~project_root
+      ~native_target
       ~features
       ~application_opam_file
   =
   let lock = closure_lock_path project_root in
   Scaffold.ensure_directory (Filename.dirname lock);
   let switch = Filename.concat framework_root "_build/ios/switches/iphoneos" in
+  let* dune_closure_helper = current_executable () in
   let environment =
     [ "OPAMROOT", Filename.concat framework_root "_build/ios/opam-root"
     ; "HOST_OCAML_SWITCH", switch
     ; "APPLICATION_OPAM_FILE", application_opam_file
     ; "BONSAI_FLUTTER_FEATURES", features_string features
+    ; "BONSAI_FLUTTER_DUNE_CLOSURE_HELPER", dune_closure_helper
+    ; "BONSAI_FLUTTER_NATIVE_TARGET", native_target
     ]
   in
   let* () =
@@ -146,6 +175,7 @@ let resolve_application_lock
 
 let build_application_sdk ~framework_root ~project_root ~features =
   let* application_opam_file = find_application_opam_file project_root in
+  let* config = Config.parse_file (Filename.concat project_root "bonsai-flutter.sexp") in
   let common_environment =
     [ "APPLICATION_OPAM_FILE", application_opam_file
     ; "BONSAI_FLUTTER_FEATURES", features_string features
@@ -164,6 +194,7 @@ let build_application_sdk ~framework_root ~project_root ~features =
     resolve_application_lock
       ~framework_root
       ~project_root
+      ~native_target:config.Config.native_target
       ~features
       ~application_opam_file
   in

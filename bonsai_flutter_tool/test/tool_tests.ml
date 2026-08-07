@@ -583,6 +583,290 @@ let test_artifact_layout () =
        ~profile:Plan.Release)
 ;;
 
+let dune_description source =
+  let length = String.length source in
+  let buffer = Buffer.create length in
+  let rec loop index =
+    if index = length
+    then Buffer.contents buffer
+    else (
+      match source.[index] with
+      | ' ' | '\n' | '\r' | '\t' -> loop (index + 1)
+      | ('(' | ')') as delimiter ->
+        Buffer.add_char buffer delimiter;
+        loop (index + 1)
+      | _ ->
+        let stop = ref index in
+        while
+          !stop < length
+          && not (List.mem source.[!stop] [ ' '; '\n'; '\r'; '\t'; '('; ')' ])
+        do
+          incr stop
+        done;
+        let atom = String.sub source index (!stop - index) in
+        Buffer.add_string buffer (string_of_int (String.length atom));
+        Buffer.add_char buffer ':';
+        Buffer.add_string buffer atom;
+        loop !stop)
+  in
+  loop 0
+;;
+
+let resolve_dune_closure ?(target = "app/native_embed.exe.o") source =
+  Dune_closure.resolve_csexp ~target (dune_description source)
+;;
+
+let check_dune_closure expected source =
+  Alcotest.(check (result (list string) string))
+    "external dependency closure"
+    (Ok expected)
+    (resolve_dune_closure source)
+;;
+
+let test_dune_closure_follows_local_app () =
+  check_dune_closure
+    [ "datascript-ocaml-native" ]
+    {|
+      (default
+       ((library
+         ((names (app))
+          (extensions ())
+          (package ())
+          (source_dir app)
+          (external_deps ((datascript-ocaml-native required)))
+          (internal_deps ())))
+        (executables
+         ((names (native_embed))
+          (extensions (.exe.o))
+          (package ())
+          (source_dir app)
+          (external_deps ())
+          (internal_deps ((app required)))))))
+    |}
+;;
+
+let test_dune_closure_follows_arbitrary_local_library () =
+  check_dune_closure
+    [ "base" ]
+    {|
+      (default
+       ((executables
+         ((names (native_embed))
+          (extensions (.exe.o))
+          (package ())
+          (source_dir app)
+          (external_deps ())
+          (internal_deps ((journal_core required)))))
+        (library
+         ((names (journal_core))
+          (extensions ())
+          (package ())
+          (source_dir journal)
+          (external_deps ((base required)))
+          (internal_deps ())))))
+    |}
+;;
+
+let test_dune_closure_excludes_local_component_roots () =
+  check_dune_closure
+    [ "datascript-ocaml-native.sqlite" ]
+    {|
+      (default
+       ((library
+         ((names (journal_core))
+          (extensions ())
+          (package ())
+          (source_dir lib)
+          (external_deps ((datascript-ocaml-native.sqlite required)))
+          (internal_deps ())))
+        (executables
+         ((names (native_embed))
+          (extensions (.exe.o))
+          (package ())
+          (source_dir app)
+          (external_deps ((datascript-ocaml-native.sqlite required)))
+          (internal_deps ((journal_core required)))))))
+    |}
+;;
+
+let test_dune_closure_follows_transitive_local_chain () =
+  check_dune_closure
+    [ "uutf" ]
+    {|
+      (default
+       ((library
+         ((names (domain))
+          (extensions ())
+          (package ())
+          (source_dir domain)
+          (external_deps ((uutf required)))
+          (internal_deps ())))
+        (executables
+         ((names (native_embed))
+          (extensions (.exe.o))
+          (package ())
+          (source_dir app)
+          (external_deps ())
+          (internal_deps ((application required)))))
+        (library
+         ((names (application))
+          (extensions ())
+          (package ())
+          (source_dir application)
+          (external_deps ())
+          (internal_deps ((domain required)))))))
+    |}
+;;
+
+let test_dune_closure_ignores_unreachable_stanzas () =
+  check_dune_closure
+    [ "base" ]
+    {|
+      (default
+       ((tests
+         ((names (application_test))
+          (extensions (.exe))
+          (package ())
+          (source_dir test)
+          (external_deps ((alcotest required) (ppx_expect required)))
+          (internal_deps ((application required)))))
+        (executables
+         ((names (benchmark))
+          (extensions (.exe))
+          (package ())
+          (source_dir bench)
+          (external_deps ((core_bench required)))
+          (internal_deps ((application required)))))
+        (library
+         ((names (application))
+          (extensions ())
+          (package ())
+          (source_dir app)
+          (external_deps ((base required)))
+          (internal_deps ())))
+        (executables
+         ((names (native_embed))
+          (extensions (.exe.o))
+          (package ())
+          (source_dir app)
+          (external_deps ())
+          (internal_deps ((application required)))))))
+    |}
+;;
+
+let test_dune_closure_combines_direct_and_indirect_external_dependencies () =
+  check_dune_closure
+    [ "bonsai_flutter.driver"; "core"; "uucp" ]
+    {|
+      (default
+       ((executables
+         ((names (native_embed))
+          (extensions (.exe.o))
+          (package ())
+          (source_dir app)
+          (external_deps ((core required) (bonsai_flutter.driver required)))
+          (internal_deps ((application required)))))
+        (library
+         ((names (application))
+          (extensions ())
+          (package ())
+          (source_dir app)
+          (external_deps ((uucp required) (core required)))
+          (internal_deps ())))))
+    |}
+;;
+
+let test_dune_closure_keeps_ppx_only_stanzas_host_only () =
+  check_dune_closure
+    [ "base" ]
+    {|
+      (default
+       ((tests
+         ((names (ppx_test))
+          (extensions (.exe))
+          (package ())
+          (source_dir test)
+          (external_deps ((ppx_expect required)))
+          (internal_deps ())))
+        (executables
+         ((names (native_embed))
+          (extensions (.exe.o))
+          (package ())
+          (source_dir app)
+          (external_deps ((base required)))
+          (internal_deps ())))))
+    |}
+;;
+
+let test_dune_closure_reports_missing_local_stanza () =
+  let actual =
+    resolve_dune_closure
+      {|
+        (default
+         ((executables
+           ((names (native_embed))
+            (extensions (.exe.o))
+            (package ())
+            (source_dir app)
+            (external_deps ())
+            (internal_deps ((missing_local required)))))))
+      |}
+  in
+  Alcotest.(check (result (list string) string))
+    "workspace diagnostic"
+    (Error
+       "Dune workspace dependency graph references a missing local stanza: missing_local")
+    actual
+;;
+
+let test_dune_closure_rejects_invalid_semantic_output () =
+  let expected = Error "Malformed Dune external dependency description" in
+  Alcotest.(check (result (list string) string))
+    "malformed output"
+    expected
+    (Dune_closure.resolve_csexp ~target:"app/native_embed.exe.o" "(4:atom");
+  let unsupported = dune_description "(future ())" in
+  Alcotest.(check (result (list string) string))
+    "unsupported output"
+    (Error "Unsupported Dune external dependency description")
+    (Dune_closure.resolve_csexp ~target:"app/native_embed.exe.o" unsupported)
+;;
+
+let test_dune_closure_output_is_deterministic () =
+  let first =
+    {|
+      (default
+       ((library
+         ((names (application)) (extensions ()) (package ()) (source_dir app)
+          (external_deps ((uutf required) (base required))) (internal_deps ())))
+        (executables
+         ((names (native_embed)) (extensions (.exe.o)) (package ()) (source_dir app)
+          (external_deps ((core required)))
+          (internal_deps ((application required)))))))
+    |}
+  in
+  let second =
+    {|
+      (default
+       ((executables
+         ((internal_deps ((application required)))
+          (external_deps ((core required))) (source_dir app) (package ())
+          (extensions (.exe.o)) (names (native_embed))))
+        (library
+         ((internal_deps ()) (external_deps ((base required) (uutf required)))
+          (source_dir app) (package ()) (extensions ()) (names (application))))))
+    |}
+  in
+  Alcotest.(check (result (list string) string))
+    "ordering independent"
+    (resolve_dune_closure first)
+    (resolve_dune_closure second);
+  Alcotest.(check (result (list string) string))
+    "canonical ordering"
+    (Ok [ "base"; "core"; "uutf" ])
+    (resolve_dune_closure first)
+;;
+
 let () =
   Alcotest.run
     "bonsai_flutter_tool"
@@ -623,5 +907,44 @@ let () =
         ] )
     ; "flutter", [ Alcotest.test_case "command plans" `Quick test_flutter_plans ]
     ; "artifact", [ Alcotest.test_case "layout" `Quick test_artifact_layout ]
+    ; ( "dune-closure"
+      , [ Alcotest.test_case "local app" `Quick test_dune_closure_follows_local_app
+        ; Alcotest.test_case
+            "arbitrary local library"
+            `Quick
+            test_dune_closure_follows_arbitrary_local_library
+        ; Alcotest.test_case
+            "local component exclusion"
+            `Quick
+            test_dune_closure_excludes_local_component_roots
+        ; Alcotest.test_case
+            "transitive local chain"
+            `Quick
+            test_dune_closure_follows_transitive_local_chain
+        ; Alcotest.test_case
+            "unreachable stanzas"
+            `Quick
+            test_dune_closure_ignores_unreachable_stanzas
+        ; Alcotest.test_case
+            "direct and indirect dependencies"
+            `Quick
+            test_dune_closure_combines_direct_and_indirect_external_dependencies
+        ; Alcotest.test_case
+            "PPX-only stanzas"
+            `Quick
+            test_dune_closure_keeps_ppx_only_stanzas_host_only
+        ; Alcotest.test_case
+            "missing local stanza"
+            `Quick
+            test_dune_closure_reports_missing_local_stanza
+        ; Alcotest.test_case
+            "invalid semantic output"
+            `Quick
+            test_dune_closure_rejects_invalid_semantic_output
+        ; Alcotest.test_case
+            "deterministic output"
+            `Quick
+            test_dune_closure_output_is_deterministic
+        ] )
     ]
 ;;

@@ -144,8 +144,14 @@ do
 done
 
 resolver=$(cat tool/ios/resolve_application_closure.sh)
-require_text "$resolver" 'extract_dune_libraries' "application closure roots"
-require_text "$resolver" 'application opam metadata has no target roots' "application closure roots"
+require_text \
+  "$resolver" \
+  'BONSAI_FLUTTER_DUNE_CLOSURE_HELPER' \
+  "application semantic closure roots"
+require_text \
+  "$resolver" \
+  'application opam metadata has no dependency roots' \
+  "application package metadata"
 reject_pattern "$resolver" 'network_root|network roots' "application closure resolver"
 
 network_dune=$(cat examples/network/ocaml/dune)

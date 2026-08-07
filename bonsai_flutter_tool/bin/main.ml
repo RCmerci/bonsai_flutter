@@ -202,6 +202,12 @@ let sdk_fetch target features =
   Sdk.fetch ~target ~features
 ;;
 
+let resolve_dune_closure project_root target =
+  let* dependencies = Dune_closure.resolve_project ~project_root ~target in
+  List.iter print_endline dependencies;
+  Ok ()
+;;
+
 let target =
   Arg.(
     required
@@ -227,6 +233,20 @@ let platform =
 
 let forwarded = Arg.(value & pos_right 0 string [] & info [] ~docv:"FLUTTER_ARGUMENT")
 let features = Arg.(value & opt string "" & info [ "features" ] ~docv:"FEATURES")
+
+let resolve_dune_closure_command =
+  let project_root =
+    Arg.(required & opt (some string) None & info [ "project-root" ] ~docv:"PATH")
+  in
+  let target =
+    Arg.(required & opt (some string) None & info [ "target" ] ~docv:"DUNE_TARGET")
+  in
+  Cmd.v
+    (Cmd.info
+       "internal-resolve-dune-closure"
+       ~doc:"Resolve the external Dune closure of one application target.")
+    Term.(const resolve_dune_closure $ project_root $ target)
+;;
 
 let init_command =
   let name = Arg.(value & opt (some string) None & info [ "name" ] ~docv:"NAME") in
@@ -321,6 +341,7 @@ let command =
     ; build_command
     ; sync_host_command
     ; sdk_command
+    ; resolve_dune_closure_command
     ]
 ;;
 

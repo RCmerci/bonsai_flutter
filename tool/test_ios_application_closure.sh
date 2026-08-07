@@ -40,6 +40,120 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 
+opam_root_resolver=tool/ios/resolve_application_closure.sh
+filtered_exact_opam="$temporary_directory/filtered-exact.opam"
+cat >"$filtered_exact_opam" <<'EOF'
+opam-version: "2.0"
+name: "filtered-exact"
+version: "0.1.0"
+depends: [
+  "ocaml" {= "5.1.1"}
+  "dune" {= "3.23.1"}
+  "bonsai_flutter_test" {with-test & = "0.1.0~dev"}
+  "alcotest" {= "1.7.0" & with-test}
+]
+EOF
+if ! filtered_roots=$(
+  "$opam_root_resolver" --application-opam-roots "$filtered_exact_opam" 2>&1
+); then
+  printf '%s\n' "$filtered_roots" >&2
+  fail "exact application roots with opam filters are rejected"
+else
+  require_text \
+    "$filtered_roots" \
+    'bonsai_flutter_test' \
+    "filtered exact application roots"
+  require_text "$filtered_roots" 'alcotest' "prefix-filtered exact application roots"
+  reject_pattern "$filtered_roots" '^(ocaml|dune)$' "compiler and build-system roots"
+fi
+
+inexact_opam="$temporary_directory/inexact.opam"
+cat >"$inexact_opam" <<'EOF'
+opam-version: "2.0"
+name: "inexact"
+version: "0.1.0"
+depends: [
+  "ocaml" {= "5.1.1"}
+  "dune" {>= "3.17"}
+]
+EOF
+if inexact_output=$(
+  "$opam_root_resolver" --application-opam-roots "$inexact_opam" 2>&1
+); then
+  fail "inexact application root validation unexpectedly passed"
+else
+  require_text \
+    "$inexact_output" \
+    'application opam root dune must use an exact version constraint' \
+    "inexact application root diagnostic"
+fi
+
+findlib_test_bin="$temporary_directory/findlib-bin"
+findlib_external_libraries="$temporary_directory/findlib-external-libraries"
+findlib_components="$temporary_directory/findlib-components"
+findlib_roots="$temporary_directory/findlib-roots"
+mkdir -p "$findlib_test_bin"
+cat >"$findlib_test_bin/opam" <<'EOF'
+#!/bin/sh
+while test "$#" -gt 0 && test "$1" != --; do
+  shift
+done
+test "${1:-}" = -- && shift
+test "${1:-}" = ocamlfind && shift
+test "${1:-}" = query && shift
+if test "${1:-}" = -recursive; then
+  shift 2
+  case "$1" in
+    bonsai_flutter.driver)
+      printf '%s\n' bonsai_flutter.driver eio mtime mtime.clock
+      ;;
+    uunf)
+      printf '%s\n' uunf uutf
+      ;;
+    *) exit 1 ;;
+  esac
+  exit 0
+fi
+exit 0
+EOF
+chmod +x "$findlib_test_bin/opam"
+printf '%s\n' bonsai_flutter.driver uunf unix >"$findlib_external_libraries"
+if ! PATH="$findlib_test_bin:$PATH" \
+  OPAMROOT="$temporary_directory/opam-root" \
+  HOST_OCAML_SWITCH="$temporary_directory/host-switch" \
+  "$opam_root_resolver" \
+    --findlib-closure \
+    "$findlib_external_libraries" \
+    "$findlib_components" \
+    "$findlib_roots"
+then
+  fail "framework-aware findlib closure resolution failed"
+else
+  resolved_findlib_components=$(cat "$findlib_components")
+  resolved_findlib_roots=$(cat "$findlib_roots")
+  require_text \
+    "$resolved_findlib_components" \
+    'mtime.clock' \
+    "framework transitive findlib dependencies"
+  require_text \
+    "$resolved_findlib_components" \
+    'eio' \
+    "framework transitive runtime dependencies"
+  require_text \
+    "$resolved_findlib_components" \
+    'uunf' \
+    "application external findlib components"
+  reject_pattern \
+    "$resolved_findlib_components" \
+    '^bonsai_flutter([._]|$)' \
+    "framework-owned target components"
+  require_text "$resolved_findlib_roots" 'uunf' "external target closure roots"
+  reject_pattern \
+    "$resolved_findlib_roots" \
+    '^bonsai_flutter([._]|$)' \
+    "framework target closure roots"
+fi
+
 exercise_host_setup() {
   application_opam_file=$1
   fake_repository="$temporary_directory/repository"
@@ -81,6 +195,42 @@ resolver=tool/ios/resolve_application_closure.sh
 require_file "$resolver"
 require_file tool/ios/closure_capabilities.lock
 resolver_source=$(cat "$resolver")
+reject_pattern \
+  "$resolver_source" \
+  'extract_dune_libraries|find.*-name dune' \
+  "Dune source-text dependency discovery"
+reject_pattern \
+  "$resolver_source" \
+  'root_component|application package roots remain authoritative external components' \
+  "opam package roots promoted into the target component closure"
+require_text \
+  "$resolver_source" \
+  'BONSAI_FLUTTER_DUNE_CLOSURE_HELPER' \
+  "OCaml semantic closure helper"
+require_text \
+  "$resolver_source" \
+  'BONSAI_FLUTTER_NATIVE_TARGET' \
+  "configured native embed target"
+require_text \
+  "$resolver_source" \
+  'opam exec --switch="$host_switch"' \
+  "pinned host-switch Dune discovery"
+require_text \
+  "$resolver_source" \
+  'Dune workspace/configuration error while resolving' \
+  "missing local dependency diagnostic"
+require_text \
+  "$resolver_source" \
+  'External Dune library $library does not resolve in the pinned host switch' \
+  "missing external dependency diagnostic"
+require_text \
+  "$(cat bonsai_flutter_tool/lib/dune_closure.ml)" \
+  '"describe"; "external-lib-deps"; "--format=csexp"' \
+  "Dune machine-readable dependency description"
+reject_pattern \
+  "$(cat bonsai_flutter_tool/lib/dune_closure.ml)" \
+  'Str\.|Re\.|Pcre|grep|awk' \
+  "Csexp semantic parser"
 require_text "$resolver_source" 'Extra C object files' "foreign-stub archive preflight"
 require_text "$resolver_source" 'Unix platform APIs' "Unix capability preflight"
 require_text \
@@ -145,6 +295,10 @@ require_text \
   "$(cat bonsai_flutter_tool/bin/main.ml)" \
   '~project_root:(Some project_root)' \
   "SDK command application closure root"
+require_text \
+  "$(cat bonsai_flutter_tool/bin/main.ml)" \
+  'internal-resolve-dune-closure' \
+  "semantic closure helper command"
 reject_pattern \
   "$sdk_source" \
   'vendor/opam-ios/runtime-closure.lock' \

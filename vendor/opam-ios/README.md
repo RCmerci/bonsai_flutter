@@ -5,9 +5,11 @@ generates the same lock format per application; applications do not share a
 fixed package union.
 
 `runtime-closure.lock` is generated from
-`tool/ios/fixtures/application-closure`. Its pinned opam metadata and Dune
-libraries are the roots. The fixture deliberately includes `astring`, a pure
-OCaml package that is not named by framework source, as well as these
+`tool/ios/fixtures/application-closure`. Its pinned opam metadata fixes source
+identities and defines the host/build dependency universe, while Dune semantic
+output provides the external component roots reachable from the fixture's
+native embed target. The fixture deliberately includes `astring`, a pure OCaml
+package that is not named by framework source, as well as these
 DataScript-facing libraries:
 
 ```text
@@ -27,12 +29,18 @@ numbers are verification evidence, not constants in the resolver or verifier.
 and the digest before accepting the lock.
 
 Every source URL, source commit, version, and SHA-256 digest is immutable.
-`tool/ios/resolve_application_closure.sh` resolves Dune library names through
-the pinned host switch, maps them to owning opam packages, and records the
-complete target dependency closure in deterministic order. Host-only PPX
-executables, generators, and build dependencies are locked separately. Only
-their descriptions are projected into the target findlib path; their host
-archives, plugins, objects, and executables are not staged.
+`tool/ios/resolve_application_closure.sh` runs `dune describe
+external-lib-deps --format=csexp` in the pinned host switch. The OCaml tooling
+parses that machine-readable description, starts at the configured native
+embed target, follows project-local libraries as internal dependencies, and
+emits only reachable external library names. The resolver maps only those
+external components to owning opam packages and records the complete target
+dependency closure in deterministic order. Unrelated Dune tests, benchmarks,
+tools, and top-level opam package names do not contribute target roots.
+Host-only PPX executables, generators, and build dependencies are locked
+separately from the exact application metadata. Only their descriptions are
+projected into the target findlib path; their host archives, plugins, objects,
+and executables are not staged.
 
 Packages detected as pure OCaml and built by the supported Dune or Topkg
 mechanisms do not need a package allowlist entry. Packages with C or Rust

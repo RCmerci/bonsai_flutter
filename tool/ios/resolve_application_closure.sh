@@ -48,6 +48,71 @@ sdk_identity() {
     awk '{ print $1 }'
 }
 
+application_opam_roots() {
+  opam_file=$1
+  awk '
+    /^depends:[[:space:]]*\[/ { in_depends = 1; next }
+    in_depends && /^[[:space:]]*\]/ { exit }
+    in_depends && match($0, /"[A-Za-z0-9_.+-]+"/) {
+      package = substr($0, RSTART + 1, RLENGTH - 2)
+      constraint = $0
+      sub(/^[^{]*\{/, "", constraint)
+      sub(/\}[^}]*$/, "", constraint)
+      if (constraint !~ /(^|[[:space:]&(])=[[:space:]]*"/) {
+        printf "application opam root %s must use an exact version constraint\n", package > "/dev/stderr"
+        invalid = 1
+        exit
+      }
+      if (package != "ocaml" && package != "dune") print package
+    }
+    END { if (invalid) exit 1 }
+  ' "$opam_file"
+}
+
+is_builtin_library() {
+  case "$1" in
+    str | unix | threads | dynlink | bigarray) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+is_framework_library() {
+  case "$1" in
+    bonsai_flutter | bonsai_flutter.* | bonsai_flutter_*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+resolve_findlib_closure() {
+  external_libraries=$1
+  components=$2
+  closure_roots=$3
+  : >"$components"
+  : >"$closure_roots"
+
+  while IFS= read -r library; do
+    test -n "$library" || continue
+    is_builtin_library "$library" && continue
+    if ! is_framework_library "$library"; then
+      printf '%s\n' "$library" >>"$closure_roots"
+    fi
+    if OPAMROOT="$opam_root" opam exec --switch="$host_switch" -- \
+      ocamlfind query "$library" >/dev/null 2>&1; then
+      OPAMROOT="$opam_root" opam exec --switch="$host_switch" -- \
+        ocamlfind query -recursive -p-format "$library" >>"$components"
+    else
+      fail "External Dune library $library does not resolve in the pinned host switch"
+    fi
+  done <"$external_libraries"
+
+  grep -Ev \
+    '^(bonsai_flutter($|[._].*)|runtime_events|seq|str|threads(\.posix)?|unix|dynlink|bigarray)$' \
+    "$components" | sort -u >"$components.sorted"
+  mv "$components.sorted" "$components"
+  sort -u "$closure_roots" >"$closure_roots.sorted"
+  mv "$closure_roots.sorted" "$closure_roots"
+}
+
 if test "${1:-}" = --identity; then
   shift
   lock=
@@ -73,6 +138,25 @@ if test "${1:-}" = --identity; then
   exit 0
 fi
 
+if test "${1:-}" = --application-opam-roots; then
+  test "$#" -eq 2 || fail "--application-opam-roots requires one opam file"
+  test -f "$2" || fail "application opam file does not exist: $2"
+  roots=$(application_opam_roots "$2") || exit 1
+  printf '%s\n' "$roots" | sort -u
+  exit 0
+fi
+
+if test "${1:-}" = --findlib-closure; then
+  test "$#" -eq 4 ||
+    fail "--findlib-closure requires external-library, component, and root paths"
+  test -f "$2" || fail "external library file does not exist: $2"
+  opam_root=${OPAMROOT:-"$repository_root/_build/ios/opam-root"}
+  host_switch=${HOST_OCAML_SWITCH:-}
+  test -n "$host_switch" || fail "HOST_OCAML_SWITCH is required"
+  resolve_findlib_closure "$2" "$3" "$4"
+  exit 0
+fi
+
 test "$#" -eq 3 ||
   fail "usage: resolve_application_closure.sh iphoneos <project-root> <output-lock>"
 target=$1
@@ -84,7 +168,6 @@ test -f "$capability_lock" || fail "missing capability lock: $capability_lock"
 
 require_command awk
 require_command curl
-require_command dune
 require_command find
 require_command mktemp
 require_command ocamlfind
@@ -121,7 +204,7 @@ test -f "$application_opam_file" ||
   fail "application opam file does not exist: $application_opam_file"
 
 temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/bonsai-flutter-resolver.XXXXXX")
-libraries_file="$temporary_directory/libraries"
+external_libraries_file="$temporary_directory/external-libraries"
 components_file="$temporary_directory/components"
 closure_roots_file="$temporary_directory/closure-roots"
 target_packages_file="$temporary_directory/target-packages"
@@ -143,100 +226,37 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 mkdir -p "$source_cache" "$(dirname -- "$output_lock")"
 
-extract_dune_libraries() {
-  find "$project_root" -type f -name dune -print |
-    sort |
-    while IFS= read -r dune_file; do
-      awk '
-        /\(libraries([[:space:]]|$)/ { in_libraries = 1 }
-        in_libraries {
-          line = $0
-          sub(/;.*/, "", line)
-          open_count = gsub(/\(/, "(", line)
-          close_count = gsub(/\)/, ")", line)
-          depth += open_count - close_count
-          gsub(/[()]/, " ", line)
-          count = split(line, words, /[[:space:]]+/)
-          for (word_index = 1; word_index <= count; word_index++) {
-            word = words[word_index]
-            if (word != "" && word != "libraries" && word !~ /^:/ && word !~ /^%/) {
-              print word
-            }
-          }
-          if (depth <= 0) { in_libraries = 0; depth = 0 }
-        }
-      ' "$dune_file"
-    done |
-    sort -u
-}
+dune_closure_helper=${BONSAI_FLUTTER_DUNE_CLOSURE_HELPER:-}
+native_target=${BONSAI_FLUTTER_NATIVE_TARGET:-}
+test -n "$dune_closure_helper" ||
+  fail "BONSAI_FLUTTER_DUNE_CLOSURE_HELPER must name the OCaml semantic closure helper"
+test -x "$dune_closure_helper" ||
+  fail "Dune semantic closure helper is unavailable: $dune_closure_helper"
+test -n "$native_target" ||
+  fail "BONSAI_FLUTTER_NATIVE_TARGET must name the application native embed target"
 
-extract_dune_libraries >"$libraries_file"
-test -s "$libraries_file" || fail "application Dune files declare no libraries"
+if ! OPAMROOT="$opam_root" opam exec --switch="$host_switch" -- \
+  "$dune_closure_helper" \
+    internal-resolve-dune-closure \
+    --project-root "$project_root" \
+    --target "$native_target" \
+    >"$external_libraries_file"
+then
+  fail "Dune workspace/configuration error while resolving $native_target"
+fi
+test -s "$external_libraries_file" ||
+  fail "application native embed target has no external Dune dependencies"
 
-root_packages=$(
-  awk '
-    /^depends:[[:space:]]*\[/ { in_depends = 1; next }
-    in_depends && /^[[:space:]]*\]/ { exit }
-    in_depends && match($0, /"[A-Za-z0-9_.+-]+"/) {
-      print substr($0, RSTART + 1, RLENGTH - 2)
-    }
-  ' "$application_opam_file" |
-    grep -Ev '^(ocaml|dune)$' |
-    sort -u |
-    paste -sd, -
-)
-test -n "$root_packages" || fail "application opam metadata has no target roots"
+if ! application_packages=$(application_opam_roots "$application_opam_file"); then
+  fail "application opam metadata has invalid dependency constraints"
+fi
+application_packages=$(printf '%s\n' "$application_packages" | sort -u | paste -sd, -)
+test -n "$application_packages" || fail "application opam metadata has no dependency roots"
 
-for framework_root in \
-  bonsai \
-  bonsai.driver \
-  incr_dom.ui_incr \
-  incr_dom.ui_time_source \
-  virtual_dom.ui_effect \
-  core \
-  eio_posix
-do
-  printf '%s\n' "$framework_root" >>"$libraries_file"
-done
-
-# Exact application package roots participate in the target closure when they
-# expose a findlib library. Build-only roots such as PPX drivers stay in the
-# host closure and are not compiled for iPhoneOS.
-printf '%s\n' "$root_packages" | tr ',' '\n' |
-  while IFS= read -r root_package; do
-    case "$root_package" in ppx*) continue ;; esac
-    for root_component in "$root_package" "$(printf '%s' "$root_package" | tr '-' '_')"; do
-      if OPAMROOT="$opam_root" opam exec --switch="$host_switch" -- \
-        ocamlfind query "$root_component" >/dev/null 2>&1; then
-        ppx_driver=$(
-          OPAMROOT="$opam_root" opam exec --switch="$host_switch" -- \
-            ocamlfind query -format '%(ppx)' "$root_component" 2>/dev/null || true
-        )
-        test -n "$ppx_driver" || printf '%s\n' "$root_component"
-        break
-      fi
-    done
-  done >>"$libraries_file"
-sort -u "$libraries_file" -o "$libraries_file"
-
-: >"$components_file"
-: >"$closure_roots_file"
-while IFS= read -r library; do
-  case "$library" in
-    bonsai_flutter | bonsai_flutter.* | bonsai_flutter_* | str | unix | threads | dynlink | bigarray) continue ;;
-  esac
-  printf '%s\n' "$library" >>"$closure_roots_file"
-  if OPAMROOT="$opam_root" opam exec --switch="$host_switch" -- \
-    ocamlfind query "$library" >/dev/null 2>&1; then
-    OPAMROOT="$opam_root" opam exec --switch="$host_switch" -- \
-      ocamlfind query -recursive -p-format "$library" >>"$components_file"
-  else
-    fail "Dune library $library does not resolve in the pinned host switch"
-  fi
-done <"$libraries_file"
-grep -Ev '^(runtime_events|seq|str|threads(\.posix)?|unix|dynlink|bigarray)$' \
-  "$components_file" | sort -u >"$components_file.sorted"
-mv "$components_file.sorted" "$components_file"
+resolve_findlib_closure \
+  "$external_libraries_file" \
+  "$components_file" \
+  "$closure_roots_file"
 
 test -s "$components_file" || fail "application has no target findlib components"
 
@@ -264,19 +284,6 @@ while IFS= read -r component; do
   printf '%s|%s\n' "$component" "$owner"
 done <"$components_file" >"$component_owners_file"
 awk -F '|' '{ print $2 }' "$component_owners_file" | sort -u >"$target_packages_file"
-
-unpinned_root=$(
-  awk '
-    /^depends:[[:space:]]*\[/ { in_depends = 1; next }
-    in_depends && /^[[:space:]]*\]/ { exit }
-    in_depends && match($0, /"[A-Za-z0-9_.+-]+"/) && $0 !~ /\{[[:space:]]*=[[:space:]]*"[^"]+"[[:space:]]*\}/ {
-      print substr($0, RSTART + 1, RLENGTH - 2)
-      exit
-    }
-  ' "$application_opam_file"
-)
-test -z "$unpinned_root" ||
-  fail "application opam root $unpinned_root must use an exact version constraint"
 
 component_list_for_package() {
   package=$1
@@ -463,7 +470,7 @@ resolve_host_build_packages() {
 
   host_roots=$(
     {
-      printf '%s\n' "$root_packages" | tr ',' '\n'
+      printf '%s\n' "$application_packages" | tr ',' '\n'
       cat "$ppx_packages_file"
     } | sed '/^$/d' | sort -u | paste -sd, -
   )
