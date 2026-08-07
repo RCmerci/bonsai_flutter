@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
+import 'package:bonsai_flutter/src/native_widget/sparse_extent_transition_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -147,6 +148,37 @@ void main() {
       },
     );
 
+    testWidgets('retargets fixed expanded content without a layout overflow', (
+      tester,
+    ) async {
+      final controller = ScrollController();
+      final model =
+          ValueNotifier<({int? expandedIndex, List<ExtentOverride> overrides})>(
+            (expandedIndex: null, overrides: const []),
+          );
+
+      await _pumpRetargetingMorphHost(tester, controller, model);
+      model.value = (
+        expandedIndex: 0,
+        overrides: const [ExtentOverride(index: 0, extent: 120)],
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      model.value = (
+        expandedIndex: 1,
+        overrides: const [ExtentOverride(index: 1, extent: 120)],
+      );
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      await tester.pump(const Duration(milliseconds: 210));
+      expect(tester.takeException(), isNull);
+
+      model.dispose();
+      controller.dispose();
+    });
+
     testWidgets('releases the preferred anchor when direct scrolling starts', (
       tester,
     ) async {
@@ -196,6 +228,34 @@ void main() {
       expect(tester.getSize(_item(2)).height, 120);
 
       props.dispose();
+      controller.dispose();
+    });
+
+    testWidgets('retains row state when a preceding row is removed', (
+      tester,
+    ) async {
+      final controller = ScrollController();
+
+      await _pumpReindexingSparseHost(tester, controller, const [0, 1, 2]);
+      final retainedState = tester.state(_statefulRow(1));
+
+      await _pumpReindexingSparseHost(tester, controller, const [1, 2]);
+
+      expect(identical(tester.state(_statefulRow(1)), retainedState), isTrue);
+      controller.dispose();
+    });
+
+    testWidgets('retains row state when a preceding row is inserted', (
+      tester,
+    ) async {
+      final controller = ScrollController();
+
+      await _pumpReindexingSparseHost(tester, controller, const [1, 2]);
+      final retainedState = tester.state(_statefulRow(1));
+
+      await _pumpReindexingSparseHost(tester, controller, const [0, 1, 2]);
+
+      expect(identical(tester.state(_statefulRow(1)), retainedState), isTrue);
       controller.dispose();
     });
 
@@ -435,7 +495,83 @@ SparseExtentListProps _props({List<ExtentOverride> overrides = const []}) =>
 
 ValueKey<String> _rowKey(int index) => ValueKey('transition-row-$index');
 
-Finder _item(int index) => find.byKey(SparseExtentListHost.itemKey(index));
+Finder _item(int index) => find
+    .ancestor(of: find.text('Row $index'), matching: find.byType(SizedBox))
+    .first;
+
+Finder _statefulRow(int id) => find.byWidgetPredicate(
+  (widget) => widget is _StatefulRow && widget.id == id,
+);
+
+Future<void> _pumpReindexingSparseHost(
+  WidgetTester tester,
+  ScrollController controller,
+  List<int> rowIds,
+) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: SizedBox(
+        height: 200,
+        child: SparseExtentListHost(
+          props: SparseExtentListProps(
+            totalCount: rowIds.length,
+            firstIndex: 0,
+            defaultItemExtent: 40,
+            extentOverrides: const [],
+            overscan: 2,
+            axis: ScrollAxis.vertical,
+            transition: _linearTransition,
+          ),
+          controller: controller,
+          emit: null,
+          children: [
+            for (final id in rowIds) _StatefulRow(key: _rowKey(id), id: id),
+          ],
+        ),
+      ),
+    ),
+  );
+  await tester.pump();
+}
+
+Future<void> _pumpRetargetingMorphHost(
+  WidgetTester tester,
+  ScrollController controller,
+  ValueNotifier<({int? expandedIndex, List<ExtentOverride> overrides})> model,
+) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: SizedBox(
+        height: 200,
+        child: ValueListenableBuilder(
+          valueListenable: model,
+          builder: (context, value, _) => SparseExtentListHost(
+            props: SparseExtentListProps(
+              totalCount: 2,
+              firstIndex: 0,
+              defaultItemExtent: 40,
+              extentOverrides: value.overrides,
+              overscan: 2,
+              axis: ScrollAxis.vertical,
+              transition: _linearTransition,
+            ),
+            controller: controller,
+            emit: null,
+            children: [
+              for (var index = 0; index < 2; index += 1)
+                _ScopedFixedExtentRow(
+                  key: _rowKey(index),
+                  index: index,
+                  expanded: value.expandedIndex == index,
+                ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pump();
+}
 
 Future<void> _pumpSparseHost(
   WidgetTester tester, {
@@ -519,6 +655,53 @@ Future<void> _pumpMorph(
     ),
   ),
 );
+
+final class _StatefulRow extends StatefulWidget {
+  const _StatefulRow({required this.id, super.key});
+
+  final int id;
+
+  @override
+  State<_StatefulRow> createState() => _StatefulRowState();
+}
+
+final class _StatefulRowState extends State<_StatefulRow> {
+  @override
+  Widget build(BuildContext context) => Text('Stateful row ${widget.id}');
+}
+
+final class _ScopedFixedExtentRow extends StatelessWidget {
+  const _ScopedFixedExtentRow({
+    required this.index,
+    required this.expanded,
+    super.key,
+  });
+
+  final int index;
+  final bool expanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final transition = SparseExtentTransitionScope.maybeOf(context)!;
+    return MorphingSurfaceHost(
+      progress: transition.progress,
+      expanded: expanded,
+      sharedContent: const SizedBox.shrink(),
+      compactContent: SizedBox(height: 40, child: Text('Compact row $index')),
+      expandedContent: SizedBox(
+        height: 120,
+        child: Column(
+          children: [
+            SizedBox(height: 60, child: Text('Expanded row $index header')),
+            const SizedBox(height: 60),
+          ],
+        ),
+      ),
+      compactContentExtent: transition.compactExtent,
+      expandedContentExtent: transition.expandedExtent,
+    );
+  }
+}
 
 EdgeInsets _surfacePadding(WidgetTester tester) =>
     tester

@@ -129,9 +129,9 @@ void main() {
     );
     final expandFrame = FrameCodec.decode(expandResponse!.bytes);
     store.apply(expandFrame);
-    await tester.pump();
+    await tester.pumpAndSettle();
     final open = find.bySemanticsLabel('Open message from Juniper Works');
-    expect(open, findsOneWidget);
+    expect(open.hitTestable(), findsOneWidget);
     await tester.tap(open);
     await tester.pump(const Duration(milliseconds: 80));
     final openBatch = queue.takeBatch()!;

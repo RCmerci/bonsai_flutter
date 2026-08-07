@@ -475,9 +475,6 @@ final class SparseExtentListHost extends StatefulWidget {
   final ScrollController controller;
   final NativeEventEmitter? emit;
 
-  static ValueKey<String> itemKey(int logicalIndex) =>
-      ValueKey<String>('bonsai-sparse-extent-item-$logicalIndex');
-
   @override
   State<SparseExtentListHost> createState() => _SparseExtentListHostState();
 }
@@ -493,6 +490,7 @@ final class _SparseExtentListHostState extends State<SparseExtentListHost>
   Map<int, double> _extentTargets = const {};
   Map<int, double> _surfaceStarts = const {};
   Map<int, double> _surfaceTargets = const {};
+  Map<int, double> _transitionContentExtents = const {};
   ({int index, double viewportOffset})? _anchor;
   bool _animating = false;
 
@@ -515,6 +513,7 @@ final class _SparseExtentListHostState extends State<SparseExtentListHost>
           _extentTargets = const {};
           _surfaceStarts = const {};
           _surfaceTargets = const {};
+          _transitionContentExtents = const {};
           _anchor = null;
           _suppressRange = false;
         });
@@ -569,6 +568,7 @@ final class _SparseExtentListHostState extends State<SparseExtentListHost>
     final targets = <int, double>{};
     final surfaceStarts = <int, double>{};
     final surfaceTargets = <int, double>{};
+    final transitionContentExtents = <int, double>{};
     for (final index in changedIndexes) {
       starts[index] = _effectiveExtent(index, oldWidget.props);
       targets[index] = _targetExtent(index, widget.props);
@@ -576,12 +576,18 @@ final class _SparseExtentListHostState extends State<SparseExtentListHost>
       surfaceTargets[index] = _overrideByIndex(widget.props).containsKey(index)
           ? 1
           : 0;
+      transitionContentExtents[index] = _retainedContentExtent(
+        index,
+        oldWidget.props,
+        widget.props,
+      );
     }
     _animation.stop();
     _extentStarts = starts;
     _extentTargets = targets;
     _surfaceStarts = surfaceStarts;
     _surfaceTargets = surfaceTargets;
+    _transitionContentExtents = transitionContentExtents;
 
     final transition = widget.props.transition;
     if (transition == null ||
@@ -611,6 +617,25 @@ final class _SparseExtentListHostState extends State<SparseExtentListHost>
 
   double _targetExtent(int index, SparseExtentListProps props) =>
       _overrideByIndex(props)[index] ?? props.defaultItemExtent;
+
+  double _retainedContentExtent(
+    int index,
+    SparseExtentListProps oldProps,
+    SparseExtentListProps newProps,
+  ) {
+    var extent = math.max(
+      _targetExtent(index, oldProps),
+      _targetExtent(index, newProps),
+    );
+    for (final candidate in [
+      _transitionContentExtents[index],
+      _extentStarts[index],
+      _extentTargets[index],
+    ]) {
+      if (candidate != null) extent = math.max(extent, candidate);
+    }
+    return extent;
+  }
 
   double _effectiveExtent(int index, SparseExtentListProps props) {
     if (!_animating || !_extentStarts.containsKey(index)) {
@@ -725,6 +750,7 @@ final class _SparseExtentListHostState extends State<SparseExtentListHost>
       _extentTargets = const {};
       _surfaceStarts = const {};
       _surfaceTargets = const {};
+      _transitionContentExtents = const {};
       _suppressRange = true;
     });
     _scheduleAnchorCorrection(settled: true);
@@ -840,23 +866,19 @@ final class _SparseExtentListHostState extends State<SparseExtentListHost>
               final expanded = _overrideByIndex(
                 widget.props,
               ).containsKey(index);
-              final expandedExtent = math.max(
-                widget.props.defaultItemExtent,
-                math.max(
-                  _extentStarts[index] ?? geometry.itemExtent(index),
-                  _extentTargets[index] ?? geometry.itemExtent(index),
-                ),
-              );
+              final expandedExtent =
+                  _transitionContentExtents[index] ??
+                  math.max(
+                    widget.props.defaultItemExtent,
+                    geometry.itemExtent(index),
+                  );
               return SparseExtentTransitionScope(
                 key: child.key,
                 progress: progress,
                 expanded: expanded,
                 compactExtent: widget.props.defaultItemExtent,
                 expandedExtent: expandedExtent,
-                child: SizedBox(
-                  key: SparseExtentListHost.itemKey(index),
-                  child: child,
-                ),
+                child: SizedBox(child: child),
               );
             }
             return const SizedBox.shrink();
