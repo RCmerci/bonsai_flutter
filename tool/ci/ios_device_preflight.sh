@@ -78,8 +78,11 @@ xcrun devicectl device info lockState \
   --json-output "$lock_state" >/dev/null ||
   fail "CoreDevice could not read the selected device lock state"
 
-jq -e '.result.unlockedSinceBoot == true' "$lock_state" >/dev/null ||
-  fail "the selected device has not been unlocked since boot"
+jq -e '
+  .result.unlockedSinceBoot == true
+  and .result.passcodeRequired == false
+' "$lock_state" >/dev/null ||
+  fail "the selected device must be currently unlocked"
 
 require_environment() {
   variable_name=$1

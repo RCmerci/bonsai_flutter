@@ -24,6 +24,29 @@ require_text() {
     fail "$label does not contain: $needle"
 }
 
+reject_text() {
+  haystack=$1
+  needle=$2
+  label=$3
+  if printf '%s' "$haystack" | grep -F -- "$needle" >/dev/null; then
+    fail "$label unexpectedly contains: $needle"
+  fi
+}
+
+require_before() {
+  haystack=$1
+  earlier=$2
+  later=$3
+  label=$4
+  earlier_line=$(printf '%s\n' "$haystack" | grep -n -F -- "$earlier" | head -1 | cut -d: -f1)
+  later_line=$(printf '%s\n' "$haystack" | grep -n -F -- "$later" | head -1 | cut -d: -f1)
+  if test -z "$earlier_line" || test -z "$later_line" || \
+    test "$earlier_line" -ge "$later_line"
+  then
+    fail "$label does not place $earlier before $later"
+  fi
+}
+
 fixture=tool/ios/fixtures/application-closure
 for path in \
   "$fixture/datascript_worker_probe.ml" \
@@ -60,8 +83,30 @@ require_text "$service" 'create_with_persistence_probe' "injectable Worker persi
 require_text "$service_interface" 'create_with_persistence_probe' "Worker persistence probe interface"
 
 device_test=$(cat tool/ios/test_datascript_worker_device.sh 2>/dev/null)
+device_entry=$(cat examples/sqlite_worker/flutter/lib/datascript_worker_device.dart)
+require_text \
+  "$device_entry" \
+  "stderr.writeln('BONSAI_DATASCRIPT_HOST_RUNTIME_STARTED')" \
+  "physical-device host runtime start evidence"
+require_text \
+  "$device_entry" \
+  "stderr.writeln('BONSAI_DATASCRIPT_HOST_RUNTIME_DISPOSED')" \
+  "physical-device host runtime disposal evidence"
 require_text "$device_test" 'IOS_DEVICE_ID' "physical iPhone selection"
 require_text "$device_test" 'IOS_SIGNING_IDENTITY' "physical iPhone signing"
+require_text "$device_test" 'CODE_SIGN_IDENTITY = $IOS_SIGNING_IDENTITY' \
+  "selected Development signing identity"
+reject_text "$device_test" '--require-signing' \
+  "Development-only DataScript physical slice"
+require_before \
+  "$device_test" \
+  'ios_device_preflight.sh' \
+  'setup_toolchain.sh' \
+  "physical-device fail-fast preflight"
+require_text "$device_test" '      --profile \' \
+  "standalone physical-device Flutter build mode"
+reject_text "$device_test" '--debug' \
+  "standalone physical-device Flutter build mode"
 require_text "$device_test" 'BONSAI_DATASCRIPT_WORKER_PERSISTED' "first launch evidence"
 require_text "$device_test" 'BONSAI_DATASCRIPT_WORKER_SHUTDOWN' "runtime shutdown evidence"
 require_text "$device_test" 'BONSAI_DATASCRIPT_WORKER_RESTORED' "relaunch evidence"

@@ -28,10 +28,12 @@ require_environment() {
 
 require_environment IOS_DEVICE_ID
 require_environment IOS_DEVELOPMENT_TEAM
-require_environment IOS_DEVELOPMENT_PROFILE_SPECIFIER
 require_environment IOS_BUNDLE_IDENTIFIER
 IOS_SIGNING_IDENTITY=${IOS_SIGNING_IDENTITY:-${IOS_DEVELOPMENT_SIGNING_IDENTITY:-Apple Development}}
 export IOS_SIGNING_IDENTITY
+
+"$repository_root/tool/ci/ios_device_preflight.sh" \
+  "$IOS_DEVICE_ID"
 
 mkdir -p "$application_source" "$(dirname -- "$staged_object")"
 cp "$fixture_root/app.dune" "$application_source/dune"
@@ -120,6 +122,7 @@ signing_xcconfig="$build_root/development-signing.xcconfig"
 {
   printf '%s\n' "DEVELOPMENT_TEAM = $IOS_DEVELOPMENT_TEAM"
   printf '%s\n' 'CODE_SIGN_STYLE = Automatic'
+  printf '%s\n' "CODE_SIGN_IDENTITY = $IOS_SIGNING_IDENTITY"
   printf '%s\n' "PRODUCT_BUNDLE_IDENTIFIER = $IOS_BUNDLE_IDENTIFIER"
 } >"$signing_xcconfig"
 
@@ -128,7 +131,7 @@ signing_xcconfig="$build_root/development-signing.xcconfig"
   flutter pub get
   XCODE_XCCONFIG_FILE="$signing_xcconfig" \
     flutter build ios \
-      --debug \
+      --profile \
       --target lib/datascript_worker_device.dart
 )
 
@@ -138,8 +141,7 @@ test -d "$app" || fail "signed DataScript Worker application was not produced"
 codesign --verify --deep --strict "$app"
 
 "$repository_root/tool/ci/ios_device_preflight.sh" \
-  "$IOS_DEVICE_ID" \
-  --require-signing
+  "$IOS_DEVICE_ID"
 
 xcrun devicectl device uninstall app \
   --device "$IOS_DEVICE_ID" \

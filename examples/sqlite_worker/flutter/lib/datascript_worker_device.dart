@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
@@ -35,10 +36,10 @@ final class _DataScriptWorkerDeviceProbeState
       final runtime = await RuntimeClient.start(
         config: Uint8List.fromList(bootstrap.runtimeConfig),
       );
-      debugPrint('BONSAI_DATASCRIPT_HOST_RUNTIME_STARTED');
+      stderr.writeln('BONSAI_DATASCRIPT_HOST_RUNTIME_STARTED');
       await Future<void>.delayed(const Duration(seconds: 1));
       await runtime.dispose();
-      debugPrint('BONSAI_DATASCRIPT_HOST_RUNTIME_DISPOSED');
+      stderr.writeln('BONSAI_DATASCRIPT_HOST_RUNTIME_DISPOSED');
       if (mounted) setState(() => _status = 'Worker persistence probe passed');
     } catch (error, stackTrace) {
       debugPrint('BONSAI_DATASCRIPT_HOST_FAILURE $error\n$stackTrace');

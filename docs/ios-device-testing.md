@@ -13,7 +13,7 @@ The Mac must have an arm64 physical iPhone that is:
 - paired and trusted;
 - booted and connected;
 - running with Developer Mode enabled;
-- unlocked at least once since boot.
+- currently unlocked and already unlocked at least once since boot.
 
 The Apple Developer account must provide:
 
@@ -99,7 +99,8 @@ by `pull_request` or `pull_request_target`.
   exactly one connected Flutter device.
 - An emulator result is rejected even if it has an iOS target platform.
 - Pairing, trust, Developer Mode, boot, or unlock failures must be corrected
-  on the phone and host before rerunning.
+  on the phone and host before rerunning. Keep the phone unlocked while the
+  signed application launches.
 - A Team, App ID, device-list, `get-task-allow`, or expiry error means the
   supplied profile does not match the lane.
 - A certificate error means the imported identity is absent, expired, or has
@@ -117,6 +118,15 @@ development Eio Worker probe. The probe validates arm64 iPhoneOS execution,
 DNS, loopback TCP, bounded file I/O, structural cancellation, reuse, cleanup,
 and a real background-to-foreground transition. Device identifiers and signing
 material are intentionally not recorded in this document.
+
+A Development-signed Profile DataScript Worker application also passed the
+physical-iPhone persistence slice. The application resolved its pinned target
+closure, linked the iPhoneOS system SQLite library, opened app-private storage
+through `Datascript_sqlite`, persisted one typed fact, disposed the Worker and
+host runtime, relaunched, and restored the same fact. Profile mode is required
+because the canonical test cold-launches the signed application with
+`devicectl`; a Debug Flutter application requires a Flutter tooling or Xcode
+debug session instead.
 
 Unsigned iPhoneOS arm64 application builds and final framework audits also
 pass. The complete canonical lane has not yet been run with the Flutter FFI

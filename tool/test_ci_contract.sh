@@ -665,6 +665,11 @@ require_file tool/ci/install_ios_signing.sh
 require_file tool/ci/ios_device_preflight.sh
 require_file tool/ci/verify_ios_bundle.sh
 require_file tool/ios/run_device_tests.sh
+ios_device_preflight=$(cat tool/ci/ios_device_preflight.sh)
+require_text \
+  "$ios_device_preflight" \
+  ".result.passcodeRequired == false" \
+  "currently unlocked physical iOS device preflight"
 ios_signing_installer=$(cat tool/ci/install_ios_signing.sh)
 require_text \
   "$ios_signing_installer" \
