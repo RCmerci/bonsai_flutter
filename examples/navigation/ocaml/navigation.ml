@@ -42,11 +42,12 @@ let component handlers graph =
           (Ui.Material.scaffold
              ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Navigation") ())
              ~body:
-               (Ui.Widget.center
-                  (Ui.Material.elevated_button
-                     ~on_press:open_details
-                     ~child:(Ui.Widget.text "Open details")
-                     ()))
+               (Ui.Widget.Body.static
+                  (Ui.Widget.center
+                     (Ui.Material.elevated_button
+                        ~on_press:open_details
+                        ~child:(Ui.Widget.text "Open details")
+                        ())))
              ())
       in
       let pages =
@@ -59,11 +60,12 @@ let component handlers graph =
               (Ui.Material.scaffold
                  ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Details") ())
                  ~body:
-                   (Ui.Widget.center
-                      (Ui.Material.text_button
-                         ~on_press:close_details
-                         ~child:(Ui.Widget.text "Close details")
-                         ()))
+                   (Ui.Widget.Body.static
+                      (Ui.Widget.center
+                         (Ui.Material.text_button
+                            ~on_press:close_details
+                            ~child:(Ui.Widget.text "Close details")
+                            ())))
                  ())
           ]
         else [ home ]

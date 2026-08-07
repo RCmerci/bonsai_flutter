@@ -45,7 +45,8 @@ let widgets =
       ~on_completed:handler
       child
   ; Ui.Widget.transform ~transform:(Ui.Style.Transform.scale ~x:2. ~y:3. ()) child
-  ; Ui.Widget.list_view ~on_scroll:handler [ child ] ()
+  ; Ui.Widget.List_view.vertical ~on_scroll:handler [ child ] ()
+    |> Ui.Widget.Viewport.Vertical.with_height ~height:120.
   ; Ui.Widget.safe_area child
   ; Ui.Widget.environment_boundary child
   ; Ui.Widget.gesture ~on_tap:handler ~on_double_tap:handler ~on_long_press:handler child
@@ -71,7 +72,7 @@ let expected =
   ; "Opacity"
   ; "Animated_opacity"
   ; "Transform"
-  ; "List_view"
+  ; "Sized_box"
   ; "Safe_area"
   ; "Environment_boundary"
   ; "Gesture"
@@ -223,10 +224,85 @@ let test_styled_text_constructor_and_validation () =
     "zero maximum lines was accepted"
 ;;
 
+let expect_invalid create message =
+  match create () with
+  | exception Invalid_argument _ -> ()
+  | _ -> failwith message
+;;
+
+let test_typed_viewport_body_encoding () =
+  let viewport =
+    Ui.Widget.List_view.vertical ~on_scroll:handler [ Ui.Widget.text "Row" ] ()
+  in
+  let body =
+    Ui.Widget.Body.Vertical.create
+      [ Ui.Widget.Body.Vertical.fixed (Ui.Widget.text "Search")
+      ; Ui.Widget.Body.Vertical.fill ~flex:2 viewport
+      ]
+  in
+  let scaffold = Ui.Material.scaffold ~body () in
+  let scaffold_children = Ui.Widget.For_testing.children scaffold in
+  check (Array.length scaffold_children = 1) "scaffold lost its typed body";
+  let column = scaffold_children.(0) in
+  check
+    (String.equal (Ui.Widget.For_testing.kind_name column) "Flex_column")
+    "vertical body did not encode as a flex column";
+  let children = (Ui.Widget.Private.view column).children in
+  check (Array.length children = 2) "vertical body lost a child";
+  (match children.(0).parent_data, children.(1).parent_data with
+   | Ui.Widget.Private.No_parent_data, Flex_parent_data { flex = 2; fit = Tight } -> ()
+   | _ -> failwith "vertical body encoded incorrect flex parent data");
+  let overlay =
+    Ui.Widget.Body.overlay
+      ~base:body
+      ~overlays:
+        [ Ui.Widget.Stack.positioned ~right:16. ~bottom:16. (Ui.Widget.text "Capture") ]
+      ()
+  in
+  let overlay_scaffold = Ui.Material.scaffold ~body:overlay () in
+  let stack = (Ui.Widget.For_testing.children overlay_scaffold).(0) in
+  check
+    (String.equal (Ui.Widget.For_testing.kind_name stack) "Stack")
+    "body overlay did not encode as a stack";
+  let stack_children = (Ui.Widget.Private.view stack).children in
+  match stack_children.(0).parent_data, stack_children.(1).parent_data with
+  | ( Stack_position { left = Some 0.; top = Some 0.; right = Some 0.; bottom = Some 0. }
+    , Stack_position { right = Some 16.; bottom = Some 16.; _ } ) -> ()
+  | _ -> failwith "body overlay did not keep its base tight and overlay positioned"
+;;
+
+let test_viewport_extent_and_body_validation () =
+  let vertical = Ui.Widget.List_view.vertical ~on_scroll:handler [] () in
+  List.iter
+    (fun height ->
+       expect_invalid
+         (fun () -> Ui.Widget.Viewport.Vertical.with_height ~height vertical)
+         "invalid explicit viewport height was accepted")
+    [ nan; infinity; neg_infinity; 0.; -1. ];
+  let horizontal = Ui.Widget.List_view.horizontal ~on_scroll:handler [] () in
+  List.iter
+    (fun width ->
+       expect_invalid
+         (fun () -> Ui.Widget.Viewport.Horizontal.with_width ~width horizontal)
+         "invalid explicit viewport width was accepted")
+    [ nan; infinity; neg_infinity; 0.; -1. ];
+  expect_invalid
+    (fun () -> Ui.Widget.Body.Vertical.fill ~flex:0 vertical)
+    "zero body flex was accepted";
+  expect_invalid
+    (fun () -> Ui.Widget.Body.Vertical.create [])
+    "empty vertical body was accepted";
+  expect_invalid
+    (fun () -> Ui.Widget.Body.Horizontal.create [])
+    "empty horizontal body was accepted"
+;;
+
 let () =
   test_core_constructors ();
   test_navigation_constructors ();
   test_debug_tree ();
   test_semantics_properties ();
-  test_styled_text_constructor_and_validation ()
+  test_styled_text_constructor_and_validation ();
+  test_typed_viewport_body_encoding ();
+  test_viewport_extent_and_body_validation ()
 ;;

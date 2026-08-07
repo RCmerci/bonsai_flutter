@@ -357,30 +357,24 @@ let view model handlers =
       ; native_section model handlers
       ]
   in
-  let body =
-    Ui.Widget.scroll_view
+  let viewport =
+    Ui.Widget.Scroll_view.vertical
       ~key:(Ui.Key.string "gallery-scroll")
-      ~axis:Ui.Layout.Axis.Vertical
       ~on_scroll:handlers.scroll
       body
       ()
+    |> Ui.Widget.Viewport.Vertical.padding
+         ~insets:(Ui.Layout.Edge_insets.symmetric ~horizontal:24. ~vertical:16. ())
+    |> Ui.Widget.Viewport.Vertical.semantics
+         ~properties:
+           (Ui.Semantics.create
+              ~label:"Bonsai Flutter gallery"
+              ~role:Ui.Semantics.Role.Generic
+              ~enabled:true
+              ~checked:model.checked
+              ())
   in
-  let body =
-    Ui.Widget.padding
-      ~insets:(Ui.Layout.Edge_insets.symmetric ~horizontal:24. ~vertical:16. ())
-      body
-  in
-  let body =
-    Ui.Widget.semantics
-      ~properties:
-        (Ui.Semantics.create
-           ~label:"Bonsai Flutter gallery"
-           ~role:Ui.Semantics.Role.Generic
-           ~enabled:true
-           ~checked:model.checked
-           ())
-      body
-  in
+  let body = Ui.Widget.Body.Vertical.create [ Ui.Widget.Body.Vertical.fill viewport ] in
   Ui.Widget.theme
     ~data:
       (Ui.Theme.material

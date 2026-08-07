@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/widgets.dart';
 
 import '../protocol/frame.dart';
+import '../renderer/viewport_constraint_guard.dart';
 import 'native_widget_registry.dart';
 import 'sparse_extent_transition_scope.dart';
 import 'virtual_list.dart';
@@ -451,6 +452,8 @@ void registerSparseExtentList(NativeWidgetRegistry registry) {
           dispose: (controller) => controller.dispose(),
         );
         return SparseExtentListHost(
+          nodeId: context.node.id,
+          localRevision: context.node.localRevision,
           props: context.props,
           controller: controller,
           emit: context.emit,
@@ -463,6 +466,8 @@ void registerSparseExtentList(NativeWidgetRegistry registry) {
 
 final class SparseExtentListHost extends StatefulWidget {
   const SparseExtentListHost({
+    this.nodeId = 0,
+    this.localRevision = 0,
     required this.props,
     required this.children,
     required this.controller,
@@ -470,6 +475,8 @@ final class SparseExtentListHost extends StatefulWidget {
     super.key,
   });
 
+  final int nodeId;
+  final int localRevision;
   final SparseExtentListProps props;
   final List<Widget> children;
   final ScrollController controller;
@@ -830,7 +837,13 @@ final class _SparseExtentListHostState extends State<SparseExtentListHost>
       }
       return false;
     },
-    child: LayoutBuilder(
+    child: ViewportConstraintGuard(
+      nodeId: widget.nodeId,
+      localRevision: widget.localRevision,
+      widgetKind: 'SparseExtentList',
+      axis: widget.props.axis == ScrollAxis.horizontal
+          ? RendererViewportAxis.horizontal
+          : RendererViewportAxis.vertical,
       builder: (context, constraints) {
         _viewportExtent = widget.props.axis == ScrollAxis.horizontal
             ? constraints.maxWidth

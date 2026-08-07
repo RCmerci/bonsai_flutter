@@ -46,6 +46,103 @@ let encode_frame frame =
   | Error error -> failwith error.message
 ;;
 
+let set_u64 bytes offset value = Bytes.set_int64_le bytes offset value
+let set_u32 bytes offset value = Bytes.set_int32_le bytes offset (Int32.of_int value)
+let set_f64 bytes offset value = set_u64 bytes offset (Int64.bits_of_float value)
+
+let sparse_extent_list_payload () =
+  let payload = Bytes.make 36 '\000' in
+  set_u64 payload 0 100L;
+  set_u64 payload 8 0L;
+  set_f64 payload 16 48.;
+  set_u32 payload 24 2;
+  Bytes.set payload 28 '\001';
+  set_u32 payload 32 0;
+  payload
+;;
+
+let text_props value =
+  Protocol.Wire_frame.Text_props
+    { value; style = None; text_align = Start; max_lines = None; overflow = Clip_text }
+;;
+
+let viewport_body_frame : Protocol.Wire_frame.t =
+  let open Protocol.Wire_frame in
+  let create ?(parent_data = No_parent_data) node_id kind props =
+    Create_node
+      { node_id = node (Int64.of_int node_id)
+      ; kind
+      ; props
+      ; event_bindings = []
+      ; parent_data
+      }
+  in
+  let row_ids = List.init 10 (fun index -> 9 + index) in
+  { runtime_epoch = epoch 57L
+  ; base_revision = revision 0L
+  ; target_revision = revision 1L
+  ; kind = Full_snapshot
+  ; operations =
+      [ create 1 Material_scaffold (Material_scaffold_props { has_app_bar = false })
+      ; create 2 Stack Empty_props
+      ; create
+          ~parent_data:
+            (Stack_position
+               { left = Some 0.; top = Some 0.; right = Some 0.; bottom = Some 0. })
+          3
+          Column
+          Linear_props
+      ; create
+          4
+          Material_text_button
+          (Material_button_props
+             { variant = Text_button; enabled = true; autofocus = false })
+      ; create 5 Text (text_props "Search")
+      ; Create_node
+          { node_id = node 6L
+          ; kind = Native_widget
+          ; props =
+              Native_widget_props
+                { kind_id = ID.Native_widget.Kind_id.of_int 4
+                ; version = 1
+                ; capabilities = 23L
+                ; payload = sparse_extent_list_payload ()
+                }
+          ; event_bindings =
+              [ { event_tag = Protocol.Generated_protocol.Event_tag.native_event
+                ; handler_id = ID.Ui.Handler_id.of_int64 400L
+                }
+              ]
+          ; parent_data = Flex_parent_data { flex = 1; fit = Tight }
+          }
+      ; create
+          ~parent_data:
+            (Stack_position
+               { left = None; top = None; right = Some 16.; bottom = Some 16. })
+          7
+          Material_text_button
+          (Material_button_props
+             { variant = Text_button; enabled = true; autofocus = false })
+      ; create 8 Text (text_props "Capture")
+      ]
+      @ List.mapi
+          (fun index node_id ->
+             create node_id Text (text_props (Printf.sprintf "Row %d" index)))
+          row_ids
+      @ [ Set_children { node_id = node 1L; children = [ node 2L ] }
+        ; Set_children { node_id = node 2L; children = [ node 3L; node 7L ] }
+        ; Set_children { node_id = node 3L; children = [ node 4L; node 6L ] }
+        ; Set_children { node_id = node 4L; children = [ node 5L ] }
+        ; Set_children
+            { node_id = node 6L
+            ; children = List.map (fun id -> node (Int64.of_int id)) row_ids
+            }
+        ; Set_children { node_id = node 7L; children = [ node 8L ] }
+        ; Set_root (node 1L)
+        ]
+  }
+;;
+
 let counter_frame : Protocol.Wire_frame.t =
   { runtime_epoch = epoch 7L
   ; base_revision = revision 0L
@@ -186,6 +283,7 @@ let fixtures : (string * Protocol.Wire_frame.t) list =
               }
           ]
       } )
+  ; "ocaml_viewport_body.hex", viewport_body_frame
   ]
 ;;
 

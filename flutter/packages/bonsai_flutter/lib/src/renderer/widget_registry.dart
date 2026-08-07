@@ -21,6 +21,7 @@ import 'node_host.dart';
 import 'pressable_host.dart';
 import 'renderer_event.dart';
 import 'renderer_resource_store.dart';
+import 'viewport_constraint_guard.dart';
 
 export 'renderer_event.dart';
 
@@ -508,36 +509,20 @@ Widget _buildScrollView(
   final controller = RendererResourceScope.of(
     context,
   ).acquireScrollController(node.id);
-  final scrollView = SingleChildScrollView(
-    controller: controller,
-    scrollDirection: props.axis == ScrollAxis.horizontal
-        ? Axis.horizontal
-        : Axis.vertical,
-    reverse: props.reverse,
-    child: children.single,
-  );
-  if (binding == null || onEvent == null) {
-    return scrollView;
-  }
-  return NotificationListener<ScrollNotification>(
-    onNotification: (notification) {
-      final delta = notification is ScrollUpdateNotification
-          ? (notification.scrollDelta ?? 0)
-          : 0.0;
-      onEvent(
-        RendererEvent(
-          nodeId: node.id,
-          eventTag: binding.eventTag,
-          handlerId: binding.handlerId,
-          payload: ScrollEventPayload(
-            pixels: notification.metrics.pixels,
-            delta: delta,
-          ),
-        ),
-      );
-      return false;
-    },
-    child: scrollView,
+  return _guardedScrollable(
+    node: node,
+    widgetKind: 'ScrollView',
+    axis: props.axis,
+    binding: binding,
+    onEvent: onEvent,
+    viewportBuilder: () => SingleChildScrollView(
+      controller: controller,
+      scrollDirection: props.axis == ScrollAxis.horizontal
+          ? Axis.horizontal
+          : Axis.vertical,
+      reverse: props.reverse,
+      child: children.single,
+    ),
   );
 }
 
@@ -552,38 +537,62 @@ Widget _buildListView(
   final controller = RendererResourceScope.of(
     context,
   ).acquireScrollController(node.id);
-  final listView = ListView(
-    controller: controller,
-    scrollDirection: props.axis == ScrollAxis.horizontal
-        ? Axis.horizontal
-        : Axis.vertical,
-    reverse: props.reverse,
-    children: children,
-  );
-  if (binding == null || onEvent == null) {
-    return listView;
-  }
-  return NotificationListener<ScrollNotification>(
-    onNotification: (notification) {
-      final delta = notification is ScrollUpdateNotification
-          ? (notification.scrollDelta ?? 0)
-          : 0.0;
-      onEvent(
-        RendererEvent(
-          nodeId: node.id,
-          eventTag: binding.eventTag,
-          handlerId: binding.handlerId,
-          payload: ScrollEventPayload(
-            pixels: notification.metrics.pixels,
-            delta: delta,
-          ),
-        ),
-      );
-      return false;
-    },
-    child: listView,
+  return _guardedScrollable(
+    node: node,
+    widgetKind: 'ListView',
+    axis: props.axis,
+    binding: binding,
+    onEvent: onEvent,
+    viewportBuilder: () => ListView(
+      controller: controller,
+      scrollDirection: props.axis == ScrollAxis.horizontal
+          ? Axis.horizontal
+          : Axis.vertical,
+      reverse: props.reverse,
+      children: children,
+    ),
   );
 }
+
+Widget _guardedScrollable({
+  required UiNode node,
+  required String widgetKind,
+  required ScrollAxis axis,
+  required EventBinding? binding,
+  required RendererEventCallback? onEvent,
+  required Widget Function() viewportBuilder,
+}) => ViewportConstraintGuard(
+  nodeId: node.id,
+  localRevision: node.localRevision,
+  widgetKind: widgetKind,
+  axis: axis == ScrollAxis.horizontal
+      ? RendererViewportAxis.horizontal
+      : RendererViewportAxis.vertical,
+  builder: (context, constraints) {
+    final viewport = viewportBuilder();
+    if (binding == null || onEvent == null) return viewport;
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        final delta = notification is ScrollUpdateNotification
+            ? (notification.scrollDelta ?? 0)
+            : 0.0;
+        onEvent(
+          RendererEvent(
+            nodeId: node.id,
+            eventTag: binding.eventTag,
+            handlerId: binding.handlerId,
+            payload: ScrollEventPayload(
+              pixels: notification.metrics.pixels,
+              delta: delta,
+            ),
+          ),
+        );
+        return false;
+      },
+      child: viewport,
+    );
+  },
+);
 
 Widget _buildGesture(
   BuildContext context,

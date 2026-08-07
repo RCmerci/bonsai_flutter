@@ -868,29 +868,23 @@ let view ~timings model recurring_state deadline_state exact_now approx_now hand
            |> List.of_seq)
       ]
   in
-  let body =
-    Ui.Widget.scroll_view
+  let viewport =
+    Ui.Widget.Scroll_view.vertical
       ~key:(Ui.Key.string "clock-scroll")
-      ~axis:Ui.Layout.Axis.Vertical
       ~on_scroll:handlers.scroll
       body
       ()
+    |> Ui.Widget.Viewport.Vertical.padding
+         ~insets:(Ui.Layout.Edge_insets.symmetric ~horizontal:16. ~vertical:12. ())
+    |> Ui.Widget.Viewport.Vertical.semantics
+         ~properties:
+           (Ui.Semantics.create
+              ~label:"Bonsai Flutter Clock example"
+              ~role:Ui.Semantics.Role.Generic
+              ~enabled:true
+              ())
   in
-  let body =
-    Ui.Widget.padding
-      ~insets:(Ui.Layout.Edge_insets.symmetric ~horizontal:16. ~vertical:12. ())
-      body
-  in
-  let body =
-    Ui.Widget.semantics
-      ~properties:
-        (Ui.Semantics.create
-           ~label:"Bonsai Flutter Clock example"
-           ~role:Ui.Semantics.Role.Generic
-           ~enabled:true
-           ())
-      body
-  in
+  let body = Ui.Widget.Body.Vertical.create [ Ui.Widget.Body.Vertical.fill viewport ] in
   Ui.Widget.theme
     ~data:
       (Ui.Theme.material

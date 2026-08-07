@@ -4,6 +4,7 @@ import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/widgets.dart';
 
 import '../protocol/frame.dart';
+import '../renderer/viewport_constraint_guard.dart';
 import 'native_widget_registry.dart';
 
 abstract final class NativeWidgetKind {
@@ -149,6 +150,8 @@ void registerVirtualList(NativeWidgetRegistry registry) {
           dispose: (controller) => controller.dispose(),
         );
         return _VirtualListHost(
+          nodeId: context.node.id,
+          localRevision: context.node.localRevision,
           props: context.props,
           controller: controller,
           emit: context.emit,
@@ -161,12 +164,16 @@ void registerVirtualList(NativeWidgetRegistry registry) {
 
 final class _VirtualListHost extends StatefulWidget {
   const _VirtualListHost({
+    required this.nodeId,
+    required this.localRevision,
     required this.props,
     required this.children,
     required this.controller,
     required this.emit,
   });
 
+  final int nodeId;
+  final int localRevision;
   final VirtualListProps props;
   final List<Widget> children;
   final ScrollController controller;
@@ -227,7 +234,13 @@ final class _VirtualListHostState extends State<_VirtualListHost> {
   }
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
+  Widget build(BuildContext context) => ViewportConstraintGuard(
+    nodeId: widget.nodeId,
+    localRevision: widget.localRevision,
+    widgetKind: 'VirtualList',
+    axis: widget.props.axis == ScrollAxis.horizontal
+        ? RendererViewportAxis.horizontal
+        : RendererViewportAxis.vertical,
     builder: (context, constraints) {
       _viewportExtent = widget.props.axis == ScrollAxis.horizontal
           ? constraints.maxWidth

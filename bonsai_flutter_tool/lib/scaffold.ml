@@ -33,14 +33,15 @@ let component handlers graph =
     Ui.Material.scaffold
       ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "%s") ())
       ~body:
-        (Ui.Widget.center
-           (Ui.Widget.column
-              [ Ui.Widget.text (Printf.sprintf "Count: %%d" count)
-              ; Ui.Material.elevated_button
-                  ~on_press:increment
-                  ~child:(Ui.Widget.text "Increment")
-                  ()
-              ]))
+        (Ui.Widget.Body.static
+           (Ui.Widget.center
+              (Ui.Widget.column
+                 [ Ui.Widget.text (Printf.sprintf "Count: %%d" count)
+                 ; Ui.Material.elevated_button
+                     ~on_press:increment
+                     ~child:(Ui.Widget.text "Increment")
+                     ()
+                 ])))
       ())
 ;;
 

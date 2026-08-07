@@ -19,6 +19,7 @@ export 'src/root/bonsai_flutter_root.dart';
 export 'src/root/bonsai_flutter_host_adapter.dart';
 export 'src/renderer/node_host.dart';
 export 'src/renderer/renderer_resource_store.dart';
+export 'src/renderer/viewport_constraint_guard.dart';
 export 'src/renderer/widget_registry.dart';
 export 'src/runtime/runtime_client.dart';
 export 'src/runtime/runtime_bootstrap_config.dart';

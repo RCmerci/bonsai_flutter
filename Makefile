@@ -1,4 +1,4 @@
-.PHONY: build test fmt protocol-generate protocol-check protocol-fixtures-generate protocol-fixtures-check dart-test flutter-test dart-analyze native-test native-analyze native-object native-objects integration-native-object integration-test ios-toolchains ios-cross-probes ios-device-native-objects ci-contract ci-ocaml ci-flutter ci-macos ci-sanitizers ci-ios ci-ios-device clean
+.PHONY: build test viewport-type-test fmt protocol-generate protocol-check protocol-fixtures-generate protocol-fixtures-check dart-test flutter-test dart-analyze native-test native-analyze native-object native-objects integration-native-object integration-test ios-toolchains ios-cross-probes ios-device-native-objects ci-contract ci-ocaml ci-flutter ci-macos ci-sanitizers ci-ios ci-ios-device clean
 
 EXAMPLE ?= counter
 NATIVE_OBJECT_TARGET = examples/$(EXAMPLE)/ocaml/native_embed.exe.o
@@ -28,6 +28,10 @@ build:
 
 test:
 	dune runtest
+	tool/check_viewport_types.sh
+
+viewport-type-test:
+	tool/check_viewport_types.sh
 
 fmt:
 	dune build @fmt
@@ -96,6 +100,7 @@ ci-ocaml:
 	opam install . --deps-only --with-test --yes
 	dune build @all
 	dune runtest
+	tool/check_viewport_types.sh
 	dune build @fmt
 	dune exec protocol/generator/generate.exe -- --check
 	dune exec protocol/generator/generate_fixtures.exe -- --check

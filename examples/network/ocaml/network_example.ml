@@ -547,7 +547,7 @@ let component ~https_endpoint ~websocket_endpoint client handlers graph =
       in
       Ui.Material.scaffold
         ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Secure Network Lab") ())
-        ~body:(Ui.Widget.column [ https_panel; websocket_panel ])
+        ~body:(Ui.Widget.Body.static (Ui.Widget.column [ https_panel; websocket_panel ]))
         ())
   in
   Bonsai.Cont.map2 event_subscription view ~f:(fun () view -> view)

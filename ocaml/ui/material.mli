@@ -1,6 +1,6 @@
 (** Material widgets represented by renderer-independent logical nodes. *)
 
-val scaffold : ?key:Key.t -> ?app_bar:Widget.t -> body:Widget.t -> unit -> Widget.t
+val scaffold : ?key:Key.t -> ?app_bar:Widget.t -> body:Widget.Body.t -> unit -> Widget.t
 val app_bar : ?key:Key.t -> ?center_title:bool -> title:Widget.t -> unit -> Widget.t
 
 val elevated_button

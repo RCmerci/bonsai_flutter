@@ -1173,7 +1173,7 @@ let loading_more_row =
 
 let render_mail_body ~state ~rows ~open_menu ~on_visible_range =
   match state.selected_mail_destination with
-  | Settings_view -> placeholder "Settings"
+  | Settings_view -> Ui.Widget.Body.static (placeholder "Settings")
   | (Inbox_view | Starred_view | Archived_view | Trash_view) as destination ->
     let rows =
       match rows with
@@ -1209,7 +1209,7 @@ let render_mail_body ~state ~rows ~open_menu ~on_visible_range =
       | _, Settings_view -> 0
     in
     let list =
-      Ui.Native_widget.Sparse_extent_list.create_with_handler
+      Ui.Native_widget.Sparse_extent_list.vertical
         ~total_count
         ~first_index:state.window_first
         ~default_item_extent:compact_mail_extent
@@ -1219,16 +1219,16 @@ let render_mail_body ~state ~rows ~open_menu ~on_visible_range =
         ~items:rows
         ~on_visible_range
         ()
-      |> Ui.Widget.with_test_id (Ui.Test_id.string "mail-virtual-list")
-      |> Ui.Widget.decorated_box
+      |> Ui.Widget.Viewport.Vertical.with_test_id (Ui.Test_id.string "mail-virtual-list")
+      |> Ui.Widget.Viewport.Vertical.decorated_box
            ~decoration:
              (Ui.Style.Decoration.create ~background:surface ~border_radius:26. ())
     in
     let title = mail_destination_title destination in
-    Ui.Widget.Flex.column
-      [ Ui.Widget.Flex.fixed
+    Ui.Widget.Body.Vertical.create
+      [ Ui.Widget.Body.Vertical.fixed
           (padding ~horizontal:16. ~vertical:10. (search_header open_menu))
-      ; Ui.Widget.Flex.fixed
+      ; Ui.Widget.Body.Vertical.fixed
           (padding
              ~horizontal:20.
              ~vertical:8.
@@ -1244,7 +1244,7 @@ let render_mail_body ~state ~rows ~open_menu ~on_visible_range =
                         ~role:Ui.Semantics.Role.Header
                         ~heading_level:1
                         ())))
-      ; Ui.Widget.Flex.expanded list
+      ; Ui.Widget.Body.Vertical.fill list
       ]
 ;;
 
@@ -1572,10 +1572,10 @@ let render_detail_page
     |> List.filter_map Fun.id
   in
   let content =
-    Ui.Widget.Flex.column
-      [ Ui.Widget.Flex.fixed toolbar
-      ; Ui.Widget.Flex.expanded
-          (Ui.Widget.scroll_view ~on_scroll:scroll (Ui.Widget.column blocks) ())
+    Ui.Widget.Body.Vertical.create
+      [ Ui.Widget.Body.Vertical.fixed toolbar
+      ; Ui.Widget.Body.Vertical.fill
+          (Ui.Widget.Scroll_view.vertical ~on_scroll:scroll (Ui.Widget.column blocks) ())
       ]
   in
   let page_key = Printf.sprintf "mail-detail-%d" message.id in
@@ -1585,9 +1585,10 @@ let render_detail_page
     ~transition:Ui.Navigation.Slide
     (Ui.Material.scaffold
        ~body:
-         (Ui.Widget.decorated_box
-            ~decoration:(Ui.Style.Decoration.create ~background ())
-            (Ui.Widget.safe_area content))
+         (content
+          |> Ui.Widget.Body.safe_area
+          |> Ui.Widget.Body.decorated_box
+               ~decoration:(Ui.Style.Decoration.create ~background ()))
        ())
   |> Ui.Widget.with_test_id (Ui.Test_id.string "mail-detail-page")
 ;;
@@ -1750,12 +1751,17 @@ let render_mail_page
   =
   let mail_body =
     render_mail_body ~state ~rows ~open_menu ~on_visible_range:visible_range
-    |> Ui.Widget.decorated_box ~decoration:(Ui.Style.Decoration.create ~background ())
-    |> Ui.Widget.safe_area ~bottom:false
-    |> Ui.Widget.with_test_id (Ui.Test_id.string "mail-content-safe-area")
+    |> Ui.Widget.Body.decorated_box
+         ~decoration:(Ui.Style.Decoration.create ~background ())
+    |> Ui.Widget.Body.safe_area ~bottom:false
+    |> Ui.Widget.Body.with_test_id (Ui.Test_id.string "mail-content-safe-area")
   in
   let bodies =
-    [ mail_body; placeholder "Chat"; placeholder "Spaces"; placeholder "Meet" ]
+    [ mail_body
+    ; Ui.Widget.Body.static (placeholder "Chat")
+    ; Ui.Widget.Body.static (placeholder "Spaces")
+    ; Ui.Widget.Body.static (placeholder "Meet")
+    ]
   in
   let drawer = render_drawer state ~inbox ~starred ~archived ~trash ~settings in
   let bottom_navigation = render_bottom_navigation state ~mail ~chat ~spaces ~meet in

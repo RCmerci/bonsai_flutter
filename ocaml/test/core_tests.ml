@@ -1369,11 +1369,11 @@ let test_layout_material_and_semantics_widgets_are_incremental () =
          (Widget.padding
             ~insets:(Ui.Layout.Edge_insets.symmetric ~horizontal:12. ~vertical:8. ())
             (Widget.center
-               (Widget.scroll_view
-                  ~axis:Ui.Layout.Axis.Vertical
+               (Widget.Scroll_view.vertical
                   ~on_scroll
                   (Ui.Material.checkbox ~key ~value ~on_changed ())
-                  ()))))
+                  ()
+                |> Widget.Viewport.Vertical.with_height ~height:240.))))
   in
   let first =
     reconcile_exn reconciler ~base_revision:0L ~target_revision:1L ~old:None (tree false)

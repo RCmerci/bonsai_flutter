@@ -51,6 +51,11 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byType(RendererLayoutError), findsNothing);
+    final listViewport = tester.getSize(find.byType(ListView).first);
+    expect(listViewport.height, greaterThan(0));
+    expect(listViewport.height.isFinite, isTrue);
     final initialRangeBatch = queue.takeBatch();
     expect(initialRangeBatch, isNotNull);
     final initialRangeResponse = await tester.runAsync(

@@ -12,6 +12,25 @@ let expect_invalid_argument f message =
   | () -> failwith message
 ;;
 
+let widget_of_vertical_viewport viewport =
+  viewport
+  |> Ui.Widget.Viewport.Vertical.with_height ~height:240.
+  |> Ui.Widget.For_testing.children
+  |> fun children -> children.(0)
+;;
+
+let virtual_range_handler callback =
+  Ui.Event.Handler.create (fun payload ->
+    Option.iter callback (Ui.Native_widget.Virtual_list.visible_range_of_payload payload))
+;;
+
+let sparse_range_handler callback =
+  Ui.Event.Handler.create (fun payload ->
+    Option.iter
+      callback
+      (Ui.Native_widget.Sparse_extent_list.visible_range_of_payload payload))
+;;
+
 type dial_event = Changed of int
 
 let dial_extension =
@@ -67,15 +86,16 @@ let test_virtual_list_window () =
   in
   let received = ref None in
   let widget =
-    Ui.Native_widget.Virtual_list.create
+    Ui.Native_widget.Virtual_list.vertical
       ~key:(Ui.Key.string "large-list")
       ~total_count:50_000
       ~first_index:100
       ~item_extent:48.
       ~overscan:4
       ~items
-      ~on_visible_range:(fun range -> received := Some range)
+      ~on_visible_range:(virtual_range_handler (fun range -> received := Some range))
       ()
+    |> widget_of_vertical_viewport
   in
   let view = Ui.Widget.Private.view widget in
   check (Array.length view.children = 20) "only the supplied window is mounted";
@@ -113,7 +133,7 @@ let test_virtual_list_handler_path_and_payload_filtering () =
       received := Ui.Native_widget.Virtual_list.visible_range_of_payload payload)
   in
   let widget =
-    Ui.Native_widget.Virtual_list.create_with_handler
+    Ui.Native_widget.Virtual_list.vertical
       ~total_count:40
       ~first_index:8
       ~item_extent:88.
@@ -121,6 +141,7 @@ let test_virtual_list_handler_path_and_payload_filtering () =
       ~items:(List.init 24 (fun index -> Ui.Widget.text (string_of_int index)))
       ~on_visible_range:handler
       ()
+    |> widget_of_vertical_viewport
   in
   let binding = (Ui.Widget.Private.view widget).event_bindings.(0) in
   let invoke kind_id version event_id payload =
@@ -159,7 +180,7 @@ let test_sparse_extent_list_contract () =
         (string_of_int (40 + index)))
   in
   let widget =
-    Ui.Native_widget.Sparse_extent_list.create
+    Ui.Native_widget.Sparse_extent_list.vertical
       ~key:(Ui.Key.string "sparse-list")
       ~total_count:50_000
       ~first_index:40
@@ -167,8 +188,9 @@ let test_sparse_extent_list_contract () =
       ~extent_overrides:[ sparse_extent 3 120.; sparse_extent 42 312. ]
       ~overscan:5
       ~items
-      ~on_visible_range:(fun range -> received := Some range)
+      ~on_visible_range:(sparse_range_handler (fun range -> received := Some range))
       ()
+    |> widget_of_vertical_viewport
   in
   let view = Ui.Widget.Private.view widget in
   check (Array.length view.children = 6) "sparse list mounted outside its supplied window";
@@ -219,7 +241,7 @@ let test_sparse_extent_list_transition_contract () =
       ()
   in
   let widget =
-    Ui.Native_widget.Sparse_extent_list.create
+    Ui.Native_widget.Sparse_extent_list.vertical
       ~total_count:20
       ~first_index:4
       ~default_item_extent:88.
@@ -227,8 +249,9 @@ let test_sparse_extent_list_transition_contract () =
       ~overscan:4
       ~transition
       ~items:[ Ui.Widget.empty () ]
-      ~on_visible_range:(fun _ -> ())
+      ~on_visible_range:(sparse_range_handler (fun _ -> ()))
       ()
+    |> widget_of_vertical_viewport
   in
   match (Ui.Widget.Private.view widget).props with
   | Native_widget_props { kind_id; version; payload; _ } ->
@@ -279,14 +302,14 @@ let test_sparse_extent_list_validation () =
         ?(items = [])
         ()
     =
-    Ui.Native_widget.Sparse_extent_list.create
+    Ui.Native_widget.Sparse_extent_list.vertical
       ~total_count
       ~first_index
       ~default_item_extent
       ~extent_overrides
       ~overscan
       ~items
-      ~on_visible_range:(fun _ -> ())
+      ~on_visible_range:(sparse_range_handler (fun _ -> ()))
       ()
   in
   List.iter
@@ -327,14 +350,15 @@ let test_sparse_extent_list_validation () =
       , "sparse list accepted a child window beyond total_count" )
     ];
   let valid =
-    Ui.Native_widget.Sparse_extent_list.create
+    Ui.Native_widget.Sparse_extent_list.vertical
       ~total_count:8
       ~first_index:2
       ~default_item_extent:48.
       ~extent_overrides:[ sparse_extent 4 96. ]
       ~items:[ Ui.Widget.empty () ]
-      ~on_visible_range:(fun _ -> ())
+      ~on_visible_range:(sparse_range_handler (fun _ -> ()))
       ()
+    |> widget_of_vertical_viewport
   in
   let payload =
     match (Ui.Widget.Private.view valid).props with
@@ -370,7 +394,7 @@ let test_sparse_extent_handler_path_and_payload_filtering () =
       received := Ui.Native_widget.Sparse_extent_list.visible_range_of_payload payload)
   in
   let widget =
-    Ui.Native_widget.Sparse_extent_list.create_with_handler
+    Ui.Native_widget.Sparse_extent_list.vertical
       ~total_count:40
       ~first_index:8
       ~default_item_extent:88.
@@ -378,6 +402,7 @@ let test_sparse_extent_handler_path_and_payload_filtering () =
       ~items:(List.init 24 (fun index -> Ui.Widget.text (string_of_int index)))
       ~on_visible_range:handler
       ()
+    |> widget_of_vertical_viewport
   in
   let binding = (Ui.Widget.Private.view widget).event_bindings.(0) in
   let invoke kind_id version event_id payload =
@@ -556,7 +581,10 @@ let test_navigation_shell_contract_and_events () =
       ~selected_index:1
       ~drawer_open:true
       ~drawer_enabled:false
-      ~bodies:[ Ui.Widget.text "Primary"; Ui.Widget.text "Secondary" ]
+      ~bodies:
+        [ Ui.Widget.Body.static (Ui.Widget.text "Primary")
+        ; Ui.Widget.Body.static (Ui.Widget.text "Secondary")
+        ]
       ~drawer:(Ui.Widget.text "Drawer")
       ~bottom_navigation:(Ui.Widget.text "Bottom")
       ~on_drawer_state_changed:(fun state -> received := Some state)
@@ -622,7 +650,10 @@ let test_navigation_shell_contract_and_events () =
             ~selected_index:2
             ~drawer_open:false
             ~drawer_enabled:true
-            ~bodies:[ Ui.Widget.empty (); Ui.Widget.empty () ]
+            ~bodies:
+              [ Ui.Widget.Body.static (Ui.Widget.empty ())
+              ; Ui.Widget.Body.static (Ui.Widget.empty ())
+              ]
             ~drawer:(Ui.Widget.empty ())
             ~bottom_navigation:(Ui.Widget.empty ())
             ~on_drawer_state_changed:(fun _ -> ())

@@ -1,6 +1,8 @@
 (** Public renderer-independent bonsai_flutter surface. *)
 
 module Widget = Bonsai_flutter_ui.Widget
+module Viewport = Bonsai_flutter_ui.Widget.Viewport
+module Body = Bonsai_flutter_ui.Widget.Body
 module Test_id = Bonsai_flutter_ui.Test_id
 module Layout = Bonsai_flutter_ui.Layout
 module Style = Bonsai_flutter_ui.Style

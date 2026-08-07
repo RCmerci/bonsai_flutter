@@ -38,6 +38,23 @@ let worker_component client _context _graph =
   Bonsai.Cont.return (Ui.Widget.text "worker public API")
 ;;
 
+let viewport_handler = Ui.Event.Handler.create (fun _ -> ())
+
+let (_ : Ui.Viewport.Vertical.t) =
+  Ui.Widget.List_view.vertical
+    ~on_scroll:viewport_handler
+    [ Ui.Widget.text "Public row" ]
+    ()
+;;
+
+let (_ : Ui.Body.t) =
+  Ui.Body.Vertical.create
+    [ Ui.Body.Vertical.fixed (Ui.Widget.text "Search")
+    ; Ui.Body.Vertical.fill
+        (Ui.Widget.List_view.vertical ~on_scroll:viewport_handler [] ())
+    ]
+;;
+
 let () =
   let cancellation = Ui.Application_platform.Cancellation.create () in
   Ui.Application_platform.Cancellation.cancel cancellation;

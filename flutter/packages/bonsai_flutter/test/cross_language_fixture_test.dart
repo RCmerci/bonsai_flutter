@@ -325,6 +325,42 @@ void main() {
         ),
       );
     });
+
+    test('decodes a bounded body with a sparse viewport and overlay', () {
+      final frame = decodeOcamlFixture('ocaml_viewport_body.hex');
+      final creates = frame.operations.whereType<CreateNode>().toList();
+
+      final basePosition =
+          creates.singleWhere((node) => node.nodeId == 3).parentData
+              as StackPositionData;
+      expect(basePosition.left, 0);
+      expect(basePosition.top, 0);
+      expect(basePosition.right, 0);
+      expect(basePosition.bottom, 0);
+      expect(
+        creates.singleWhere((node) => node.nodeId == 4).parentData,
+        const NoParentData(),
+      );
+      final viewportFlex =
+          creates.singleWhere((node) => node.nodeId == 6).parentData
+              as FlexParentData;
+      expect(viewportFlex.flex, 1);
+      expect(viewportFlex.fit, FlexParentFit.tight);
+      final overlayPosition =
+          creates.singleWhere((node) => node.nodeId == 7).parentData
+              as StackPositionData;
+      expect(overlayPosition.left, isNull);
+      expect(overlayPosition.top, isNull);
+      expect(overlayPosition.right, 16);
+      expect(overlayPosition.bottom, 16);
+      final sparse = creates.singleWhere((node) => node.nodeId == 6);
+      expect(sparse.kind, NodeKind.nativeWidget);
+      expect(
+        (sparse.props as NativeWidgetProps).kindId,
+        NativeWidgetKind.sparseExtentList,
+      );
+      expectFixtureMatchesDartEncoding('ocaml_viewport_body.hex', frame);
+    });
   });
 }
 

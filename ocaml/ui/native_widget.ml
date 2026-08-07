@@ -203,36 +203,13 @@ module Virtual_list = struct
       ()
   ;;
 
-  let create
+  let create_widget
         ?key
+        ~axis
         ~total_count
         ~first_index
         ~item_extent
         ?(overscan = 2)
-        ?(axis = Layout.Axis.Vertical)
-        ~items
-        ~on_visible_range
-        ()
-    =
-    let props = { total_count; first_index; item_extent; overscan; axis } in
-    validate props (List.length items);
-    widget extension ?key ~props ~on_event:on_visible_range ~children:items ()
-  ;;
-
-  let visible_range_of_payload = function
-    | Event.Payload.Native_event event
-      when event.kind_id = kind_id && event.version = version ->
-      Result.to_option (decode_event ~event_id:event.event_id event.payload)
-    | _ -> None
-  ;;
-
-  let create_with_handler
-        ?key
-        ~total_count
-        ~first_index
-        ~item_extent
-        ?(overscan = 2)
-        ?(axis = Layout.Axis.Vertical)
         ~items
         ~on_visible_range
         ()
@@ -246,6 +223,59 @@ module Virtual_list = struct
       ~on_event:on_visible_range
       ~children:items
       ()
+  ;;
+
+  let vertical
+        ?key
+        ~total_count
+        ~first_index
+        ~item_extent
+        ?overscan
+        ~items
+        ~on_visible_range
+        ()
+    =
+    create_widget
+      ?key
+      ~axis:Layout.Axis.Vertical
+      ~total_count
+      ~first_index
+      ~item_extent
+      ?overscan
+      ~items
+      ~on_visible_range
+      ()
+    |> Widget.Private.vertical_viewport
+  ;;
+
+  let horizontal
+        ?key
+        ~total_count
+        ~first_index
+        ~item_extent
+        ?overscan
+        ~items
+        ~on_visible_range
+        ()
+    =
+    create_widget
+      ?key
+      ~axis:Layout.Axis.Horizontal
+      ~total_count
+      ~first_index
+      ~item_extent
+      ?overscan
+      ~items
+      ~on_visible_range
+      ()
+    |> Widget.Private.horizontal_viewport
+  ;;
+
+  let visible_range_of_payload = function
+    | Event.Payload.Native_event event
+      when event.kind_id = kind_id && event.version = version ->
+      Result.to_option (decode_event ~event_id:event.event_id event.payload)
+    | _ -> None
   ;;
 
   module For_testing = struct
@@ -606,55 +636,14 @@ module Sparse_extent_list = struct
     props
   ;;
 
-  let create
+  let create_widget
         ?key
-        ~total_count
-        ~first_index
-        ~default_item_extent
-        ~extent_overrides
-        ?(overscan = 2)
-        ?(axis = Layout.Axis.Vertical)
-        ?transition
-        ~items
-        ~on_visible_range
-        ()
-    =
-    let props =
-      props
-        ~total_count
-        ~first_index
-        ~default_item_extent
-        ~extent_overrides
-        ~overscan
         ~axis
-        ~transition
-        items
-    in
-    widget
-      (extension_for transition)
-      ?key
-      ~props
-      ~on_event:on_visible_range
-      ~children:items
-      ()
-  ;;
-
-  let visible_range_of_payload = function
-    | Event.Payload.Native_event event
-      when event.kind_id = kind_id
-           && (event.version = version_v1 || event.version = version_v2) ->
-      Result.to_option (decode_event ~event_id:event.event_id event.payload)
-    | _ -> None
-  ;;
-
-  let create_with_handler
-        ?key
         ~total_count
         ~first_index
         ~default_item_extent
         ~extent_overrides
         ?(overscan = 2)
-        ?(axis = Layout.Axis.Vertical)
         ?transition
         ~items
         ~on_visible_range
@@ -678,6 +667,68 @@ module Sparse_extent_list = struct
       ~on_event:on_visible_range
       ~children:items
       ()
+  ;;
+
+  let vertical
+        ?key
+        ~total_count
+        ~first_index
+        ~default_item_extent
+        ~extent_overrides
+        ?overscan
+        ?transition
+        ~items
+        ~on_visible_range
+        ()
+    =
+    create_widget
+      ?key
+      ~axis:Layout.Axis.Vertical
+      ~total_count
+      ~first_index
+      ~default_item_extent
+      ~extent_overrides
+      ?overscan
+      ?transition
+      ~items
+      ~on_visible_range
+      ()
+    |> Widget.Private.vertical_viewport
+  ;;
+
+  let horizontal
+        ?key
+        ~total_count
+        ~first_index
+        ~default_item_extent
+        ~extent_overrides
+        ?overscan
+        ?transition
+        ~items
+        ~on_visible_range
+        ()
+    =
+    create_widget
+      ?key
+      ~axis:Layout.Axis.Horizontal
+      ~total_count
+      ~first_index
+      ~default_item_extent
+      ~extent_overrides
+      ?overscan
+      ?transition
+      ~items
+      ~on_visible_range
+      ()
+    |> Widget.Private.horizontal_viewport
+  ;;
+
+  let visible_range_of_payload = function
+    | Event.Payload.Native_event event
+      when event.kind_id = kind_id
+           && (event.version = version_v1 || event.version = version_v2) ->
+      Result.to_option (decode_event ~event_id:event.event_id event.payload)
+    | _ -> None
   ;;
 
   module For_testing = struct
@@ -1009,7 +1060,37 @@ module Navigation_shell = struct
     props
   ;;
 
-  let children bodies drawer bottom_navigation = bodies @ [ drawer; bottom_navigation ]
+  let widget_with_handler_and_bodies
+        ?key
+        ~props
+        ~on_event
+        ~bodies
+        ~drawer
+        ~bottom_navigation
+        ()
+    =
+    Widget.Private.native_widget_with_body_children
+      ?key
+      ~kind_id:extension.kind_id
+      ~version:extension.version
+      ~capabilities:extension.capabilities
+      ~payload:(extension.encode_props props)
+      ~on_event
+      ~bodies
+      ~trailing_children:[ drawer; bottom_navigation ]
+      ()
+  ;;
+
+  let widget_with_bodies ?key ~props ~on_event ~bodies ~drawer ~bottom_navigation () =
+    widget_with_handler_and_bodies
+      ?key
+      ~props
+      ~on_event:(event_handler extension on_event)
+      ~bodies
+      ~drawer
+      ~bottom_navigation
+      ()
+  ;;
 
   let drawer_state_of_payload = function
     | Event.Payload.Native_event event
@@ -1029,12 +1110,13 @@ module Navigation_shell = struct
         ~on_drawer_state_changed
         ()
     =
-    widget
-      extension
+    widget_with_bodies
       ?key
       ~props:(props ~selected_index ~drawer_open ~drawer_enabled bodies)
       ~on_event:on_drawer_state_changed
-      ~children:(children bodies drawer bottom_navigation)
+      ~bodies
+      ~drawer
+      ~bottom_navigation
       ()
   ;;
 
@@ -1049,12 +1131,13 @@ module Navigation_shell = struct
         ~on_drawer_state_changed
         ()
     =
-    widget_with_handler
-      extension
+    widget_with_handler_and_bodies
       ?key
       ~props:(props ~selected_index ~drawer_open ~drawer_enabled bodies)
       ~on_event:on_drawer_state_changed
-      ~children:(children bodies drawer bottom_navigation)
+      ~bodies
+      ~drawer
+      ~bottom_navigation
       ()
   ;;
 

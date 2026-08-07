@@ -6,7 +6,7 @@ let text value = Ui.Widget.text value
 let widgets =
   [ Ui.Material.scaffold
       ~app_bar:(Ui.Material.app_bar ~title:(text "Title") ())
-      ~body:(text "Body")
+      ~body:(Ui.Widget.Body.static (text "Body"))
       ()
   ; Ui.Material.elevated_button ~on_press:handler ~child:(text "Elevated") ()
   ; Ui.Material.text_button ~on_press:handler ~child:(text "Text") ()

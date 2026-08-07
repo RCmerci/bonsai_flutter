@@ -258,25 +258,26 @@ let component handlers graph =
     in
     let list =
       Ui.Widget.column rows
-      |> fun content -> Ui.Widget.scroll_view ~on_scroll:scroll content ()
+      |> fun content -> Ui.Widget.Scroll_view.vertical ~on_scroll:scroll content ()
     in
     Ui.Material.scaffold
       ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Todo") ())
       ~body:
-        (Ui.Widget.column
-           [ Ui.Widget.Flex.row
-               [ Ui.Widget.Flex.expanded
-                   (Ui.Material.elevated_button
-                      ~on_press:add
-                      ~child:(Ui.Widget.text "Add")
-                      ())
-               ; Ui.Widget.Flex.expanded
-                   (Ui.Material.text_button
-                      ~on_press:reverse
-                      ~child:(Ui.Widget.text "Reverse")
-                      ())
-               ]
-           ; list
+        (Ui.Widget.Body.Vertical.create
+           [ Ui.Widget.Body.Vertical.fixed
+               (Ui.Widget.Flex.row
+                  [ Ui.Widget.Flex.expanded
+                      (Ui.Material.elevated_button
+                         ~on_press:add
+                         ~child:(Ui.Widget.text "Add")
+                         ())
+                  ; Ui.Widget.Flex.expanded
+                      (Ui.Material.text_button
+                         ~on_press:reverse
+                         ~child:(Ui.Widget.text "Reverse")
+                         ())
+                  ])
+           ; Ui.Widget.Body.Vertical.fill list
            ])
       ())
 ;;

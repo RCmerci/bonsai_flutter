@@ -5,7 +5,8 @@ mounting every row in the OCaml tree or creating a `NodeHost` per logical
 item. OCaml supplies only a keyed, prefetched item window:
 
 ```ocaml
-Native_widget.Virtual_list.create
+let viewport =
+  Native_widget.Virtual_list.vertical
   ~total_count:50_000
   ~first_index:100
   ~item_extent:48.
@@ -13,6 +14,8 @@ Native_widget.Virtual_list.create
   ~items:twenty_keyed_rows
   ~on_visible_range
   ()
+in
+Body.Vertical.create [ Body.Vertical.fill viewport ]
 ```
 
 The binary properties contain the logical count, window origin, fixed item
@@ -26,9 +29,8 @@ is bounded by `total_count`, not by the currently supplied child window. This
 lets a fast scroll request a catch-up window instead of becoming pinned to
 stale supplied indexes.
 
-Effectful applications can attach a driver-managed handler directly with
-`create_with_handler` and validate raw input through
-`visible_range_of_payload`. A typical append feed keeps one cursor and one load
+Applications attach a driver-managed `Event.Handler.t` and validate raw input
+through `visible_range_of_payload`. A typical append feed keeps one cursor and one load
 generation in OCaml, ignores repeated range events while loading, supplies an
 overlapping keyed window, and schedules completion through Bonsai logical
 time. Flutter retains the controller and exact offset while props and children
@@ -51,7 +53,8 @@ explicit optional transition while retaining the same bounded OCaml child
 window, default extent, and sorted logical-index overrides:
 
 ```ocaml
-Native_widget.Sparse_extent_list.create
+let viewport =
+  Native_widget.Sparse_extent_list.vertical
   ~total_count:50_000
   ~first_index:100
   ~default_item_extent:48.
@@ -65,6 +68,8 @@ Native_widget.Sparse_extent_list.create
   ~items:twenty_keyed_rows
   ~on_visible_range
   ()
+in
+Body.Vertical.create [ Body.Vertical.fill viewport ]
 ```
 
 The payload validates exact length, safe indexes, sorted uniqueness, reserved
@@ -93,3 +98,8 @@ OCaml composes the two endpoint trees with
 `Native_widget.Morphing_surface.create`. The wrapper is placed inside the
 single keyed row or swipe host, so list identity and gesture arbitration remain
 unchanged while both endpoint visuals are available to Flutter.
+
+Both virtual-list constructors have separate `vertical` and `horizontal`
+entry points. They return `Viewport.Vertical.t` and `Viewport.Horizontal.t`,
+not `Widget.t`. See [Viewport layout](viewport-layout.md) for bounded body and
+explicit extent embedding.

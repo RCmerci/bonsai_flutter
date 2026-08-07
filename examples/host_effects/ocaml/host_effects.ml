@@ -36,18 +36,19 @@ let component handlers graph =
     Ui.Material.scaffold
       ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Host effects") ())
       ~body:
-        (Ui.Widget.padding
-           ~insets:(Ui.Layout.Edge_insets.all 24.)
-           (Ui.Widget.column
-              [ Ui.Widget.text status
-              ; Ui.Material.elevated_button
-                  ~on_press:read_clipboard
-                  ~child:(Ui.Widget.text "Read clipboard")
-                  ()
-              ; Ui.Material.text_button
-                  ~on_press:write_clipboard
-                  ~child:(Ui.Widget.text "Write clipboard")
-                  ()
-              ]))
+        (Ui.Widget.Body.static
+           (Ui.Widget.padding
+              ~insets:(Ui.Layout.Edge_insets.all 24.)
+              (Ui.Widget.column
+                 [ Ui.Widget.text status
+                 ; Ui.Material.elevated_button
+                     ~on_press:read_clipboard
+                     ~child:(Ui.Widget.text "Read clipboard")
+                     ()
+                 ; Ui.Material.text_button
+                     ~on_press:write_clipboard
+                     ~child:(Ui.Widget.text "Write clipboard")
+                     ()
+                 ])))
       ())
 ;;

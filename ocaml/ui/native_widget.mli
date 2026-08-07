@@ -59,31 +59,29 @@ module Virtual_list : sig
   val kind_id : Bonsai_flutter_spec.Id.Native_widget.kind_id
   val visible_range_event_id : Bonsai_flutter_spec.Id.Native_widget.event_id
 
-  val create
+  val vertical
     :  ?key:Key.t
     -> total_count:int
     -> first_index:int
     -> item_extent:float
     -> ?overscan:int
-    -> ?axis:Layout.Axis.t
-    -> items:Widget.t list
-    -> on_visible_range:(Event.Payload.visible_range -> unit)
-    -> unit
-    -> Widget.t
-
-  val visible_range_of_payload : Event.Payload.t -> Event.Payload.visible_range option
-
-  val create_with_handler
-    :  ?key:Key.t
-    -> total_count:int
-    -> first_index:int
-    -> item_extent:float
-    -> ?overscan:int
-    -> ?axis:Layout.Axis.t
     -> items:Widget.t list
     -> on_visible_range:Event.Handler.t
     -> unit
-    -> Widget.t
+    -> Widget.Viewport.Vertical.t
+
+  val visible_range_of_payload : Event.Payload.t -> Event.Payload.visible_range option
+
+  val horizontal
+    :  ?key:Key.t
+    -> total_count:int
+    -> first_index:int
+    -> item_extent:float
+    -> ?overscan:int
+    -> items:Widget.t list
+    -> on_visible_range:Event.Handler.t
+    -> unit
+    -> Widget.Viewport.Horizontal.t
 
   module For_testing : sig
     type props =
@@ -135,35 +133,33 @@ module Sparse_extent_list : sig
   val kind_id : Bonsai_flutter_spec.Id.Native_widget.kind_id
   val visible_range_event_id : Bonsai_flutter_spec.Id.Native_widget.event_id
 
-  val create
+  val vertical
     :  ?key:Key.t
     -> total_count:int
     -> first_index:int
     -> default_item_extent:float
     -> extent_overrides:extent_override list
     -> ?overscan:int
-    -> ?axis:Layout.Axis.t
-    -> ?transition:Transition.t
-    -> items:Widget.t list
-    -> on_visible_range:(Event.Payload.visible_range -> unit)
-    -> unit
-    -> Widget.t
-
-  val visible_range_of_payload : Event.Payload.t -> Event.Payload.visible_range option
-
-  val create_with_handler
-    :  ?key:Key.t
-    -> total_count:int
-    -> first_index:int
-    -> default_item_extent:float
-    -> extent_overrides:extent_override list
-    -> ?overscan:int
-    -> ?axis:Layout.Axis.t
     -> ?transition:Transition.t
     -> items:Widget.t list
     -> on_visible_range:Event.Handler.t
     -> unit
-    -> Widget.t
+    -> Widget.Viewport.Vertical.t
+
+  val visible_range_of_payload : Event.Payload.t -> Event.Payload.visible_range option
+
+  val horizontal
+    :  ?key:Key.t
+    -> total_count:int
+    -> first_index:int
+    -> default_item_extent:float
+    -> extent_overrides:extent_override list
+    -> ?overscan:int
+    -> ?transition:Transition.t
+    -> items:Widget.t list
+    -> on_visible_range:Event.Handler.t
+    -> unit
+    -> Widget.Viewport.Horizontal.t
 
   module For_testing : sig
     type nonrec extent_override = extent_override =
@@ -256,7 +252,7 @@ module Navigation_shell : sig
     -> selected_index:int
     -> drawer_open:bool
     -> drawer_enabled:bool
-    -> bodies:Widget.t list
+    -> bodies:Widget.Body.t list
     -> drawer:Widget.t
     -> bottom_navigation:Widget.t
     -> on_drawer_state_changed:(drawer_state -> unit)
@@ -270,7 +266,7 @@ module Navigation_shell : sig
     -> selected_index:int
     -> drawer_open:bool
     -> drawer_enabled:bool
-    -> bodies:Widget.t list
+    -> bodies:Widget.Body.t list
     -> drawer:Widget.t
     -> bottom_navigation:Widget.t
     -> on_drawer_state_changed:Event.Handler.t

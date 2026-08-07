@@ -687,21 +687,22 @@ let component client handlers graph =
       Ui.Material.scaffold
         ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "SQLite Worker Todo") ())
         ~body:
-          (Ui.Widget.column
-             ([ status
-              ; Ui.Widget.text
-                  (Printf.sprintf
-                     "%d open · %d completed"
-                     state.open_count
-                     state.completed_count)
-              ; input
-              ; Ui.Widget.Flex.row
-                  [ Ui.Widget.Flex.expanded add; Ui.Widget.Flex.expanded refresh ]
-              ; startup_timing
-              ; file_demo
-              ]
-              @ messages
-              @ rows))
+          (Ui.Widget.Body.static
+             (Ui.Widget.column
+                ([ status
+                 ; Ui.Widget.text
+                     (Printf.sprintf
+                        "%d open · %d completed"
+                        state.open_count
+                        state.completed_count)
+                 ; input
+                 ; Ui.Widget.Flex.row
+                     [ Ui.Widget.Flex.expanded add; Ui.Widget.Flex.expanded refresh ]
+                 ; startup_timing
+                 ; file_demo
+                 ]
+                 @ messages
+                 @ rows)))
         ())
   in
   Bonsai.Cont.map2 event_subscription view ~f:(fun () view -> view)

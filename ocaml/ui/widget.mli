@@ -61,23 +61,71 @@ val animated_opacity
 
 val transform : ?key:Key.t -> transform:Style.Transform.t -> t -> t
 
-val scroll_view
-  :  ?key:Key.t
-  -> ?axis:Layout.Axis.t
-  -> ?reverse:bool
-  -> on_scroll:Event.Handler.t
-  -> t
-  -> unit
-  -> t
+(** Axis-specific scrolling content that is not an ordinary widget until it is
+    placed in a bounded body slot or given an explicit finite extent. *)
+module Viewport : sig
+  type widget = t
 
-val list_view
-  :  ?key:Key.t
-  -> ?axis:Layout.Axis.t
-  -> ?reverse:bool
-  -> on_scroll:Event.Handler.t
-  -> t list
-  -> unit
-  -> t
+  module Vertical : sig
+    type t
+
+    val with_test_id : Test_id.t -> t -> t
+    val padding : insets:Layout.Edge_insets.t -> t -> t
+    val decorated_box : decoration:Style.Decoration.t -> t -> t
+    val semantics : properties:Semantics.t -> t -> t
+    val safe_area : ?minimum:Layout.Edge_insets.t -> t -> t
+    val theme : data:Theme.t -> t -> t
+    val with_height : height:float -> t -> widget
+  end
+
+  module Horizontal : sig
+    type t
+
+    val with_test_id : Test_id.t -> t -> t
+    val padding : insets:Layout.Edge_insets.t -> t -> t
+    val decorated_box : decoration:Style.Decoration.t -> t -> t
+    val semantics : properties:Semantics.t -> t -> t
+    val safe_area : ?minimum:Layout.Edge_insets.t -> t -> t
+    val theme : data:Theme.t -> t -> t
+    val with_width : width:float -> t -> widget
+  end
+end
+
+module Scroll_view : sig
+  val vertical
+    :  ?key:Key.t
+    -> ?reverse:bool
+    -> on_scroll:Event.Handler.t
+    -> t
+    -> unit
+    -> Viewport.Vertical.t
+
+  val horizontal
+    :  ?key:Key.t
+    -> ?reverse:bool
+    -> on_scroll:Event.Handler.t
+    -> t
+    -> unit
+    -> Viewport.Horizontal.t
+end
+
+module List_view : sig
+  val vertical
+    :  ?key:Key.t
+    -> ?reverse:bool
+    -> on_scroll:Event.Handler.t
+    -> t list
+    -> unit
+    -> Viewport.Vertical.t
+
+  val horizontal
+    :  ?key:Key.t
+    -> ?reverse:bool
+    -> on_scroll:Event.Handler.t
+    -> t list
+    -> unit
+    -> Viewport.Horizontal.t
+end
 
 val safe_area
   :  ?key:Key.t
@@ -220,6 +268,47 @@ module Stack : sig
     -> child
 
   val create : ?key:Key.t -> child list -> t
+end
+
+(** Content validated for framework slots that provide finite constraints. *)
+module Body : sig
+  type widget = t
+  type t
+
+  val static : widget -> t
+  val with_test_id : Test_id.t -> t -> t
+  val padding : insets:Layout.Edge_insets.t -> t -> t
+  val decorated_box : decoration:Style.Decoration.t -> t -> t
+  val semantics : properties:Semantics.t -> t -> t
+
+  val safe_area
+    :  ?left:bool
+    -> ?top:bool
+    -> ?right:bool
+    -> ?bottom:bool
+    -> ?minimum:Layout.Edge_insets.t
+    -> t
+    -> t
+
+  val theme : data:Theme.t -> t -> t
+
+  module Vertical : sig
+    type child
+
+    val fixed : widget -> child
+    val fill : ?flex:int -> Viewport.Vertical.t -> child
+    val create : ?key:Key.t -> child list -> t
+  end
+
+  module Horizontal : sig
+    type child
+
+    val fixed : widget -> child
+    val fill : ?flex:int -> Viewport.Horizontal.t -> child
+    val create : ?key:Key.t -> child list -> t
+  end
+
+  val overlay : ?key:Key.t -> base:t -> overlays:Stack.child list -> unit -> t
 end
 
 module For_testing : sig
@@ -520,7 +609,7 @@ module Private : sig
     -> unit
     -> t
 
-  val material_scaffold : ?key:Key.t -> ?app_bar:t -> body:t -> unit -> t
+  val material_scaffold : ?key:Key.t -> ?app_bar:t -> body:Body.t -> unit -> t
   val material_app_bar : ?key:Key.t -> ?center_title:bool -> title:t -> unit -> t
 
   val material_button
@@ -581,6 +670,21 @@ module Private : sig
     -> payload:bytes
     -> on_event:Event.Handler.t
     -> children:t list
+    -> unit
+    -> t
+
+  val vertical_viewport : t -> Viewport.Vertical.t
+  val horizontal_viewport : t -> Viewport.Horizontal.t
+
+  val native_widget_with_body_children
+    :  ?key:Key.t
+    -> kind_id:Bonsai_flutter_spec.Id.Native_widget.kind_id
+    -> version:int
+    -> capabilities:int64
+    -> payload:bytes
+    -> on_event:Event.Handler.t
+    -> bodies:Body.t list
+    -> trailing_children:t list
     -> unit
     -> t
 end

@@ -813,8 +813,7 @@ let transform ?key ~transform child =
     ~children:(plain_children [ child ])
 ;;
 
-let scroll_view ?key ?(axis = Layout.Axis.Vertical) ?(reverse = false) ~on_scroll child ()
-  =
+let scroll_view_widget ?key ~axis ?(reverse = false) ~on_scroll child () =
   create
     ~key
     ~kind:Kind.Scroll_view
@@ -823,14 +822,7 @@ let scroll_view ?key ?(axis = Layout.Axis.Vertical) ?(reverse = false) ~on_scrol
     ~children:(plain_children [ child ])
 ;;
 
-let list_view
-      ?key
-      ?(axis = Layout.Axis.Vertical)
-      ?(reverse = false)
-      ~on_scroll
-      children
-      ()
-  =
+let list_view_widget ?key ~axis ?(reverse = false) ~on_scroll children () =
   create
     ~key
     ~kind:Kind.List_view
@@ -1051,7 +1043,7 @@ let material_checkbox ?key ?(enabled = true) ~value ~on_changed () =
     ~children:[||]
 ;;
 
-let material_scaffold ?key ?app_bar ~body () =
+let material_scaffold_widget ?key ?app_bar ~body () =
   create
     ~key
     ~kind:Kind.Material_scaffold
@@ -1315,6 +1307,177 @@ module Stack = struct
   ;;
 end
 
+type vertical_viewport = Vertical_viewport of t
+type horizontal_viewport = Horizontal_viewport of t
+
+let vertical_viewport widget = Vertical_viewport widget
+let horizontal_viewport widget = Horizontal_viewport widget
+
+module Viewport = struct
+  type nonrec widget = t
+
+  let positive_extent label value =
+    if (not (Float.is_finite value)) || Float.compare value 0. <= 0
+    then
+      invalid_arg (Printf.sprintf "Widget.Viewport.%s must be finite and positive" label)
+  ;;
+
+  module Vertical = struct
+    type t = vertical_viewport
+
+    let map f (Vertical_viewport widget) = Vertical_viewport (f widget)
+    let widget (Vertical_viewport widget) = widget
+    let with_test_id test_id = map (with_test_id test_id)
+    let padding ~insets = map (padding ~insets)
+    let decorated_box ~decoration = map (decorated_box ~decoration)
+    let semantics ~properties = map (semantics ~properties)
+    let safe_area ?minimum = map (safe_area ?minimum)
+    let theme ~data = map (theme ~data)
+
+    let with_height ~height viewport =
+      positive_extent "Vertical.with_height" height;
+      sized_box ~height (widget viewport)
+    ;;
+  end
+
+  module Horizontal = struct
+    type t = horizontal_viewport
+
+    let map f (Horizontal_viewport widget) = Horizontal_viewport (f widget)
+    let widget (Horizontal_viewport widget) = widget
+    let with_test_id test_id = map (with_test_id test_id)
+    let padding ~insets = map (padding ~insets)
+    let decorated_box ~decoration = map (decorated_box ~decoration)
+    let semantics ~properties = map (semantics ~properties)
+    let safe_area ?minimum = map (safe_area ?minimum)
+    let theme ~data = map (theme ~data)
+
+    let with_width ~width viewport =
+      positive_extent "Horizontal.with_width" width;
+      sized_box ~width (widget viewport)
+    ;;
+  end
+end
+
+module Scroll_view = struct
+  let vertical ?key ?reverse ~on_scroll child () =
+    scroll_view_widget ?key ~axis:Layout.Axis.Vertical ?reverse ~on_scroll child ()
+    |> vertical_viewport
+  ;;
+
+  let horizontal ?key ?reverse ~on_scroll child () =
+    scroll_view_widget ?key ~axis:Layout.Axis.Horizontal ?reverse ~on_scroll child ()
+    |> horizontal_viewport
+  ;;
+end
+
+module List_view = struct
+  let vertical ?key ?reverse ~on_scroll children () =
+    list_view_widget ?key ~axis:Layout.Axis.Vertical ?reverse ~on_scroll children ()
+    |> vertical_viewport
+  ;;
+
+  let horizontal ?key ?reverse ~on_scroll children () =
+    list_view_widget ?key ~axis:Layout.Axis.Horizontal ?reverse ~on_scroll children ()
+    |> horizontal_viewport
+  ;;
+end
+
+type body = Body of t
+
+type vertical_body_child =
+  | Vertical_fixed of t
+  | Vertical_fill of int * vertical_viewport
+
+type horizontal_body_child =
+  | Horizontal_fixed of t
+  | Horizontal_fill of int * horizontal_viewport
+
+module Body = struct
+  type nonrec widget = t
+  type t = body
+
+  let static widget = Body widget
+  let map f (Body widget) = Body (f widget)
+  let with_test_id test_id = map (with_test_id test_id)
+  let padding ~insets = map (padding ~insets)
+  let decorated_box ~decoration = map (decorated_box ~decoration)
+  let semantics ~properties = map (semantics ~properties)
+
+  let safe_area ?left ?top ?right ?bottom ?minimum =
+    map (safe_area ?left ?top ?right ?bottom ?minimum)
+  ;;
+
+  let theme ~data = map (theme ~data)
+
+  let positive_flex axis flex =
+    if flex <= 0
+    then invalid_arg (Printf.sprintf "Widget.Body.%s.fill: flex must be positive" axis);
+    flex
+  ;;
+
+  let nonempty axis children =
+    if children = []
+    then
+      invalid_arg
+        (Printf.sprintf "Widget.Body.%s.create: at least one child is required" axis)
+  ;;
+
+  module Vertical = struct
+    type child = vertical_body_child
+
+    let fixed widget = Vertical_fixed widget
+    let fill ?(flex = 1) viewport = Vertical_fill (positive_flex "Vertical" flex, viewport)
+
+    let create ?key children =
+      nonempty "Vertical" children;
+      children
+      |> List.map (function
+        | Vertical_fixed widget -> Flex.fixed widget
+        | Vertical_fill (flex, viewport) ->
+          Flex.expanded ~flex (Viewport.Vertical.widget viewport))
+      |> Flex.column ?key
+      |> fun widget -> Body widget
+    ;;
+  end
+
+  module Horizontal = struct
+    type child = horizontal_body_child
+
+    let fixed widget = Horizontal_fixed widget
+
+    let fill ?(flex = 1) viewport =
+      Horizontal_fill (positive_flex "Horizontal" flex, viewport)
+    ;;
+
+    let create ?key children =
+      nonempty "Horizontal" children;
+      children
+      |> List.map (function
+        | Horizontal_fixed widget -> Flex.fixed widget
+        | Horizontal_fill (flex, viewport) ->
+          Flex.expanded ~flex (Viewport.Horizontal.widget viewport))
+      |> Flex.row ?key
+      |> fun widget -> Body widget
+    ;;
+  end
+
+  let overlay ?key ~base:(Body base) ~overlays () =
+    Stack.create
+      ?key
+      (Stack.positioned ~left:0. ~top:0. ~right:0. ~bottom:0. base :: overlays)
+    |> fun widget -> Body widget
+  ;;
+
+  module Private = struct
+    let to_widget (Body widget) = widget
+  end
+end
+
+let material_scaffold ?key ?app_bar ~body () =
+  material_scaffold_widget ?key ?app_bar ~body:(Body.Private.to_widget body) ()
+;;
+
 module For_testing = struct
   let kind_name t = Kind.to_string t.view.kind
   let key t = t.view.key
@@ -1562,4 +1725,28 @@ module Private = struct
   let cupertino_button = cupertino_button
   let cupertino_switch = cupertino_switch
   let native_widget = native_widget
+  let vertical_viewport = vertical_viewport
+  let horizontal_viewport = horizontal_viewport
+
+  let native_widget_with_body_children
+        ?key
+        ~kind_id
+        ~version
+        ~capabilities
+        ~payload
+        ~on_event
+        ~bodies
+        ~trailing_children
+        ()
+    =
+    native_widget
+      ?key
+      ~kind_id
+      ~version
+      ~capabilities
+      ~payload
+      ~on_event
+      ~children:(List.map Body.Private.to_widget bodies @ trailing_children)
+      ()
+  ;;
 end

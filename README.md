@@ -70,16 +70,21 @@ let component handlers graph =
     Ui.Material.scaffold
       ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Counter") ())
       ~body:
-        (Ui.Widget.center
-           (Ui.Widget.column
-              [ Ui.Widget.text (Printf.sprintf "Count: %d" count)
-              ; Ui.Material.elevated_button
-                  ~on_press:increment
-                  ~child:(Ui.Widget.text "Increment")
-                  ()
-              ]))
+        (Ui.Widget.Body.static
+           (Ui.Widget.center
+              (Ui.Widget.column
+                 [ Ui.Widget.text (Printf.sprintf "Count: %d" count)
+                 ; Ui.Material.elevated_button
+                     ~on_press:increment
+                     ~child:(Ui.Widget.text "Increment")
+                     ()
+                 ])))
       ())
 ```
+
+Scrollable widgets use axis-specific viewport types and must enter a bounded
+body slot or receive an explicit finite extent. See
+[`docs/viewport-layout.md`](docs/viewport-layout.md).
 
 The Flutter shell initializes the native runtime and hosts
 `BonsaiFlutterRoot`; it has no count variable or increment reducer.
