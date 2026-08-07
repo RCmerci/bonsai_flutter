@@ -164,7 +164,8 @@ The project uses a checked-in S-expression file named
   (entrypoint my_app)
   (launch_policy replace_existing))
  (macos
-  (minimum_version 13.0))
+  (minimum_version 26.0)
+  (architectures arm64))
  (ios
   (minimum_version 15.0)
   (architectures arm64)))
@@ -179,6 +180,9 @@ and SQLite writes:
 
 Unknown fields, duplicate fields, unsupported schema versions, invalid target
 names, and unsupported architectures must fail before any build starts.
+macOS supports only minimum version 26.0 on Apple Silicon arm64. Intel Mac and
+universal macOS builds are unsupported. iPhoneOS remains minimum 15.0 on
+arm64.
 
 ### Managed host adapter mode
 

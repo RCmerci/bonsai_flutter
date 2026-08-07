@@ -27,6 +27,7 @@ hooks:
   user_defines:
     bonsai_flutter_native:
       native_artifact_root: %s/_build/bonsai-flutter/native-artifacts/%s/
+      macos_deployment_target: '%s'
       ios_deployment_target: '%s'
       require_ocaml_backend: true
 %s
@@ -48,6 +49,7 @@ flutter:
     config.name
     prefix
     config.name
+    config.macos.minimum_version
     config.ios.minimum_version
     sqlite_define
     prefix
@@ -224,12 +226,21 @@ void main() {
 
 let host_test config = managed_host_test config config.Config.host
 
+let macos_xcconfig config =
+  Printf.sprintf
+    "MACOSX_DEPLOYMENT_TARGET = %s\nARCHS = %s\n"
+    config.Config.macos.minimum_version
+    (String.concat " " config.macos.architectures)
+;;
+
 let render ~config =
   [ Filename.concat config.Config.flutter_root "pubspec.yaml", pubspec config
   ; Filename.concat config.flutter_root "lib/main.dart", main_dart config
   ; ( Filename.concat config.flutter_root "ios/Runner/PrivacyInfo.xcprivacy"
     , privacy_manifest )
   ; Filename.concat config.flutter_root "test/widget_test.dart", host_test config
+  ; ( Filename.concat config.flutter_root "macos/Runner/Configs/BonsaiFlutter.xcconfig"
+    , macos_xcconfig config )
   ]
 ;;
 
@@ -299,6 +310,29 @@ let patch_ios_project_contents contents =
         "\n\t\t\t\tBF1000020000000000000001 /* PrivacyInfo.xcprivacy in Resources */,")
 ;;
 
+let managed_macos_include = "#include \"BonsaiFlutter.xcconfig\""
+
+let patch_macos_xcconfig_contents contents =
+  if
+    contents
+    |> String.split_on_char '\n'
+    |> List.exists (fun line -> String.equal (String.trim line) managed_macos_include)
+  then contents
+  else
+    contents
+    ^ (if String.ends_with ~suffix:"\n" contents then "" else "\n")
+    ^ managed_macos_include
+    ^ "\n"
+;;
+
+let patch_macos_project_contents contents =
+  contents
+  |> String.split_on_char '\n'
+  |> List.filter (fun line ->
+    Option.is_none (find_substring line "MACOSX_DEPLOYMENT_TARGET ="))
+  |> String.concat "\n"
+;;
+
 type sync_mode =
   | Check
   | Write
@@ -353,10 +387,42 @@ let sync ~project_root ~config ~mode : (string list, string) result =
          | Ok patched when String.equal contents patched -> Ok []
          | Ok patched -> Ok [ project_relative, project_path, patched ])
     in
+    let macos_config_drift =
+      [ "Debug.xcconfig"; "Release.xcconfig"; "AppInfo.xcconfig" ]
+      |> List.filter_map (fun filename ->
+        let relative_path =
+          Filename.concat
+            config.Config.flutter_root
+            (Filename.concat "macos/Runner/Configs" filename)
+        in
+        let path = Filename.concat project_root relative_path in
+        match read_file path with
+        | None -> None
+        | Some contents ->
+          let patched = patch_macos_xcconfig_contents contents in
+          if String.equal contents patched
+          then None
+          else Some (relative_path, path, patched))
+    in
+    let macos_project_relative =
+      Filename.concat config.Config.flutter_root "macos/Runner.xcodeproj/project.pbxproj"
+    in
+    let macos_project_path = Filename.concat project_root macos_project_relative in
+    let macos_project_drift =
+      match read_file macos_project_path with
+      | None -> []
+      | Some contents ->
+        let patched = patch_macos_project_contents contents in
+        if String.equal contents patched
+        then []
+        else [ macos_project_relative, macos_project_path, patched ]
+    in
     match project_drift with
     | Error _ as error -> error
     | Ok project_drift ->
-      let drift = generated_drift @ project_drift in
+      let drift =
+        generated_drift @ project_drift @ macos_config_drift @ macos_project_drift
+      in
       let changed = List.map (fun (relative, _, _) -> relative) drift in
       (match mode, drift with
        | Check, [] -> Ok []

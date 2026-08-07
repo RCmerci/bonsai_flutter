@@ -20,12 +20,12 @@ module Feature = struct
   ;;
 end
 
-type platform = { minimum_version : string }
-
-type ios =
+type platform =
   { minimum_version : string
   ; architectures : string list
   }
+
+type ios = platform
 
 type launch_policy =
   | Fresh
@@ -190,13 +190,24 @@ let parse_host values =
   { adapter; entrypoint; launch_policy }
 ;;
 
-let parse_platform ~scope values =
+let parse_macos values =
+  let scope = "macos" in
   let fields = named_fields ~scope values in
-  reject_unknown ~scope ~known:[ "minimum_version" ] fields;
+  reject_unknown ~scope ~known:[ "minimum_version"; "architectures" ] fields;
   let minimum_version = single_atom ~scope ~name:"minimum_version" fields in
-  if not (valid_version minimum_version)
-  then invalid "%s.minimum_version must be a major.minor version" scope;
-  { minimum_version }
+  if not (String.equal minimum_version "26.0")
+  then invalid "Unsupported macOS minimum version: %s; expected 26.0" minimum_version;
+  let architectures = List.map atom (take_field ~scope ~name:"architectures" fields) in
+  if architectures = [] then invalid "macos.architectures must not be empty";
+  if
+    List.length architectures <> List.length (List.sort_uniq String.compare architectures)
+  then invalid "Duplicate macOS architecture";
+  List.iter
+    (fun architecture ->
+       if architecture <> "arm64"
+       then invalid "Unsupported macOS architecture: %s" architecture)
+    architectures;
+  { minimum_version; architectures }
 ;;
 
 let parse_ios values =
@@ -257,7 +268,7 @@ let parse_app values =
     | None -> invalid "app.host is required; configure managed_adapter"
     | Some values -> parse_host values
   in
-  let macos = parse_platform ~scope:"macos" (take_field ~scope ~name:"macos" fields) in
+  let macos = parse_macos (take_field ~scope ~name:"macos" fields) in
   let ios = parse_ios (take_field ~scope ~name:"ios" fields) in
   { name; flutter_root; native_target; features; host; macos; ios }
 ;;

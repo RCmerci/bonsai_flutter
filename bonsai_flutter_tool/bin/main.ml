@@ -251,7 +251,7 @@ let resolve_dune_closure_command =
 let init_command =
   let name = Arg.(value & opt (some string) None & info [ "name" ] ~docv:"NAME") in
   let macos =
-    Arg.(value & opt string "13.0" & info [ "macos-minimum-version" ] ~docv:"VERSION")
+    Arg.(value & opt string "26.0" & info [ "macos-minimum-version" ] ~docv:"VERSION")
   in
   let ios =
     Arg.(value & opt string "15.0" & info [ "ios-deployment-target" ] ~docv:"VERSION")

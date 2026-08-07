@@ -62,6 +62,10 @@ void main(List<String> args) async {
             input.config.code.iOS.targetVersion,
             input.userDefines['ios_deployment_target'],
           ),
+        if (input.config.code.targetOS == OS.macOS)
+          ...macOSDeploymentTargetFlags(
+            input.userDefines['macos_deployment_target'],
+          ),
         ...systemLinkFlagsForTesting(
           input.config.code.targetOS,
           input.userDefines['link_system_sqlite3'],
@@ -136,25 +140,38 @@ List<String> iOSDeploymentTargetFlagsForTesting(
   return ['-mios-version-min=$minimumVersion'];
 }
 
+String macOSMinimumVersion(Object? userDefine) {
+  if (userDefine case final String value
+      when RegExp(r'^[1-9][0-9]*[.][0-9]+$').hasMatch(value)) {
+    return value;
+  }
+  throw FormatException(
+    'macos_deployment_target must be a quoted major.minor version, '
+    'found $userDefine.',
+  );
+}
+
+List<String> macOSDeploymentTargetFlags(Object? userDefine) => [
+  '-mmacosx-version-min=${macOSMinimumVersion(userDefine)}',
+];
+
 OcamlArtifactTarget? _ocamlTarget(BuildInput input) {
   final config = input.config.code;
-  final architecture = switch (config.targetArchitecture) {
-    Architecture.arm64 => OcamlTargetArchitecture.arm64,
-    Architecture.x64 => OcamlTargetArchitecture.x86_64,
-    _ => null,
-  };
-  if (architecture == null) {
-    return null;
-  }
-
   if (config.targetOS == OS.macOS) {
+    if (config.targetArchitecture == Architecture.x64) {
+      throw StateError(
+        'Unsupported macOS architecture x86_64; '
+        'bonsai_flutter supports arm64 only.',
+      );
+    }
+    if (config.targetArchitecture != Architecture.arm64) return null;
     return OcamlArtifactTarget(
       operatingSystem: OcamlTargetOperatingSystem.macOS,
-      architecture: architecture,
+      architecture: OcamlTargetArchitecture.arm64,
       appleSdk: OcamlAppleSdk.macOS,
-      // The existing OCaml dependency closure is measured on macOS 26.
-      // Do not relabel it with Flutter's lower native-assets link target.
-      minimumVersion: '26.0',
+      minimumVersion: macOSMinimumVersion(
+        input.userDefines['macos_deployment_target'],
+      ),
     );
   }
   if (config.targetOS == OS.iOS) {
@@ -165,9 +182,15 @@ OcamlArtifactTarget? _ocamlTarget(BuildInput input) {
       ),
       _ => throw StateError('Unsupported iOS SDK ${config.iOS.targetSdk}.'),
     };
+    if (config.targetArchitecture != Architecture.arm64) {
+      throw StateError(
+        'Unsupported iPhoneOS architecture ${config.targetArchitecture}; '
+        'bonsai_flutter supports arm64 only.',
+      );
+    }
     return OcamlArtifactTarget(
       operatingSystem: OcamlTargetOperatingSystem.iOS,
-      architecture: architecture,
+      architecture: OcamlTargetArchitecture.arm64,
       appleSdk: sdk,
       minimumVersion: iOSMinimumVersionForTesting(
         config.iOS.targetVersion,

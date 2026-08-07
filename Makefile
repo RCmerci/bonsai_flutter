@@ -22,6 +22,8 @@ NATIVE_OBJECT_TARGETS = \
 	examples/todo/ocaml/native_embed.exe.o
 IOS_REFERENCE_OPAM = $(CURDIR)/tool/ios/fixtures/application-closure/bonsai_flutter_ios_closure_fixture.opam
 IOS_REFERENCE_CLOSURE = $(CURDIR)/vendor/opam-ios/runtime-closure.lock
+MACOS_MINIMUM_VERSION = 26.0
+MACOS_ARCHITECTURE = arm64
 
 build:
 	dune build @all
@@ -66,16 +68,16 @@ native-analyze:
 	cd flutter/packages/bonsai_flutter_native && dart analyze
 
 native-object:
-	BONSAI_FLUTTER_APPLE_SDK_ROOT="$$(xcrun --sdk macosx --show-sdk-path)" BONSAI_FLUTTER_EMBED_OCAML=enabled dune build $(NATIVE_OBJECT_TARGET)
-	tool/macos/stage_native_objects.sh example $(EXAMPLE)
+	MACOSX_DEPLOYMENT_TARGET="$(MACOS_MINIMUM_VERSION)" BONSAI_FLUTTER_APPLE_SDK_ROOT="$$(xcrun --sdk macosx --show-sdk-path)" BONSAI_FLUTTER_EMBED_OCAML=enabled dune build $(NATIVE_OBJECT_TARGET)
+	tool/macos/stage_native_objects.sh "$(MACOS_MINIMUM_VERSION)" "$(MACOS_ARCHITECTURE)" example $(EXAMPLE)
 
 native-objects:
-	BONSAI_FLUTTER_APPLE_SDK_ROOT="$$(xcrun --sdk macosx --show-sdk-path)" BONSAI_FLUTTER_EMBED_OCAML=enabled dune build $(NATIVE_OBJECT_TARGETS)
-	tool/macos/stage_native_objects.sh examples
+	MACOSX_DEPLOYMENT_TARGET="$(MACOS_MINIMUM_VERSION)" BONSAI_FLUTTER_APPLE_SDK_ROOT="$$(xcrun --sdk macosx --show-sdk-path)" BONSAI_FLUTTER_EMBED_OCAML=enabled dune build $(NATIVE_OBJECT_TARGETS)
+	tool/macos/stage_native_objects.sh "$(MACOS_MINIMUM_VERSION)" "$(MACOS_ARCHITECTURE)" examples
 
 integration-native-object:
-	BONSAI_FLUTTER_APPLE_SDK_ROOT="$$(xcrun --sdk macosx --show-sdk-path)" BONSAI_FLUTTER_EMBED_OCAML=enabled dune build flutter/integration_test/ocaml/native_integration_embed.exe.o
-	tool/macos/stage_native_objects.sh integration
+	MACOSX_DEPLOYMENT_TARGET="$(MACOS_MINIMUM_VERSION)" BONSAI_FLUTTER_APPLE_SDK_ROOT="$$(xcrun --sdk macosx --show-sdk-path)" BONSAI_FLUTTER_EMBED_OCAML=enabled dune build flutter/integration_test/ocaml/native_integration_embed.exe.o
+	tool/macos/stage_native_objects.sh "$(MACOS_MINIMUM_VERSION)" "$(MACOS_ARCHITECTURE)" integration
 
 integration-test: integration-native-object
 	cd flutter/integration_test && flutter pub get

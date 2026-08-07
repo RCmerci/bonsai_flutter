@@ -11,6 +11,7 @@ hooks:
   user_defines:
     bonsai_flutter_native:
       native_artifact_root: ../../../_build/native-artifacts/navigation/
+      macos_deployment_target: '26.0'
       ios_deployment_target: '15.0'
       require_ocaml_backend: true
 

@@ -730,7 +730,7 @@ Verification:
 dune runtest
 make ci-flutter
 make example-network-native-object
-./tool/macos/stage_native_objects.sh
+./tool/macos/stage_native_objects.sh 26.0 arm64 example network
 ./tool/ios/verify_runtime_closure.sh
 ```
 

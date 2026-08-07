@@ -12,3 +12,5 @@ PRODUCT_BUNDLE_IDENTIFIER = dev.bonsaiflutter.bonsaiFlutterSqliteWorkerExample
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 dev.bonsaiflutter. All rights reserved.
+
+#include "BonsaiFlutter.xcconfig"

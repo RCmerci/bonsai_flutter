@@ -21,6 +21,8 @@ hooks:
   user_defines:
     bonsai_flutter_native:
       native_artifact_root: ../../../_build/native-artifacts/counter/
+      macos_deployment_target: '26.0'
+      ios_deployment_target: '15.0'
       require_ocaml_backend: true
 ```
 
@@ -29,6 +31,11 @@ The root contains separate `macos/arm64/native_embed.exe.o` and
 Mach-O metadata and rejects the wrong platform, SDK kind, architecture,
 minimum version, Bitcode, missing backend, or backend that does not expose the
 exact bridge contract.
+
+The macOS contract is minimum 26.0 and Apple Silicon arm64 only. The hook
+rejects Intel (`x86_64`) before resolving an artifact, and universal macOS
+builds are unsupported. iPhoneOS remains minimum 15.0 on physical-device
+arm64.
 
 The repository integration workspace uses this route to run a real Bonsai
 Counter through Flutter on the project OCaml 5.1.1 baseline. iPhoneOS unsigned

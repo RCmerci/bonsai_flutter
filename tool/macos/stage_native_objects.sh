@@ -7,6 +7,16 @@ repository_root=$(CDPATH= cd -- "$script_directory/../.." && pwd)
 source_root=${DUNE_BUILD_DIRECTORY:-"$repository_root/_build"}/default
 artifact_root="$repository_root/_build/native-artifacts"
 
+test "$#" -ge 3 && test "$#" -le 4 || {
+  printf '%s\n' \
+    "macOS native-object staging failure: usage: tool/macos/stage_native_objects.sh <minimum-version> <architecture> <examples|integration|example NAME>" >&2
+  exit 1
+}
+
+minimum_version=$1
+architecture=$2
+shift 2
+
 fail() {
   printf '%s\n' "macOS native-object staging failure: $1" >&2
   exit 1
@@ -16,7 +26,7 @@ stage_object() {
   artifact_name=$1
   source_object=$2
   variant=${3:-}
-  destination_directory="$artifact_root/$artifact_name/macos/arm64"
+  destination_directory="$artifact_root/$artifact_name/macos/$architecture"
   if test -n "$variant"; then
     destination_directory="$destination_directory/$variant"
   fi
@@ -29,8 +39,8 @@ stage_object() {
   "$repository_root/tool/ios/verify_complete_object.sh" \
     "$destination_object" \
     MACOS \
-    26.0 \
-    arm64
+    "$minimum_version" \
+    "$architecture"
 }
 
 stage_network_object() {
@@ -47,7 +57,8 @@ stage_network_object() {
   sdk_root=$(xcrun --sdk macosx --show-sdk-path)
   clang \
     -r \
-    -target arm64-apple-macos26 \
+    -target "${architecture}-apple-macos${minimum_version}" \
+    -mmacosx-version-min="$minimum_version" \
     -isysroot "$sdk_root" \
     "$source_object" \
     "$gmp_archive" \
@@ -58,9 +69,6 @@ stage_network_object() {
   stage_object network "$merged_object"
   rm -rf "$merge_directory"
 }
-
-test "$#" -ge 1 && test "$#" -le 2 ||
-  fail "usage: tool/macos/stage_native_objects.sh <examples|integration|example NAME>"
 
 case "$1" in
   examples)

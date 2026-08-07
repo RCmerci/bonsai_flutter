@@ -2,7 +2,7 @@ import 'dart:io';
 
 enum OcamlTargetOperatingSystem { macOS, iOS }
 
-enum OcamlTargetArchitecture { arm64, x86_64 }
+enum OcamlTargetArchitecture { arm64 }
 
 enum OcamlAppleSdk { macOS, iPhoneOS }
 
@@ -137,8 +137,6 @@ Future<OcamlArtifactMetadata> inspectOcamlArtifact(File object) async {
   final fileOutput = await _run('file', [object.path]);
   final architecture = switch (fileOutput) {
     final output when output.contains('arm64') => OcamlTargetArchitecture.arm64,
-    final output when output.contains('x86_64') =>
-      OcamlTargetArchitecture.x86_64,
     _ => throw StateError(
       'Unsupported Mach-O architecture for ${object.path}: $fileOutput',
     ),

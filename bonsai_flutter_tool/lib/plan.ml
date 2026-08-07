@@ -99,10 +99,10 @@ let build_native ~project_root ~config ~target ~profile =
       ; "ios"
       ]
   in
-  let minimum_version =
+  let platform_environment =
     match target with
-    | Macos -> config.macos.minimum_version
-    | Iphoneos -> config.ios.minimum_version
+    | Macos -> [ "MACOSX_DEPLOYMENT_TARGET", config.macos.minimum_version ]
+    | Iphoneos -> []
   in
   { program = "dune"
   ; arguments
@@ -110,8 +110,8 @@ let build_native ~project_root ~config ~target ~profile =
   ; environment =
       [ "BONSAI_FLUTTER_EMBED_OCAML", "enabled"
       ; "BONSAI_FLUTTER_TARGET", target_name target
-      ; "BONSAI_FLUTTER_MINIMUM_VERSION", minimum_version
       ]
+      @ platform_environment
   }
 ;;
 

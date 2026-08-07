@@ -2,6 +2,10 @@
 
 Testing is split by boundary.
 
+The supported desktop test boundary is macOS 26.0 or newer on Apple Silicon
+arm64. Intel Mac and universal macOS builds are unsupported. The mobile
+boundary remains physical-device iPhoneOS 15.0 or newer on arm64.
+
 ## Continuous integration
 
 The repository has five required GitHub Actions workflows:
@@ -280,7 +284,8 @@ make integration-test
 This builds the linked OCaml object with the active OCaml 5.1.1 switch, resolves
 the Flutter workspace, and runs its real FFI tests. Counter Debug, Profile, and
 Release packages have also built and launched on the recorded macOS arm64
-host. Lower macOS deployment targets and other platforms remain unclaimed.
+host. macOS deployment targets below 26.0, Intel Mac, and universal builds are
+unsupported.
 
 ## iOS unsigned packaging
 

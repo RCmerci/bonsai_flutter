@@ -116,7 +116,8 @@ let configuration_text ~name ~features ~macos_minimum_version ~ios_minimum_versi
   (entrypoint %s)
   (launch_policy replace_existing))
  (macos
-  (minimum_version %s))
+  (minimum_version %s)
+  (architectures arm64))
  (ios
   (minimum_version %s)
   (architectures arm64)))

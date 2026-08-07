@@ -445,12 +445,12 @@ reject_pattern \
 native_object_commands=$(dry_run_target native-objects)
 require_text \
   "$native_object_commands" \
-  "tool/macos/stage_native_objects.sh examples" \
+  'tool/macos/stage_native_objects.sh "26.0" "arm64" examples' \
   "native-objects"
 single_native_object_commands=$(make -n native-object EXAMPLE=mail)
 require_text \
   "$single_native_object_commands" \
-  "tool/macos/stage_native_objects.sh example mail" \
+  'tool/macos/stage_native_objects.sh "26.0" "arm64" example mail' \
   "native-object"
 require_text \
   "$native_object_commands" \
@@ -578,6 +578,10 @@ for example in clock counter gallery host_effects host_navigation mail navigatio
     "$example_pubspec" \
     "require_ocaml_backend: true" \
     "$example Flutter build hook"
+  require_text \
+    "$example_pubspec" \
+    "macos_deployment_target: '26.0'" \
+    "$example Flutter build hook"
   if test "$example" = sqlite_worker; then
     require_text \
       "$example_pubspec" \
@@ -595,10 +599,20 @@ for example in clock counter gallery host_effects host_navigation mail navigatio
       "mode_specific_ocaml_artifacts: true" \
       "$example Flutter build hook"
   fi
-  macos_debug_config=$(cat "examples/$example/flutter/macos/Runner/Configs/Debug.xcconfig")
-  macos_release_config=$(cat "examples/$example/flutter/macos/Runner/Configs/Release.xcconfig")
-  require_text "$macos_debug_config" "ARCHS = arm64" "$example macOS Debug configuration"
-  require_text "$macos_release_config" "ARCHS = arm64" "$example macOS Release configuration"
+  macos_config=$(cat "examples/$example/flutter/macos/Runner/Configs/BonsaiFlutter.xcconfig")
+  require_text "$macos_config" "MACOSX_DEPLOYMENT_TARGET = 26.0" "$example macOS configuration"
+  require_text "$macos_config" "ARCHS = arm64" "$example macOS configuration"
+  for configuration in Debug Release AppInfo; do
+    macos_consumer=$(cat "examples/$example/flutter/macos/Runner/Configs/$configuration.xcconfig")
+    require_text \
+      "$macos_consumer" \
+      '#include "BonsaiFlutter.xcconfig"' \
+      "$example macOS $configuration configuration"
+  done
+  reject_text \
+    "$(cat "examples/$example/flutter/macos/Runner.xcodeproj/project.pbxproj")" \
+    "MACOSX_DEPLOYMENT_TARGET = 10.15" \
+    "$example macOS project"
   require_file "examples/$example/flutter/ios/Runner/PrivacyInfo.xcprivacy"
   ios_project=$(cat "examples/$example/flutter/ios/Runner.xcodeproj/project.pbxproj")
   require_text \
@@ -609,7 +623,7 @@ done
 integration_object_commands=$(dry_run_target integration-native-object)
 require_text \
   "$integration_object_commands" \
-  "tool/macos/stage_native_objects.sh integration" \
+  'tool/macos/stage_native_objects.sh "26.0" "arm64" integration' \
   "integration-native-object"
 
 integration_pubspec=$(cat flutter/integration_test/pubspec.yaml)
@@ -620,6 +634,10 @@ require_text \
 require_text \
   "$integration_pubspec" \
   "require_ocaml_backend: true" \
+  "integration Flutter build hook"
+require_text \
+  "$integration_pubspec" \
+  "macos_deployment_target: '26.0'" \
   "integration Flutter build hook"
 require_text \
   "$integration_pubspec" \

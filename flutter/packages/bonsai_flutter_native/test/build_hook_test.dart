@@ -1,5 +1,7 @@
+import 'dart:io';
+
 import 'package:code_assets/code_assets.dart';
-import 'package:hooks/src/test.dart';
+import 'package:hooks/hooks.dart';
 import 'package:test/test.dart';
 
 import '../hook/build.dart' as build_hook;
@@ -20,6 +22,7 @@ void main() {
     expect(
       testCodeBuildHook(
         mainMethod: build_hook.main,
+        userDefines: _userDefines({'macos_deployment_target': '26.0'}),
         check: (input, output) {
           expect(input.config.buildCodeAssets, isTrue);
           expect(output.assets.encodedAssets, hasLength(1));
@@ -80,4 +83,100 @@ void main() {
       }
     });
   });
+
+  group('macOS platform contract', () {
+    test('links the produced library with macOS minimum 26.0', () async {
+      await testCodeBuildHook(
+        mainMethod: build_hook.main,
+        targetOS: OS.macOS,
+        targetArchitecture: Architecture.arm64,
+        targetMacOSVersion: 13,
+        userDefines: _userDefines({'macos_deployment_target': '26.0'}),
+        check: (input, output) async {
+          final library = output.assets.code.single.file!;
+          final result = await Process.run('xcrun', [
+            'vtool',
+            '-show-build',
+            library.toFilePath(),
+          ]);
+          expect(result.exitCode, 0, reason: '${result.stderr}');
+          expect(result.stdout, contains(RegExp(r'\bminos\s+26[.]0\b')));
+        },
+      );
+    });
+
+    test('requires the quoted macOS deployment target user define', () {
+      expect(
+        testCodeBuildHook(
+          mainMethod: build_hook.main,
+          targetOS: OS.macOS,
+          targetArchitecture: Architecture.arm64,
+          userDefines: _userDefines({'require_ocaml_backend': true}),
+          check: (_, _) {},
+        ),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('macos_deployment_target'),
+          ),
+        ),
+      );
+    });
+
+    test('rejects malformed deployment targets', () {
+      for (final value in <Object>['26', 26]) {
+        expect(
+          testCodeBuildHook(
+            mainMethod: build_hook.main,
+            targetOS: OS.macOS,
+            targetArchitecture: Architecture.arm64,
+            userDefines: _userDefines({
+              'macos_deployment_target': value,
+              'require_ocaml_backend': true,
+            }),
+            check: (_, _) {},
+          ),
+          throwsA(
+            isA<FormatException>().having(
+              (error) => error.message,
+              'message',
+              contains('macos_deployment_target'),
+            ),
+          ),
+        );
+      }
+    });
+
+    test('rejects x86_64 before artifact resolution', () {
+      expect(
+        testCodeBuildHook(
+          mainMethod: build_hook.main,
+          targetOS: OS.macOS,
+          targetArchitecture: Architecture.x64,
+          userDefines: _userDefines({
+            'macos_deployment_target': '26.0',
+            'require_ocaml_backend': true,
+          }),
+          check: (_, _) {},
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'Unsupported macOS architecture x86_64; '
+                'bonsai_flutter supports arm64 only.',
+          ),
+        ),
+      );
+    });
+  });
 }
+
+PackageUserDefines _userDefines(Map<String, Object?> defines) =>
+    PackageUserDefines(
+      workspacePubspec: PackageUserDefinesSource(
+        defines: defines,
+        basePath: Directory.current.uri,
+      ),
+    );

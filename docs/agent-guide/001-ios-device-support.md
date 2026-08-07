@@ -11,11 +11,12 @@ Supported execution targets:
 
 | Target | Architecture | Native artifact |
 | --- | --- | --- |
-| macOS | arm64 | `macos/arm64/native_embed.exe.o` |
-| Physical iPhone | arm64 | `ios/iphoneos/arm64/native_embed.exe.o` |
+| macOS 26.0+ | arm64 | `macos/arm64/native_embed.exe.o` |
+| Physical iPhone, iOS 15.0+ | arm64 | `ios/iphoneos/arm64/native_embed.exe.o` |
 
-iOS Simulator is intentionally unsupported. The native build hook must fail
-before linking when Flutter selects that SDK.
+iOS Simulator, Intel Mac, and universal macOS builds are intentionally
+unsupported. The native build hook must fail before artifact resolution when
+Flutter selects an unsupported Apple target.
 
 ## Constraints
 

@@ -89,7 +89,7 @@ body slot or receive an explicit finite extent. See
 The Flutter shell initializes the native runtime and hosts
 `BonsaiFlutterRoot`; it has no count variable or increment reducer.
 
-Build and run the macOS arm64 example:
+Build and run the macOS 26.0+ Apple Silicon arm64 example:
 
 ```sh
 make native-object EXAMPLE=counter
@@ -195,7 +195,7 @@ OCaml owns the output-frame fixtures and Dart owns the renderer-to-runtime
 event-batch fixtures. Both CI gates run their respective generator in
 `--check` mode so stale bytes fail instead of being rewritten.
 
-On macOS arm64, run the OCaml gate, Counter Debug/Profile/Release builds, and
+On macOS 26.0+ arm64, run the OCaml gate, Counter Debug/Profile/Release builds, and
 the real OCaml/Dart/Flutter integration suite:
 
 ```sh
@@ -229,9 +229,11 @@ without rewriting the controller. See
 
 ## Platform status
 
-macOS arm64 is tested end to end. On the recorded macOS 26.5.2 arm64 host,
-the Counter builds in Debug, Profile, and Release, native symbols and
-signatures are verified, and the cross-language integration suite passes.
+macOS 26.0 or newer on Apple Silicon arm64 is supported and tested end to end.
+On the recorded macOS 26.5.2 arm64 host, the Counter builds in Debug, Profile,
+and Release, native symbols and signatures are verified, and the
+cross-language integration suite passes. Intel Mac (`x86_64`) and universal
+macOS builds are unsupported.
 
 iPhoneOS arm64 is supported with a minimum iOS 15.0.
 The locked OCaml 5.1.1 cross compiler builds every standalone example and the
@@ -268,7 +270,8 @@ complete object statically absorbs GMP and introduces no OpenSSL dependency.
 
 ## Current limitations and roadmap
 
-- macOS arm64 and physical-device iPhoneOS arm64 are the validated targets.
+- macOS 26.0+ Apple Silicon arm64 and physical-device iPhoneOS 15.0+ arm64 are
+  the validated targets. Intel Mac and universal macOS builds are unsupported.
 - The generic virtual-list prototype is intended for cached visible windows,
   not synchronous per-row FFI calls.
 - Platform packaging and integration coverage will expand to Linux, Windows,

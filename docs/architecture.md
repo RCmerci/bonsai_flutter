@@ -426,5 +426,7 @@ exercises both directions and verifies the system-pop round trip.
 This full vertical slice uses the project OCaml 5.1.1 baseline. Counter
 packages have built, launched, and passed code-signing checks in Debug,
 Profile, and Release on the recorded macOS arm64 host. The dependency objects
-inherit that macOS 26 build host, so lower deployment targets remain
-unverified. See `ffi.md` and `packaging.md`.
+and generated hosts share an explicit macOS 26.0, Apple Silicon arm64-only
+contract. Intel Mac, universal binaries, and lower macOS deployment targets
+are unsupported. iPhoneOS remains minimum 15.0 on arm64. See `ffi.md` and
+`packaging.md`.

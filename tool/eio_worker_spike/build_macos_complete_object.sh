@@ -4,17 +4,25 @@ set -eu
 
 script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repository_root=$(CDPATH= cd -- "$script_directory/../.." && pwd)
+test "$#" -eq 2 || {
+  printf '%s\n' \
+    "usage: tool/eio_worker_spike/build_macos_complete_object.sh <minimum-version> <architecture>" >&2
+  exit 1
+}
+minimum_version=$1
+architecture=$2
 opam_root="$repository_root/_build/ios/opam-root"
 host_switch="$repository_root/_build/ios/switches/iphoneos"
 build_directory="$repository_root/_build/eio-worker-spike/macos-build"
-output_directory="$repository_root/_build/eio-worker-spike/macos/arm64"
+output_directory="$repository_root/_build/eio-worker-spike/macos/$architecture"
 complete_object="$output_directory/eio_worker_backend_spike.o"
 probe_executable="$output_directory/eio_worker_backend_spike_probe"
 
 mkdir -p "$build_directory" "$output_directory"
 
 compile() {
-  OPAMROOT="$opam_root" opam exec --switch="$host_switch" -- \
+  MACOSX_DEPLOYMENT_TARGET="$minimum_version" \
+    OPAMROOT="$opam_root" opam exec --switch="$host_switch" -- \
     ocamlfind ocamlopt \
     -thread \
     -package eio_posix \
@@ -48,14 +56,16 @@ compile \
 "$repository_root/tool/ios/verify_macho.sh" \
   "$complete_object" \
   MACOS \
-  arm64 \
-  26.0
+  "$architecture" \
+  "$minimum_version"
 
 ocaml_standard_library=$(
   OPAMROOT="$opam_root" \
     opam exec --switch="$host_switch" -- ocamlc -where
 )
 xcrun clang \
+  -target "${architecture}-apple-macos${minimum_version}" \
+  -mmacosx-version-min="$minimum_version" \
   -I "$ocaml_standard_library" \
   "$script_directory/probe_host.c" \
   "$complete_object" \
@@ -65,8 +75,8 @@ xcrun clang \
 "$repository_root/tool/ios/verify_macho.sh" \
   "$probe_executable" \
   MACOS \
-  arm64 \
-  26.0
+  "$architecture" \
+  "$minimum_version"
 "$probe_executable"
 
 object_size=$(stat -f '%z' "$complete_object")

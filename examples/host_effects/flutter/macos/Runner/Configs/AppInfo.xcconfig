@@ -13,5 +13,5 @@ PRODUCT_BUNDLE_IDENTIFIER = com.example.hostEffectsExample
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.example. All rights reserved.
 
-// The linked OCaml complete object is currently built for macOS arm64.
-ARCHS = arm64
+
+#include "BonsaiFlutter.xcconfig"

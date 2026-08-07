@@ -167,19 +167,6 @@ void main() {
       );
     });
 
-    test('rejects the wrong architecture', () async {
-      await _expectMetadataFailure(
-        temporaryDirectory,
-        const OcamlArtifactMetadata(
-          platform: OcamlMachOPlatform.iOS,
-          architecture: OcamlTargetArchitecture.x86_64,
-          appleSdk: OcamlAppleSdk.iPhoneOS,
-          minimumVersion: '15.0',
-        ),
-        contains('architecture'),
-      );
-    });
-
     test('rejects an inconsistent deployment target', () async {
       await _expectMetadataFailure(
         temporaryDirectory,

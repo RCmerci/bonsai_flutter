@@ -19,7 +19,8 @@ flutter run -d macos
 ```
 
 The integration workspace also verifies the event flow with
-`make integration-test`. Lower macOS deployment targets remain unclaimed.
+`make integration-test`. macOS deployment targets below 26.0, Intel Mac, and
+universal builds are unsupported.
 
 Build the target-qualified unsigned iPhoneOS application:
 

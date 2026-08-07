@@ -27,9 +27,15 @@ hooks:
   user_defines:
     bonsai_flutter_native:
       native_artifact_root: ../../../_build/native-artifacts/counter/
+      macos_deployment_target: '26.0'
       ios_deployment_target: '15.0'
       require_ocaml_backend: true
 ```
+
+The generated macOS host passes the quoted `macos_deployment_target` to the
+hook and includes `BonsaiFlutter.xcconfig` from the Debug, Release/Profile, and
+Runner configurations. That xcconfig sets `MACOSX_DEPLOYMENT_TARGET = 26.0`
+and `ARCHS = arm64`.
 
 Flutter 3.44.8 reports its SDK-level iOS native-assets default to build hooks
 instead of the Runner target's `IPHONEOS_DEPLOYMENT_TARGET`. Every repository
@@ -49,6 +55,7 @@ hooks:
   user_defines:
     bonsai_flutter_native:
       native_artifact_root: ../../../_build/native-artifacts/sqlite_worker/
+      macos_deployment_target: '26.0'
       ios_deployment_target: '15.0'
       require_ocaml_backend: true
       link_system_sqlite3: true
@@ -72,11 +79,10 @@ The aggregate integration object is separate:
 make integration-native-object
 ```
 
-The existing OCaml dependency closure is measured at macOS 26.0 and arm64
-only. Flutter 3.44.8 links native assets with a lower fixed macOS target, so
-the Apple linker reports that the object was built for a newer version. The
-repository does not relabel the input object and does not claim compatibility
-below the measured macOS 26 host.
+The macOS contract is minimum 26.0 and Apple Silicon arm64 only. The native
+build, staged object verifier, Native Assets hook, and Xcode host all consume
+that contract. Intel Mac (`x86_64`) and universal binaries are unsupported;
+the hook rejects an x86_64 request before artifact resolution.
 
 ## iPhoneOS
 

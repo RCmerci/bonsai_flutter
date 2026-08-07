@@ -1,3 +1,8 @@
+let only_architecture = function
+  | [ architecture ] -> architecture
+  | _ -> invalid_arg "validated platform must contain exactly one architecture"
+;;
+
 let source ~project_root ~config ~target ~profile:_ =
   let build_root =
     match target with
@@ -10,8 +15,8 @@ let source ~project_root ~config ~target ~profile:_ =
 let destination ~project_root ~config ~target ~profile:_ =
   let platform =
     match target with
-    | Plan.Macos -> "macos/arm64"
-    | Plan.Iphoneos -> "ios/iphoneos/arm64"
+    | Plan.Macos -> "macos/" ^ only_architecture config.Config.macos.architectures
+    | Plan.Iphoneos -> "ios/iphoneos/" ^ only_architecture config.Config.ios.architectures
   in
   Filename.concat
     project_root
@@ -48,15 +53,21 @@ let stage ~framework_root ~project_root ~config ~target ~profile =
   else (
     try
       copy_file source destination;
-      let platform, minimum_version =
+      let platform, minimum_version, architecture =
         match target with
-        | Plan.Macos -> "MACOS", "26.0"
-        | Plan.Iphoneos -> "IOS", config.Config.ios.minimum_version
+        | Plan.Macos ->
+          ( "MACOS"
+          , config.Config.macos.minimum_version
+          , only_architecture config.Config.macos.architectures )
+        | Plan.Iphoneos ->
+          ( "IOS"
+          , config.Config.ios.minimum_version
+          , only_architecture config.Config.ios.architectures )
       in
       let verify = Filename.concat framework_root "tool/ios/verify_complete_object.sh" in
       let command : Plan.command =
         { program = verify
-        ; arguments = [ destination; platform; minimum_version; "arm64" ]
+        ; arguments = [ destination; platform; minimum_version; architecture ]
         ; working_directory = project_root
         ; environment = []
         }

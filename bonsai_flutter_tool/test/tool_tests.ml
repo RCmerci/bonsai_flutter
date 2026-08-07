@@ -15,7 +15,8 @@ let valid_config =
   (entrypoint journal)
   (launch_policy replace_existing))
  (macos
-  (minimum_version 13.0))
+  (minimum_version 26.0)
+  (architectures arm64))
  (ios
   (minimum_version 15.0)
   (architectures arm64)))
@@ -37,7 +38,8 @@ let managed_adapter_config =
   (entrypoint journal_runtime)
   (launch_policy replace_existing))
  (macos
-  (minimum_version 13.0))
+  (minimum_version 26.0)
+  (architectures arm64))
  (ios
   (minimum_version 15.0)
   (architectures arm64)))
@@ -219,7 +221,7 @@ let test_parse_valid_config () =
     "features"
     [ "core"; "network"; "sqlite" ]
     (List.map Config.Feature.to_string config.features);
-  Alcotest.(check string) "macOS minimum" "13.0" config.macos.minimum_version;
+  Alcotest.(check string) "macOS minimum" "26.0" config.macos.minimum_version;
   Alcotest.(check string) "iOS minimum" "15.0" config.ios.minimum_version;
   Alcotest.(check (list string)) "iOS architectures" [ "arm64" ] config.ios.architectures
 ;;
@@ -255,11 +257,32 @@ let test_invalid_configs () =
         ~pattern:"app/native_embed.exe.o"
         ~replacement:"../native_embed.exe.o"
     , "native_target must not contain parent traversal" )
-  ; ( "unsupported architecture"
+  ; ( "unsupported macOS minimum"
+    , replace_once valid_config ~pattern:"26.0" ~replacement:"13.0"
+    , "Unsupported macOS minimum version" )
+  ; ( "unsupported macOS architecture"
     , replace_once
         valid_config
-        ~pattern:"(architectures arm64)"
-        ~replacement:"(architectures x86_64)"
+        ~pattern:"(minimum_version 26.0)\n  (architectures arm64)"
+        ~replacement:"(minimum_version 26.0)\n  (architectures x86_64)"
+    , "Unsupported macOS architecture" )
+  ; ( "duplicate macOS architecture"
+    , replace_once
+        valid_config
+        ~pattern:"(minimum_version 26.0)\n  (architectures arm64)"
+        ~replacement:"(minimum_version 26.0)\n  (architectures arm64 arm64)"
+    , "Duplicate macOS architecture" )
+  ; ( "empty macOS architecture"
+    , replace_once
+        valid_config
+        ~pattern:"(minimum_version 26.0)\n  (architectures arm64)"
+        ~replacement:"(minimum_version 26.0)\n  (architectures)"
+    , "macos.architectures must not be empty" )
+  ; ( "unsupported iOS architecture"
+    , replace_once
+        valid_config
+        ~pattern:"(minimum_version 15.0)\n  (architectures arm64)"
+        ~replacement:"(minimum_version 15.0)\n  (architectures x86_64)"
     , "Unsupported iOS architecture" )
   ; ( "duplicate feature"
     , replace_once
@@ -357,7 +380,8 @@ let test_missing_host_requires_migration () =
  (native_target app/native_embed.exe.o)
  (features network sqlite)
  (macos
-  (minimum_version 13.0))
+  (minimum_version 26.0)
+  (architectures arm64))
  (ios
   (minimum_version 15.0)
   (architectures arm64)))
@@ -386,6 +410,14 @@ let test_command_plans () =
     ("BONSAI_FLUTTER_EMBED_OCAML", "enabled")
     (List.assoc "BONSAI_FLUTTER_EMBED_OCAML" macos.environment
      |> fun value -> "BONSAI_FLUTTER_EMBED_OCAML", value);
+  Alcotest.(check string)
+    "macOS deployment environment"
+    "26.0"
+    (List.assoc "MACOSX_DEPLOYMENT_TARGET" macos.environment);
+  Alcotest.(check bool)
+    "obsolete generic minimum environment"
+    false
+    (List.mem_assoc "BONSAI_FLUTTER_MINIMUM_VERSION" macos.environment);
   let ios =
     Plan.build_native
       ~project_root:"/work/journal"
@@ -398,7 +430,11 @@ let test_command_plans () =
   Alcotest.(check bool)
     "release profile"
     true
-    (List.mem "--profile=release" ios.arguments)
+    (List.mem "--profile=release" ios.arguments);
+  Alcotest.(check bool)
+    "macOS environment is not leaked to iPhoneOS"
+    false
+    (List.mem_assoc "MACOSX_DEPLOYMENT_TARGET" ios.environment)
 ;;
 
 let test_feature_validation () =
@@ -469,6 +505,15 @@ let test_generated_host () =
     "renderer dependency"
     true
     (contains pubspec "path: ../.bonsai-flutter/flutter-packages/bonsai_flutter");
+  Alcotest.(check bool)
+    "macOS deployment target user define"
+    true
+    (contains pubspec "macos_deployment_target: '26.0'");
+  let macos_config_path = "flutter/macos/Runner/Configs/BonsaiFlutter.xcconfig" in
+  Alcotest.(check (option string))
+    "managed macOS configuration is rendered"
+    (Some "MACOSX_DEPLOYMENT_TARGET = 26.0\nARCHS = arm64\n")
+    (List.assoc_opt macos_config_path files);
   let native_direct_dependency = Str.regexp "^  bonsai_flutter_native:" in
   Alcotest.(check bool)
     "native package remains transitive"
@@ -603,8 +648,7 @@ let test_project_root_discovery () =
 let test_host_sync_check () =
   let root = Filename.temp_dir "bonsai-flutter-tool" "sync" in
   let config = Config.parse_string valid_config |> get_ok in
-  let changed = Host.sync ~project_root:root ~config ~mode:Host.Write |> get_ok in
-  Alcotest.(check int) "initial generated files" 4 (List.length changed);
+  Host.sync ~project_root:root ~config ~mode:Host.Write |> get_ok |> ignore;
   let main_path = Filename.concat root "flutter/lib/main.dart" in
   let channel = open_out main_path in
   output_string channel "// drift\n";
@@ -655,6 +699,37 @@ let test_managed_adapter_sync_preserves_application_code () =
     "drift check does not touch adapter"
     application_owned
     (read_file adapter_path)
+;;
+
+let test_macos_host_settings_sync () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "macos-sync" in
+  let config = Config.parse_string valid_config |> get_ok in
+  let configs_root = Filename.concat root "flutter/macos/Runner/Configs" in
+  let debug = Filename.concat configs_root "Debug.xcconfig" in
+  let release = Filename.concat configs_root "Release.xcconfig" in
+  let app_info = Filename.concat configs_root "AppInfo.xcconfig" in
+  write_file debug "#include \"../../Flutter/Flutter-Debug.xcconfig\"\n";
+  write_file release "#include \"../../Flutter/Flutter-Release.xcconfig\"\n";
+  write_file app_info "PRODUCT_NAME = journal\n";
+  let project = Filename.concat root "flutter/macos/Runner.xcodeproj/project.pbxproj" in
+  write_file project "buildSettings = {\n\tMACOSX_DEPLOYMENT_TARGET = 10.15;\n};\n";
+  Host.sync ~project_root:root ~config ~mode:Host.Check
+  |> check_error_contains "Debug.xcconfig";
+  Host.sync ~project_root:root ~config ~mode:Host.Write |> get_ok |> ignore;
+  [ debug; release; app_info ]
+  |> List.iter (fun path ->
+    Alcotest.(check bool)
+      "managed include"
+      true
+      (contains (read_file path) "#include \"BonsaiFlutter.xcconfig\""));
+  Alcotest.(check bool)
+    "obsolete project deployment target is removed"
+    false
+    (contains (read_file project) "MACOSX_DEPLOYMENT_TARGET = 10.15");
+  let managed = Filename.concat configs_root "BonsaiFlutter.xcconfig" in
+  write_file managed "MACOSX_DEPLOYMENT_TARGET = 25.0\nARCHS = x86_64\n";
+  Host.sync ~project_root:root ~config ~mode:Host.Check
+  |> check_error_contains "BonsaiFlutter.xcconfig"
 ;;
 
 let test_flutter_plans () =
@@ -976,6 +1051,37 @@ let test_artifact_layout () =
        ~profile:Plan.Release)
 ;;
 
+let test_macos_artifact_staging_contract () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "macos-artifact" in
+  let project_root = Filename.concat root "project" in
+  let framework_root = Filename.concat root "framework" in
+  let config = Config.parse_string valid_config |> get_ok in
+  let source =
+    Artifact.source ~project_root ~config ~target:Plan.Macos ~profile:Plan.Release
+  in
+  write_file source "complete-object";
+  let log = Filename.concat root "verify.log" in
+  let verifier = Filename.concat framework_root "tool/ios/verify_complete_object.sh" in
+  write_executable
+    verifier
+    (Printf.sprintf
+       "#!/bin/sh\nset -eu\nprintf '%%s\\n' \"$@\" > %s\n"
+       (Filename.quote log));
+  let destination =
+    Artifact.stage
+      ~framework_root
+      ~project_root
+      ~config
+      ~target:Plan.Macos
+      ~profile:Plan.Release
+    |> get_ok
+  in
+  Alcotest.(check (list string))
+    "verifier contract"
+    [ destination; "MACOS"; "26.0"; "arm64" ]
+    (read_file log |> non_empty_lines)
+;;
+
 let dune_description source =
   let length = String.length source in
   let buffer = Buffer.create length in
@@ -1294,6 +1400,10 @@ let () =
     ; ( "sync"
       , [ Alcotest.test_case "check and repair" `Quick test_host_sync_check
         ; Alcotest.test_case
+            "macOS platform settings"
+            `Quick
+            test_macos_host_settings_sync
+        ; Alcotest.test_case
             "managed adapter preservation"
             `Quick
             test_managed_adapter_sync_preserves_application_code
@@ -1323,7 +1433,13 @@ let () =
             `Quick
             test_ios_device_run_rejects_empty_bundle_identifier
         ] )
-    ; "artifact", [ Alcotest.test_case "layout" `Quick test_artifact_layout ]
+    ; ( "artifact"
+      , [ Alcotest.test_case "layout" `Quick test_artifact_layout
+        ; Alcotest.test_case
+            "macOS staging contract"
+            `Quick
+            test_macos_artifact_staging_contract
+        ] )
     ; ( "dune-closure"
       , [ Alcotest.test_case "local app" `Quick test_dune_closure_follows_local_app
         ; Alcotest.test_case
