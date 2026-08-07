@@ -2,7 +2,7 @@
 
 # Protocol IDs
 
-Protocol version: `1.15`
+Protocol version: `1.16`
 
 ## Frame kind
 
@@ -28,6 +28,7 @@ Protocol version: `1.15`
 | `host_request` | 8 |
 | `runtime_notification` | 9 |
 | `end_frame` | 10 |
+| `application_request` | 11 |
 
 ## Node kind
 
@@ -114,6 +115,9 @@ Protocol version: `1.15`
 | `semantics_action` | 22 |
 | `resync_requested` | 23 |
 | `text_limit_reached` | 24 |
+| `application_response` | 25 |
+| `application_request_error` | 26 |
+| `application_event` | 27 |
 
 ## Host request
 

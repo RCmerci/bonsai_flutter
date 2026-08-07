@@ -1098,6 +1098,16 @@ final class CancelHostRequestOperation extends FrameOperation {
   final int requestId;
 }
 
+final class ApplicationRequestOperation extends FrameOperation {
+  ApplicationRequestOperation({
+    required this.requestId,
+    required Uint8List payload,
+  }) : payload = Uint8List.fromList(payload);
+
+  final int requestId;
+  final Uint8List payload;
+}
+
 final class RuntimeStatsOperation extends FrameOperation {
   const RuntimeStatsOperation({
     required this.eventBatchSize,

@@ -35,6 +35,7 @@ module Handler : sig
     -> Bonsai_flutter_ui.Event.Handler.t Bonsai.Cont.t
 
   val host_effects : t -> Host_effect.t
+  val application_platform : t -> Host_effect.Application_platform.t
   val environment : t -> Environment.t
 
   (** Returns an effect that completes during the next pump after Bonsai has
@@ -57,6 +58,7 @@ type error =
   | Invalid_state of string
   | Lifecycle_error of string
   | Host_response_error of string
+  | Application_platform_error of string
   | Shutdown
 
 val error_to_string : error -> string
@@ -109,7 +111,7 @@ val presentation_rejected
   -> reason:rejection_reason
   -> (unit, error) result
 
-val shutdown : t -> unit
+val shutdown : ?application_error:Host_effect.Application_platform.error -> t -> unit
 val is_shutdown : t -> bool
 
 module For_testing : sig
@@ -118,6 +120,7 @@ module For_testing : sig
   val snapshot : t -> Bonsai_flutter_runtime.Mounted_tree.Snapshot.t option
   val environment : t -> Environment.snapshot
   val pending_host_effect_count : t -> int
+  val pending_application_request_count : t -> int
   val retained_handler_frame_count : t -> int
 
   val set_next_presentation_id

@@ -4,6 +4,8 @@ import 'dart:ui' show FrameTiming;
 
 import 'package:flutter/widgets.dart';
 
+import '../application_platform/application_platform.dart';
+import '../application_platform/application_platform_dispatcher.dart';
 import '../debug/frame_stats.dart';
 import '../environment/environment_reporter.dart';
 import '../host_effects/host_effect_dispatcher.dart';
@@ -29,6 +31,7 @@ final class BonsaiFlutterRoot extends StatefulWidget {
     this.loading,
     this.errorBuilder,
     this.hostEffects,
+    this.applicationPlatform,
     this.frameEligibilitySource,
     super.key,
   }) : runtimeStarter =
@@ -41,6 +44,7 @@ final class BonsaiFlutterRoot extends StatefulWidget {
   final Widget? loading;
   final RuntimeErrorBuilder? errorBuilder;
   final HostEffectImplementation? hostEffects;
+  final BonsaiFlutterApplicationPlatform? applicationPlatform;
   final FrameEligibilitySource? frameEligibilitySource;
 
   @override
@@ -67,6 +71,7 @@ final class _BonsaiFlutterRootState extends State<BonsaiFlutterRoot> {
   NodeStore? _store;
   EventBatchQueue? _events;
   HostEffectDispatcher? _hostEffects;
+  ApplicationPlatformDispatcher? _applicationPlatform;
   final RendererResourceStore _resources = RendererResourceStore();
   CycleReady? _heldCycle;
   _PendingPresentation? _pendingPresentation;
@@ -91,6 +96,8 @@ final class _BonsaiFlutterRootState extends State<BonsaiFlutterRoot> {
     if (runtime != null) unawaited(runtime.dispose());
     final hostEffects = _hostEffects;
     if (hostEffects != null) unawaited(hostEffects.dispose());
+    final applicationPlatform = _applicationPlatform;
+    if (applicationPlatform != null) unawaited(applicationPlatform.dispose());
     _resources.dispose();
     WidgetsBinding.instance.removeTimingsCallback(_recordFrameTimings);
     super.dispose();
@@ -110,6 +117,11 @@ final class _BonsaiFlutterRootState extends State<BonsaiFlutterRoot> {
             widget.hostEffects ??
             FlutterHostEffectImplementation(resources: _resources),
         onEvent: _onEvent,
+      );
+      _applicationPlatform = ApplicationPlatformDispatcher(
+        platform: widget.applicationPlatform,
+        onEvent: _onEvent,
+        onError: _handleApplicationPlatformError,
       );
       _runtimeUpdates = runtime.updates.listen(
         _handleRuntimeUpdate,
@@ -235,12 +247,33 @@ final class _BonsaiFlutterRootState extends State<BonsaiFlutterRoot> {
           runtimeEpoch: frame.runtimeEpoch,
           displayedRevision: () => _displayedRevision,
         );
+        final applicationPlatform = _applicationPlatform;
+        if (applicationPlatform != null &&
+            applicationPlatform.runtimeEpoch == null) {
+          applicationPlatform.activate(runtimeEpoch: frame.runtimeEpoch);
+        }
         _resources.synchronize(store);
         final dispatch = _hostEffects?.dispatch(frame);
         if (dispatch != null) {
           unawaited(
             dispatch.catchError((Object error, StackTrace stackTrace) {
               _reportError(error, stackTrace);
+            }),
+          );
+        }
+        final applicationDispatch = applicationPlatform?.dispatch(frame);
+        if (applicationDispatch != null) {
+          unawaited(
+            applicationDispatch.catchError((
+              Object error,
+              StackTrace stackTrace,
+            ) {
+              _handleApplicationPlatformError(
+                ApplicationPlatformBridgeError(
+                  code: ApplicationPlatformErrorCode.invalidResponse,
+                  message: error.toString(),
+                ),
+              );
             }),
           );
         }
@@ -315,6 +348,10 @@ final class _BonsaiFlutterRootState extends State<BonsaiFlutterRoot> {
     } catch (error, stackTrace) {
       _reportError(error, stackTrace);
     }
+  }
+
+  void _handleApplicationPlatformError(ApplicationPlatformBridgeError _) {
+    // Application traffic is recoverable and must not terminate rendering.
   }
 
   void _recordFrameTimings(List<FrameTiming> timings) {

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import '../application_platform/application_platform.dart';
 import 'binary_codec.dart';
 import 'generated_protocol.dart';
 
@@ -298,6 +299,59 @@ final class HostResponseEventPayload extends EventPayload {
     status,
     Object.hashAll(value),
   );
+}
+
+final class ApplicationResponseEventPayload extends EventPayload {
+  ApplicationResponseEventPayload({
+    required this.requestId,
+    required Uint8List payload,
+  }) : payload = Uint8List.fromList(payload);
+
+  final int requestId;
+  final Uint8List payload;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ApplicationResponseEventPayload &&
+      other.requestId == requestId &&
+      _eventBytesEqual(other.payload, payload);
+
+  @override
+  int get hashCode => Object.hash(requestId, Object.hashAll(payload));
+}
+
+final class ApplicationRequestErrorEventPayload extends EventPayload {
+  const ApplicationRequestErrorEventPayload({
+    required this.requestId,
+    required this.error,
+  });
+
+  final int requestId;
+  final ApplicationPlatformBridgeError error;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ApplicationRequestErrorEventPayload &&
+      other.requestId == requestId &&
+      other.error == error;
+
+  @override
+  int get hashCode => Object.hash(requestId, error);
+}
+
+final class ApplicationEventPayload extends EventPayload {
+  ApplicationEventPayload({required Uint8List payload})
+    : payload = Uint8List.fromList(payload);
+
+  final Uint8List payload;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ApplicationEventPayload &&
+      _eventBytesEqual(other.payload, payload);
+
+  @override
+  int get hashCode => Object.hashAll(payload);
 }
 
 enum EnvironmentBrightness { light, dark }
@@ -814,6 +868,28 @@ abstract final class EventBatchCodec {
         ..raw(payload.value);
       return;
     }
+    if (eventTag == EventTagId.applicationResponse &&
+        payload is ApplicationResponseEventPayload) {
+      _checkApplicationRequestId(payload.requestId);
+      writer
+        ..uint64(payload.requestId)
+        ..applicationPayload(payload.payload);
+      return;
+    }
+    if (eventTag == EventTagId.applicationRequestError &&
+        payload is ApplicationRequestErrorEventPayload) {
+      _checkApplicationRequestId(payload.requestId);
+      writer
+        ..uint64(payload.requestId)
+        ..uint8(payload.error.code.wireId)
+        ..applicationErrorMessage(payload.error.message);
+      return;
+    }
+    if (eventTag == EventTagId.applicationEvent &&
+        payload is ApplicationEventPayload) {
+      writer.applicationPayload(payload.payload);
+      return;
+    }
     if (eventTag == EventTagId.environmentChanged &&
         payload is EnvironmentEventPayload) {
       final snapshot = payload.snapshot;
@@ -1023,6 +1099,38 @@ abstract final class EventBatchCodec {
         value: List.unmodifiable(value),
       );
     }
+    if (eventTag == EventTagId.applicationResponse) {
+      final requestId = reader.uint64();
+      _checkApplicationRequestId(requestId);
+      return ApplicationResponseEventPayload(
+        requestId: requestId,
+        payload: reader.applicationPayload(),
+      );
+    }
+    if (eventTag == EventTagId.applicationRequestError) {
+      final requestId = reader.uint64();
+      _checkApplicationRequestId(requestId);
+      final codeValue = reader.uint8();
+      final ApplicationPlatformErrorCode code;
+      try {
+        code = ApplicationPlatformErrorCode.fromWireId(codeValue);
+      } on StateError {
+        _eventFail(
+          ProtocolErrorCode.invalidProps,
+          'Unknown application platform error code $codeValue',
+        );
+      }
+      return ApplicationRequestErrorEventPayload(
+        requestId: requestId,
+        error: ApplicationPlatformBridgeError(
+          code: code,
+          message: reader.applicationErrorMessage(),
+        ),
+      );
+    }
+    if (eventTag == EventTagId.applicationEvent) {
+      return ApplicationEventPayload(payload: reader.applicationPayload());
+    }
     if (eventTag == EventTagId.environmentChanged) {
       final viewportWidth = reader.float64();
       final viewportHeight = reader.float64();
@@ -1144,6 +1252,29 @@ final class _EventWriter {
       _eventFail(
         ProtocolErrorCode.stringTooLarge,
         'String is ${bytes.length} bytes',
+      );
+    }
+    uint32(bytes.length);
+    raw(bytes);
+  }
+
+  void applicationPayload(List<int> value) {
+    if (value.length > ProtocolLimits.maxApplicationPayloadBytes) {
+      _eventFail(
+        ProtocolErrorCode.applicationPayloadTooLarge,
+        'Application payload is ${value.length} bytes',
+      );
+    }
+    uint32(value.length);
+    raw(value);
+  }
+
+  void applicationErrorMessage(String value) {
+    final bytes = utf8.encode(value);
+    if (bytes.length > maximumApplicationPlatformErrorBytes) {
+      _eventFail(
+        ProtocolErrorCode.stringTooLarge,
+        'Application error is ${bytes.length} bytes',
       );
     }
     uint32(bytes.length);
@@ -1273,6 +1404,35 @@ final class _EventReader {
     }
   }
 
+  Uint8List applicationPayload() {
+    final length = uint32();
+    if (length > ProtocolLimits.maxApplicationPayloadBytes) {
+      _eventFail(
+        ProtocolErrorCode.applicationPayloadTooLarge,
+        'Application payload is $length bytes',
+      );
+    }
+    return Uint8List.fromList(bytes(length));
+  }
+
+  String applicationErrorMessage() {
+    final length = uint32();
+    if (length > maximumApplicationPlatformErrorBytes) {
+      _eventFail(
+        ProtocolErrorCode.stringTooLarge,
+        'Application error is $length bytes',
+      );
+    }
+    try {
+      return utf8.decode(bytes(length), allowMalformed: false);
+    } on FormatException {
+      _eventFail(
+        ProtocolErrorCode.invalidUtf8,
+        'Application error is not UTF-8',
+      );
+    }
+  }
+
   _EventReader subReader(int length) {
     _require(length);
     final reader = _EventReader(_bytes, _position, _position + length);
@@ -1313,6 +1473,15 @@ void _checkEventUint64(String label, int value) {
     _eventFail(
       ProtocolErrorCode.invalidProps,
       '$label is outside the supported positive int64 range',
+    );
+  }
+}
+
+void _checkApplicationRequestId(int value) {
+  if (value <= 0 || value > 0x7fffffffffffffff) {
+    _eventFail(
+      ProtocolErrorCode.invalidProps,
+      'Application request ID must be a positive int64',
     );
   }
 }

@@ -18,6 +18,8 @@ void main(List<String> arguments) {
     'dart_text_edit_unicode.hex': textEditUnicode,
     'dart_text_limit_reached.hex': textLimitReached,
     'dart_environment_changed.hex': environmentChanged,
+    'dart_application_response.hex': applicationResponse,
+    'dart_application_event.hex': applicationEvent,
   };
   final stale = <String>[];
 
@@ -172,6 +174,39 @@ final textLimitReached = EventBatch(
       handlerId: 45,
       eventTag: EventTagId.textLimitReached,
       payload: UnitEventPayload(),
+    ),
+  ],
+);
+
+final applicationResponse = EventBatch(
+  runtimeEpoch: 41,
+  events: [
+    UiEvent(
+      sequence: 8,
+      displayedRevision: 9,
+      nodeId: 0,
+      handlerId: 0,
+      eventTag: EventTagId.applicationResponse,
+      payload: ApplicationResponseEventPayload(
+        requestId: 501,
+        payload: Uint8List.fromList([0, 111, 112, 97, 113, 117, 101, 255]),
+      ),
+    ),
+  ],
+);
+
+final applicationEvent = EventBatch(
+  runtimeEpoch: 41,
+  events: [
+    UiEvent(
+      sequence: 9,
+      displayedRevision: 9,
+      nodeId: 0,
+      handlerId: 0,
+      eventTag: EventTagId.applicationEvent,
+      payload: ApplicationEventPayload(
+        payload: Uint8List.fromList([128, 0, 101, 118, 101, 110, 116]),
+      ),
     ),
   ],
 );

@@ -25,6 +25,7 @@ enum ProtocolErrorCode {
   invalidOperationOrder,
   truncatedInput,
   trailingBytes,
+  applicationPayloadTooLarge,
 }
 
 final class ProtocolException implements Exception {
@@ -278,6 +279,27 @@ abstract final class FrameCodec {
             ..uint64(operation.requestId)
             ..uint16(0);
         });
+      case ApplicationRequestOperation():
+        if (operation.requestId <= 0 ||
+            operation.requestId > 0x7fffffffffffffff) {
+          _fail(
+            ProtocolErrorCode.invalidProps,
+            'Application request ID must be a positive int64',
+          );
+        }
+        if (operation.payload.length >
+            ProtocolLimits.maxApplicationPayloadBytes) {
+          _fail(
+            ProtocolErrorCode.applicationPayloadTooLarge,
+            'Application request payload is ${operation.payload.length} bytes',
+          );
+        }
+        payload.envelope(OperationId.applicationRequest, (body) {
+          body
+            ..uint64(operation.requestId)
+            ..uint32(operation.payload.length)
+            ..raw(operation.payload);
+        });
       case RuntimeStatsOperation():
         payload.envelope(OperationId.runtimeNotification, (body) {
           _writeRuntimeStats(body, operation);
@@ -351,6 +373,26 @@ abstract final class FrameCodec {
     }
     if (opcode == OperationId.runtimeNotification) {
       return _readRuntimeStats(body);
+    }
+    if (opcode == OperationId.applicationRequest) {
+      final requestId = body.uint64();
+      if (requestId <= 0) {
+        _fail(
+          ProtocolErrorCode.invalidProps,
+          'Application request ID must be positive',
+        );
+      }
+      final length = body.uint32();
+      if (length > ProtocolLimits.maxApplicationPayloadBytes) {
+        _fail(
+          ProtocolErrorCode.applicationPayloadTooLarge,
+          'Application request payload is $length bytes',
+        );
+      }
+      return ApplicationRequestOperation(
+        requestId: requestId,
+        payload: body.bytes(length),
+      );
     }
     _fail(ProtocolErrorCode.unknownOperation, 'Unknown operation $opcode');
   }
@@ -1334,7 +1376,8 @@ abstract final class FrameCodec {
       opcode == OperationId.setRoot ||
       opcode == OperationId.dropNode ||
       opcode == OperationId.hostRequest ||
-      opcode == OperationId.runtimeNotification;
+      opcode == OperationId.runtimeNotification ||
+      opcode == OperationId.applicationRequest;
 }
 
 void _writeTextProps(_Writer writer, TextProps props) {

@@ -159,7 +159,9 @@ does not exist. The generated host awaits the payload, wraps it in the
 versioned `RuntimeBootstrapConfig` (`BFR1`) envelope, and passes the encoded
 bytes to `BonsaiFlutterRoot`. A configuration without `host` is rejected with
 a migration error. See the renderer package README for a complete adapter
-example.
+example. The adapter may also provide a bounded opaque-byte application bridge
+for asynchronous requests and ordered unsolicited events. See
+[`docs/application-platform.md`](docs/application-platform.md).
 
 ## Testing
 

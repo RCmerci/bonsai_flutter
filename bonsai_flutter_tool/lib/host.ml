@@ -97,44 +97,61 @@ final class BonsaiFlutterHost extends StatefulWidget {
   State<BonsaiFlutterHost> createState() => _BonsaiFlutterHostState();
 }
 
+final class _PreparedRuntime {
+  const _PreparedRuntime({
+    required this.runtimeConfig,
+    required this.applicationPlatform,
+  });
+
+  final Uint8List runtimeConfig;
+  final BonsaiFlutterApplicationPlatform? applicationPlatform;
+}
+
 final class _BonsaiFlutterHostState extends State<BonsaiFlutterHost> {
-  late Future<Uint8List> _runtimeConfig;
+  late Future<_PreparedRuntime> _preparedRuntime;
 
   @override
   void initState() {
     super.initState();
-    _runtimeConfig = _createRuntimeConfig();
+    _preparedRuntime = _prepareRuntime();
   }
 
   @override
   void didUpdateWidget(covariant BonsaiFlutterHost oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(widget.adapter, oldWidget.adapter)) {
-      _runtimeConfig = _createRuntimeConfig();
+      _preparedRuntime = _prepareRuntime();
     }
   }
 
-  Future<Uint8List> _createRuntimeConfig() async {
+  Future<_PreparedRuntime> _prepareRuntime() async {
     final applicationPayload = await widget.adapter.createApplicationPayload();
-    return RuntimeBootstrapConfig(
-      entrypoint: %s,
-      launchPolicy: RuntimeLaunchPolicy.%s,
-      applicationPayload: applicationPayload,
-    ).encode();
+    final applicationPlatform = widget.adapter.createApplicationPlatform();
+    return _PreparedRuntime(
+      runtimeConfig: RuntimeBootstrapConfig(
+        entrypoint: %s,
+        launchPolicy: RuntimeLaunchPolicy.%s,
+        applicationPayload: applicationPayload,
+      ).encode(),
+      applicationPlatform: applicationPlatform,
+    );
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<Uint8List>(
-    future: _runtimeConfig,
+  Widget build(BuildContext context) => FutureBuilder<_PreparedRuntime>(
+    future: _preparedRuntime,
     builder: (context, snapshot) {
-      final runtimeConfig = snapshot.data;
+      final prepared = snapshot.data;
       final Widget home;
       if (snapshot.error case final error?) {
         home = Center(child: Text('Unable to prepare application: $error'));
-      } else if (runtimeConfig == null) {
+      } else if (prepared == null) {
         home = const Center(child: CircularProgressIndicator());
       } else {
-        home = BonsaiFlutterRoot(config: runtimeConfig);
+        home = BonsaiFlutterRoot(
+          config: prepared.runtimeConfig,
+          applicationPlatform: prepared.applicationPlatform,
+        );
       }
       return widget.adapter.buildHost(
         context: context,

@@ -18,6 +18,7 @@ type limits =
   { header_bytes : int
   ; max_frame_bytes : int
   ; max_string_bytes : int
+  ; max_application_payload_bytes : int
   ; max_operations : int
   ; max_nodes : int
   }
@@ -237,6 +238,7 @@ let parse text =
       { header_bytes = int_field "header_bytes" protocol
       ; max_frame_bytes = int_field "max_frame_bytes" protocol
       ; max_string_bytes = int_field "max_string_bytes" protocol
+      ; max_application_payload_bytes = int_field "max_application_payload_bytes" protocol
       ; max_operations = int_field "max_operations" protocol
       ; max_nodes = int_field "max_nodes" protocol
       }

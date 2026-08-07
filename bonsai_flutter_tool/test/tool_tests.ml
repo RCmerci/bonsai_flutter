@@ -367,12 +367,15 @@ let test_generated_managed_adapter_host () =
   [ "import 'application_host_adapter.dart' as application;"
   ; "application.createBonsaiFlutterHostAdapter()"
   ; "await widget.adapter.createApplicationPayload()"
+  ; "widget.adapter.createApplicationPlatform()"
   ; "RuntimeBootstrapConfig("
   ; "entrypoint: 'journal_runtime'"
   ; "launchPolicy: RuntimeLaunchPolicy.replaceExisting"
   ; "applicationPayload: applicationPayload"
   ; ").encode()"
-  ; "BonsaiFlutterRoot(config: runtimeConfig)"
+  ; "BonsaiFlutterRoot("
+  ; "config: prepared.runtimeConfig"
+  ; "applicationPlatform: prepared.applicationPlatform"
   ; "widget.adapter.buildHost("
   ]
   |> List.iter (fun expected ->
@@ -441,6 +444,10 @@ let test_scaffold_preserves_user_source () =
     "missing application-owned adapter created"
     true
     (Sys.file_exists adapter_path);
+  Alcotest.(check bool)
+    "starter adapter exposes an optional application platform"
+    true
+    (contains (read_file adapter_path) "createApplicationPlatform() => null");
   let application_owned = "// application-owned after init\n" in
   write_file adapter_path application_owned;
   Scaffold.initialize ~project_root:root ~config |> get_ok;

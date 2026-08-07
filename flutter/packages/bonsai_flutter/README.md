@@ -68,6 +68,9 @@ final class ApplicationHostAdapter implements BonsaiFlutterHostAdapter {
   }
 
   @override
+  BonsaiFlutterApplicationPlatform? createApplicationPlatform() => null;
+
+  @override
   Widget buildHost({
     required BuildContext context,
     required Widget child,
@@ -84,6 +87,12 @@ copies the bytes and rejects payloads larger than 1 MiB. The generated host
 owns the `BFR1` outer envelope, configured entrypoint and launch policy, and
 `BonsaiFlutterRoot`. Adapter implementations must not encode a second `BFR1`
 envelope.
+
+Applications that need live application-owned requests or events return a
+`BonsaiFlutterApplicationPlatform` instead of `null`. The bridge transports
+copied opaque byte payloads up to 1 MiB; application-specific tags, codecs, and
+platform signal collection remain outside this package. See
+[`docs/application-platform.md`](../../../docs/application-platform.md).
 
 Run the package checks with:
 

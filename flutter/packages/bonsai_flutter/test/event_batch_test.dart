@@ -311,6 +311,118 @@ void main() {
       );
     });
 
+    test(
+      'round trips generic application responses, errors, and ordered events',
+      () {
+        final boundary = Uint8List(maximumApplicationPlatformPayloadBytes)
+          ..[0] = 1
+          ..[maximumApplicationPlatformPayloadBytes - 1] = 255;
+        final batch = EventBatch(
+          runtimeEpoch: 72,
+          events: [
+            UiEvent(
+              sequence: 1,
+              displayedRevision: 7,
+              nodeId: 0,
+              handlerId: 0,
+              eventTag: EventTagId.applicationResponse,
+              payload: ApplicationResponseEventPayload(
+                requestId: 101,
+                payload: Uint8List.fromList([0, 127, 128, 255]),
+              ),
+            ),
+            const UiEvent(
+              sequence: 2,
+              displayedRevision: 7,
+              nodeId: 0,
+              handlerId: 0,
+              eventTag: EventTagId.applicationRequestError,
+              payload: ApplicationRequestErrorEventPayload(
+                requestId: 102,
+                error: ApplicationPlatformBridgeError(
+                  code: ApplicationPlatformErrorCode.handlerFailed,
+                  message: 'handler failed safely',
+                ),
+              ),
+            ),
+            UiEvent(
+              sequence: 3,
+              displayedRevision: 7,
+              nodeId: 0,
+              handlerId: 0,
+              eventTag: EventTagId.applicationEvent,
+              payload: ApplicationEventPayload(payload: boundary),
+            ),
+          ],
+        );
+
+        final decoded = EventBatchCodec.decode(EventBatchCodec.encode(batch));
+
+        expect(decoded.events[0].payload, batch.events[0].payload);
+        expect(decoded.events[1].payload, batch.events[1].payload);
+        expect(decoded.events[2].payload, batch.events[2].payload);
+      },
+    );
+
+    test('rejects oversized application event lengths before slicing', () {
+      final valid = EventBatchCodec.encode(
+        EventBatch(
+          runtimeEpoch: 72,
+          events: [
+            UiEvent(
+              sequence: 1,
+              displayedRevision: 7,
+              nodeId: 0,
+              handlerId: 0,
+              eventTag: EventTagId.applicationEvent,
+              payload: ApplicationEventPayload(
+                payload: Uint8List.fromList([1]),
+              ),
+            ),
+          ],
+        ),
+      );
+      final malformed = Uint8List.fromList(valid);
+      ByteData.sublistView(malformed).setUint32(
+        90,
+        maximumApplicationPlatformPayloadBytes + 1,
+        Endian.little,
+      );
+
+      expectEventDecodeError(
+        malformed,
+        ProtocolErrorCode.applicationPayloadTooLarge,
+      );
+      expect(
+        () => EventBatchCodec.encode(
+          EventBatch(
+            runtimeEpoch: 72,
+            events: [
+              UiEvent(
+                sequence: 1,
+                displayedRevision: 7,
+                nodeId: 0,
+                handlerId: 0,
+                eventTag: EventTagId.applicationEvent,
+                payload: ApplicationEventPayload(
+                  payload: Uint8List(
+                    maximumApplicationPlatformPayloadBytes + 1,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        throwsA(
+          isA<ProtocolException>().having(
+            (error) => error.code,
+            'code',
+            ProtocolErrorCode.applicationPayloadTooLarge,
+          ),
+        ),
+      );
+    });
+
     test('preserves UTF-16 ranges across supported writing systems', () {
       final cases = ['ascii', '拼音', 'かな', '한글', '😀', 'é'];
       for (var index = 0; index < cases.length; index += 1) {

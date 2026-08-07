@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:bonsai_flutter/src/application_platform/application_platform.dart';
 import 'package:bonsai_flutter/src/protocol/binary_codec.dart';
 import 'package:bonsai_flutter/src/protocol/frame.dart';
 import 'package:bonsai_flutter/src/protocol/generated_protocol.dart';
@@ -144,6 +145,78 @@ void main() {
           canPop: true,
           restorationId: 'settings-page',
         ),
+      );
+    });
+
+    test('round trips byte-exact bounded application requests', () {
+      final below = Uint8List.fromList([0, 1, 127, 128, 255]);
+      final equal = Uint8List(maximumApplicationPlatformPayloadBytes)
+        ..[0] = 1
+        ..[maximumApplicationPlatformPayloadBytes - 1] = 255;
+      final frame = Frame(
+        runtimeEpoch: 71,
+        baseRevision: 3,
+        targetRevision: 4,
+        kind: FrameKind.incremental,
+        operations: [
+          ApplicationRequestOperation(requestId: 91, payload: below),
+          ApplicationRequestOperation(requestId: 92, payload: equal),
+        ],
+      );
+
+      final decoded = FrameCodec.decode(FrameCodec.encode(frame));
+
+      final first = decoded.operations[0] as ApplicationRequestOperation;
+      final second = decoded.operations[1] as ApplicationRequestOperation;
+      expect(first.requestId, 91);
+      expect(first.payload, [0, 1, 127, 128, 255]);
+      expect(second.requestId, 92);
+      expect(second.payload, orderedEquals(equal));
+    });
+
+    test('rejects oversized application request lengths before slicing', () {
+      final valid = FrameCodec.encode(
+        Frame(
+          runtimeEpoch: 71,
+          baseRevision: 3,
+          targetRevision: 4,
+          kind: FrameKind.incremental,
+          operations: [
+            ApplicationRequestOperation(
+              requestId: 91,
+              payload: Uint8List.fromList([1]),
+            ),
+          ],
+        ),
+      );
+      const applicationRequestBodyOffset = ProtocolLimits.headerBytes + 10;
+      final malformed = Uint8List.fromList(valid);
+      writeUint32(
+        malformed,
+        applicationRequestBodyOffset + 8,
+        maximumApplicationPlatformPayloadBytes + 1,
+      );
+
+      expectDecodeError(
+        malformed,
+        ProtocolErrorCode.applicationPayloadTooLarge,
+      );
+      expect(
+        () => FrameCodec.encode(
+          Frame(
+            runtimeEpoch: 71,
+            baseRevision: 3,
+            targetRevision: 4,
+            kind: FrameKind.incremental,
+            operations: [
+              ApplicationRequestOperation(
+                requestId: 92,
+                payload: Uint8List(maximumApplicationPlatformPayloadBytes + 1),
+              ),
+            ],
+          ),
+        ),
+        throwsProtocolCode(ProtocolErrorCode.applicationPayloadTooLarge),
       );
     });
 

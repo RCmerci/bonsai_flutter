@@ -157,6 +157,7 @@ let all (schema : Schema.t) =
     \  val header_bytes : int\n\
     \  val max_frame_bytes : int\n\
     \  val max_string_bytes : int\n\
+    \  val max_application_payload_bytes : int\n\
     \  val max_operations : int\n\
     \  val max_nodes : int\n\
      end\n\n";
@@ -192,12 +193,14 @@ let all (schema : Schema.t) =
     \  let header_bytes = %d\n\
     \  let max_frame_bytes = %d\n\
     \  let max_string_bytes = %d\n\
+    \  let max_application_payload_bytes = %d\n\
     \  let max_operations = %d\n\
     \  let max_nodes = %d\n\
      end\n\n"
     schema.limits.header_bytes
     schema.limits.max_frame_bytes
     schema.limits.max_string_bytes
+    schema.limits.max_application_payload_bytes
     schema.limits.max_operations
     schema.limits.max_nodes;
   List.iter
@@ -232,12 +235,14 @@ let all (schema : Schema.t) =
     \  static const int headerBytes = %d;\n\
     \  static const int maxFrameBytes = %d;\n\
     \  static const int maxStringBytes = %d;\n\
+    \  static const int maxApplicationPayloadBytes = %d;\n\
     \  static const int maxOperations = %d;\n\
     \  static const int maxNodes = %d;\n\
      }\n\n"
     schema.limits.header_bytes
     schema.limits.max_frame_bytes
     schema.limits.max_string_bytes
+    schema.limits.max_application_payload_bytes
     schema.limits.max_operations
     schema.limits.max_nodes;
   List.iter

@@ -127,6 +127,18 @@ let fixtures : (string * Protocol.Wire_frame.t) list =
               { request_id = request 41L; payload = Clipboard_write { text = "剪贴板😀" } }
           ]
       } )
+  ; ( "ocaml_application_request.hex"
+    , { runtime_epoch = epoch 41L
+      ; base_revision = revision 8L
+      ; target_revision = revision 9L
+      ; kind = Incremental_frame
+      ; operations =
+          [ Application_request
+              { request_id = 501L
+              ; payload = Bytes.of_string "\000opaque\255application\128"
+              }
+          ]
+      } )
   ; ( "ocaml_animated_opacity.hex"
     , { runtime_epoch = epoch 7L
       ; base_revision = revision 3L

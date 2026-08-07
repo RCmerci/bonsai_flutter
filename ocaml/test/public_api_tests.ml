@@ -5,6 +5,13 @@ let require condition message = if not condition then failwith message
 
 let component context _graph =
   let environment = Ui.App.Context.environment context in
+  let application_platform = Ui.App.Context.application_platform context in
+  Ui.Application_platform.on_event application_platform (fun _payload ->
+    Ui.Effect.return ());
+  ignore
+    (Ui.Application_platform.request
+       application_platform
+       (Bytes.of_string "compile-surface"));
   Bonsai.Cont.map environment ~f:(fun environment ->
     Ui.Widget.text
       (Printf.sprintf
@@ -32,6 +39,12 @@ let worker_component client _context _graph =
 ;;
 
 let () =
+  let cancellation = Ui.Application_platform.Cancellation.create () in
+  Ui.Application_platform.Cancellation.cancel cancellation;
+  require
+    (Ui.Application_platform.maximum_payload_bytes = 1_048_576)
+    "unexpected public application payload limit";
+  let (_ : Ui.Application_platform.error) = Ui.Application_platform.Runtime_replaced in
   let (_ : Ui.Host_effect.native_menu_item) =
     { item_id = ID.Host.Native_menu_item_id.of_string "copy"
     ; label = "Copy"

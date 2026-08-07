@@ -3,6 +3,7 @@ module Context = struct
 
   let environment context = Driver.Handler.environment context |> Environment.value
   let host_effects = Driver.Handler.host_effects
+  let application_platform = Driver.Handler.application_platform
   let event_handler = Driver.Handler.create
   let native_event_handler = Driver.Handler.create_native
 end

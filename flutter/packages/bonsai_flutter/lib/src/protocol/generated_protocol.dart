@@ -2,13 +2,14 @@
 
 abstract final class ProtocolVersion {
   static const int protocolMajor = 1;
-  static const int protocolMinor = 15;
+  static const int protocolMinor = 16;
 }
 
 abstract final class ProtocolLimits {
   static const int headerBytes = 48;
   static const int maxFrameBytes = 16777216;
   static const int maxStringBytes = 1048576;
+  static const int maxApplicationPayloadBytes = 1048576;
   static const int maxOperations = 1000000;
   static const int maxNodes = 1000000;
 }
@@ -41,6 +42,7 @@ abstract final class OperationId {
   static const int hostRequest = 8;
   static const int runtimeNotification = 9;
   static const int endFrame = 10;
+  static const int applicationRequest = 11;
 
   static String? debugName(int id) => switch (id) {
     1 => 'begin_frame',
@@ -53,6 +55,7 @@ abstract final class OperationId {
     8 => 'host_request',
     9 => 'runtime_notification',
     10 => 'end_frame',
+    11 => 'application_request',
     _ => null,
   };
 }
@@ -193,6 +196,9 @@ abstract final class EventTagId {
   static const int semanticsAction = 22;
   static const int resyncRequested = 23;
   static const int textLimitReached = 24;
+  static const int applicationResponse = 25;
+  static const int applicationRequestError = 26;
+  static const int applicationEvent = 27;
 
   static String? debugName(int id) => switch (id) {
     1 => 'press',
@@ -219,6 +225,9 @@ abstract final class EventTagId {
     22 => 'semantics_action',
     23 => 'resync_requested',
     24 => 'text_limit_reached',
+    25 => 'application_response',
+    26 => 'application_request_error',
+    27 => 'application_event',
     _ => null,
   };
 }

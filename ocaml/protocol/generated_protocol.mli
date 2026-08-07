@@ -7,6 +7,7 @@ module Limits : sig
   val header_bytes : int
   val max_frame_bytes : int
   val max_string_bytes : int
+  val max_application_payload_bytes : int
   val max_operations : int
   val max_nodes : int
 end
@@ -31,6 +32,7 @@ module Operation : sig
   val host_request : Bonsai_flutter_spec.Id.Protocol.operation
   val runtime_notification : Bonsai_flutter_spec.Id.Protocol.operation
   val end_frame : Bonsai_flutter_spec.Id.Protocol.operation
+  val application_request : Bonsai_flutter_spec.Id.Protocol.operation
   val debug_name : Bonsai_flutter_spec.Id.Protocol.operation -> string option
 end
 
@@ -115,6 +117,9 @@ module Event_tag : sig
   val semantics_action : Bonsai_flutter_spec.Id.Protocol.event_tag
   val resync_requested : Bonsai_flutter_spec.Id.Protocol.event_tag
   val text_limit_reached : Bonsai_flutter_spec.Id.Protocol.event_tag
+  val application_response : Bonsai_flutter_spec.Id.Protocol.event_tag
+  val application_request_error : Bonsai_flutter_spec.Id.Protocol.event_tag
+  val application_event : Bonsai_flutter_spec.Id.Protocol.event_tag
   val debug_name : Bonsai_flutter_spec.Id.Protocol.event_tag -> string option
 end
 

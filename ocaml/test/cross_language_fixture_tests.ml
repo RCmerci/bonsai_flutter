@@ -34,15 +34,21 @@ let bytes_of_hex text =
 ;;
 
 let fixture name =
-  let from_root = "protocol/generated/fixtures/" ^ name in
-  let from_test = "../../protocol/generated/fixtures/" ^ name in
-  let path =
-    if Sys.file_exists from_root
-    then from_root
-    else if Sys.file_exists from_test
-    then from_test
-    else fail "missing Dart-generated cross-language fixture: %s" name
+  let rec find_repository_root directory =
+    let marker = Filename.concat directory ".git" in
+    if Sys.file_exists marker
+    then Some directory
+    else (
+      let parent = Filename.dirname directory in
+      if String.equal parent directory then None else find_repository_root parent)
   in
+  let path =
+    match find_repository_root (Sys.getcwd ()) with
+    | Some root -> Filename.concat root ("protocol/generated/fixtures/" ^ name)
+    | None -> fail "cannot locate the repository root for fixture %s" name
+  in
+  if not (Sys.file_exists path)
+  then fail "missing Dart-generated cross-language fixture: %s" name;
   let channel = open_in_bin path in
   Fun.protect
     ~finally:(fun () -> close_in channel)
@@ -60,10 +66,31 @@ let expect_fixture name expected =
   match Protocol.Event_batch_codec.encode expected with
   | Error error -> fail "%s encode failed: %s" name error.message
   | Ok reencoded ->
-    expect
-      (Bytes.equal encoded reencoded)
-      "OCaml and Dart encoded different bytes for %s"
-      name
+    if not (Bytes.equal encoded reencoded)
+    then (
+      let limit = min (Bytes.length encoded) (Bytes.length reencoded) in
+      let rec first_difference index =
+        if index = limit
+        then None
+        else if Char.equal (Bytes.get encoded index) (Bytes.get reencoded index)
+        then first_difference (index + 1)
+        else Some index
+      in
+      match first_difference 0 with
+      | None ->
+        fail
+          "OCaml and Dart encoded different lengths for %s: Dart=%d OCaml=%d"
+          name
+          (Bytes.length encoded)
+          (Bytes.length reencoded)
+      | Some index ->
+        fail
+          "OCaml and Dart encoded different bytes for %s at offset %d: Dart=%02x \
+           OCaml=%02x"
+          name
+          index
+          (Char.code (Bytes.get encoded index))
+          (Char.code (Bytes.get reencoded index)))
 ;;
 
 let test_counter_press () =
@@ -183,11 +210,49 @@ let test_environment_changed () =
     }
 ;;
 
+let test_application_response () =
+  let open Protocol.Inbound_event in
+  expect_fixture
+    "dart_application_response.hex"
+    { runtime_epoch = epoch 41L
+    ; events =
+        [ { sequence = sequence 8L
+          ; displayed_revision = revision 9L
+          ; node_id = node 0L
+          ; handler_id = handler 0L
+          ; event_tag = Protocol.Generated_protocol.Event_tag.application_response
+          ; payload =
+              Application_response
+                { request_id = 501L; payload = Bytes.of_string "\000opaque\255" }
+          }
+        ]
+    }
+;;
+
+let test_application_event () =
+  let open Protocol.Inbound_event in
+  expect_fixture
+    "dart_application_event.hex"
+    { runtime_epoch = epoch 41L
+    ; events =
+        [ { sequence = sequence 9L
+          ; displayed_revision = revision 9L
+          ; node_id = node 0L
+          ; handler_id = handler 0L
+          ; event_tag = Protocol.Generated_protocol.Event_tag.application_event
+          ; payload = Application_event (Bytes.of_string "\128\000event")
+          }
+        ]
+    }
+;;
+
 let () =
   test_counter_press ();
   test_host_response ();
   test_text_edit_unicode ();
   test_text_limit_reached ();
   test_environment_changed ();
+  test_application_response ();
+  test_application_event ();
   print_endline "cross-language fixture tests passed"
 ;;

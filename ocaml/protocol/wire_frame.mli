@@ -481,6 +481,10 @@ type operation =
       ; payload : host_request_payload
       }
   | Cancel_host_request of { request_id : Bonsai_flutter_spec.Id.Host.request_id }
+  | Application_request of
+      { request_id : int64
+      ; payload : bytes
+      }
   | Runtime_stats of runtime_stats
 
 type t =

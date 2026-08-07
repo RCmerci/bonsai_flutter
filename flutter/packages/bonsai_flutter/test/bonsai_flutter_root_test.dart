@@ -70,6 +70,91 @@ void main() {
     expect(runtime.disposed, isTrue);
   });
 
+  testWidgets('root activates and disposes the application platform bridge', (
+    tester,
+  ) async {
+    final runtime = _OrderedRuntimeSession();
+    final platform = _RootApplicationPlatform();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BonsaiFlutterRoot(
+          config: Uint8List(0),
+          applicationPlatform: platform,
+          runtimeStarter: (_) async => runtime,
+        ),
+      ),
+    );
+    await tester.pump();
+    platform.add(Uint8List.fromList([0]));
+    runtime.emitCycle(
+      presentationId: 70,
+      revision: 1,
+      bytes: FrameCodec.encode(
+        Frame(
+          runtimeEpoch: 73,
+          baseRevision: 0,
+          targetRevision: 1,
+          kind: FrameKind.fullSnapshot,
+          operations: [
+            const CreateNode(
+              nodeId: 1,
+              kind: NodeKind.text,
+              props: TextProps('application bridge'),
+              eventBindings: [],
+            ),
+            const SetRoot(1),
+            ApplicationRequestOperation(
+              requestId: 201,
+              payload: Uint8List.fromList([0, 1, 255]),
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(platform.requests, [
+      [0, 1, 255],
+    ]);
+    final firstBatch = EventBatchCodec.decode(
+      runtime.successes.single.eventBatch,
+    );
+    final response =
+        firstBatch.events
+                .where(
+                  (event) => event.eventTag == EventTagId.applicationResponse,
+                )
+                .single
+                .payload
+            as ApplicationResponseEventPayload;
+    expect(response.requestId, 201);
+    expect(response.payload, [255, 1, 0]);
+
+    platform.add(Uint8List.fromList([7, 8]));
+    runtime.emitCycle(presentationId: 71, revision: 1, bytes: Uint8List(0));
+    await tester.pump();
+    final secondBatch = EventBatchCodec.decode(
+      runtime.successes.last.eventBatch,
+    );
+    final applicationEvent =
+        secondBatch.events
+                .where((event) => event.eventTag == EventTagId.applicationEvent)
+                .single
+                .payload
+            as ApplicationEventPayload;
+    expect(applicationEvent.payload, [7, 8]);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    platform.add(Uint8List.fromList([9]));
+    await tester.pump();
+    expect(platform.listenCount, 1);
+    expect(platform.cancelCount, 1);
+    expect(runtime.disposed, isTrue);
+  });
+
   testWidgets('root gives built-in host effects access to renderer resources', (
     tester,
   ) async {
@@ -433,6 +518,33 @@ final class _FailingHostEffects implements HostEffectImplementation {
 
   @override
   Future<void> cancel(int requestId) async {}
+}
+
+final class _RootApplicationPlatform
+    implements BonsaiFlutterApplicationPlatform {
+  _RootApplicationPlatform() {
+    _events = StreamController<Uint8List>.broadcast(
+      sync: true,
+      onListen: () => listenCount += 1,
+      onCancel: () => cancelCount += 1,
+    );
+  }
+
+  late final StreamController<Uint8List> _events;
+  final requests = <List<int>>[];
+  var listenCount = 0;
+  var cancelCount = 0;
+
+  @override
+  Stream<Uint8List> get events => _events.stream;
+
+  @override
+  Future<Uint8List> handleRequest(Uint8List request) async {
+    requests.add(List<int>.of(request));
+    return Uint8List.fromList(request.reversed.toList(growable: false));
+  }
+
+  void add(Uint8List event) => _events.add(event);
 }
 
 final class _LegacyResponse {

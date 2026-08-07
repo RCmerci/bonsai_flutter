@@ -3,12 +3,13 @@
 module ID = Bonsai_flutter_spec.Id
 
 let protocol_major = 1
-let protocol_minor = 15
+let protocol_minor = 16
 
 module Limits = struct
   let header_bytes = 48
   let max_frame_bytes = 16777216
   let max_string_bytes = 1048576
+  let max_application_payload_bytes = 1048576
   let max_operations = 1000000
   let max_nodes = 1000000
 end
@@ -42,6 +43,7 @@ module Operation = struct
   let host_request = ID.Protocol.Operation.of_int 8
   let runtime_notification = ID.Protocol.Operation.of_int 9
   let end_frame = ID.Protocol.Operation.of_int 10
+  let application_request = ID.Protocol.Operation.of_int 11
 
   let debug_name id =
     match ID.Protocol.Operation.to_int id with
@@ -55,6 +57,7 @@ module Operation = struct
     | 8 -> Some "host_request"
     | 9 -> Some "runtime_notification"
     | 10 -> Some "end_frame"
+    | 11 -> Some "application_request"
     | _ -> None
   ;;
 end
@@ -196,6 +199,9 @@ module Event_tag = struct
   let semantics_action = ID.Protocol.Event_tag.of_int 22
   let resync_requested = ID.Protocol.Event_tag.of_int 23
   let text_limit_reached = ID.Protocol.Event_tag.of_int 24
+  let application_response = ID.Protocol.Event_tag.of_int 25
+  let application_request_error = ID.Protocol.Event_tag.of_int 26
+  let application_event = ID.Protocol.Event_tag.of_int 27
 
   let debug_name id =
     match ID.Protocol.Event_tag.to_int id with
@@ -223,6 +229,9 @@ module Event_tag = struct
     | 22 -> Some "semantics_action"
     | 23 -> Some "resync_requested"
     | 24 -> Some "text_limit_reached"
+    | 25 -> Some "application_response"
+    | 26 -> Some "application_request_error"
+    | 27 -> Some "application_event"
     | _ -> None
   ;;
 end

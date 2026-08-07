@@ -1044,6 +1044,97 @@ let test_runtime_stats_backpatch_variants () =
     frames
 ;;
 
+let test_application_request_round_trip_and_bounds () =
+  let below = Bytes.of_string "\000\001\127\128\255" in
+  let boundary =
+    Bytes.make Generated_protocol.Limits.max_application_payload_bytes '\255'
+  in
+  let frame =
+    Wire_frame.
+      { runtime_epoch = epoch 96L
+      ; base_revision = revision 3L
+      ; target_revision = revision 4L
+      ; kind = Incremental_frame
+      ; operations =
+          [ Application_request { request_id = 71L; payload = below }
+          ; Application_request { request_id = 72L; payload = boundary }
+          ]
+      }
+  in
+  let encoded =
+    match Binary_codec.encode frame with
+    | Ok bytes -> bytes
+    | Error error -> fail "application request encode failed: %s" error.message
+  in
+  (match Binary_codec.decode encoded with
+   | Ok decoded -> expect (decoded = frame) "application request bytes changed"
+   | Error error -> fail "application request decode failed: %s" error.message);
+  let oversized =
+    Wire_frame.
+      { frame with
+        operations =
+          [ Application_request
+              { request_id = 73L
+              ; payload =
+                  Bytes.make
+                    (Generated_protocol.Limits.max_application_payload_bytes + 1)
+                    '\000'
+              }
+          ]
+      }
+  in
+  match Binary_codec.encode oversized with
+  | Error { code = Application_payload_too_large; _ } -> ()
+  | Error error -> fail "oversized application request returned %s" error.message
+  | Ok _ -> fail "oversized application request encoded"
+;;
+
+let test_application_response_error_and_event_round_trip () =
+  let open Inbound_event in
+  let batch =
+    { runtime_epoch = epoch 96L
+    ; events =
+        [ { sequence = sequence 1L
+          ; displayed_revision = revision 4L
+          ; node_id = node 0L
+          ; handler_id = handler 0L
+          ; event_tag = Generated_protocol.Event_tag.application_response
+          ; payload =
+              Application_response
+                { request_id = 71L; payload = Bytes.of_string "\000\255response" }
+          }
+        ; { sequence = sequence 2L
+          ; displayed_revision = revision 4L
+          ; node_id = node 0L
+          ; handler_id = handler 0L
+          ; event_tag = Generated_protocol.Event_tag.application_request_error
+          ; payload =
+              Application_request_error
+                { request_id = 72L
+                ; error =
+                    { code = Handler_failed; message = "application handler failed" }
+                }
+          }
+        ; { sequence = sequence 3L
+          ; displayed_revision = revision 4L
+          ; node_id = node 0L
+          ; handler_id = handler 0L
+          ; event_tag = Generated_protocol.Event_tag.application_event
+          ; payload = Application_event (Bytes.of_string "\128\000event")
+          }
+        ]
+    }
+  in
+  let encoded =
+    match Event_batch_codec.encode batch with
+    | Ok bytes -> bytes
+    | Error error -> fail "application event encode failed: %s" error.message
+  in
+  match Event_batch_codec.decode encoded with
+  | Ok decoded -> expect (decoded = batch) "application event bytes changed"
+  | Error error -> fail "application event decode failed: %s" error.message
+;;
+
 let () =
   test_golden_fixture ();
   test_round_trip ();
@@ -1072,5 +1163,7 @@ let () =
   test_runtime_stats_backpatch_limits ();
   test_runtime_encode_requires_exactly_one_stats_operation ();
   test_runtime_stats_backpatch_variants ();
+  test_application_request_round_trip_and_bounds ();
+  test_application_response_error_and_event_round_trip ();
   print_endline "protocol tests passed"
 ;;

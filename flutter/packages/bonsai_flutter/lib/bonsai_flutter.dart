@@ -1,5 +1,6 @@
 library;
 
+export 'src/application_platform/application_platform.dart';
 export 'src/debug/bonsai_flutter_debug.dart';
 export 'src/debug/frame_stats.dart' show BonsaiFlutterFrameStats;
 export 'src/environment/environment_reporter.dart';

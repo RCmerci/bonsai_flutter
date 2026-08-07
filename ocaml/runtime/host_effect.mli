@@ -38,6 +38,64 @@ type haptic_kind =
   | Haptic_heavy
   | Haptic_selection
 
+module Application_platform : sig
+  type t
+
+  type error =
+    | Unavailable
+    | Payload_too_large
+    | Handler_failed of string
+    | Cancelled
+    | Shutdown
+    | Runtime_replaced
+    | Invalid_response of string
+
+  val maximum_payload_bytes : int
+
+  module Cancellation : sig
+    type t
+
+    val create : unit -> t
+    val cancel : t -> unit
+  end
+
+  val request
+    :  ?cancellation:Cancellation.t
+    -> t
+    -> bytes
+    -> (bytes, error) result Bonsai.Effect.t
+
+  val on_event : t -> (bytes -> unit Bonsai.Effect.t) -> unit
+
+  module Prepared_operations : sig
+    type t
+
+    val operations : t -> Bonsai_flutter_protocol.Wire_frame.operation list
+  end
+
+  val prepare_operations : t -> Prepared_operations.t
+  val commit_operations : t -> Prepared_operations.t -> (unit, string) result
+
+  module Private : sig
+    val create : schedule:(unit Bonsai.Effect.t -> unit) -> t
+
+    module Validated_input : sig
+      type t
+
+      val request_id : t -> int64 option
+    end
+
+    val validate_input
+      :  t
+      -> Bonsai_flutter_protocol.Inbound_event.payload
+      -> (Validated_input.t, string) result
+
+    val resolve_validated : t -> Validated_input.t -> (unit, string) result
+    val shutdown : t -> error -> unit
+    val pending_count : t -> int
+  end
+end
+
 module Cancellation : sig
   type t
 

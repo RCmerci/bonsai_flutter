@@ -75,6 +75,20 @@ type host_response =
   ; value : bytes
   }
 
+type application_error_code =
+  | Unavailable
+  | Payload_too_large
+  | Handler_failed
+  | Cancelled
+  | Shutdown
+  | Runtime_replaced
+  | Invalid_response
+
+type application_error =
+  { code : application_error_code
+  ; message : string
+  }
+
 type edge_insets =
   { left : float
   ; top : float
@@ -129,6 +143,15 @@ type payload =
       }
   | Route_pop of route_pop
   | Host_response of host_response
+  | Application_response of
+      { request_id : int64
+      ; payload : bytes
+      }
+  | Application_request_error of
+      { request_id : int64
+      ; error : application_error
+      }
+  | Application_event of bytes
   | Environment_changed of environment
   | Native_event of native_event
 

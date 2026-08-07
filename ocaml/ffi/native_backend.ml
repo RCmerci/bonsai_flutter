@@ -114,15 +114,15 @@ let exception_message exception_ =
 
 let () = Printexc.record_backtrace true
 
-let shutdown_driver runtime =
-  Driver.shutdown runtime.driver;
+let shutdown_driver ?application_error runtime =
+  Driver.shutdown ?application_error runtime.driver;
   incr driver_shutdowns;
   decr active_drivers
 ;;
 
-let destroy_active runtime =
+let destroy_active ?application_error runtime =
   transition (Destroying runtime);
-  shutdown_driver runtime;
+  shutdown_driver ?application_error runtime;
   transition Empty
 ;;
 
@@ -189,7 +189,9 @@ let create config =
           | Active _, Runtime_bootstrap_config.Fresh ->
             create_error "Runtime_already_active"
           | Active runtime, Replace_existing ->
-            destroy_active runtime;
+            destroy_active
+              ~application_error:Host_effect.Application_platform.Runtime_replaced
+              runtime;
             create_in_empty config
           | Empty, _ -> create_in_empty config
           | Creating, _ | Destroying _, _ | Finalized, _ -> assert false))
@@ -224,6 +226,7 @@ let driver_error_metadata error =
       else Fatal_error, 15
     | Lifecycle_error _ -> Fatal_error, 11
     | Host_response_error _ -> Fatal_error, 8
+    | Application_platform_error _ -> Recoverable_error, 8
     | Shutdown -> Fatal_error, 9
   in
   status, error_code, Driver.error_to_string error

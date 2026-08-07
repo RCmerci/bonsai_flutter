@@ -57,6 +57,272 @@ module Cancellation = struct
   let is_cancelled t = t.cancelled
 end
 
+module Application_platform = struct
+  type error =
+    | Unavailable
+    | Payload_too_large
+    | Handler_failed of string
+    | Cancelled
+    | Shutdown
+    | Runtime_replaced
+    | Invalid_response of string
+
+  let maximum_payload_bytes =
+    Protocol.Generated_protocol.Limits.max_application_payload_bytes
+  ;;
+
+  module Cancellation = struct
+    type t =
+      { mutable cancelled : bool
+      ; mutable cancel_active : (unit -> unit) option
+      }
+
+    let create () = { cancelled = false; cancel_active = None }
+
+    let cancel t =
+      if not t.cancelled
+      then (
+        t.cancelled <- true;
+        Option.iter (fun cancel -> cancel ()) t.cancel_active;
+        t.cancel_active <- None)
+    ;;
+  end
+
+  type pending =
+    { callback : (unit, (bytes, error) result) Effect.Private.Callback.t
+    ; cancellation : Cancellation.t option
+    }
+
+  type queued_operation =
+    { id : int64
+    ; operation : Protocol.Wire_frame.operation
+    }
+
+  type t =
+    { schedule : unit Effect.t -> unit
+    ; pending : (int64, pending) Hashtbl.t
+    ; operations : queued_operation Queue.t
+    ; mutable subscribers : (bytes -> unit Effect.t) list
+    ; mutable next_request_id : int64
+    ; mutable next_operation_id : int64
+    ; mutable shutdown_error : error option
+    }
+
+  let respond t callback response =
+    t.schedule (Effect.Private.Callback.respond_to callback response)
+  ;;
+
+  let enqueue_operation t operation =
+    if Int64.equal t.next_operation_id Int64.max_int
+    then failwith "application operation ID space exhausted";
+    let id = t.next_operation_id in
+    t.next_operation_id <- Int64.succ id;
+    Queue.add { id; operation } t.operations
+  ;;
+
+  let cancel_request t request_id =
+    match Hashtbl.find_opt t.pending request_id with
+    | None -> ()
+    | Some pending ->
+      Hashtbl.remove t.pending request_id;
+      Option.iter
+        (fun (cancellation : Cancellation.t) -> cancellation.cancel_active <- None)
+        pending.cancellation;
+      respond t pending.callback (Error Cancelled)
+  ;;
+
+  let request ?cancellation t payload =
+    let payload = Bytes.copy payload in
+    Effect.Private.make ~request:() ~evaluator:(fun callback ->
+      match t.shutdown_error with
+      | Some error -> respond t callback (Error error)
+      | None when Bytes.length payload > maximum_payload_bytes ->
+        respond t callback (Error Payload_too_large)
+      | None ->
+        (match cancellation with
+         | Some (cancellation : Cancellation.t) when cancellation.cancelled ->
+           respond t callback (Error Cancelled)
+         | _ ->
+           if Int64.equal t.next_request_id Int64.max_int
+           then respond t callback (Error (Handler_failed "request ID space exhausted"))
+           else (
+             let request_id = t.next_request_id in
+             t.next_request_id <- Int64.succ request_id;
+             Hashtbl.add t.pending request_id { callback; cancellation };
+             Option.iter
+               (fun (cancellation : Cancellation.t) ->
+                  cancellation.cancel_active
+                  <- Some (fun () -> cancel_request t request_id))
+               cancellation;
+             enqueue_operation
+               t
+               (Protocol.Wire_frame.Application_request
+                  { request_id; payload = Bytes.copy payload }))))
+  ;;
+
+  let on_event t subscriber =
+    if Option.is_none t.shutdown_error
+    then t.subscribers <- t.subscribers @ [ subscriber ]
+  ;;
+
+  module Prepared_operations = struct
+    type nonrec t =
+      { owner : t
+      ; entries : queued_operation list
+      ; mutable committed : bool
+      }
+
+    let operations t = List.map (fun entry -> entry.operation) t.entries
+  end
+
+  let prepare_operations t =
+    Prepared_operations.
+      { owner = t; entries = Queue.to_seq t.operations |> List.of_seq; committed = false }
+  ;;
+
+  let commit_operations t (prepared : Prepared_operations.t) =
+    if prepared.committed
+    then Error "prepared application operations were already committed"
+    else if not (prepared.owner == t)
+    then Error "prepared application operations belong to another manager"
+    else (
+      let current = Queue.to_seq t.operations |> List.of_seq in
+      let rec validate_prefix expected actual =
+        match expected, actual with
+        | [], _ -> Ok ()
+        | _, [] -> Error "prepared application operation prefix is unavailable"
+        | expected :: expected_rest, actual :: actual_rest ->
+          if Int64.equal expected.id actual.id
+          then validate_prefix expected_rest actual_rest
+          else Error "prepared application operation prefix is stale"
+      in
+      match validate_prefix prepared.entries current with
+      | Error _ as error -> error
+      | Ok () ->
+        List.iter (fun _ -> ignore (Queue.take t.operations)) prepared.entries;
+        prepared.committed <- true;
+        Ok ())
+  ;;
+
+  module Private = struct
+    let create ~schedule =
+      { schedule
+      ; pending = Hashtbl.create 16
+      ; operations = Queue.create ()
+      ; subscribers = []
+      ; next_request_id = 1L
+      ; next_operation_id = 1L
+      ; shutdown_error = None
+      }
+    ;;
+
+    module Validated_input = struct
+      type nonrec t =
+        { owner : t
+        ; request_id : int64 option
+        ; still_current : unit -> bool
+        ; apply : unit -> unit
+        }
+
+      let request_id t = t.request_id
+    end
+
+    let typed_error (error : Protocol.Inbound_event.application_error) =
+      match error.code with
+      | Protocol.Inbound_event.Unavailable -> Unavailable
+      | Payload_too_large -> Payload_too_large
+      | Handler_failed -> Handler_failed error.message
+      | Cancelled -> Cancelled
+      | Shutdown -> Shutdown
+      | Runtime_replaced -> Runtime_replaced
+      | Invalid_response -> Invalid_response error.message
+    ;;
+
+    let validate_response t response_request_id result =
+      if Int64.compare response_request_id 0L <= 0
+      then Error "application request ID must be positive"
+      else (
+        match Hashtbl.find_opt t.pending response_request_id with
+        | None ->
+          Error (Printf.sprintf "unknown application request ID %Ld" response_request_id)
+        | Some pending ->
+          Ok
+            Validated_input.
+              { owner = t
+              ; request_id = Some response_request_id
+              ; still_current =
+                  (fun () ->
+                    match Hashtbl.find_opt t.pending response_request_id with
+                    | Some current -> current == pending
+                    | None -> false)
+              ; apply =
+                  (fun () ->
+                    Hashtbl.remove t.pending response_request_id;
+                    Option.iter
+                      (fun (cancellation : Cancellation.t) ->
+                         cancellation.cancel_active <- None)
+                      pending.cancellation;
+                    respond t pending.callback result)
+              })
+    ;;
+
+    let validate_input t = function
+      | Protocol.Inbound_event.Application_response { request_id; payload } ->
+        if Bytes.length payload > maximum_payload_bytes
+        then Error "application response exceeds the payload limit"
+        else validate_response t request_id (Ok (Bytes.copy payload))
+      | Application_request_error { request_id; error } ->
+        validate_response t request_id (Error (typed_error error))
+      | Application_event payload ->
+        if Bytes.length payload > maximum_payload_bytes
+        then Error "application event exceeds the payload limit"
+        else (
+          let payload = Bytes.copy payload in
+          let subscribers = t.subscribers in
+          Ok
+            Validated_input.
+              { owner = t
+              ; request_id = None
+              ; still_current = (fun () -> Option.is_none t.shutdown_error)
+              ; apply =
+                  (fun () ->
+                    List.iter
+                      (fun subscriber -> t.schedule (subscriber (Bytes.copy payload)))
+                      subscribers)
+              })
+      | _ -> Error "payload is not an application platform control"
+    ;;
+
+    let resolve_validated t (validated : Validated_input.t) =
+      if not (validated.owner == t)
+      then Error "validated application input belongs to another manager"
+      else if not (validated.still_current ())
+      then Error "stale application platform input"
+      else (
+        validated.apply ();
+        Ok ())
+    ;;
+
+    let shutdown t error =
+      if Option.is_none t.shutdown_error
+      then (
+        t.shutdown_error <- Some error;
+        Hashtbl.iter
+          (fun _ pending ->
+             Option.iter
+               (fun (cancellation : Cancellation.t) -> cancellation.cancel_active <- None)
+               pending.cancellation;
+             respond t pending.callback (Error error))
+          t.pending;
+        Hashtbl.clear t.pending;
+        Queue.clear t.operations;
+        t.subscribers <- [])
+    ;;
+
+    let pending_count t = Hashtbl.length t.pending
+  end
+end
+
 type pending =
   | Pending :
       { decode : bytes -> ('a, error) result

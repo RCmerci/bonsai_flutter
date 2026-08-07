@@ -8,6 +8,7 @@ module Context : sig
 
   val environment : t -> Environment.snapshot Bonsai.Cont.t
   val host_effects : t -> Host_effect.t
+  val application_platform : t -> Host_effect.Application_platform.t
 
   val event_handler
     :  t

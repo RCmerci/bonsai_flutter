@@ -17,6 +17,9 @@ final class _ApplicationAdapter implements BonsaiFlutterHostAdapter {
   }
 
   @override
+  BonsaiFlutterApplicationPlatform? createApplicationPlatform() => null;
+
+  @override
   Widget buildHost({required BuildContext context, required Widget child}) =>
       Directionality(
         textDirection: TextDirection.ltr,
@@ -31,7 +34,9 @@ void main() {
   testWidgets('adapter provides async payload and application-owned services', (
     tester,
   ) async {
-    final adapter = _ApplicationAdapter(Uint8List.fromList([0, 1, 255]));
+    final BonsaiFlutterHostAdapter adapter = _ApplicationAdapter(
+      Uint8List.fromList([0, 1, 255]),
+    );
 
     expect(await adapter.createApplicationPayload(), [0, 1, 255]);
     await tester.pumpWidget(
@@ -43,7 +48,8 @@ void main() {
       ),
     );
 
-    expect(adapter.payloadRequests, 1);
+    expect((adapter as _ApplicationAdapter).payloadRequests, 1);
+    expect(adapter.createApplicationPlatform(), isNull);
     expect(find.byKey(const Key('application-services')), findsOneWidget);
     expect(find.byKey(const Key('generated-host')), findsOneWidget);
   });

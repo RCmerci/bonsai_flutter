@@ -20,6 +20,7 @@ type limits =
   { header_bytes : int
   ; max_frame_bytes : int
   ; max_string_bytes : int
+  ; max_application_payload_bytes : int
   ; max_operations : int
   ; max_nodes : int
   }

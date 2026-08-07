@@ -2,6 +2,10 @@ import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 
+import '../application_platform/application_platform.dart';
+
+export '../application_platform/application_platform.dart';
+
 /// Application-owned behavior used by a generated Bonsai Flutter host.
 ///
 /// Implementations create the opaque application payload asynchronously. They
@@ -9,6 +13,8 @@ import 'package:flutter/widgets.dart';
 /// lifecycle services. The host owns the runtime envelope and root widget.
 abstract interface class BonsaiFlutterHostAdapter {
   Future<Uint8List> createApplicationPayload();
+
+  BonsaiFlutterApplicationPlatform? createApplicationPlatform();
 
   Widget buildHost({required BuildContext context, required Widget child});
 }

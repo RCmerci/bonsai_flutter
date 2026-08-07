@@ -17,6 +17,7 @@ type error_code =
   | Invalid_operation_order
   | Truncated_input
   | Trailing_bytes
+  | Application_payload_too_large
 
 type error =
   { code : error_code
@@ -1327,6 +1328,21 @@ let write_operation ?(record_runtime_stats_offsets = fun _ -> ()) payload = func
     Writer.u64 body request_id;
     Writer.u16 body 0;
     envelope payload Generated_protocol.Operation.host_request body
+  | Application_request { request_id; payload = application_payload } ->
+    if Int64.compare request_id 0L <= 0
+    then fail Invalid_props "application request ID must be positive";
+    let payload_length = Bytes.length application_payload in
+    if payload_length > Generated_protocol.Limits.max_application_payload_bytes
+    then
+      fail
+        Application_payload_too_large
+        "application request payload is %d bytes"
+        payload_length;
+    let body = Writer.create () in
+    Writer.u64 body request_id;
+    Writer.u32 body payload_length;
+    Writer.bytes body application_payload;
+    envelope payload Generated_protocol.Operation.application_request body
   | Runtime_stats stats ->
     let body = Writer.create () in
     check_u32 "event batch size" stats.event_batch_size;
@@ -2397,6 +2413,19 @@ let read_operation opcode body ~protocol_minor =
         ; full_snapshot_count
         ; resync_count
         })
+    else if opcode = Generated_protocol.Operation.application_request
+    then (
+      let request_id = Reader.u64 body in
+      if Int64.compare request_id 0L <= 0
+      then fail Invalid_props "application request ID must be positive";
+      let payload_length = Reader.u32 body in
+      if payload_length > Generated_protocol.Limits.max_application_payload_bytes
+      then
+        fail
+          Application_payload_too_large
+          "application request payload is %d bytes"
+          payload_length;
+      Application_request { request_id; payload = Reader.bytes body payload_length })
     else
       fail Unknown_operation "unknown operation %d" (ID.Protocol.Operation.to_int opcode)
   in

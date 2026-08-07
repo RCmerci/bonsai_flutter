@@ -213,8 +213,10 @@ final class NodeStore {
           }
           dropped.add(operation.nodeId);
           dirty.remove(operation.nodeId);
-        case HostRequestOperation() || CancelHostRequestOperation():
-        // Host effects are consumed by HostEffectDispatcher, outside the
+        case HostRequestOperation() ||
+            CancelHostRequestOperation() ||
+            ApplicationRequestOperation():
+        // Platform requests are consumed by their dispatchers, outside the
         // renderer's atomic node transaction.
         case RuntimeStatsOperation():
         // Debug instrumentation is consumed after frame decode and never

@@ -12,6 +12,7 @@ type error_code =
   | Invalid_utf8
   | Truncated_input
   | Trailing_bytes
+  | Application_payload_too_large
 
 type error =
   { code : error_code

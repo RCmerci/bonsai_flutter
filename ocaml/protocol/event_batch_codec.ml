@@ -12,6 +12,7 @@ type error_code =
   | Invalid_utf8
   | Truncated_input
   | Trailing_bytes
+  | Application_payload_too_large
 
 type error =
   { code : error_code
@@ -23,6 +24,8 @@ exception Decode_error of error
 let fail code format =
   Printf.ksprintf (fun message -> raise (Decode_error { code; message })) format
 ;;
+
+let maximum_application_error_bytes = 4096
 
 module Reader = struct
   type t =
@@ -390,6 +393,45 @@ let read_payload reader event_tag =
     if value_length < 0 then fail Truncated_input "negative host response length";
     let value = Reader.bytes reader value_length in
     Host_response { request_id; status; value })
+  else if event_tag = Generated_protocol.Event_tag.application_response
+  then (
+    let request_id = Reader.u64 reader in
+    if Int64.compare request_id 0L <= 0
+    then fail Invalid_payload "application request ID must be positive";
+    let payload_length = Reader.u32 reader in
+    if payload_length > Generated_protocol.Limits.max_application_payload_bytes
+    then
+      fail Application_payload_too_large "application response is %d bytes" payload_length;
+    Application_response { request_id; payload = Reader.bytes reader payload_length })
+  else if event_tag = Generated_protocol.Event_tag.application_request_error
+  then (
+    let request_id = Reader.u64 reader in
+    if Int64.compare request_id 0L <= 0
+    then fail Invalid_payload "application request ID must be positive";
+    let code =
+      match Reader.u8 reader with
+      | 1 -> Inbound_event.Unavailable
+      | 2 -> Payload_too_large
+      | 3 -> Handler_failed
+      | 4 -> Cancelled
+      | 5 -> Shutdown
+      | 6 -> Runtime_replaced
+      | 7 -> Invalid_response
+      | value -> fail Invalid_payload "invalid application error code %d" value
+    in
+    let message_length = Reader.u32 reader in
+    if message_length > maximum_application_error_bytes
+    then fail Invalid_payload "application error is %d bytes" message_length;
+    let message = Reader.string reader message_length in
+    if not (validate_utf8 message)
+    then fail Invalid_utf8 "application error is not valid UTF-8";
+    Application_request_error { request_id; error = { code; message } })
+  else if event_tag = Generated_protocol.Event_tag.application_event
+  then (
+    let payload_length = Reader.u32 reader in
+    if payload_length > Generated_protocol.Limits.max_application_payload_bytes
+    then fail Application_payload_too_large "application event is %d bytes" payload_length;
+    Application_event (Reader.bytes reader payload_length))
   else if event_tag = Generated_protocol.Event_tag.environment_changed
   then (
     let viewport_width = read_finite_f64 reader in
@@ -650,6 +692,54 @@ let write_payload writer event_tag payload =
        | Host_cancelled -> 2);
     Writer.u32 writer (Bytes.length value);
     Writer.bytes writer value
+  | Application_response { request_id; payload } ->
+    if event_tag <> Generated_protocol.Event_tag.application_response
+    then fail Invalid_payload "application response payload does not match event tag";
+    if Int64.compare request_id 0L <= 0
+    then fail Invalid_payload "application request ID must be positive";
+    if Bytes.length payload > Generated_protocol.Limits.max_application_payload_bytes
+    then
+      fail
+        Application_payload_too_large
+        "application response is %d bytes"
+        (Bytes.length payload);
+    Writer.u64 writer request_id;
+    Writer.u32 writer (Bytes.length payload);
+    Writer.bytes writer payload
+  | Application_request_error { request_id; error } ->
+    if event_tag <> Generated_protocol.Event_tag.application_request_error
+    then fail Invalid_payload "application error payload does not match event tag";
+    if Int64.compare request_id 0L <= 0
+    then fail Invalid_payload "application request ID must be positive";
+    if String.length error.message > maximum_application_error_bytes
+    then
+      fail Invalid_payload "application error is %d bytes" (String.length error.message);
+    if not (validate_utf8 error.message)
+    then fail Invalid_utf8 "application error is not valid UTF-8";
+    Writer.u64 writer request_id;
+    Writer.u8
+      writer
+      (match error.code with
+       | Unavailable -> 1
+       | Payload_too_large -> 2
+       | Handler_failed -> 3
+       | Cancelled -> 4
+       | Shutdown -> 5
+       | Runtime_replaced -> 6
+       | Invalid_response -> 7);
+    Writer.u32 writer (String.length error.message);
+    Writer.string writer error.message
+  | Application_event payload ->
+    if event_tag <> Generated_protocol.Event_tag.application_event
+    then fail Invalid_payload "application event payload does not match event tag";
+    if Bytes.length payload > Generated_protocol.Limits.max_application_payload_bytes
+    then
+      fail
+        Application_payload_too_large
+        "application event is %d bytes"
+        (Bytes.length payload);
+    Writer.u32 writer (Bytes.length payload);
+    Writer.bytes writer payload
   | Environment_changed environment ->
     if event_tag <> Generated_protocol.Event_tag.environment_changed
     then fail Invalid_payload "environment payload does not match event tag";

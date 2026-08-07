@@ -141,6 +141,9 @@ final class ApplicationHostAdapter implements BonsaiFlutterHostAdapter {
   Future<Uint8List> createApplicationPayload() async => Uint8List(0);
 
   @override
+  BonsaiFlutterApplicationPlatform? createApplicationPlatform() => null;
+
+  @override
   Widget buildHost({
     required BuildContext context,
     required Widget child,

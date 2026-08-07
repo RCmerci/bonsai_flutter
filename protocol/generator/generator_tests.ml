@@ -28,8 +28,11 @@ let load_schema () =
 let test_schema_values () =
   let schema = load_schema () in
   expect (schema.major = 1) "unexpected protocol major";
-  expect (schema.minor = 15) "unexpected protocol minor";
+  expect (schema.minor = 16) "unexpected protocol minor";
   expect (schema.limits.header_bytes = 48) "unexpected header size";
+  expect
+    (schema.limits.max_application_payload_bytes = 1_048_576)
+    "unexpected application payload limit";
   expect
     (List.exists
        (fun (entry : Schema.entry) ->
@@ -73,15 +76,29 @@ let test_schema_values () =
        (fun (entry : Schema.entry) ->
           String.equal entry.name "text_limit_reached" && entry.id = 24)
        schema.event_tags)
-    "text input limit event schema was not parsed"
+    "text input limit event schema was not parsed";
+  expect
+    (List.exists
+       (fun (entry : Schema.entry) ->
+          String.equal entry.name "application_request" && entry.id = 11)
+       schema.operations)
+    "application request operation schema was not parsed";
+  [ "application_response", 25; "application_request_error", 26; "application_event", 27 ]
+  |> List.iter (fun (name, id) ->
+    expect
+      (List.exists
+         (fun (entry : Schema.entry) -> String.equal entry.name name && entry.id = id)
+         schema.event_tags)
+      "%s event schema was not parsed"
+      name)
 ;;
 
 let test_duplicate_ids_are_rejected () =
   let duplicate_schema =
     "((protocol (major 1) (minor 0) (header_bytes 48) (max_frame_bytes 1) \
-     (max_string_bytes 1) (max_operations 1) (max_nodes 1)) (frame_kinds ((a 1) (b 1))) \
-     (operations ()) (node_kinds ()) (event_tags ()) (host_requests ()) (runtime_errors \
-     ()))"
+     (max_string_bytes 1) (max_application_payload_bytes 1) (max_operations 1) \
+     (max_nodes 1)) (frame_kinds ((a 1) (b 1))) (operations ()) (node_kinds ()) \
+     (event_tags ()) (host_requests ()) (runtime_errors ()))"
   in
   match Schema.parse duplicate_schema with
   | Ok _ -> fail "duplicate IDs unexpectedly parsed"
@@ -114,6 +131,18 @@ let test_all_targets_are_rendered_from_one_model () =
     "val host_response : Bonsai_flutter_spec.Id.Protocol.event_tag";
   expect_contains
     outputs.ocaml_interface
+    "val application_request : Bonsai_flutter_spec.Id.Protocol.operation";
+  expect_contains
+    outputs.ocaml_interface
+    "val application_response : Bonsai_flutter_spec.Id.Protocol.event_tag";
+  expect_contains
+    outputs.ocaml_interface
+    "val application_request_error : Bonsai_flutter_spec.Id.Protocol.event_tag";
+  expect_contains
+    outputs.ocaml_interface
+    "val application_event : Bonsai_flutter_spec.Id.Protocol.event_tag";
+  expect_contains
+    outputs.ocaml_interface
     "val clipboard_read : Bonsai_flutter_spec.Id.Protocol.host_request_kind";
   expect_contains
     outputs.ocaml_interface
@@ -132,6 +161,11 @@ let test_all_targets_are_rendered_from_one_model () =
   expect_contains outputs.dart "static const int hostResponse = 19;";
   expect_contains outputs.dart "static const int nativeEvent = 21;";
   expect_contains outputs.dart "static const int textLimitReached = 24;";
+  expect_contains outputs.dart "static const int applicationRequest = 11;";
+  expect_contains outputs.dart "static const int applicationResponse = 25;";
+  expect_contains outputs.dart "static const int applicationRequestError = 26;";
+  expect_contains outputs.dart "static const int applicationEvent = 27;";
+  expect_contains outputs.dart "static const int maxApplicationPayloadBytes = 1048576;";
   expect_contains outputs.dart "static const int nativeWidget = 128;";
   expect_contains outputs.dart "abstract final class PagePropId";
   expect_contains outputs.dart "static String? debugName(int id)";

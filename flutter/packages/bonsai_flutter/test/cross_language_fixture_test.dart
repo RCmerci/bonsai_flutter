@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:test/test.dart';
 
@@ -118,6 +120,74 @@ void main() {
             HostRequestOperation(
               requestId: 41,
               request: ClipboardWriteRequest('剪贴板😀'),
+            ),
+          ],
+        ),
+      );
+    });
+
+    test('decodes an opaque application request byte for byte', () {
+      final frame = decodeOcamlFixture('ocaml_application_request.hex');
+
+      expect(frame.runtimeEpoch, 41);
+      expect(frame.baseRevision, 8);
+      expect(frame.targetRevision, 9);
+      final operation = frame.operations.single as ApplicationRequestOperation;
+      expect(operation.requestId, 501);
+      expect(operation.payload, [
+        0,
+        111,
+        112,
+        97,
+        113,
+        117,
+        101,
+        255,
+        97,
+        112,
+        112,
+        108,
+        105,
+        99,
+        97,
+        116,
+        105,
+        111,
+        110,
+        128,
+      ]);
+      expectFixtureMatchesDartEncoding(
+        'ocaml_application_request.hex',
+        Frame(
+          runtimeEpoch: 41,
+          baseRevision: 8,
+          targetRevision: 9,
+          kind: FrameKind.incremental,
+          operations: [
+            ApplicationRequestOperation(
+              requestId: 501,
+              payload: Uint8List.fromList([
+                0,
+                111,
+                112,
+                97,
+                113,
+                117,
+                101,
+                255,
+                97,
+                112,
+                112,
+                108,
+                105,
+                99,
+                97,
+                116,
+                105,
+                111,
+                110,
+                128,
+              ]),
             ),
           ],
         ),

@@ -792,3 +792,428 @@ let test_handler_dependencies_control_identity () =
 ;;
 
 let () = test_handler_dependencies_control_identity ()
+
+let application_platform_component
+      ~platform_ref
+      ~first_cancellation
+      ~request_results
+      ~application_events
+      handlers
+      _graph
+  =
+  let platform = Driver.Handler.application_platform handlers in
+  platform_ref := Some platform;
+  Host_effect.Application_platform.on_event platform (fun payload ->
+    Bonsai.Effect.of_thunk (fun () ->
+      application_events := !application_events @ [ Bytes.copy payload ]));
+  let request ?cancellation label payload =
+    Driver.Handler.create
+      handlers
+      ~name:("application-request-" ^ label)
+      ~equal:( == )
+      (Bonsai.Cont.return ())
+      ~f:(fun () _ ->
+        Bonsai.Effect.bind
+          (Host_effect.Application_platform.request ?cancellation platform payload)
+          ~f:(fun result ->
+            Bonsai.Effect.of_thunk (fun () ->
+              request_results := !request_results @ [ label, result ])))
+  in
+  let first =
+    request ~cancellation:first_cancellation "first" (Bytes.of_string "\000one\255")
+  in
+  let second = request "second" (Bytes.of_string "\128two\000") in
+  Bonsai.Cont.map2 first second ~f:(fun first second ->
+    Ui.Widget.column
+      [ Ui.Widget.button ~on_press:first ~child:(Ui.Widget.text "First") ()
+      ; Ui.Material.text_button ~on_press:second ~child:(Ui.Widget.text "Second") ()
+      ])
+;;
+
+let application_control_event ~sequence ~revision ~event_tag payload =
+  Protocol.Inbound_event.
+    { sequence
+    ; displayed_revision = revision
+    ; node_id = ID.Ui.Node_id.zero
+    ; handler_id = ID.Ui.Handler_id.zero
+    ; event_tag
+    ; payload
+    }
+;;
+
+let test_application_platform_requests_events_and_cancellation () =
+  let runtime_epoch = ID.Runtime.Epoch.of_int64 97L in
+  let platform_ref = ref None in
+  let request_results = ref [] in
+  let application_events = ref [] in
+  let cancellation = Host_effect.Application_platform.Cancellation.create () in
+  let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
+  let driver =
+    Driver.create
+      ~runtime_epoch
+      ~time_source
+      (application_platform_component
+         ~platform_ref
+         ~first_cancellation:cancellation
+         ~request_results
+         ~application_events)
+  in
+  let initial =
+    match ok (pump driver ()) with
+    | Some frame -> frame
+    | None -> fail "application platform component did not mount"
+  in
+  let initial_wire = decode_frame initial.bytes in
+  let first_node, first_binding =
+    find_single_binding_for_kind initial_wire Protocol.Wire_frame.Button
+  in
+  let second_node, second_binding =
+    find_single_binding_for_kind initial_wire Protocol.Wire_frame.Material_text_button
+  in
+  ok (present driver ~revision:initial.revision);
+  let presses =
+    Protocol.Inbound_event.
+      { runtime_epoch
+      ; events =
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 1L
+            ; displayed_revision = initial.revision
+            ; node_id = first_node
+            ; handler_id = first_binding.Protocol.Wire_frame.handler_id
+            ; event_tag = first_binding.event_tag
+            ; payload = Unit
+            }
+          ; { sequence = ID.Runtime.Event_sequence.of_int64 2L
+            ; displayed_revision = initial.revision
+            ; node_id = second_node
+            ; handler_id = second_binding.Protocol.Wire_frame.handler_id
+            ; event_tag = second_binding.event_tag
+            ; payload = Unit
+            }
+          ]
+      }
+  in
+  let requests =
+    match ok (pump driver ~events:presses ()) with
+    | Some frame -> frame
+    | None -> fail "concurrent application requests emitted no frame"
+  in
+  let request_operations = semantic_operations (decode_frame requests.bytes) in
+  let first_request_id, second_request_id =
+    match request_operations with
+    | [ Protocol.Wire_frame.Application_request first
+      ; Protocol.Wire_frame.Application_request second
+      ] ->
+      require
+        (Bytes.equal first.payload (Bytes.of_string "\000one\255"))
+        "first application request bytes changed";
+      require
+        (Bytes.equal second.payload (Bytes.of_string "\128two\000"))
+        "second application request bytes changed";
+      first.request_id, second.request_id
+    | operations ->
+      fail "expected two application requests, got %d operations" (List.length operations)
+  in
+  let platform =
+    match !platform_ref with
+    | Some platform -> platform
+    | None -> fail "component did not expose the application platform"
+  in
+  require
+    (Host_effect.Application_platform.Private.pending_count platform = 2)
+    "concurrent application requests were not retained";
+  ok (present driver ~revision:requests.revision);
+  let response_two = Bytes.of_string "two-response\255" in
+  let response_one = Bytes.of_string "one-response\000" in
+  let inbound =
+    Protocol.Inbound_event.
+      { runtime_epoch
+      ; events =
+          [ application_control_event
+              ~sequence:(ID.Runtime.Event_sequence.of_int64 3L)
+              ~revision:requests.revision
+              ~event_tag:Protocol.Generated_protocol.Event_tag.application_response
+              (Application_response
+                 { request_id = second_request_id; payload = response_two })
+          ; application_control_event
+              ~sequence:(ID.Runtime.Event_sequence.of_int64 4L)
+              ~revision:requests.revision
+              ~event_tag:Protocol.Generated_protocol.Event_tag.application_response
+              (Application_response
+                 { request_id = first_request_id; payload = response_one })
+          ; application_control_event
+              ~sequence:(ID.Runtime.Event_sequence.of_int64 5L)
+              ~revision:requests.revision
+              ~event_tag:Protocol.Generated_protocol.Event_tag.application_event
+              (Application_event (Bytes.of_string "event-1"))
+          ; application_control_event
+              ~sequence:(ID.Runtime.Event_sequence.of_int64 6L)
+              ~revision:requests.revision
+              ~event_tag:Protocol.Generated_protocol.Event_tag.application_event
+              (Application_event (Bytes.of_string "event-2"))
+          ]
+      }
+  in
+  let response_result = ok (pump_result driver ~events:inbound ()) in
+  Bytes.fill response_one 0 (Bytes.length response_one) '\000';
+  Bytes.fill response_two 0 (Bytes.length response_two) '\000';
+  (match !request_results with
+   | [ ("second", Ok second); ("first", Ok first) ] ->
+     require
+       (Bytes.equal second (Bytes.of_string "two-response\255"))
+       "second response cross-correlated or aliased";
+     require
+       (Bytes.equal first (Bytes.of_string "one-response\000"))
+       "first response cross-correlated or aliased"
+   | _ -> fail "concurrent application responses were not correlated");
+  require
+    (!application_events = [ Bytes.of_string "event-1"; Bytes.of_string "event-2" ])
+    "application events were reordered";
+  require
+    (Host_effect.Application_platform.Private.pending_count platform = 0)
+    "completed application requests remained pending";
+  ok (present driver ~revision:response_result.renderer_revision);
+  let third_press =
+    Protocol.Inbound_event.
+      { runtime_epoch
+      ; events =
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 7L
+            ; displayed_revision = response_result.renderer_revision
+            ; node_id = first_node
+            ; handler_id = first_binding.handler_id
+            ; event_tag = first_binding.event_tag
+            ; payload = Unit
+            }
+          ]
+      }
+  in
+  let cancelled_request =
+    match ok (pump driver ~events:third_press ()) with
+    | Some frame -> frame
+    | None -> fail "cancellable application request emitted no frame"
+  in
+  ok (present driver ~revision:cancelled_request.revision);
+  Host_effect.Application_platform.Cancellation.cancel cancellation;
+  let cancelled_result = ok (pump_result driver ()) in
+  (match List.rev !request_results with
+   | ("first", Error Host_effect.Application_platform.Cancelled) :: _ -> ()
+   | _ -> fail "application request cancellation returned the wrong result");
+  require
+    (Host_effect.Application_platform.Private.pending_count platform = 0)
+    "cancelled application request remained pending";
+  ok (present driver ~revision:cancelled_result.renderer_revision);
+  Driver.shutdown driver
+;;
+
+let () = test_application_platform_requests_events_and_cancellation ()
+
+let single_application_request_component ~platform_ref ~payload ~results handlers _graph =
+  let platform = Driver.Handler.application_platform handlers in
+  platform_ref := Some platform;
+  Driver.Handler.create
+    handlers
+    ~name:"single-application-request"
+    ~equal:( == )
+    (Bonsai.Cont.return ())
+    ~f:(fun () _ ->
+      Bonsai.Effect.bind
+        (Host_effect.Application_platform.request platform payload)
+        ~f:(fun result ->
+          Bonsai.Effect.of_thunk (fun () -> results := !results @ [ result ])))
+  |> Bonsai.Cont.map ~f:(fun handler ->
+    Ui.Widget.button ~on_press:handler ~child:(Ui.Widget.text "Request") ())
+;;
+
+let start_single_application_request driver runtime_epoch =
+  let initial =
+    match ok (pump driver ()) with
+    | Some frame -> frame
+    | None -> fail "single application request component did not mount"
+  in
+  let node_id, event_tag, handler_id = find_button_binding (decode_frame initial.bytes) in
+  ok (present driver ~revision:initial.revision);
+  let press =
+    Protocol.Inbound_event.
+      { runtime_epoch
+      ; events =
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 1L
+            ; displayed_revision = initial.revision
+            ; node_id
+            ; handler_id
+            ; event_tag
+            ; payload = Unit
+            }
+          ]
+      }
+  in
+  initial, ok (pump_result driver ~events:press ())
+;;
+
+let test_application_platform_bounds_errors_and_recoverable_traffic () =
+  let runtime_epoch = ID.Runtime.Epoch.of_int64 98L in
+  let platform_ref = ref None in
+  let results = ref [] in
+  let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
+  let driver =
+    Driver.create
+      ~runtime_epoch
+      ~time_source
+      (single_application_request_component
+         ~platform_ref
+         ~payload:(Bytes.of_string "request")
+         ~results)
+  in
+  let _, request_result = start_single_application_request driver runtime_epoch in
+  let request_frame =
+    match request_result.frame with
+    | Some frame -> frame
+    | None -> fail "single application request emitted no frame"
+  in
+  let request_id =
+    match semantic_operations (decode_frame request_frame.bytes) with
+    | [ Protocol.Wire_frame.Application_request request ] -> request.request_id
+    | _ -> fail "single application request emitted unexpected operations"
+  in
+  ok (present driver ~revision:request_result.renderer_revision);
+  let unavailable =
+    Protocol.Inbound_event.
+      { runtime_epoch
+      ; events =
+          [ application_control_event
+              ~sequence:(ID.Runtime.Event_sequence.of_int64 2L)
+              ~revision:request_result.renderer_revision
+              ~event_tag:Protocol.Generated_protocol.Event_tag.application_request_error
+              (Application_request_error
+                 { request_id; error = { code = Unavailable; message = "" } })
+          ]
+      }
+  in
+  let unavailable_result = ok (pump_result driver ~events:unavailable ()) in
+  (match !results with
+   | [ Error Host_effect.Application_platform.Unavailable ] -> ()
+   | _ -> fail "unavailable bridge returned the wrong typed error");
+  ok (present driver ~revision:unavailable_result.renderer_revision);
+  let unknown =
+    Protocol.Inbound_event.
+      { runtime_epoch
+      ; events =
+          [ application_control_event
+              ~sequence:(ID.Runtime.Event_sequence.of_int64 3L)
+              ~revision:unavailable_result.renderer_revision
+              ~event_tag:Protocol.Generated_protocol.Event_tag.application_response
+              (Application_response
+                 { request_id = Int64.succ request_id; payload = Bytes.empty })
+          ]
+      }
+  in
+  let unknown_result = ok (pump_result driver ~events:unknown ()) in
+  require
+    (Option.is_some unknown_result.recoverable_error)
+    "unknown application response was not recoverable";
+  ok (present driver ~revision:unknown_result.renderer_revision);
+  let stale =
+    Protocol.Inbound_event.
+      { runtime_epoch = ID.Runtime.Epoch.of_int64 981L
+      ; events =
+          [ application_control_event
+              ~sequence:(ID.Runtime.Event_sequence.of_int64 4L)
+              ~revision:unknown_result.renderer_revision
+              ~event_tag:Protocol.Generated_protocol.Event_tag.application_event
+              (Application_event (Bytes.of_string "stale"))
+          ]
+      }
+  in
+  let stale_result = ok (pump_result driver ~events:stale ()) in
+  (match stale_result.recoverable_error with
+   | Some (Driver.Application_platform_error _) -> ()
+   | _ -> fail "stale application event was not a recoverable bridge error");
+  ok (present driver ~revision:stale_result.renderer_revision);
+  let clean_result = ok (pump_result driver ()) in
+  require
+    (Option.is_none clean_result.recoverable_error)
+    "malformed application traffic terminated the driver";
+  ok (present driver ~revision:clean_result.renderer_revision);
+  Driver.shutdown driver;
+  let oversized_results = ref [] in
+  let oversized_platform = ref None in
+  let oversized_driver =
+    Driver.create
+      ~runtime_epoch:(ID.Runtime.Epoch.of_int64 99L)
+      ~time_source:(Bonsai.Time_source.create ~start:Core.Time_ns.epoch)
+      (single_application_request_component
+         ~platform_ref:oversized_platform
+         ~payload:
+           (Bytes.make
+              (Host_effect.Application_platform.maximum_payload_bytes + 1)
+              '\000')
+         ~results:oversized_results)
+  in
+  let _, oversized_result =
+    start_single_application_request oversized_driver (ID.Runtime.Epoch.of_int64 99L)
+  in
+  require (Option.is_none oversized_result.frame) "oversized request emitted bytes";
+  (match !oversized_results with
+   | [ Error Host_effect.Application_platform.Payload_too_large ] -> ()
+   | _ -> fail "oversized request returned the wrong typed error");
+  ok (present oversized_driver ~revision:oversized_result.renderer_revision);
+  Driver.shutdown oversized_driver
+;;
+
+let test_application_platform_runtime_replacement_resolves_pending () =
+  let runtime_epoch = ID.Runtime.Epoch.of_int64 100L in
+  let platform_ref = ref None in
+  let results = ref [] in
+  let driver =
+    Driver.create
+      ~runtime_epoch
+      ~time_source:(Bonsai.Time_source.create ~start:Core.Time_ns.epoch)
+      (single_application_request_component
+         ~platform_ref
+         ~payload:(Bytes.of_string "pending")
+         ~results)
+  in
+  let _, request_result = start_single_application_request driver runtime_epoch in
+  let platform = Option.get !platform_ref in
+  ok (present driver ~revision:request_result.renderer_revision);
+  Host_effect.Application_platform.Private.shutdown
+    platform
+    Host_effect.Application_platform.Runtime_replaced;
+  let replacement_result = ok (pump_result driver ()) in
+  (match !results with
+   | [ Error Host_effect.Application_platform.Runtime_replaced ] -> ()
+   | _ -> fail "runtime replacement did not resolve the pending request");
+  require
+    (Host_effect.Application_platform.Private.pending_count platform = 0)
+    "runtime replacement retained pending requests";
+  ok (present driver ~revision:replacement_result.renderer_revision);
+  Driver.shutdown driver
+;;
+
+let test_application_platform_shutdown_resolves_pending () =
+  let runtime_epoch = ID.Runtime.Epoch.of_int64 101L in
+  let platform_ref = ref None in
+  let results = ref [] in
+  let driver =
+    Driver.create
+      ~runtime_epoch
+      ~time_source:(Bonsai.Time_source.create ~start:Core.Time_ns.epoch)
+      (single_application_request_component
+         ~platform_ref
+         ~payload:(Bytes.of_string "pending-at-shutdown")
+         ~results)
+  in
+  let _, request_result = start_single_application_request driver runtime_epoch in
+  ok (present driver ~revision:request_result.renderer_revision);
+  Driver.shutdown driver;
+  (match !results with
+   | [ Error Host_effect.Application_platform.Shutdown ] -> ()
+   | _ -> fail "shutdown did not resolve the pending application request");
+  require
+    (Driver.For_testing.pending_application_request_count driver = 0)
+    "shutdown retained pending application requests"
+;;
+
+let () =
+  test_application_platform_bounds_errors_and_recoverable_traffic ();
+  test_application_platform_runtime_replacement_resolves_pending ();
+  test_application_platform_shutdown_resolves_pending ()
+;;

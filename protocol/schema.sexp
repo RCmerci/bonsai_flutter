@@ -1,11 +1,12 @@
 ((protocol
   (name bonsai_flutter)
   (major 1)
-  (minor 15)
+  (minor 16)
   (endianness little)
   (header_bytes 48)
   (max_frame_bytes 16777216)
   (max_string_bytes 1048576)
+  (max_application_payload_bytes 1048576)
   (max_operations 1000000)
   (max_nodes 1000000))
 
@@ -26,7 +27,8 @@
    (drop_node 7)
    (host_request 8)
    (runtime_notification 9)
-   (end_frame 10)))
+   (end_frame 10)
+   (application_request 11)))
 
  (node_kinds
   ((empty 1)
@@ -276,7 +278,10 @@
    (native_event 21 native_event)
    (semantics_action 22 u64)
    (resync_requested 23 unit)
-   (text_limit_reached 24 unit)))
+   (text_limit_reached 24 unit)
+   (application_response 25 application_response)
+   (application_request_error 26 application_request_error)
+   (application_event 27 application_event)))
 
  (host_requests
   ((clipboard_read 1 unit string_result)

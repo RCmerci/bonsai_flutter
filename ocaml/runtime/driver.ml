@@ -8,6 +8,7 @@ module Handler = struct
     { pending_effects : unit Bonsai.Effect.t Queue.t
     ; pending_before_display : (unit, unit) Bonsai.Effect.Private.Callback.t Queue.t
     ; host_effects : Host_effect.t
+    ; application_platform : Host_effect.Application_platform.t
     ; environment : Environment.t
     }
 
@@ -28,6 +29,7 @@ module Handler = struct
   ;;
 
   let host_effects t = t.host_effects
+  let application_platform t = t.application_platform
   let environment t = t.environment
 
   let wait_before_display t =
@@ -51,6 +53,7 @@ type error =
   | Invalid_state of string
   | Lifecycle_error of string
   | Host_response_error of string
+  | Application_platform_error of string
   | Shutdown
 
 type pump_result =
@@ -79,6 +82,7 @@ let error_to_string = function
   | Invalid_state message -> "invalid driver state: " ^ message
   | Lifecycle_error message -> "lifecycle failed: " ^ message
   | Host_response_error message -> "host response failed: " ^ message
+  | Application_platform_error message -> "application platform failed: " ^ message
   | Shutdown -> "driver is shut down"
 ;;
 
@@ -88,6 +92,8 @@ type pending_presentation =
   ; candidate_tree : Runtime.Mounted_tree.t
   ; candidate_handler_frame : Runtime.Handler_registry.Frame.t option
   ; prepared_host_operations : Host_effect.Prepared_operations.t
+  ; prepared_application_operations :
+      Host_effect.Application_platform.Prepared_operations.t
   ; emitted_frame : frame option
   }
 
@@ -103,6 +109,7 @@ type t =
   ; handlers : Runtime.Handler_registry.t
   ; pending_effects : Handler.t
   ; host_effects : Host_effect.t
+  ; application_platform : Host_effect.Application_platform.t
   ; environment : Environment.t
   ; mutable displayed_tree : Runtime.Mounted_tree.t option
   ; mutable displayed_handler_frame : Runtime.Handler_registry.Frame.t option
@@ -137,12 +144,17 @@ let create
     Host_effect.Private.create ~schedule:(fun scheduled_effect ->
       Queue.add scheduled_effect pending_queue)
   in
+  let application_platform_manager =
+    Host_effect.Application_platform.Private.create ~schedule:(fun scheduled_effect ->
+      Queue.add scheduled_effect pending_queue)
+  in
   let environment_input = Environment.Private.create () in
   let pending_effects =
     Handler.
       { pending_effects = pending_queue
       ; pending_before_display
       ; host_effects = host_effect_manager
+      ; application_platform = application_platform_manager
       ; environment = environment_input
       }
   in
@@ -158,6 +170,7 @@ let create
   ; handlers = Runtime.Handler_registry.create ~runtime_epoch
   ; pending_effects
   ; host_effects = host_effect_manager
+  ; application_platform = application_platform_manager
   ; environment = environment_input
   ; displayed_tree = None
   ; displayed_handler_frame = None
@@ -699,6 +712,7 @@ let operation_summary operations =
   let drop_node = ref 0 in
   let host_request = ref 0 in
   let cancel_host_request = ref 0 in
+  let application_request = ref 0 in
   List.iter
     (function
       | Protocol.Wire_frame.Create_node _ -> incr create_node
@@ -709,11 +723,12 @@ let operation_summary operations =
       | Drop_node _ -> incr drop_node
       | Host_request _ -> incr host_request
       | Cancel_host_request _ -> incr cancel_host_request
+      | Application_request _ -> incr application_request
       | Runtime_stats _ -> ())
     operations;
   Printf.sprintf
     "createNode=%d updateProps=%d updateEventBindings=%d setChildren=%d setRoot=%d \
-     dropNode=%d hostRequest=%d cancelHostRequest=%d"
+     dropNode=%d hostRequest=%d cancelHostRequest=%d applicationRequest=%d"
     !create_node
     !update_props
     !update_event_bindings
@@ -722,6 +737,7 @@ let operation_summary operations =
     !drop_node
     !host_request
     !cancel_host_request
+    !application_request
 ;;
 
 type widget_change =
@@ -807,6 +823,8 @@ type produced_candidate =
   { candidate_tree : Runtime.Mounted_tree.t
   ; candidate_handler_frame : Runtime.Handler_registry.Frame.t option
   ; prepared_host_operations : Host_effect.Prepared_operations.t
+  ; prepared_application_operations :
+      Host_effect.Application_platform.Prepared_operations.t
   ; renderer_revision : ID.Runtime.renderer_revision
   ; emitted_frame : frame option
   }
@@ -841,12 +859,23 @@ let produce_candidate t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot 
       let host_operations =
         Host_effect.Prepared_operations.operations prepared_host_operations
       in
-      if Runtime.Frame_patch.is_empty output.frame_patch && host_operations = []
+      let prepared_application_operations =
+        Host_effect.Application_platform.prepare_operations t.application_platform
+      in
+      let application_operations =
+        Host_effect.Application_platform.Prepared_operations.operations
+          prepared_application_operations
+      in
+      if
+        Runtime.Frame_patch.is_empty output.frame_patch
+        && host_operations = []
+        && application_operations = []
       then
         Ok
           { candidate_tree = output.mounted_tree
           ; candidate_handler_frame = None
           ; prepared_host_operations
+          ; prepared_application_operations
           ; renderer_revision = t.displayed_revision
           ; emitted_frame = None
           }
@@ -854,7 +883,7 @@ let produce_candidate t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot 
         match wire_operations (Runtime.Frame_patch.operations output.frame_patch) with
         | Error _ as error -> error
         | Ok ui_operations ->
-          let operations = ui_operations @ host_operations in
+          let operations = ui_operations @ host_operations @ application_operations in
           let frame_kind = Runtime.Frame_patch.kind output.frame_patch in
           let base_revision =
             match frame_kind with
@@ -930,6 +959,7 @@ let produce_candidate t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot 
                   { candidate_tree = output.mounted_tree
                   ; candidate_handler_frame = Some output.handler_frame
                   ; prepared_host_operations
+                  ; prepared_application_operations
                   ; renderer_revision = target_revision
                   ; emitted_frame = Some frame
                   }))))
@@ -1013,6 +1043,15 @@ let payload_summary = function
       (ID.Host.Request_id.to_int64 response.request_id)
       (host_response_status_name response.status)
       (Bytes.length response.value)
+  | Application_response response ->
+    Printf.sprintf
+      "application_response(request=%Ld bytes=%d)"
+      response.request_id
+      (Bytes.length response.payload)
+  | Application_request_error response ->
+    Printf.sprintf "application_request_error(request=%Ld)" response.request_id
+  | Application_event payload ->
+    Printf.sprintf "application_event(bytes=%d)" (Bytes.length payload)
   | Environment_changed environment ->
     Printf.sprintf
       "environment_changed(platform=%S locale=%S viewport=%gx%g)"
@@ -1097,6 +1136,8 @@ let exception_message exception_ =
 
 type validated_control =
   | Validated_host_response of Host_effect.Private.Validated_response.t
+  | Validated_application_input of
+      Host_effect.Application_platform.Private.Validated_input.t
   | Validated_environment of Environment.snapshot
   | Validated_resync
 
@@ -1148,11 +1189,25 @@ let valid_environment (environment : Protocol.Inbound_event.environment) =
   && valid_insets environment.keyboard_insets
 ;;
 
+let is_application_platform_tag event_tag =
+  event_tag = Protocol.Generated_protocol.Event_tag.application_response
+  || event_tag = Protocol.Generated_protocol.Event_tag.application_request_error
+  || event_tag = Protocol.Generated_protocol.Event_tag.application_event
+;;
+
 let validate_input t (batch : Protocol.Inbound_event.batch) =
   if not (ID.Runtime.Epoch.equal batch.runtime_epoch t.runtime_epoch)
-  then Error (Host_response_error "runtime epoch mismatch")
+  then
+    if
+      List.exists
+        (fun (event : Protocol.Inbound_event.t) ->
+           is_application_platform_tag event.event_tag)
+        batch.events
+    then Error (Application_platform_error "runtime epoch mismatch")
+    else Error (Host_response_error "runtime epoch mismatch")
   else (
     let seen_host_responses = Hashtbl.create 8 in
+    let seen_application_responses = Hashtbl.create 8 in
     let rec validate_events reversed_ui reversed_controls last_sequence force = function
       | [] ->
         let ui_events = List.rev reversed_ui in
@@ -1197,7 +1252,20 @@ let validate_input t (batch : Protocol.Inbound_event.batch) =
           let is_resync =
             event.event_tag = Protocol.Generated_protocol.Event_tag.resync_requested
           in
-          if is_host_response || is_environment || is_resync
+          let is_application_response =
+            event.event_tag = Protocol.Generated_protocol.Event_tag.application_response
+            || event.event_tag
+               = Protocol.Generated_protocol.Event_tag.application_request_error
+          in
+          let is_application_event =
+            event.event_tag = Protocol.Generated_protocol.Event_tag.application_event
+          in
+          if
+            is_host_response
+            || is_environment
+            || is_resync
+            || is_application_response
+            || is_application_event
           then
             if
               (not (ID.Ui.Node_id.equal event.node_id ID.Ui.Node_id.zero))
@@ -1206,7 +1274,11 @@ let validate_input t (batch : Protocol.Inbound_event.batch) =
                    (ID.Runtime.Renderer_revision.equal
                       event.displayed_revision
                       t.displayed_revision)
-            then Error (Host_response_error "malformed runtime control event")
+            then
+              if is_application_response || is_application_event
+              then
+                Error (Application_platform_error "malformed application control event")
+              else Error (Host_response_error "malformed runtime control event")
             else if is_host_response
             then (
               match event.payload with
@@ -1230,6 +1302,41 @@ let validate_input t (batch : Protocol.Inbound_event.batch) =
                       force
                       rest)
               | _ -> Error (Host_response_error "malformed host response event"))
+            else if is_application_response || is_application_event
+            then (
+              match
+                Host_effect.Application_platform.Private.validate_input
+                  t.application_platform
+                  event.payload
+              with
+              | Error message -> Error (Application_platform_error message)
+              | Ok validated ->
+                (match
+                   Host_effect.Application_platform.Private.Validated_input.request_id
+                     validated
+                 with
+                 | Some request_id when Hashtbl.mem seen_application_responses request_id
+                   ->
+                   Error
+                     (Application_platform_error
+                        (Printf.sprintf
+                           "duplicate application response ID %Ld"
+                           request_id))
+                 | Some request_id ->
+                   Hashtbl.add seen_application_responses request_id ();
+                   validate_events
+                     reversed_ui
+                     (Validated_application_input validated :: reversed_controls)
+                     next_sequence
+                     force
+                     rest
+                 | None ->
+                   validate_events
+                     reversed_ui
+                     (Validated_application_input validated :: reversed_controls)
+                     next_sequence
+                     force
+                     rest))
             else if is_environment
             then (
               match event.payload with
@@ -1283,6 +1390,14 @@ let execute_validated_input t validated =
         (match Host_effect.Private.resolve_validated t.host_effects response with
          | Ok () -> execute_controls rest
          | Error message -> Error (Host_response_error message))
+      | Validated_application_input input :: rest ->
+        (match
+           Host_effect.Application_platform.Private.resolve_validated
+             t.application_platform
+             input
+         with
+         | Ok () -> execute_controls rest
+         | Error message -> Error (Application_platform_error message))
       | Validated_environment environment :: rest ->
         ignore (Environment.Private.update t.environment environment);
         execute_controls rest
@@ -1367,6 +1482,8 @@ let pump t ~monotonic_now_ns ?events () =
                     ; candidate_tree = candidate.candidate_tree
                     ; candidate_handler_frame = candidate.candidate_handler_frame
                     ; prepared_host_operations = candidate.prepared_host_operations
+                    ; prepared_application_operations =
+                        candidate.prepared_application_operations
                     ; emitted_frame = candidate.emitted_frame
                     }
                   in
@@ -1420,48 +1537,57 @@ let presentation_succeeded t ~presentation_id ~renderer_revision ~monotonic_now_
            with
            | Error message -> fail_fatal (Invalid_state message)
            | Ok () ->
-             let commit_handler =
-               match pending.emitted_frame, pending.candidate_handler_frame with
-               | None, None -> Ok (t.displayed_revision, t.displayed_handler_frame, false)
-               | Some _, Some handler_frame ->
-                 (match Runtime.Handler_registry.install t.handlers handler_frame with
-                  | Error error -> Error (Runtime_error error)
-                  | Ok () ->
-                    (match
-                       Runtime.Handler_registry.mark_displayed_revision
-                         t.handlers
-                         ~revision:renderer_revision
-                     with
+             (match
+                Host_effect.Application_platform.commit_operations
+                  t.application_platform
+                  pending.prepared_application_operations
+              with
+              | Error message -> fail_fatal (Invalid_state message)
+              | Ok () ->
+                let commit_handler =
+                  match pending.emitted_frame, pending.candidate_handler_frame with
+                  | None, None ->
+                    Ok (t.displayed_revision, t.displayed_handler_frame, false)
+                  | Some _, Some handler_frame ->
+                    (match Runtime.Handler_registry.install t.handlers handler_frame with
                      | Error error -> Error (Runtime_error error)
-                     | Ok () -> Ok (renderer_revision, Some handler_frame, true)))
-               | None, Some _ | Some _, None ->
-                 Error
-                   (Invalid_state "candidate frame and handler metadata are inconsistent")
-             in
-             (match commit_handler with
-              | Error error -> fail_fatal error
-              | Ok (displayed_revision, displayed_handler_frame, retire_handlers) ->
-                t.displayed_tree <- Some pending.candidate_tree;
-                t.displayed_handler_frame <- displayed_handler_frame;
-                t.displayed_revision <- displayed_revision;
-                if retire_handlers
-                then
-                  Runtime.Handler_registry.retire_superseded
-                    t.handlers
-                    ~displayed_revision;
-                (try
-                   Bonsai_runtime_adapter.advance_clock t.bonsai ~to_:logical_time;
-                   ignore (Bonsai.Time_source.now t.time_source);
-                   t.last_monotonic_ns <- monotonic_now_ns;
-                   t.pending_presentation <- None;
-                   t.force_full_snapshot_next <- false;
-                   let lifecycle_started = now_ns () in
-                   Bonsai_runtime_adapter.trigger_lifecycles t.bonsai;
-                   t.last_lifecycle_ns <- elapsed_ns lifecycle_started;
-                   Ok ()
-                 with
-                 | exception_ ->
-                   fail_fatal (Lifecycle_error (exception_message exception_)))))))
+                     | Ok () ->
+                       (match
+                          Runtime.Handler_registry.mark_displayed_revision
+                            t.handlers
+                            ~revision:renderer_revision
+                        with
+                        | Error error -> Error (Runtime_error error)
+                        | Ok () -> Ok (renderer_revision, Some handler_frame, true)))
+                  | None, Some _ | Some _, None ->
+                    Error
+                      (Invalid_state
+                         "candidate frame and handler metadata are inconsistent")
+                in
+                (match commit_handler with
+                 | Error error -> fail_fatal error
+                 | Ok (displayed_revision, displayed_handler_frame, retire_handlers) ->
+                   t.displayed_tree <- Some pending.candidate_tree;
+                   t.displayed_handler_frame <- displayed_handler_frame;
+                   t.displayed_revision <- displayed_revision;
+                   if retire_handlers
+                   then
+                     Runtime.Handler_registry.retire_superseded
+                       t.handlers
+                       ~displayed_revision;
+                   (try
+                      Bonsai_runtime_adapter.advance_clock t.bonsai ~to_:logical_time;
+                      ignore (Bonsai.Time_source.now t.time_source);
+                      t.last_monotonic_ns <- monotonic_now_ns;
+                      t.pending_presentation <- None;
+                      t.force_full_snapshot_next <- false;
+                      let lifecycle_started = now_ns () in
+                      Bonsai_runtime_adapter.trigger_lifecycles t.bonsai;
+                      t.last_lifecycle_ns <- elapsed_ns lifecycle_started;
+                      Ok ()
+                    with
+                    | exception_ ->
+                      fail_fatal (Lifecycle_error (exception_message exception_))))))))
 ;;
 
 let presentation_rejected t ~presentation_id ~renderer_revision ~reason:_ =
@@ -1481,12 +1607,20 @@ let presentation_rejected t ~presentation_id ~renderer_revision ~reason:_ =
        Ok ())
 ;;
 
-let shutdown t =
+let shutdown ?(application_error = Host_effect.Application_platform.Shutdown) t =
   if not t.is_shutdown
   then (
     t.before_shutdown ();
     t.is_shutdown <- true;
     Host_effect.Private.shutdown t.host_effects;
+    Host_effect.Application_platform.Private.shutdown
+      t.application_platform
+      application_error;
+    (try
+       drain_effects t;
+       Bonsai_runtime_adapter.flush t.bonsai
+     with
+     | _ -> ());
     Queue.clear t.pending_effects.pending_effects;
     Queue.clear t.pending_effects.pending_before_display;
     Runtime.Handler_registry.clear t.handlers;
@@ -1508,6 +1642,10 @@ module For_testing = struct
 
   let environment t = Environment.Private.current t.environment
   let pending_host_effect_count t = Host_effect.Private.pending_count t.host_effects
+
+  let pending_application_request_count t =
+    Host_effect.Application_platform.Private.pending_count t.application_platform
+  ;;
 
   let retained_handler_frame_count t =
     Runtime.Handler_registry.retained_frame_count t.handlers
