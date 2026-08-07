@@ -148,19 +148,101 @@ let flutter_pub_get ~project_root ~config =
   Process_runner.run command
 ;;
 
-let verify_ios_bundle ~framework_root ~project_root ~config =
-  let app = Filename.concat project_root "flutter/build/ios/iphoneos/Runner.app" in
+let verify_ios_bundle ~framework_root ~project_root ~config ~profile =
+  let app = Plan.ios_app_bundle ~project_root ~config ~profile in
   let sqlite_required =
     List.exists (Config.Feature.equal Config.Feature.Sqlite) config.Config.features
   in
-  let command : Plan.command =
-    { program = Filename.concat framework_root "tool/ios/verify_app_bundle.sh"
-    ; arguments = app :: (if sqlite_required then [ "require-sqlite" ] else [])
-    ; working_directory = project_root
-    ; environment = []
-    }
+  if not (Sys.file_exists app && Sys.is_directory app)
+  then
+    Error (Printf.sprintf "Build succeeded but the expected app at %s was not found" app)
+  else (
+    let command : Plan.command =
+      { program = Filename.concat framework_root "tool/ios/verify_app_bundle.sh"
+      ; arguments = app :: (if sqlite_required then [ "require-sqlite" ] else [])
+      ; working_directory = project_root
+      ; environment = []
+      }
+    in
+    Process_runner.run command)
+;;
+
+let capture_command (command : Plan.command) =
+  Process_runner.capture
+    ~working_directory:command.working_directory
+    ~environment:command.environment
+    command.program
+    command.arguments
+;;
+
+let resolve_ios_bundle_identifier ~project_root ~app_bundle =
+  let command = Plan.ios_bundle_identifier ~project_root ~app_bundle in
+  let* bundle_identifier = capture_command command in
+  if bundle_identifier = ""
+  then
+    Error
+      (Printf.sprintf
+         "Built application bundle has an empty CFBundleIdentifier: %s"
+         (Filename.concat app_bundle "Info.plist"))
+  else Ok bundle_identifier
+;;
+
+let run_ios_device ~framework_root ~project_root ~config ~profile ~device ~forwarded =
+  let app_bundle = Plan.ios_app_bundle ~project_root ~config ~profile in
+  let* () =
+    Plan.flutter
+      ~project_root
+      ~config
+      ~action:Plan.Build
+      ~platform:Plan.Ios_platform
+      ~profile
+      ~device:None
+      ~no_codesign:false
+      ~forwarded
+    |> Process_runner.run
   in
-  Process_runner.run command
+  let* () = verify_ios_bundle ~framework_root ~project_root ~config ~profile in
+  let* bundle_identifier = resolve_ios_bundle_identifier ~project_root ~app_bundle in
+  let* () =
+    Plan.ios_device_install ~project_root ~device ~app_bundle |> Process_runner.run
+  in
+  Plan.ios_device_launch ~project_root ~device ~bundle_identifier |> Process_runner.run
+;;
+
+let run_flutter_host
+      ~framework_root
+      ~project_root
+      ~config
+      ~action
+      ~platform
+      ~profile
+      ~device
+      ~no_codesign
+      ~forwarded
+  =
+  match action, platform, profile with
+  | Plan.Run, Plan.Ios_platform, (Plan.Profile | Plan.Release) ->
+    (match device with
+     | None -> Error "bonsai-flutter run ios requires --device <device-id>"
+     | Some device ->
+       run_ios_device ~framework_root ~project_root ~config ~profile ~device ~forwarded)
+  | Plan.Run, _, _ | Plan.Build, _, _ ->
+    let* () =
+      Plan.flutter
+        ~project_root
+        ~config
+        ~action
+        ~platform
+        ~profile
+        ~device
+        ~no_codesign
+        ~forwarded
+      |> Process_runner.run
+    in
+    (match action, platform with
+     | Plan.Build, Plan.Ios_platform ->
+       verify_ios_bundle ~framework_root ~project_root ~config ~profile
+     | Plan.Run, _ | Plan.Build, Plan.Macos_platform -> Ok ())
 ;;
 
 let run_flutter
@@ -181,20 +263,14 @@ let run_flutter
   in
   let* _artifact = build_native ~framework_root ~project_root ~config ~target ~profile in
   let* () = flutter_pub_get ~project_root ~config in
-  let* () =
-    Plan.flutter
-      ~project_root
-      ~config
-      ~action
-      ~platform
-      ~profile
-      ~device
-      ~no_codesign
-      ~forwarded
-    |> Process_runner.run
-  in
-  match action, platform with
-  | Plan.Build, Plan.Ios_platform ->
-    verify_ios_bundle ~framework_root ~project_root ~config
-  | Plan.Run, _ | Plan.Build, Plan.Macos_platform -> Ok ()
+  run_flutter_host
+    ~framework_root
+    ~project_root
+    ~config
+    ~action
+    ~platform
+    ~profile
+    ~device
+    ~no_codesign
+    ~forwarded
 ;;

@@ -81,6 +81,135 @@ let write_file path contents =
   close_out channel
 ;;
 
+let write_executable path contents =
+  write_file path contents;
+  Unix.chmod path 0o755
+;;
+
+let non_empty_lines source =
+  source |> String.split_on_char '\n' |> List.filter (fun line -> line <> "")
+;;
+
+let with_environment bindings f =
+  let previous = List.map (fun (name, _) -> name, Sys.getenv_opt name) bindings in
+  List.iter (fun (name, value) -> Unix.putenv name value) bindings;
+  Fun.protect
+    ~finally:(fun () ->
+      List.iter
+        (fun (name, value) ->
+           match value with
+           | Some value -> Unix.putenv name value
+           | None -> Unix.putenv name "")
+        previous)
+    f
+;;
+
+type ios_tool_fixture =
+  { root : string
+  ; project_root : string
+  ; framework_root : string
+  ; command_log : string
+  ; config : Config.t
+  }
+
+let command_logger program =
+  Printf.sprintf
+    {|#!/bin/sh
+set -eu
+{
+  printf '%%s\t%%s' '%s' "$PWD"
+  for argument in "$@"; do
+    printf '\t%%s' "$argument"
+  done
+  printf '\n'
+} >> "$COMMAND_LOG"
+|}
+    program
+;;
+
+let create_ios_tool_fixture () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "ios-device" |> Unix.realpath in
+  let project_root = Filename.concat root "project" in
+  let framework_root = Filename.concat root "framework" in
+  let bin = Filename.concat root "bin" in
+  let command_log = Filename.concat root "commands.log" in
+  Scaffold.ensure_directory (Filename.concat project_root "flutter");
+  Scaffold.ensure_directory (Filename.concat framework_root "tool/ios");
+  Scaffold.ensure_directory bin;
+  write_executable
+    (Filename.concat bin "flutter")
+    (command_logger "flutter"
+     ^ {|exit "${FLUTTER_EXIT:-0}"
+|}
+    );
+  write_executable
+    (Filename.concat bin "plutil")
+    (command_logger "plutil"
+     ^ {|test -z "${PLUTIL_EXIT:-}" || exit "$PLUTIL_EXIT"
+printf '%s\n' "${BUNDLE_IDENTIFIER:-com.example.journal}"
+|}
+    );
+  write_executable
+    (Filename.concat bin "xcrun")
+    (command_logger "xcrun"
+     ^ {|if test "${1:-}" = devicectl \
+  && test "${2:-}" = device \
+  && test "${3:-}" = install \
+  && test -n "${INSTALL_EXIT:-}"; then
+  exit "$INSTALL_EXIT"
+fi
+exit "${XCRUN_EXIT:-0}"
+|}
+    );
+  write_executable
+    (Filename.concat framework_root "tool/ios/verify_app_bundle.sh")
+    (command_logger "verify_app_bundle"
+     ^ {|exit "${VERIFY_EXIT:-0}"
+|}
+    );
+  { root
+  ; project_root
+  ; framework_root
+  ; command_log
+  ; config = Config.parse_string valid_config |> get_ok
+  }
+;;
+
+let with_ios_tool_fixture ?(environment = []) fixture f =
+  let path = Filename.concat fixture.root "bin" ^ ":" ^ Sys.getenv "PATH" in
+  with_environment
+    (("PATH", path) :: ("COMMAND_LOG", fixture.command_log) :: environment)
+    f
+;;
+
+let create_ios_app_bundle fixture profile =
+  let app_bundle =
+    Plan.ios_app_bundle ~project_root:fixture.project_root ~config:fixture.config ~profile
+  in
+  Scaffold.ensure_directory app_bundle;
+  write_file
+    (Filename.concat app_bundle "Info.plist")
+    {|<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>com.example.journal</string>
+</dict></plist>
+|};
+  app_bundle
+;;
+
+let run_ios_device fixture ~profile ~device ~forwarded =
+  Build_system.run_flutter_host
+    ~framework_root:fixture.framework_root
+    ~project_root:fixture.project_root
+    ~config:fixture.config
+    ~action:Plan.Run
+    ~platform:Plan.Ios_platform
+    ~profile
+    ~device:(Some device)
+    ~no_codesign:false
+    ~forwarded
+;;
+
 let test_parse_valid_config () =
   let config = Config.parse_string valid_config |> get_ok in
   Alcotest.(check string) "name" "journal" config.name;
@@ -546,6 +675,21 @@ let test_flutter_plans () =
     "macOS run"
     [ "run"; "-d"; "macos"; "--dart-define=environment=development" ]
     run.arguments;
+  let ios_debug =
+    Plan.flutter
+      ~project_root:"/work/journal"
+      ~config
+      ~action:Plan.Run
+      ~platform:Plan.Ios_platform
+      ~profile:Plan.Debug
+      ~device:(Some "physical-device")
+      ~no_codesign:false
+      ~forwarded:[ "--dart-define=environment=development" ]
+  in
+  Alcotest.(check (list string))
+    "iOS debug continues through flutter run"
+    [ "run"; "-d"; "physical-device"; "--dart-define=environment=development" ]
+    ios_debug.arguments;
   let ios =
     Plan.flutter
       ~project_root:"/work/journal"
@@ -561,6 +705,255 @@ let test_flutter_plans () =
     "unsigned iOS release"
     [ "build"; "ios"; "--release"; "--no-codesign" ]
     ios.arguments
+;;
+
+let test_ios_app_bundle_paths () =
+  let config = Config.parse_string valid_config |> get_ok in
+  [ Plan.Debug, "Debug-iphoneos"
+  ; Plan.Profile, "Profile-iphoneos"
+  ; Plan.Release, "Release-iphoneos"
+  ]
+  |> List.iter (fun (profile, configuration) ->
+    Alcotest.(check string)
+      (Plan.profile_name profile)
+      ("/work/journal/flutter/build/ios/" ^ configuration ^ "/Runner.app")
+      (Plan.ios_app_bundle ~project_root:"/work/journal" ~config ~profile))
+;;
+
+let test_ios_device_command_plans () =
+  let config = Config.parse_string valid_config |> get_ok in
+  let app_bundle =
+    Plan.ios_app_bundle ~project_root:"/work/journal" ~config ~profile:Plan.Release
+  in
+  let bundle_identifier =
+    Plan.ios_bundle_identifier ~project_root:"/work/journal" ~app_bundle
+  in
+  Alcotest.(check string) "bundle identifier program" "plutil" bundle_identifier.program;
+  Alcotest.(check (list string))
+    "bundle identifier arguments"
+    [ "-extract"
+    ; "CFBundleIdentifier"
+    ; "raw"
+    ; "-o"
+    ; "-"
+    ; Filename.concat app_bundle "Info.plist"
+    ]
+    bundle_identifier.arguments;
+  let install =
+    Plan.ios_device_install
+      ~project_root:"/work/journal"
+      ~device:"00008110-000A71C414BB801E"
+      ~app_bundle
+  in
+  Alcotest.(check string) "install program" "xcrun" install.program;
+  Alcotest.(check string) "install cwd" "/work/journal" install.working_directory;
+  Alcotest.(check (list string))
+    "install arguments"
+    [ "devicectl"
+    ; "device"
+    ; "install"
+    ; "app"
+    ; "--device"
+    ; "00008110-000A71C414BB801E"
+    ; app_bundle
+    ]
+    install.arguments;
+  let launch =
+    Plan.ios_device_launch
+      ~project_root:"/work/journal"
+      ~device:"00008110-000A71C414BB801E"
+      ~bundle_identifier:"com.example.journal"
+  in
+  Alcotest.(check string) "launch program" "xcrun" launch.program;
+  Alcotest.(check (list string))
+    "launch arguments"
+    [ "devicectl"
+    ; "device"
+    ; "process"
+    ; "launch"
+    ; "--device"
+    ; "00008110-000A71C414BB801E"
+    ; "--terminate-existing"
+    ; "com.example.journal"
+    ]
+    launch.arguments
+;;
+
+let test_ios_release_device_run () =
+  let fixture = create_ios_tool_fixture () in
+  let app_bundle = create_ios_app_bundle fixture Plan.Release in
+  with_ios_tool_fixture
+    ~environment:[ "BUNDLE_IDENTIFIER", "com.acme.release-journal" ]
+    fixture
+    (fun () ->
+       run_ios_device
+         fixture
+         ~profile:Plan.Release
+         ~device:"00008110-000A71C414BB801E"
+         ~forwarded:[ "--dart-define=environment=production"; "--verbose" ]
+       |> get_ok);
+  let flutter_root = Filename.concat fixture.project_root "flutter" in
+  Alcotest.(check (list string))
+    "release build, verify, identifier, install, and launch"
+    [ String.concat
+        "\t"
+        [ "flutter"
+        ; flutter_root
+        ; "build"
+        ; "ios"
+        ; "--release"
+        ; "--dart-define=environment=production"
+        ; "--verbose"
+        ]
+    ; String.concat
+        "\t"
+        [ "verify_app_bundle"; fixture.project_root; app_bundle; "require-sqlite" ]
+    ; String.concat
+        "\t"
+        [ "plutil"
+        ; fixture.project_root
+        ; "-extract"
+        ; "CFBundleIdentifier"
+        ; "raw"
+        ; "-o"
+        ; "-"
+        ; Filename.concat app_bundle "Info.plist"
+        ]
+    ; String.concat
+        "\t"
+        [ "xcrun"
+        ; fixture.project_root
+        ; "devicectl"
+        ; "device"
+        ; "install"
+        ; "app"
+        ; "--device"
+        ; "00008110-000A71C414BB801E"
+        ; app_bundle
+        ]
+    ; String.concat
+        "\t"
+        [ "xcrun"
+        ; fixture.project_root
+        ; "devicectl"
+        ; "device"
+        ; "process"
+        ; "launch"
+        ; "--device"
+        ; "00008110-000A71C414BB801E"
+        ; "--terminate-existing"
+        ; "com.acme.release-journal"
+        ]
+    ]
+    (read_file fixture.command_log |> non_empty_lines)
+;;
+
+let test_ios_profile_device_run () =
+  let fixture = create_ios_tool_fixture () in
+  let app_bundle = create_ios_app_bundle fixture Plan.Profile in
+  with_ios_tool_fixture fixture (fun () ->
+    run_ios_device
+      fixture
+      ~profile:Plan.Profile
+      ~device:"profile-device"
+      ~forwarded:[ "--flavor"; "internal" ]
+    |> get_ok);
+  let commands = read_file fixture.command_log |> non_empty_lines in
+  Alcotest.(check string)
+    "profile build preserves profile mode and forwarded arguments"
+    (String.concat
+       "\t"
+       [ "flutter"
+       ; Filename.concat fixture.project_root "flutter"
+       ; "build"
+       ; "ios"
+       ; "--profile"
+       ; "--flavor"
+       ; "internal"
+       ])
+    (List.hd commands);
+  Alcotest.(check bool)
+    "profile bundle is verified"
+    true
+    (List.mem
+       (String.concat
+          "\t"
+          [ "verify_app_bundle"; fixture.project_root; app_bundle; "require-sqlite" ])
+       commands)
+;;
+
+let test_ios_device_run_reports_missing_bundle () =
+  let fixture = create_ios_tool_fixture () in
+  let expected_bundle =
+    Plan.ios_app_bundle
+      ~project_root:fixture.project_root
+      ~config:fixture.config
+      ~profile:Plan.Release
+  in
+  with_ios_tool_fixture fixture (fun () ->
+    run_ios_device
+      fixture
+      ~profile:Plan.Release
+      ~device:"missing-bundle-device"
+      ~forwarded:[]
+    |> check_error_contains expected_bundle);
+  Alcotest.(check int)
+    "stops after Flutter build"
+    1
+    (read_file fixture.command_log |> non_empty_lines |> List.length)
+;;
+
+let test_ios_device_run_propagates_flutter_failure () =
+  let fixture = create_ios_tool_fixture () in
+  ignore (create_ios_app_bundle fixture Plan.Release);
+  with_ios_tool_fixture
+    ~environment:[ "FLUTTER_EXIT", "17" ]
+    fixture
+    (fun () ->
+       run_ios_device
+         fixture
+         ~profile:Plan.Release
+         ~device:"flutter-failure-device"
+         ~forwarded:[]
+       |> check_error_contains "flutter exited with status 17");
+  Alcotest.(check int)
+    "does not verify or install after failed build"
+    1
+    (read_file fixture.command_log |> non_empty_lines |> List.length)
+;;
+
+let test_ios_device_run_propagates_install_failure () =
+  let fixture = create_ios_tool_fixture () in
+  ignore (create_ios_app_bundle fixture Plan.Release);
+  with_ios_tool_fixture
+    ~environment:[ "INSTALL_EXIT", "23" ]
+    fixture
+    (fun () ->
+       run_ios_device
+         fixture
+         ~profile:Plan.Release
+         ~device:"install-failure-device"
+         ~forwarded:[]
+       |> check_error_contains "xcrun exited with status 23");
+  let commands = read_file fixture.command_log |> non_empty_lines in
+  Alcotest.(check int) "launch is not attempted" 4 (List.length commands)
+;;
+
+let test_ios_device_run_rejects_empty_bundle_identifier () =
+  let fixture = create_ios_tool_fixture () in
+  ignore (create_ios_app_bundle fixture Plan.Release);
+  with_ios_tool_fixture
+    ~environment:[ "BUNDLE_IDENTIFIER", " " ]
+    fixture
+    (fun () ->
+       run_ios_device
+         fixture
+         ~profile:Plan.Release
+         ~device:"empty-identifier-device"
+         ~forwarded:[]
+       |> check_error_contains "CFBundleIdentifier");
+  let commands = read_file fixture.command_log |> non_empty_lines in
+  Alcotest.(check int) "install is not attempted" 3 (List.length commands)
 ;;
 
 let test_artifact_layout () =
@@ -905,7 +1298,31 @@ let () =
             `Quick
             test_managed_adapter_sync_preserves_application_code
         ] )
-    ; "flutter", [ Alcotest.test_case "command plans" `Quick test_flutter_plans ]
+    ; ( "flutter"
+      , [ Alcotest.test_case "command plans" `Quick test_flutter_plans
+        ; Alcotest.test_case "iOS bundle paths" `Quick test_ios_app_bundle_paths
+        ; Alcotest.test_case "iOS device commands" `Quick test_ios_device_command_plans
+        ] )
+    ; ( "ios-device-run"
+      , [ Alcotest.test_case "release" `Quick test_ios_release_device_run
+        ; Alcotest.test_case "profile" `Quick test_ios_profile_device_run
+        ; Alcotest.test_case
+            "missing bundle"
+            `Quick
+            test_ios_device_run_reports_missing_bundle
+        ; Alcotest.test_case
+            "Flutter failure"
+            `Quick
+            test_ios_device_run_propagates_flutter_failure
+        ; Alcotest.test_case
+            "install failure"
+            `Quick
+            test_ios_device_run_propagates_install_failure
+        ; Alcotest.test_case
+            "empty bundle identifier"
+            `Quick
+            test_ios_device_run_rejects_empty_bundle_identifier
+        ] )
     ; "artifact", [ Alcotest.test_case "layout" `Quick test_artifact_layout ]
     ; ( "dune-closure"
       , [ Alcotest.test_case "local app" `Quick test_dune_closure_follows_local_app

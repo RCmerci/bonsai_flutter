@@ -33,6 +33,59 @@ let profile_name = function
   | Release -> "release"
 ;;
 
+let ios_configuration_name = function
+  | Debug -> "Debug"
+  | Profile -> "Profile"
+  | Release -> "Release"
+;;
+
+let ios_app_bundle ~project_root ~config ~profile =
+  Filename.concat
+    (Filename.concat project_root config.Config.flutter_root)
+    (Printf.sprintf "build/ios/%s-iphoneos/Runner.app" (ios_configuration_name profile))
+;;
+
+let ios_bundle_identifier ~project_root ~app_bundle =
+  { program = "plutil"
+  ; arguments =
+      [ "-extract"
+      ; "CFBundleIdentifier"
+      ; "raw"
+      ; "-o"
+      ; "-"
+      ; Filename.concat app_bundle "Info.plist"
+      ]
+  ; working_directory = project_root
+  ; environment = []
+  }
+;;
+
+let ios_device_install ~project_root ~device ~app_bundle =
+  { program = "xcrun"
+  ; arguments =
+      [ "devicectl"; "device"; "install"; "app"; "--device"; device; app_bundle ]
+  ; working_directory = project_root
+  ; environment = []
+  }
+;;
+
+let ios_device_launch ~project_root ~device ~bundle_identifier =
+  { program = "xcrun"
+  ; arguments =
+      [ "devicectl"
+      ; "device"
+      ; "process"
+      ; "launch"
+      ; "--device"
+      ; device
+      ; "--terminate-existing"
+      ; bundle_identifier
+      ]
+  ; working_directory = project_root
+  ; environment = []
+  }
+;;
+
 let build_native ~project_root ~config ~target ~profile =
   let arguments =
     match target with
