@@ -131,13 +131,21 @@ bonsai-flutter doctor --target macos
 bonsai-flutter build macos --profile release
 ```
 
-The iPhoneOS source SDK and unsigned application build use explicit commands:
+Install and verify the immutable global iPhoneOS SDK before building an iOS
+application:
 
 ```sh
-bonsai-flutter sdk build-from-source --target iphoneos
-bonsai-flutter sdk verify --target iphoneos
+bonsai-flutter toolchain install iphoneos
+bonsai-flutter toolchain verify iphoneos
 bonsai-flutter build ios --profile release --no-codesign
 ```
+
+The versioned SDK repository pins its commits, exact package versions, source
+checksums, target components, and `bonsai_flutter_ios_sdk` meta-package.
+Applications commit their generated `.opam.locked` file. Native builds validate
+only the Dune-reachable package subset, then select `@app/bonsai-flutter-macos`
+or `@app/bonsai-flutter-ios`. They never mutate or rebuild the installed SDK,
+and unchanged inputs leave both the Dune object and staged artifact untouched.
 
 `bonsai-flutter sync-host --check` verifies generated Dart, Native Assets
 configuration, the Apple privacy manifest, and its Xcode resource reference

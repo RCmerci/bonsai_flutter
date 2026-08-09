@@ -31,14 +31,36 @@ void main() {
     temporaryDirectory.deleteSync(recursive: true);
   });
 
-  test('maps Flutter linking mode to the OCaml artifact variant', () {
+  test('selects the explicit CLI profile', () {
     expect(
-      OcamlArtifactVariant.fromLinkingEnabled(false),
+      OcamlArtifactVariant.fromProfileName('debug'),
       OcamlArtifactVariant.debug,
     );
     expect(
-      OcamlArtifactVariant.fromLinkingEnabled(true),
+      OcamlArtifactVariant.fromProfileName('profile'),
+      OcamlArtifactVariant.profile,
+    );
+    expect(
+      OcamlArtifactVariant.fromProfileName('release'),
       OcamlArtifactVariant.release,
+    );
+  });
+
+  test('requires a supported explicit CLI profile', () {
+    expect(
+      () => OcamlArtifactVariant.fromProfileName(null),
+      throwsA(isA<FormatException>()),
+    );
+    expect(
+      () => OcamlArtifactVariant.fromProfileName('benchmark'),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
+  test('selects the profile-specific artifact path', () {
+    expect(
+      _macOSTarget.artifactPathFor(variant: OcamlArtifactVariant.profile),
+      'macos/arm64/profile/native_embed.exe.o',
     );
   });
 

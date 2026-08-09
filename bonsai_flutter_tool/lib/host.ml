@@ -6,8 +6,13 @@ let project_relative_prefix flutter_root =
   |> String.concat "/"
 ;;
 
-let pubspec config =
+let pubspec ?artifact_profile config =
   let prefix = project_relative_prefix config.Config.flutter_root in
+  let artifact_profile_define =
+    match artifact_profile with
+    | None -> ""
+    | Some profile -> Printf.sprintf "      native_artifact_profile: %s\n" profile
+  in
   let sqlite_define =
     if List.exists (Config.Feature.equal Config.Feature.Sqlite) config.features
     then "      link_system_sqlite3: true\n"
@@ -26,11 +31,11 @@ environment:
 hooks:
   user_defines:
     bonsai_flutter_native:
-      native_artifact_root: %s/_build/bonsai-flutter/native-artifacts/%s/
+      native_artifact_root: %s/_build/bonsai-flutter/artifacts/
       macos_deployment_target: '%s'
       ios_deployment_target: '%s'
       require_ocaml_backend: true
-%s
+%s%s
 dependencies:
   bonsai_flutter:
     path: %s/.bonsai-flutter/flutter-packages/bonsai_flutter
@@ -48,9 +53,9 @@ flutter:
     config.name
     config.name
     prefix
-    config.name
     config.macos.minimum_version
     config.ios.minimum_version
+    artifact_profile_define
     sqlite_define
     prefix
 ;;
@@ -362,6 +367,18 @@ let write_atomically path contents =
   output_string channel contents;
   close_out channel;
   Unix.rename temporary path
+;;
+
+let with_artifact_profile ~project_root ~config ~profile f =
+  let path = Filename.concat project_root (Filename.concat config.Config.flutter_root "pubspec.yaml") in
+  try
+    match read_file path with
+    | None -> Error (Printf.sprintf "Generated Flutter pubspec is missing: %s" path)
+    | Some original ->
+      write_atomically path (pubspec ~artifact_profile:profile config);
+      Fun.protect ~finally:(fun () -> write_atomically path original) f
+  with
+  | Sys_error message | Unix.Unix_error (_, _, message) -> Error message
 ;;
 
 let sync ~project_root ~config ~mode : (string list, string) result =

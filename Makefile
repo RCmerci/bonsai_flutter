@@ -94,7 +94,6 @@ ios-device-native-objects:
 
 ci-contract:
 	tool/test_ci_contract.sh
-	tool/test_ios_application_closure.sh
 	tool/test_ios_closure_lock.sh
 	tool/test_datascript_worker_contract.sh
 

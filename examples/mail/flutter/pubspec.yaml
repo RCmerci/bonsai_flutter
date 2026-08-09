@@ -14,7 +14,6 @@ hooks:
       macos_deployment_target: '26.0'
       ios_deployment_target: '15.0'
       require_ocaml_backend: true
-      mode_specific_ocaml_artifacts: true
 
 dependencies:
   bonsai_flutter:

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Routed macOS and iPhoneOS application complete-object builds through managed
+  Dune aliases, moved iPhoneOS packages into a commit- and checksum-locked
+  immutable global SDK, validated application lock subsets from the reachable
+  Dune closure, and made unchanged artifact staging preserve timestamps.
 - Replaced multi-entry native ownership with one process-wide logical runtime,
   Driver, and Dart coordinator lease. Added versioned Fresh and explicit
   replacement startup, stale-handle tombstones, and one lazily spawned,

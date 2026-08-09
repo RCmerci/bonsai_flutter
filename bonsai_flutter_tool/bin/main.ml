@@ -180,30 +180,73 @@ let sync_host check =
   Ok ()
 ;;
 
-let sdk_build target features =
-  let* project_root, _config = load_project () in
-  let* framework_root = Assets.find_framework_root () in
-  let* features = parse_features features in
-  Sdk.build_from_source
-    ~framework_root
-    ~project_root:(Some project_root)
-    ~target
-    ~features
-;;
-
-let sdk_verify target =
+let sync_project check =
   let* project_root, config = load_project () in
-  let* framework_root = Assets.find_framework_root () in
-  Sdk.verify ~framework_root ~project_root ~features:config.Config.features ~target
+  if check
+  then (
+    let* () = Scaffold.validate_dune_native_aliases ~project_root ~config in
+    Printf.printf "application Dune aliases are up to date\n%!";
+    Ok ())
+  else (
+    Printf.printf "%s\n%!" (Scaffold.dune_alias_path ~project_root ~config);
+    Build_system.synchronize ~framework_root:"" ~project_root ~config)
 ;;
 
-let sdk_fetch target features =
-  let* features = parse_features features in
-  Sdk.fetch ~target ~features
+let clean platform all_project_builds =
+  let* project_root, _config = load_project () in
+  match platform, all_project_builds with
+  | Some _, true -> Error "Select a platform or --all-project-builds, not both"
+  | None, false -> Error "Select macos, iphoneos, or --all-project-builds"
+  | Some Clean.Macos, false -> Clean.run ~project_root Clean.Macos
+  | Some Clean.Iphoneos, false -> Clean.run ~project_root Clean.Iphoneos
+  | Some Clean.All, false -> assert false
+  | None, true -> Clean.run ~project_root Clean.All
+;;
+
+let toolchain_show () =
+  let* info = Toolchain.show ~working_directory:(Sys.getcwd ()) in
+  Printf.printf
+    "switch: %s\n\
+     prefix: %s\n\
+     manifest: %s\n\
+     fingerprint: %s\n\
+     bonsai_flutter: %s\n\
+     ocaml: %s\n\
+     target: %s\n\
+     %!"
+    info.switch
+    info.prefix
+    info.manifest_path
+    info.fingerprint
+    info.bonsai_flutter_version
+    info.ocaml_version
+    info.target;
+  Ok ()
+;;
+
+let toolchain_verify () =
+  let* verified = Toolchain.verify ~working_directory:(Sys.getcwd ()) in
+  Printf.printf "verified iPhoneOS toolchain: %s\n%!" verified.fingerprint;
+  Ok ()
+;;
+
+let toolchain_remove () = Toolchain.remove ~working_directory:(Sys.getcwd ())
+
+let toolchain_install () =
+  let* framework_root = Assets.find_framework_root () in
+  Toolchain.install ~framework_root ~working_directory:(Sys.getcwd ())
 ;;
 
 let resolve_dune_closure project_root target =
-  let* dependencies = Dune_closure.resolve_project ~project_root ~target in
+  let target_key = Digest.string target |> Digest.to_hex in
+  let build_directory =
+    Filename.concat
+      project_root
+      ("_build/bonsai-flutter/dune/internal-closure/" ^ target_key)
+  in
+  let* dependencies =
+    Dune_closure.resolve_project ~project_root ~target ~build_directory
+  in
   List.iter print_endline dependencies;
   Ok ()
 ;;
@@ -307,25 +350,51 @@ let sync_host_command =
     Term.(const sync_host $ check)
 ;;
 
-let sdk_command =
-  let build_from_source =
-    Cmd.v
-      (Cmd.info "build-from-source" ~doc:"Build a native SDK from locked sources.")
-      Term.(const sdk_build $ target $ features)
+let sync_project_command =
+  let check =
+    Arg.(value & flag & info [ "check" ] ~doc:"Check without modifying app/dune.")
   in
-  let verify =
-    Cmd.v
-      (Cmd.info "verify" ~doc:"Verify a cached native SDK.")
-      Term.(const sdk_verify $ target)
+  Cmd.v
+    (Cmd.info "sync-project" ~doc:"Validate or repair application Dune aliases.")
+    Term.(const sync_project $ check)
+;;
+
+let clean_command =
+  let platform =
+    Arg.(
+      value
+      & pos 0 (some (enum [ "macos", Clean.Macos; "iphoneos", Clean.Iphoneos ])) None
+      & info [] ~docv:"PLATFORM")
   in
-  let fetch =
-    Cmd.v
-      (Cmd.info "fetch" ~doc:"Fetch a prebuilt native SDK.")
-      Term.(const sdk_fetch $ target $ features)
+  let all_project_builds =
+    Arg.(
+      value
+      & flag
+      & info
+          [ "all-project-builds" ]
+          ~doc:"Delete all Bonsai Flutter build state in this project.")
+  in
+  Cmd.v
+    (Cmd.info "clean" ~doc:"Delete project-local Bonsai Flutter build output.")
+    Term.(const clean $ platform $ all_project_builds)
+;;
+
+let toolchain_command =
+  let iphoneos =
+    Arg.(required & pos 0 (some (enum [ "iphoneos", () ])) None & info [] ~docv:"TARGET")
+  in
+  let subcommand name doc action =
+    Cmd.v (Cmd.info name ~doc) Term.(const (fun () -> action ()) $ iphoneos)
   in
   Cmd.group
-    (Cmd.info "sdk" ~doc:"Manage native SDKs.")
-    [ fetch; verify; build_from_source ]
+    (Cmd.info
+       "toolchain"
+       ~doc:"Install, inspect, or remove the global iPhoneOS toolchain.")
+    [ subcommand "install" "Install the locked global iPhoneOS SDK." toolchain_install
+    ; subcommand "show" "Show the installed iPhoneOS SDK manifest." toolchain_show
+    ; subcommand "verify" "Verify the installed iPhoneOS SDK." toolchain_verify
+    ; subcommand "remove" "Remove the fixed global iPhoneOS switch." toolchain_remove
+    ]
 ;;
 
 let command =
@@ -340,7 +409,9 @@ let command =
     ; run_command
     ; build_command
     ; sync_host_command
-    ; sdk_command
+    ; sync_project_command
+    ; clean_command
+    ; toolchain_command
     ; resolve_dune_closure_command
     ]
 ;;

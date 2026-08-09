@@ -10,10 +10,20 @@ enum OcamlMachOPlatform { macOS, iOS }
 
 enum OcamlArtifactVariant {
   debug,
+  profile,
   release;
 
-  static OcamlArtifactVariant fromLinkingEnabled(bool linkingEnabled) =>
-      linkingEnabled ? release : debug;
+  static OcamlArtifactVariant fromProfileName(String? profile) {
+    return switch (profile) {
+      'debug' => debug,
+      'profile' => OcamlArtifactVariant.profile,
+      'release' => release,
+      _ => throw FormatException(
+        'native_artifact_profile must be debug, profile, or release; '
+        'found $profile.',
+      ),
+    };
+  }
 }
 
 final class OcamlArtifactTarget {

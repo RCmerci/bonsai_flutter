@@ -4,148 +4,249 @@ let ( let* ) result f =
   | Error _ as error -> error
 ;;
 
-let synchronize ~framework_root ~project_root ~config =
+let synchronize ~framework_root:_ ~project_root ~config =
+  Scaffold.synchronize_dune_native_aliases ~project_root ~config
+;;
+
+let synchronize_flutter ~framework_root ~project_root ~config =
   let* () = Assets.synchronize_flutter_packages ~framework_root ~project_root in
   let* _changed = Host.sync ~project_root ~config ~mode:Host.Write in
   Ok ()
 ;;
 
-let macos_environment project_root =
-  let* sdk_root =
-    Process_runner.capture
-      ~working_directory:project_root
-      ~environment:[]
-      "xcrun"
-      [ "--sdk"; "macosx"; "--show-sdk-path" ]
-  in
-  Ok [ "BONSAI_FLUTTER_APPLE_SDK_ROOT", sdk_root ]
+let capture ~project_root program arguments =
+  Process_runner.capture ~working_directory:project_root ~environment:[] program arguments
 ;;
 
-let build_macos ~framework_root ~project_root ~config ~profile =
-  let* environment = macos_environment project_root in
-  let plan = Plan.build_native ~project_root ~config ~target:Plan.Macos ~profile in
-  let* () =
-    Process_runner.run { plan with environment = plan.environment @ environment }
+let apple_sdk ~project_root target =
+  let sdk =
+    match target with
+    | Plan.Macos -> "macosx"
+    | Plan.Iphoneos -> "iphoneos"
   in
-  Artifact.stage ~framework_root ~project_root ~config ~target:Plan.Macos ~profile
+  let* root = capture ~project_root "xcrun" [ "--sdk"; sdk; "--show-sdk-path" ] in
+  match target with
+  | Plan.Macos -> Ok (root, None)
+  | Plan.Iphoneos ->
+    let* version = capture ~project_root "xcrun" [ "--sdk"; sdk; "--show-sdk-version" ] in
+    Ok (root, Some version)
 ;;
 
-let copy_file source destination =
+let host_fingerprint ~project_root ~(config : Config.t) =
+  let* dune_version =
+    capture ~project_root "opam" [ "exec"; "--"; "dune"; "--version" ]
+  in
+  let* ocaml_version =
+    capture ~project_root "opam" [ "exec"; "--"; "ocamlc"; "-version" ]
+  in
+  let* package_version =
+    capture
+      ~project_root
+      "opam"
+      [ "exec"; "--"; "ocamlfind"; "query"; "-format"; "%v"; "bonsai_flutter" ]
+  in
+  let identity =
+    String.concat
+      "\000"
+      [ "bonsai-flutter-host-v1"
+      ; dune_version
+      ; ocaml_version
+      ; package_version
+      ; Sdk.supported_abi_version
+      ; config.macos.minimum_version
+      ; String.concat "," config.macos.architectures
+      ]
+  in
+  Ok Digestif.SHA256.(to_hex (digest_string identity))
+;;
+
+let iphoneos_fingerprint ~(config : Config.t) sdk_fingerprint =
+  String.concat
+    "\000"
+    [ "bonsai-flutter-iphoneos-v1"
+    ; sdk_fingerprint
+    ; Sdk.supported_abi_version
+    ; config.ios.minimum_version
+    ; String.concat "," config.ios.architectures
+    ]
+  |> Digestif.SHA256.digest_string
+  |> Digestif.SHA256.to_hex
+;;
+
+let build_manifest ~(build : Plan.native_build) ~target ~profile ~fingerprint artifact =
+  Printf.sprintf
+    "(build\n\
+    \ (format_version 1)\n\
+    \ (target %s)\n\
+    \ (profile %s)\n\
+    \ (toolchain_fingerprint %s)\n\
+    \ (source_digest %s)\n\
+    \ (artifact_digest %s))\n"
+    (Plan.target_name target)
+    (Plan.profile_name profile)
+    fingerprint
+    (Artifact.digest build.source_object)
+    (Artifact.digest artifact)
+;;
+
+let execute_native
+      ~framework_root
+      ~project_root
+      ~config
+      ~target
+      ~profile
+      ~toolchain_fingerprint
+      ~apple_sdk_root
+      ~apple_sdk_version
+  =
+  let* build =
+    Plan.native_build
+      ~project_root
+      ~config
+      ~target
+      ~profile
+      ~toolchain_fingerprint
+      ~apple_sdk_root
+      ~apple_sdk_version
+  in
+  Scaffold.ensure_directory (Filename.dirname build.build_directory);
+  let* () = Process_runner.run build.command in
+  Lock.with_lock build.lock (fun () ->
+    let* artifact = Artifact.stage ~framework_root ~build ~config ~target in
+    let manifest =
+      build_manifest ~build ~target ~profile ~fingerprint:toolchain_fingerprint artifact
+    in
+    let* () = Artifact.write_if_changed build.manifest manifest in
+    Ok artifact)
+;;
+
+let build_native ~framework_root ~project_root ~config ~target ~profile =
+  let* () = Scaffold.validate_dune_native_aliases ~project_root ~config in
+  let* apple_sdk_root, apple_sdk_version = apple_sdk ~project_root target in
+  match target with
+  | Plan.Macos ->
+    let* toolchain_fingerprint = host_fingerprint ~project_root ~config in
+    execute_native
+      ~framework_root
+      ~project_root
+      ~config
+      ~target
+      ~profile
+      ~toolchain_fingerprint
+      ~apple_sdk_root
+      ~apple_sdk_version
+  | Plan.Iphoneos ->
+    let* sdk =
+      Sdk.preflight
+        ~project_root
+        ~bonsai_flutter_version:Sdk.supported_bonsai_flutter_version
+        ~abi_version:Sdk.supported_abi_version
+        ~minimum_deployment_target:config.Config.ios.minimum_version
+        ~required_packages:[ "bonsai_flutter", Sdk.supported_bonsai_flutter_version ]
+    in
+    let closure_build_directory =
+      Filename.concat
+        project_root
+        ("_build/bonsai-flutter/dune/iphoneos/" ^ sdk.fingerprint ^ "/closure")
+    in
+    let* reachable_libraries =
+      Dune_closure.resolve_project
+        ~project_root
+        ~target:config.native_target
+        ~build_directory:closure_build_directory
+    in
+    let* _reachable_packages =
+      Sdk.validate_application_lock
+        ~project_root
+        ~application_name:config.name
+        ~reachable_libraries
+        sdk.manifest
+    in
+    let toolchain_fingerprint = iphoneos_fingerprint ~config sdk.fingerprint in
+    execute_native
+      ~framework_root
+      ~project_root
+      ~config
+      ~target
+      ~profile
+      ~toolchain_fingerprint
+      ~apple_sdk_root
+      ~apple_sdk_version
+;;
+
+let flutter_dependency_inputs ~project_root ~(config : Config.t) =
+  let flutter_root = Filename.concat project_root config.flutter_root in
+  let packages_root = Filename.concat project_root ".bonsai-flutter/flutter-packages" in
+  let required =
+    [ Filename.concat flutter_root "pubspec.yaml"
+    ; Filename.concat packages_root "bonsai_flutter/pubspec.yaml"
+    ; Filename.concat packages_root "bonsai_flutter_native/pubspec.yaml"
+    ]
+  in
+  match List.find_opt (fun path -> not (Sys.file_exists path)) required with
+  | Some path -> Error (Printf.sprintf "Flutter dependency input is missing: %s" path)
+  | None ->
+    let optional =
+      [ Filename.concat flutter_root "pubspec.lock"
+      ; Filename.concat flutter_root "pubspec_overrides.yaml"
+      ]
+      |> List.filter Sys.file_exists
+    in
+    Ok (required @ optional)
+;;
+
+let flutter_dependency_fingerprint ~project_root ~config =
   try
-    Artifact.copy_file source destination;
-    Ok ()
+    let* inputs = flutter_dependency_inputs ~project_root ~config in
+    inputs
+    |> List.map (fun path -> path ^ "\000" ^ Artifact.digest path)
+    |> String.concat "\000"
+    |> Digestif.SHA256.digest_string
+    |> Digestif.SHA256.to_hex
+    |> Result.ok
   with
   | Sys_error message | Unix.Unix_error (_, _, message) -> Error message
 ;;
 
-let with_external_app ~framework_root ~project_root ~key f =
-  let external_root = Filename.concat framework_root ("external_apps/" ^ key) in
-  let link = Filename.concat external_root "app" in
-  let lock_root = Filename.concat framework_root "_build/ios/locks" in
-  let lock = Filename.concat lock_root (key ^ ".lock") in
-  try
-    Scaffold.ensure_directory lock_root;
-    Unix.mkdir lock 0o755;
-    Scaffold.ensure_directory external_root;
-    Unix.symlink (Filename.concat project_root "app") link;
-    Fun.protect
-      ~finally:(fun () ->
-        if Sys.file_exists link then Unix.unlink link;
-        (try Unix.rmdir external_root with
-         | Unix.Unix_error _ -> ());
-        try Unix.rmdir lock with
-        | Unix.Unix_error _ -> ())
-      (fun () -> f external_root)
-  with
-  | Unix.Unix_error (Unix.EEXIST, _, _) ->
-    Error (Printf.sprintf "An iPhoneOS build already owns cache key %s" key)
-  | Unix.Unix_error (_, _, message) -> Error message
-;;
-
-let build_iphoneos ~framework_root ~project_root ~config ~profile =
-  let* () =
-    Sdk.build_from_source
-      ~framework_root
-      ~project_root:(Some project_root)
-      ~target:Plan.Iphoneos
-      ~features:config.Config.features
-  in
-  let key = Cache.application_key ~config ~target:Plan.Iphoneos ~profile in
-  with_external_app ~framework_root ~project_root ~key (fun _external_root ->
-    let* sdk_version =
-      Process_runner.capture
-        ~working_directory:project_root
-        ~environment:[]
-        "xcrun"
-        [ "--sdk"; "iphoneos"; "--show-sdk-version" ]
-    in
-    let* sdk_root =
-      Process_runner.capture
-        ~working_directory:project_root
-        ~environment:[]
-        "xcrun"
-        [ "--sdk"; "iphoneos"; "--show-sdk-path" ]
-    in
-    let opam_root = Filename.concat framework_root "_build/ios/opam-root" in
-    let switch = Filename.concat framework_root "_build/ios/switches/iphoneos" in
-    let* findlib_conf = Sdk.application_findlib_conf ~framework_root ~project_root in
-    let build_directory = Filename.concat framework_root ("_build/ios/external/" ^ key) in
-    Scaffold.ensure_directory (Filename.dirname build_directory);
-    let external_target =
-      "external_apps/" ^ key ^ "/app/" ^ Filename.basename config.native_target
-    in
-    let command : Plan.command =
-      { program = "opam"
-      ; arguments =
-          [ "exec"
-          ; "--switch=" ^ switch
-          ; "--"
-          ; "dune"
-          ; "build"
-          ; "--root=" ^ framework_root
-          ; "--build-dir=" ^ build_directory
-          ; "--profile=" ^ Plan.profile_name profile
-          ; "-x"
-          ; "ios"
-          ; external_target
-          ]
-      ; working_directory = framework_root
-      ; environment =
-          [ "OPAMROOT", opam_root
-          ; "OCAMLFIND_CONF", findlib_conf
-          ; "BUILD_PATH_PREFIX_MAP", project_root ^ "=."
-          ; "BONSAI_FLUTTER_APPLE_SDK_ROOT", sdk_root
-          ; "SDK", sdk_version
-          ; "VER", config.ios.minimum_version
-          ; "BONSAI_FLUTTER_EMBED_OCAML", "enabled"
-          ]
-      }
-    in
-    let* () = Process_runner.run command in
-    let built = Filename.concat build_directory ("default.ios/" ^ external_target) in
-    let staged_source =
-      Artifact.source ~project_root ~config ~target:Plan.Iphoneos ~profile
-    in
-    let* () = copy_file built staged_source in
-    Artifact.stage ~framework_root ~project_root ~config ~target:Plan.Iphoneos ~profile)
-;;
-
-let build_native ~framework_root ~project_root ~config ~target ~profile =
-  let* () = synchronize ~framework_root ~project_root ~config in
-  match target with
-  | Plan.Macos -> build_macos ~framework_root ~project_root ~config ~profile
-  | Plan.Iphoneos -> build_iphoneos ~framework_root ~project_root ~config ~profile
+let read_file path =
+  let channel = open_in_bin path in
+  Fun.protect
+    ~finally:(fun () -> close_in_noerr channel)
+    (fun () -> really_input_string channel (in_channel_length channel))
 ;;
 
 let flutter_pub_get ~project_root ~config =
-  let command : Plan.command =
-    { program = "flutter"
-    ; arguments = [ "pub"; "get" ]
-    ; working_directory = Filename.concat project_root config.Config.flutter_root
-    ; environment = []
-    }
+  let flutter_root = Filename.concat project_root config.Config.flutter_root in
+  let state =
+    Filename.concat project_root "_build/bonsai-flutter/state/flutter/pub-get.sexp"
   in
-  Process_runner.run command
+  let package_config = Filename.concat flutter_root ".dart_tool/package_config.json" in
+  let state_contents fingerprint =
+    Printf.sprintf "(pub_get\n (format_version 1)\n (fingerprint %s))\n" fingerprint
+  in
+  try
+    let* fingerprint = flutter_dependency_fingerprint ~project_root ~config in
+    let current = state_contents fingerprint in
+    let unchanged =
+      Sys.file_exists package_config
+      && Sys.file_exists state
+      && String.equal (read_file state) current
+    in
+    if unchanged
+    then Ok ()
+    else (
+      let command : Plan.command =
+        { program = "flutter"
+        ; arguments = [ "pub"; "get" ]
+        ; working_directory = flutter_root
+        ; environment = []
+        }
+      in
+      let* () = Process_runner.run command in
+      let* fingerprint = flutter_dependency_fingerprint ~project_root ~config in
+      Artifact.write_if_changed state (state_contents fingerprint))
+  with
+  | Sys_error message | Unix.Unix_error (_, _, message) -> Error message
 ;;
 
 let verify_ios_bundle ~framework_root ~project_root ~config ~profile =
@@ -261,16 +362,26 @@ let run_flutter
     | Plan.Macos_platform -> Plan.Macos
     | Plan.Ios_platform -> Plan.Iphoneos
   in
-  let* _artifact = build_native ~framework_root ~project_root ~config ~target ~profile in
-  let* () = flutter_pub_get ~project_root ~config in
-  run_flutter_host
-    ~framework_root
-    ~project_root
-    ~config
-    ~action
-    ~platform
-    ~profile
-    ~device
-    ~no_codesign
-    ~forwarded
+  let lock = Filename.concat project_root "_build/bonsai-flutter/locks/flutter.lock" in
+  Lock.with_lock lock (fun () ->
+    let* () = synchronize_flutter ~framework_root ~project_root ~config in
+    let* _artifact =
+      build_native ~framework_root ~project_root ~config ~target ~profile
+    in
+    let* () = flutter_pub_get ~project_root ~config in
+    Host.with_artifact_profile
+      ~project_root
+      ~config
+      ~profile:(Plan.profile_name profile)
+      (fun () ->
+         run_flutter_host
+           ~framework_root
+           ~project_root
+           ~config
+           ~action
+           ~platform
+           ~profile
+           ~device
+           ~no_codesign
+           ~forwarded))
 ;;

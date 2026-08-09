@@ -394,47 +394,1041 @@ let test_missing_host_requires_migration () =
 let test_command_plans () =
   let config = Config.parse_string valid_config |> get_ok in
   let macos =
-    Plan.build_native
+    Plan.native_build
       ~project_root:"/work/journal"
       ~config
       ~target:Plan.Macos
       ~profile:Plan.Debug
+      ~toolchain_fingerprint:"host-abc"
+      ~apple_sdk_root:"/Xcode/MacOSX.sdk"
+      ~apple_sdk_version:None
+    |> get_ok
   in
-  Alcotest.(check string) "macOS executable" "dune" macos.program;
+  Alcotest.(check string) "macOS executable" "opam" macos.command.program;
   Alcotest.(check (list string))
     "macOS args"
-    [ "build"; "app/native_embed.exe.o" ]
-    macos.arguments;
+    [ "exec"
+    ; "--"
+    ; "dune"
+    ; "build"
+    ; "--root=/work/journal"
+    ; "--build-dir=/work/journal/_build/bonsai-flutter/dune/macos/host-abc/debug"
+    ; "--profile=debug"
+    ; "@app/bonsai-flutter-macos"
+    ]
+    macos.command.arguments;
   Alcotest.(check (pair string string))
     "embed env"
     ("BONSAI_FLUTTER_EMBED_OCAML", "enabled")
-    (List.assoc "BONSAI_FLUTTER_EMBED_OCAML" macos.environment
+    (List.assoc "BONSAI_FLUTTER_EMBED_OCAML" macos.command.environment
      |> fun value -> "BONSAI_FLUTTER_EMBED_OCAML", value);
   Alcotest.(check string)
     "macOS deployment environment"
     "26.0"
-    (List.assoc "MACOSX_DEPLOYMENT_TARGET" macos.environment);
-  Alcotest.(check bool)
-    "obsolete generic minimum environment"
-    false
-    (List.mem_assoc "BONSAI_FLUTTER_MINIMUM_VERSION" macos.environment);
+    (List.assoc "MACOSX_DEPLOYMENT_TARGET" macos.command.environment);
+  Alcotest.(check string)
+    "macOS SDK root"
+    "/Xcode/MacOSX.sdk"
+    (List.assoc "BONSAI_FLUTTER_APPLE_SDK_ROOT" macos.command.environment);
+  Alcotest.(check string)
+    "macOS source object"
+    "/work/journal/_build/bonsai-flutter/dune/macos/host-abc/debug/default/app/native_embed.exe.o"
+    macos.source_object;
+  Alcotest.(check string)
+    "macOS staged object"
+    "/work/journal/_build/bonsai-flutter/artifacts/macos/arm64/debug/native_embed.exe.o"
+    macos.staged_object;
   let ios =
-    Plan.build_native
+    Plan.native_build
       ~project_root:"/work/journal"
       ~config
       ~target:Plan.Iphoneos
       ~profile:Plan.Release
+      ~toolchain_fingerprint:"sdk-def"
+      ~apple_sdk_root:"/Xcode/iPhoneOS.sdk"
+      ~apple_sdk_version:(Some "26.0")
+    |> get_ok
   in
-  Alcotest.(check string) "iOS executable" "dune" ios.program;
-  Alcotest.(check bool) "iOS cross context" true (List.mem "-x" ios.arguments);
-  Alcotest.(check bool)
-    "release profile"
-    true
-    (List.mem "--profile=release" ios.arguments);
+  Alcotest.(check string) "iOS executable" "opam" ios.command.program;
+  Alcotest.(check (list string))
+    "iOS args"
+    [ "exec"
+    ; "--switch=bonsai-flutter-ios"
+    ; "--"
+    ; "dune"
+    ; "build"
+    ; "--root=/work/journal"
+    ; "--build-dir=/work/journal/_build/bonsai-flutter/dune/iphoneos/sdk-def/release"
+    ; "--profile=release"
+    ; "-x"
+    ; "ios"
+    ; "@app/bonsai-flutter-ios"
+    ]
+    ios.command.arguments;
   Alcotest.(check bool)
     "macOS environment is not leaked to iPhoneOS"
     false
-    (List.mem_assoc "MACOSX_DEPLOYMENT_TARGET" ios.environment)
+    (List.mem_assoc "MACOSX_DEPLOYMENT_TARGET" ios.command.environment);
+  Alcotest.(check string)
+    "iOS SDK version"
+    "26.0"
+    (List.assoc "SDK" ios.command.environment);
+  Alcotest.(check string)
+    "iOS deployment target"
+    "15.0"
+    (List.assoc "VER" ios.command.environment);
+  Alcotest.(check string)
+    "iOS source object"
+    "/work/journal/_build/bonsai-flutter/dune/iphoneos/sdk-def/release/default.ios/app/native_embed.exe.o"
+    ios.source_object;
+  Alcotest.(check string)
+    "iOS staged object"
+    "/work/journal/_build/bonsai-flutter/artifacts/ios/iphoneos/arm64/release/native_embed.exe.o"
+    ios.staged_object;
+  List.iter
+    (fun path ->
+       Alcotest.(check bool)
+         ("project-local path: " ^ path)
+         true
+         (String.starts_with ~prefix:"/work/journal/_build/bonsai-flutter/" path))
+    [ ios.build_directory
+    ; ios.source_object
+    ; ios.staged_object
+    ; ios.manifest
+    ; ios.log
+    ; ios.lock
+    ];
+  Plan.native_build
+    ~project_root:"/work/journal"
+    ~config
+    ~target:Plan.Iphoneos
+    ~profile:Plan.Debug
+    ~toolchain_fingerprint:"../../../shared"
+    ~apple_sdk_root:"/Xcode/iPhoneOS.sdk"
+    ~apple_sdk_version:(Some "26.0")
+  |> check_error_contains "Invalid toolchain fingerprint"
+;;
+
+let test_fixed_iphoneos_switch () =
+  Alcotest.(check string) "fixed switch" "bonsai-flutter-ios" Plan.iphoneos_switch;
+  valid_config
+  |> replace_once
+       ~pattern:"(minimum_version 15.0)"
+       ~replacement:"(minimum_version 15.0)\n  (switch local-ios)"
+  |> Config.parse_string
+  |> check_error_contains "Unknown ios field: switch"
+;;
+
+let valid_sdk_manifest =
+  {|
+(sdk
+ (format_version 1)
+ (bonsai_flutter_version 0.1.0~dev)
+ (abi_version 1)
+ (ocaml_version 5.1.1)
+ (dune_version_range 3.17 4.0)
+ (cross_compiler ocaml-ios64 5.1.1)
+ (findlib_toolchain ios)
+ (architecture arm64)
+ (platform iphoneos)
+ (minimum_deployment_target 15.0)
+ (package_universe_digest package-digest)
+ (target_components_digest component-digest)
+ (required_frameworks Foundation Security)
+ (required_system_libraries sqlite3)
+ (build_recipe_revision 1)
+ (packages
+  (base v0.17.0)
+  (bonsai_flutter 0.1.0~dev)
+  (core v0.17.0))
+ (libraries
+  (base base v0.17.0 (base base.md5))
+  (bonsai_flutter.ui bonsai_flutter 0.1.0~dev
+   (bonsai_flutter.driver bonsai_flutter.ui))))
+|}
+;;
+
+let parse_sdk_manifest source = Sdk.Manifest.parse source |> get_ok
+
+let test_sdk_manifest_contract () =
+  let manifest = parse_sdk_manifest valid_sdk_manifest in
+  Sdk.Manifest.validate
+    manifest
+    ~bonsai_flutter_version:"0.1.0~dev"
+    ~abi_version:"1"
+    ~minimum_deployment_target:"15.0"
+  |> get_ok;
+  Sdk.Manifest.validate_packages
+    manifest
+    [ "bonsai_flutter", "0.1.0~dev"; "base", "v0.17.0" ]
+  |> get_ok;
+  Sdk.Manifest.validate_packages manifest [ "missing", "1.0" ]
+  |> check_error_contains
+       "Package missing.1.0 is not in the fixed iPhoneOS SDK package universe";
+  Sdk.Manifest.validate_packages manifest [ "base", "v0.18.0" ]
+  |> check_error_contains
+       "Package base.v0.18.0 conflicts with iPhoneOS SDK package base.v0.17.0";
+  Sdk.Manifest.validate
+    (valid_sdk_manifest
+     |> replace_once ~pattern:"(platform iphoneos)" ~replacement:"(platform macos)"
+     |> parse_sdk_manifest)
+    ~bonsai_flutter_version:"0.1.0~dev"
+    ~abi_version:"1"
+    ~minimum_deployment_target:"15.0"
+  |> check_error_contains "expected Apple platform iphoneos";
+  Sdk.Manifest.validate
+    manifest
+    ~bonsai_flutter_version:"0.2.0"
+    ~abi_version:"1"
+    ~minimum_deployment_target:"15.0"
+  |> check_error_contains
+       "The iPhoneOS switch SDK manifest is incompatible with bonsai-flutter 0.2.0";
+  Sdk.Manifest.validate
+    manifest
+    ~bonsai_flutter_version:"0.1.0~dev"
+    ~abi_version:"1"
+    ~minimum_deployment_target:"14.0"
+  |> check_error_contains "minimum deployment target 14.0 is unsupported";
+  valid_sdk_manifest
+  |> replace_once
+       ~pattern:" (target_components_digest component-digest)\n"
+       ~replacement:""
+  |> Sdk.Manifest.parse
+  |> check_error_contains "Missing SDK manifest field: target_components_digest"
+;;
+
+let application_lock =
+  {|opam-version: "2.0"
+name: "demo"
+version: "0.1.0"
+depends: [
+  "base" {= "v0.17.0"}
+  "bonsai_flutter" {= "0.1.0~dev"}
+  "unreachable" {= "99.0"}
+]
+|}
+;;
+
+let test_sdk_validates_only_reachable_application_lock_subset () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "application-lock" in
+  let lock = Filename.concat root "demo.opam.locked" in
+  write_file lock application_lock;
+  let manifest = parse_sdk_manifest valid_sdk_manifest in
+  Alcotest.(check (list (pair string string)))
+    "reachable package subset"
+    [ "base", "v0.17.0"; "bonsai_flutter", "0.1.0~dev" ]
+    (Sdk.validate_application_lock
+       ~project_root:root
+       ~application_name:"demo"
+       ~reachable_libraries:[ "bonsai_flutter.ui"; "base" ]
+       manifest
+     |> get_ok);
+  Sdk.validate_application_lock
+    ~project_root:root
+    ~application_name:"demo"
+    ~reachable_libraries:[ "unsupported.library" ]
+    manifest
+  |> check_error_contains
+       "Findlib library unsupported.library is not provided by the iPhoneOS SDK";
+  write_file
+    lock
+    (application_lock
+     |> replace_once
+          ~pattern:"\"base\" {= \"v0.17.0\"}"
+          ~replacement:"\"base\" {= \"v0.18.0\"}");
+  Sdk.validate_application_lock
+    ~project_root:root
+    ~application_name:"demo"
+    ~reachable_libraries:[ "base" ]
+    manifest
+  |> check_error_contains
+       "Package base.v0.18.0 conflicts with reachable SDK package base.v0.17.0";
+  write_file
+    lock
+    (application_lock
+     |> replace_once ~pattern:"  \"base\" {= \"v0.17.0\"}\n" ~replacement:"");
+  Sdk.validate_application_lock
+    ~project_root:root
+    ~application_name:"demo"
+    ~reachable_libraries:[ "base" ]
+    manifest
+  |> check_error_contains
+       "Reachable SDK package base.v0.17.0 is missing from demo.opam.locked";
+  write_file
+    lock
+    (application_lock
+     |> replace_once
+          ~pattern:"\"base\" {= \"v0.17.0\"}"
+          ~replacement:"\"base\" {>= \"v0.17.0\"}");
+  Sdk.validate_application_lock
+    ~project_root:root
+    ~application_name:"demo"
+    ~reachable_libraries:[ "base" ]
+    manifest
+  |> check_error_contains "Dependency base in demo.opam.locked is not pinned exactly"
+;;
+
+let test_sdk_manifest_fingerprint_is_canonical () =
+  let compact = parse_sdk_manifest valid_sdk_manifest in
+  let expanded =
+    valid_sdk_manifest
+    |> replace_once
+         ~pattern:"(architecture arm64)"
+         ~replacement:"(architecture       arm64)"
+    |> parse_sdk_manifest
+  in
+  let first = Sdk.Manifest.fingerprint compact in
+  let second = Sdk.Manifest.fingerprint expanded in
+  Alcotest.(check string) "whitespace independent" first second;
+  Alcotest.(check int) "SHA-256 length" 64 (String.length first);
+  let changed =
+    valid_sdk_manifest
+    |> replace_once ~pattern:"component-digest" ~replacement:"changed-digest"
+    |> parse_sdk_manifest
+    |> Sdk.Manifest.fingerprint
+  in
+  Alcotest.(check bool) "component changes identity" true (first <> changed)
+;;
+
+let test_sdk_preflight_is_read_only () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "sdk-preflight" |> Unix.realpath in
+  let project_root = Filename.concat root "project" in
+  let prefix = Filename.concat root "switch-prefix" in
+  let bin = Filename.concat root "bin" in
+  let command_log = Filename.concat root "commands.log" in
+  Scaffold.ensure_directory project_root;
+  [ "dune"; "ocamlc"; "ocamlfind" ]
+  |> List.iter (fun program ->
+    write_executable (Filename.concat prefix ("bin/" ^ program)) "#!/bin/sh\nexit 0\n");
+  let manifest_path =
+    Filename.concat prefix "share/bonsai_flutter_ios_sdk/manifest.sexp"
+  in
+  write_file manifest_path valid_sdk_manifest;
+  write_executable
+    (Filename.concat bin "opam")
+    (command_logger "opam"
+     ^ Printf.sprintf
+         {|if test "$1" = switch && test "$2" = show; then
+  printf '%%s\n' 'bonsai-flutter-ios'
+elif test "$1" = var && test "$2" = --switch=bonsai-flutter-ios; then
+  printf '%%s\n' '%s'
+elif test "$1" = exec && test "$4" = dune; then
+  printf '%%s\n' '3.18.2'
+elif test "$1" = exec && test "$4" = ocamlc; then
+  printf '%%s\n' '5.1.1'
+elif test "$1" = exec && test "$4" = ocamlfind; then
+  printf '%%s\n' '%s/lib/ios'
+else
+  exit 64
+fi
+|}
+         prefix
+         prefix);
+  let manifest_mtime = (Unix.stat manifest_path).st_mtime in
+  with_environment
+    [ "PATH", bin ^ ":" ^ Option.value ~default:"" (Sys.getenv_opt "PATH")
+    ; "COMMAND_LOG", command_log
+    ]
+    (fun () ->
+       let result =
+         Sdk.preflight
+           ~project_root
+           ~bonsai_flutter_version:"0.1.0~dev"
+           ~abi_version:"1"
+           ~minimum_deployment_target:"15.0"
+           ~required_packages:[ "base", "v0.17.0" ]
+         |> get_ok
+       in
+       Alcotest.(check string) "global switch prefix" prefix result.switch_prefix;
+       Alcotest.(check string)
+         "manifest fingerprint"
+         (valid_sdk_manifest |> parse_sdk_manifest |> Sdk.Manifest.fingerprint)
+         result.fingerprint);
+  Alcotest.(check (float 0.))
+    "manifest remains untouched"
+    manifest_mtime
+    (Unix.stat manifest_path).st_mtime;
+  let commands = read_file command_log |> non_empty_lines in
+  Alcotest.(check int) "five read-only opam calls" 5 (List.length commands);
+  Alcotest.(check bool)
+    "switch is selected explicitly"
+    true
+    (List.for_all
+       (fun command -> contains command "--switch=bonsai-flutter-ios")
+       commands);
+  Alcotest.(check bool)
+    "no mutation command"
+    false
+    (List.exists
+       (fun command ->
+          contains command " install "
+          || contains command " remove "
+          || contains command " switch create ")
+       commands)
+;;
+
+let test_sdk_preflight_reports_missing_switch () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "missing-switch" |> Unix.realpath in
+  let bin = Filename.concat root "bin" in
+  Scaffold.ensure_directory (Filename.concat root "project");
+  write_executable (Filename.concat bin "opam") "#!/bin/sh\nexit 2\n";
+  with_environment
+    [ "PATH", bin ^ ":" ^ Option.value ~default:"" (Sys.getenv_opt "PATH") ]
+    (fun () ->
+       Sdk.preflight
+         ~project_root:(Filename.concat root "project")
+         ~bonsai_flutter_version:"0.1.0~dev"
+         ~abi_version:"1"
+         ~minimum_deployment_target:"15.0"
+         ~required_packages:[]
+       |> check_error_contains
+            "The global iPhoneOS switch \"bonsai-flutter-ios\" is missing. Run: \
+             bonsai-flutter toolchain install iphoneos")
+;;
+
+let rec repository_files root relative =
+  let path = Filename.concat root relative in
+  match (Unix.lstat path).st_kind with
+  | Unix.S_DIR ->
+    Sys.readdir path
+    |> Array.to_list
+    |> List.sort String.compare
+    |> List.concat_map (fun name ->
+      repository_files
+        root
+        (if relative = "" then name else Filename.concat relative name))
+  | Unix.S_REG -> if relative = "repository.sexp" then [] else [ relative ]
+  | Unix.S_LNK | Unix.S_CHR | Unix.S_BLK | Unix.S_FIFO | Unix.S_SOCK ->
+    Alcotest.failf "invalid repository entry: %s" path
+;;
+
+let repository_digest root =
+  let canonical =
+    repository_files root ""
+    |> List.map (fun relative ->
+      relative ^ "\000" ^ Artifact.digest (Filename.concat root relative))
+    |> String.concat "\000"
+  in
+  let temporary = Filename.temp_file "bonsai-flutter-repository" ".digest-input" in
+  Fun.protect
+    ~finally:(fun () -> Sys.remove temporary)
+    (fun () ->
+       write_file temporary canonical;
+       Artifact.digest temporary)
+;;
+
+let repository_lock ~digest ~source_digest ~package_digest ~archive_digest =
+  Printf.sprintf
+    {|(repository
+ (format_version 1)
+ (repository_version 0.1.0)
+ (repository_snapshot_sha256 %s)
+ (source_lock vendor/opam-ios/runtime-closure.lock %s)
+ (package_universe package-universe.lock %s)
+ (source_archives source-archives.lock %s)
+ (default_repository https://github.com/RCmerci/opam-repository.git c98b21e24c088665ccae4c3b53eadadd3b755b15)
+ (cross_repository https://github.com/ocaml-cross/opam-cross-ios.git 8380b52b0154752c26c6e221c04fbced3320aa48)
+ (compiler ocaml-base-compiler 5.1.1)
+ (sdk_package bonsai_flutter_ios_sdk 0.1.0~dev))
+|}
+    digest
+    source_digest
+    package_digest
+    archive_digest
+;;
+
+let rec source_root directory =
+  if Sys.file_exists (Filename.concat directory "tool/ios/opam-repository/0.1.0")
+  then directory
+  else (
+    let parent = Filename.dirname directory in
+    if parent = directory
+    then Alcotest.fail "repository source root was not found"
+    else source_root parent)
+;;
+
+let write_repository_fixture root =
+  let framework_root =
+    root |> Filename.dirname |> Filename.dirname |> Filename.dirname |> Filename.dirname
+  in
+  let source_lock =
+    Filename.concat framework_root "vendor/opam-ios/runtime-closure.lock"
+  in
+  write_file
+    source_lock
+    "# \
+     package|version|role|capability|build-mechanism|source|sha256|components|dependencies\n";
+  write_file (Filename.concat root "repo") "opam-version: \"2.0\"\n";
+  write_file
+    (Filename.concat root "package-universe.lock")
+    "# package|version|repository|metadata-sha256\n";
+  write_file
+    (Filename.concat root "source-archives.lock")
+    "# package|version|source|algorithm|checksum\n";
+  write_file
+    (Filename.concat
+       root
+       "packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev/opam")
+    {|opam-version: "2.0"
+synopsis: "Bonsai Flutter iPhoneOS SDK"
+maintainer: "bonsai_flutter contributors"
+depends: [
+  "ocaml-base-compiler" {= "5.1.1"}
+]
+|};
+  write_file
+    (Filename.concat root "repository.sexp")
+    (repository_lock
+       ~digest:(repository_digest root)
+       ~source_digest:(Artifact.digest source_lock)
+       ~package_digest:(Artifact.digest (Filename.concat root "package-universe.lock"))
+       ~archive_digest:(Artifact.digest (Filename.concat root "source-archives.lock")))
+;;
+
+let test_ios_opam_repository_release_contract () =
+  let source_root = source_root (Sys.getcwd ()) in
+  let repository = Filename.concat source_root "tool/ios/opam-repository/0.1.0" in
+  if not (Sys.file_exists repository)
+  then Alcotest.failf "versioned iOS opam repository is missing: %s" repository;
+  let lock = Filename.concat repository "repository.sexp" in
+  let meta =
+    Filename.concat
+      repository
+      "packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev/opam"
+  in
+  let cross_compiler_opam =
+    Filename.concat repository "packages/ocaml-ios64/ocaml-ios64.5.1.1/opam"
+  in
+  let ios_configuration_opam =
+    Filename.concat repository "packages/conf-ios/conf-ios.4/opam"
+  in
+  let package_lock = Filename.concat repository "package-universe.lock" in
+  let source_archive_lock = Filename.concat repository "source-archives.lock" in
+  let sdk_files =
+    Filename.concat
+      repository
+      "packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev/files"
+  in
+  let sdk_manifest = Filename.concat sdk_files "manifest.sexp" in
+  let installed_package_lock = Filename.concat sdk_files "package-lock.sexp" in
+  let sdk_builder = Filename.concat sdk_files "build-installed-sdk.sh" in
+  Alcotest.(check bool) "repository lock" true (Sys.file_exists lock);
+  Alcotest.(check bool) "SDK meta-package" true (Sys.file_exists meta);
+  Alcotest.(check bool)
+    "fetchable cross compiler source"
+    true
+    (contains (read_file cross_compiler_opam) "ocaml/archive/5.1.1.tar.gz");
+  let ios_configuration = read_file ios_configuration_opam in
+  Alcotest.(check bool)
+    "fixed iPhoneOS architecture"
+    true
+    (contains ios_configuration "arm64" && contains ios_configuration "arm-apple-darwin");
+  Alcotest.(check bool)
+    "fixed iPhoneOS deployment target"
+    true
+    (contains ios_configuration "miphoneos-version-min=15.0");
+  Alcotest.(check bool)
+    "configuration has no caller-owned architecture variables"
+    false
+    (contains ios_configuration "${ARCH}" || contains ios_configuration "${SUBARCH}");
+  Alcotest.(check bool) "package universe lock" true (Sys.file_exists package_lock);
+  Alcotest.(check bool) "source archive lock" true (Sys.file_exists source_archive_lock);
+  Alcotest.(check bool) "installable SDK manifest" true (Sys.file_exists sdk_manifest);
+  Alcotest.(check bool)
+    "installable SDK package lock"
+    true
+    (Sys.file_exists installed_package_lock);
+  Alcotest.(check bool) "installable SDK builder" true (Sys.file_exists sdk_builder);
+  let sdk_manifest_contents = read_file sdk_manifest in
+  Alcotest.(check bool)
+    "SDK manifest owns target standard libraries through the cross compiler"
+    true
+    (contains sdk_manifest_contents "(ocaml-ios64 5.1.1)"
+     && contains
+          sdk_manifest_contents
+          "(threads ocaml-ios64 5.1.1 (threads unix str dynlink))"
+     && contains
+          sdk_manifest_contents
+          "(unix ocaml-ios64 5.1.1 (threads unix str dynlink))"
+     && contains
+          sdk_manifest_contents
+          "(str ocaml-ios64 5.1.1 (threads unix str dynlink))"
+     && contains
+          sdk_manifest_contents
+          "(dynlink ocaml-ios64 5.1.1 (threads unix str dynlink))");
+  let lock_contents = read_file lock in
+  Alcotest.(check bool)
+    "default repository commit"
+    true
+    (contains lock_contents "c98b21e24c088665ccae4c3b53eadadd3b755b15");
+  Alcotest.(check bool)
+    "cross repository commit"
+    true
+    (contains lock_contents "8380b52b0154752c26c6e221c04fbced3320aa48");
+  Alcotest.(check bool)
+    "repository snapshot digest"
+    true
+    (contains lock_contents (repository_digest repository));
+  Alcotest.(check bool)
+    "source checksum lock digest"
+    true
+    (contains
+       lock_contents
+       (Artifact.digest
+          (Filename.concat source_root "vendor/opam-ios/runtime-closure.lock")));
+  let meta_contents = read_file meta in
+  Alcotest.(check bool)
+    "meta installs manifest"
+    true
+    (contains meta_contents "bonsai_flutter_ios_sdk/manifest.sexp");
+  Alcotest.(check bool)
+    "meta installs package lock"
+    true
+    (contains meta_contents "bonsai_flutter_ios_sdk/package-lock.sexp");
+  Alcotest.(check bool)
+    "meta builds target SDK"
+    true
+    (contains meta_contents "build-installed-sdk.sh");
+  Alcotest.(check bool)
+    "meta fetches the checksummed framework source before the sandboxed build"
+    true
+    (contains meta_contents "extra-source \"bonsai_flutter.tar.gz\""
+     && contains
+          meta_contents
+          "https://github.com/RCmerci/bonsai_flutter/archive/ea5e96b4dd38795a901720c80e1ffc9eb684b86c.tar.gz"
+     && contains
+          meta_contents
+          "sha256=c20edc77779c24c411854a19d234887615a6ba0a352784d35a970fb0a7d148a5");
+  Alcotest.(check bool)
+    "meta fetches checksummed runtime sources before the sandboxed build"
+    true
+    (contains
+       meta_contents
+       "extra-source \"runtime-jst-config-2cf345e33bed0ee4c325667e77dfc5bee8f12afd56318b7c9acf81ec875ecf6e.archive\""
+     && contains
+          meta_contents
+          "https://github.com/janestreet/jst-config/archive/refs/tags/v0.17.0.tar.gz"
+     && contains
+          meta_contents
+          "sha256=2cf345e33bed0ee4c325667e77dfc5bee8f12afd56318b7c9acf81ec875ecf6e");
+  Alcotest.(check bool)
+    "meta merges the SDK contents into the compiler sysroot"
+    true
+    (contains
+       meta_contents
+       "[\"cp\" \"-R\" \".bonsai_flutter_ios_sdk/stage/ios-sysroot/.\" \
+        \"%{prefix}%/ios-sysroot/\"]");
+  Alcotest.(check bool)
+    "meta checksums target SDK builder"
+    true
+    (contains meta_contents "extra-files: ["
+     && contains meta_contents "[\"build-installed-sdk.sh\" \"sha256=");
+  let sdk_builder_contents = read_file sdk_builder in
+  let runtime_builder_contents =
+    read_file (Filename.concat sdk_files "build-runtime-package.sh")
+  in
+  Alcotest.(check bool)
+    "builder requires the selected global switch prefix"
+    true
+    (contains sdk_builder_contents "OPAM_SWITCH_PREFIX");
+  Alcotest.(check bool)
+    "builder has no removed framework build root"
+    false
+    (contains sdk_builder_contents "_build/ios"
+     || contains sdk_builder_contents "switches/iphoneos");
+  Alcotest.(check bool)
+    "builder enters the pinned framework source instead of repeating Dune root"
+    true
+    (contains sdk_builder_contents "cd \"$framework_source\""
+     && not (contains sdk_builder_contents "--root=\"$framework_source\""));
+  Alcotest.(check bool)
+    "builder consumes the opam-fetched framework archive"
+    true
+    (contains
+       sdk_builder_contents
+       "framework_archive_source=\"$script_directory/bonsai_flutter.tar.gz\""
+     && not (contains sdk_builder_contents "framework_source_url="));
+  Alcotest.(check bool)
+    "runtime builder consumes opam-fetched archives"
+    true
+    (contains
+       runtime_builder_contents
+       "source_archive_source=\"$SDK_ASSET_ROOT/runtime-$package_name-$source_sha256.archive\""
+     && not (contains runtime_builder_contents "curl"));
+  Alcotest.(check bool)
+    "builder stages the iOS cross-context install tree without nesting the sysroot"
+    true
+    (contains
+       sdk_builder_contents
+       "framework_install_root=\"$framework_build/install/default.ios\""
+     && contains
+          sdk_builder_contents
+          "cp -RL \"$framework_install_root/.\" \"$stage_root/ios-sysroot/\""
+     && not (contains sdk_builder_contents "dune install"));
+  let package_rows =
+    read_file package_lock |> non_empty_lines |> List.filter (fun line -> line.[0] <> '#')
+  in
+  Alcotest.(check int) "complete solved package universe" 217 (List.length package_rows);
+  let package_keys = ref [] in
+  package_rows
+  |> List.iter (fun line ->
+    match String.split_on_char '|' line with
+    | [ package; version; repository_name; metadata_sha ] ->
+      let key = package ^ "." ^ version in
+      package_keys := (package, version) :: !package_keys;
+      Alcotest.(check bool)
+        (key ^ " repository provenance")
+        true
+        (List.mem repository_name [ "local"; "ios-cross"; "default" ]);
+      Alcotest.(check int) (key ^ " metadata SHA-256") 64 (String.length metadata_sha);
+      if package <> "bonsai_flutter_ios_sdk"
+      then
+        Alcotest.(check bool)
+          (key ^ " exact meta dependency")
+          true
+          (contains meta_contents (Printf.sprintf "\"%s\" {= \"%s\"}" package version))
+    | _ -> Alcotest.failf "invalid package universe row: %s" line);
+  let package_keys = List.rev !package_keys in
+  Alcotest.(check (list (pair string string)))
+    "sorted unique package universe"
+    (List.sort_uniq Stdlib.compare package_keys)
+    package_keys;
+  Alcotest.(check bool)
+    "package universe digest"
+    true
+    (contains lock_contents (Artifact.digest package_lock));
+  read_file source_archive_lock
+  |> non_empty_lines
+  |> List.filter (fun line -> line.[0] <> '#')
+  |> List.iter (fun line ->
+    match String.split_on_char '|' line with
+    | [ package; version; source; checksum_algorithm; source_checksum ] ->
+      Alcotest.(check bool)
+        (package ^ "." ^ version ^ " belongs to package universe")
+        true
+        (List.mem (package, version) package_keys);
+      Alcotest.(check bool)
+        (package ^ "." ^ version ^ " immutable source URL")
+        true
+        (contains source "://");
+      let expected_checksum_length =
+        match checksum_algorithm with
+        | "sha256" -> 64
+        | "sha512" -> 128
+        | algorithm -> Alcotest.failf "unsupported source checksum: %s" algorithm
+      in
+      Alcotest.(check int)
+        (package ^ "." ^ version ^ " source checksum")
+        expected_checksum_length
+        (String.length source_checksum)
+    | _ -> Alcotest.failf "invalid source archive row: %s" line);
+  Alcotest.(check bool)
+    "source archive digest"
+    true
+    (contains lock_contents (Artifact.digest source_archive_lock));
+  let closure_lock =
+    read_file (Filename.concat source_root "vendor/opam-ios/runtime-closure.lock")
+  in
+  let manifest = read_file sdk_manifest |> parse_sdk_manifest in
+  Alcotest.(check string)
+    "installed package universe digest"
+    (Artifact.digest installed_package_lock)
+    manifest.package_universe_digest;
+  closure_lock
+  |> non_empty_lines
+  |> List.filter (fun line -> line.[0] <> '#')
+  |> List.iter (fun line ->
+    match String.split_on_char '|' line with
+    | package
+      :: version
+      :: role
+      :: _capability
+      :: _mechanism
+      :: _source
+      :: sha
+      :: components
+      :: _ ->
+      Alcotest.(check int) (package ^ " source SHA-256") 64 (String.length sha);
+      Alcotest.(check bool)
+        (package ^ " exact meta dependency")
+        true
+        (contains meta_contents (Printf.sprintf "\"%s\" {= \"%s\"}" package version));
+      if List.mem role [ "target-build"; "target-package" ] && components <> "-"
+      then (
+        let expected_components = String.split_on_char ',' components in
+        expected_components
+        |> List.iter (fun library ->
+          match Sdk.Manifest.String_map.find_opt library manifest.libraries with
+          | None -> Alcotest.failf "SDK manifest lacks findlib library %s" library
+          | Some mapping ->
+            Alcotest.(check string) (library ^ " package") package mapping.package;
+            Alcotest.(check string) (library ^ " version") version mapping.version;
+            Alcotest.(check (list string))
+              (library ^ " components")
+              expected_components
+              mapping.components))
+    | _ -> Alcotest.failf "invalid runtime closure row: %s" line);
+  [ "bonsai_flutter.driver"
+  ; "bonsai_flutter.native_backend"
+  ; "bonsai_flutter.spec_impl"
+  ; "bonsai_flutter.ui"
+  ]
+  |> List.iter (fun library ->
+    match Sdk.Manifest.String_map.find_opt library manifest.libraries with
+    | None -> Alcotest.failf "SDK manifest lacks framework library %s" library
+    | Some mapping ->
+      Alcotest.(check string) (library ^ " package") "bonsai_flutter" mapping.package;
+      Alcotest.(check string) (library ^ " version") "0.1.0~dev" mapping.version);
+  Process_runner.run
+    { Plan.program = "opam"
+    ; arguments = [ "lint"; meta ]
+    ; working_directory = repository
+    ; environment = []
+    }
+  |> get_ok
+;;
+
+type toolchain_fixture =
+  { toolchain_root : string
+  ; toolchain_bin : string
+  ; toolchain_prefix : string
+  ; toolchain_log : string
+  ; toolchain_manifest : string
+  }
+
+let create_toolchain_fixture () =
+  let toolchain_root =
+    Filename.temp_dir "bonsai-flutter-tool" "toolchain" |> Unix.realpath
+  in
+  let toolchain_bin = Filename.concat toolchain_root "bin" in
+  let toolchain_prefix = Filename.concat toolchain_root "switch-prefix" in
+  let toolchain_log = Filename.concat toolchain_root "commands.log" in
+  let toolchain_manifest =
+    Filename.concat toolchain_prefix "share/bonsai_flutter_ios_sdk/manifest.sexp"
+  in
+  [ "dune"; "ocamlc"; "ocamlfind" ]
+  |> List.iter (fun program ->
+    write_executable
+      (Filename.concat toolchain_prefix ("bin/" ^ program))
+      "#!/bin/sh\nexit 0\n");
+  write_file toolchain_manifest valid_sdk_manifest;
+  write_executable
+    (Filename.concat toolchain_bin "opam")
+    (command_logger "opam"
+     ^ Printf.sprintf
+         {|case " $* " in
+  *" switch show --switch=bonsai-flutter-ios "*)
+    printf '%%s\n' 'bonsai-flutter-ios' ;;
+  *" var --switch=bonsai-flutter-ios prefix "*)
+    printf '%%s\n' '%s' ;;
+  *" exec --switch=bonsai-flutter-ios -- dune --version "*)
+    printf '%%s\n' '3.18.2' ;;
+  *" exec --switch=bonsai-flutter-ios -- ocamlc -version "*)
+    printf '%%s\n' '5.1.1' ;;
+  *" exec --switch=bonsai-flutter-ios -- ocamlfind -toolchain ios printconf path "*)
+    printf '%%s\n' '%s/lib/ios' ;;
+  *" switch remove --yes bonsai-flutter-ios "*)
+    exit "${REMOVE_EXIT:-0}" ;;
+  *) exit 64 ;;
+esac
+|}
+         toolchain_prefix
+         toolchain_prefix);
+  { toolchain_root; toolchain_bin; toolchain_prefix; toolchain_log; toolchain_manifest }
+;;
+
+let with_toolchain_fixture ?(environment = []) fixture f =
+  with_environment
+    ([ ( "PATH"
+       , fixture.toolchain_bin ^ ":" ^ Option.value ~default:"" (Sys.getenv_opt "PATH") )
+     ; "COMMAND_LOG", fixture.toolchain_log
+     ]
+     @ environment)
+    f
+;;
+
+let test_toolchain_show_and_verify_are_read_only () =
+  let fixture = create_toolchain_fixture () in
+  let manifest_mtime = (Unix.stat fixture.toolchain_manifest).st_mtime in
+  let info =
+    with_toolchain_fixture fixture (fun () ->
+      Toolchain.show ~working_directory:fixture.toolchain_root |> get_ok)
+  in
+  Alcotest.(check string) "fixed switch" "bonsai-flutter-ios" info.switch;
+  Alcotest.(check string) "switch prefix" fixture.toolchain_prefix info.prefix;
+  Alcotest.(check string) "SDK version" "0.1.0~dev" info.bonsai_flutter_version;
+  Alcotest.(check string) "target" "iphoneos/arm64" info.target;
+  let verified =
+    with_toolchain_fixture fixture (fun () ->
+      Toolchain.verify ~working_directory:fixture.toolchain_root |> get_ok)
+  in
+  Alcotest.(check string)
+    "show and verify fingerprint"
+    info.fingerprint
+    verified.fingerprint;
+  Alcotest.(check (float 0.))
+    "manifest remains untouched"
+    manifest_mtime
+    (Unix.stat fixture.toolchain_manifest).st_mtime;
+  let commands = read_file fixture.toolchain_log |> non_empty_lines in
+  Alcotest.(check bool)
+    "show and verify never mutate opam"
+    false
+    (List.exists
+       (fun command ->
+          contains command "\tinstall\t"
+          || contains command "\tremove\t"
+          || contains command "\tcreate\t")
+       commands)
+;;
+
+let test_toolchain_remove_uses_only_fixed_switch () =
+  let fixture = create_toolchain_fixture () in
+  with_toolchain_fixture fixture (fun () ->
+    Toolchain.remove ~working_directory:fixture.toolchain_root |> get_ok);
+  Alcotest.(check (list string))
+    "fixed destructive command"
+    [ String.concat
+        "\t"
+        [ "opam"
+        ; fixture.toolchain_root
+        ; "switch"
+        ; "remove"
+        ; "--yes"
+        ; "bonsai-flutter-ios"
+        ]
+    ]
+    (read_file fixture.toolchain_log |> non_empty_lines);
+  write_file fixture.toolchain_log "";
+  with_toolchain_fixture
+    ~environment:[ "REMOVE_EXIT", "31" ]
+    fixture
+    (fun () ->
+       Toolchain.remove ~working_directory:fixture.toolchain_root
+       |> check_error_contains "opam exited with status 31")
+;;
+
+let test_toolchain_install_uses_locked_repository_and_exact_sdk () =
+  let fixture = create_toolchain_fixture () in
+  let framework_root = Filename.concat fixture.toolchain_root "framework" in
+  let repository = Filename.concat framework_root "tool/ios/opam-repository/0.1.0" in
+  write_repository_fixture repository;
+  write_file fixture.toolchain_log "";
+  write_executable
+    (Filename.concat fixture.toolchain_bin "opam")
+    (command_logger "opam"
+     ^ {|case " $* " in
+  *" switch list --short "*)
+    test -z "${SWITCH_EXISTS:-}" || printf '%s\n' 'bonsai-flutter-ios' ;;
+  *" switch create bonsai-flutter-ios "*) exit 0 ;;
+  *" install --switch=bonsai-flutter-ios --yes bonsai_flutter_ios_sdk.0.1.0~dev "*)
+    exit "${INSTALL_EXIT:-0}" ;;
+  *) exit 64 ;;
+esac
+|}
+    );
+  with_toolchain_fixture fixture (fun () ->
+    Toolchain.install ~framework_root ~working_directory:fixture.toolchain_root |> get_ok);
+  let commands = read_file fixture.toolchain_log |> non_empty_lines in
+  Alcotest.(check int) "one check, create, and install" 3 (List.length commands);
+  let create = List.nth commands 1 in
+  Alcotest.(check bool)
+    "fixed switch creation"
+    true
+    (contains create "switch\tcreate\tbonsai-flutter-ios\tocaml-base-compiler.5.1.1");
+  Alcotest.(check bool)
+    "local versioned repository"
+    true
+    (contains create ("bonsai-flutter-ios=file://" ^ repository));
+  Alcotest.(check bool)
+    "locked default repository commit"
+    true
+    (contains
+       create
+       "bonsai-flutter-default=git+https://github.com/RCmerci/opam-repository.git#c98b21e24c088665ccae4c3b53eadadd3b755b15");
+  Alcotest.(check bool)
+    "locked cross repository commit"
+    true
+    (contains
+       create
+       "bonsai-flutter-ios-cross=git+https://github.com/ocaml-cross/opam-cross-ios.git#8380b52b0154752c26c6e221c04fbced3320aa48");
+  Alcotest.(check bool)
+    "exact SDK meta-package install"
+    true
+    (contains (List.nth commands 2) "bonsai_flutter_ios_sdk.0.1.0~dev");
+  Alcotest.(check bool)
+    "non-interactive depext handling"
+    true
+    (contains (List.nth commands 2) "--assume-depexts")
+;;
+
+let test_toolchain_install_rejects_existing_switch_and_tampered_repository () =
+  let fixture = create_toolchain_fixture () in
+  let framework_root = Filename.concat fixture.toolchain_root "framework" in
+  let repository = Filename.concat framework_root "tool/ios/opam-repository/0.1.0" in
+  write_repository_fixture repository;
+  write_file fixture.toolchain_log "";
+  write_executable
+    (Filename.concat fixture.toolchain_bin "opam")
+    (command_logger "opam"
+     ^ {|if test "$1" = switch && test "$2" = list; then
+  test -z "${SWITCH_EXISTS:-}" || printf '%s\n' 'bonsai-flutter-ios'
+  exit 0
+fi
+exit 64
+|}
+    );
+  with_toolchain_fixture
+    ~environment:[ "SWITCH_EXISTS", "true" ]
+    fixture
+    (fun () ->
+       Toolchain.install ~framework_root ~working_directory:fixture.toolchain_root
+       |> check_error_contains "already exists");
+  Alcotest.(check int)
+    "existing switch stops after read-only check"
+    1
+    (read_file fixture.toolchain_log |> non_empty_lines |> List.length);
+  write_file fixture.toolchain_log "";
+  write_file (Filename.concat repository "repo") "opam-version: \"2.1\"\n";
+  with_toolchain_fixture fixture (fun () ->
+    Toolchain.install ~framework_root ~working_directory:fixture.toolchain_root
+    |> check_error_contains "repository snapshot digest");
+  Alcotest.(check string)
+    "tampered repository stops before opam"
+    ""
+    (read_file fixture.toolchain_log);
+  write_repository_fixture repository;
+  write_file
+    (Filename.concat repository "package-universe.lock")
+    "tampered package lock\n";
+  with_toolchain_fixture fixture (fun () ->
+    Toolchain.install ~framework_root ~working_directory:fixture.toolchain_root
+    |> check_error_contains "package universe digest");
+  Alcotest.(check string)
+    "tampered package universe stops before opam"
+    ""
+    (read_file fixture.toolchain_log);
+  write_repository_fixture repository;
+  write_file (Filename.concat repository "source-archives.lock") "tampered archives\n";
+  with_toolchain_fixture fixture (fun () ->
+    Toolchain.install ~framework_root ~working_directory:fixture.toolchain_root
+    |> check_error_contains "source archive digest");
+  Alcotest.(check string)
+    "tampered source archives stop before opam"
+    ""
+    (read_file fixture.toolchain_log);
+  write_repository_fixture repository;
+  let source_lock =
+    Filename.concat framework_root "vendor/opam-ios/runtime-closure.lock"
+  in
+  write_file source_lock "tampered source lock\n";
+  with_toolchain_fixture fixture (fun () ->
+    Toolchain.install ~framework_root ~working_directory:fixture.toolchain_root
+    |> check_error_contains "source lock digest");
+  Alcotest.(check string)
+    "tampered source lock stops before opam"
+    ""
+    (read_file fixture.toolchain_log)
 ;;
 
 let test_feature_validation () =
@@ -498,9 +1492,12 @@ let test_generated_host () =
   Alcotest.(check bool)
     "relative native artifacts"
     true
-    (contains
-       pubspec
-       "native_artifact_root: ../_build/bonsai-flutter/native-artifacts/journal/");
+    (contains pubspec "native_artifact_root: ../_build/bonsai-flutter/artifacts/"
+     && not (contains pubspec "native-artifacts")
+     && not
+          (contains
+             pubspec
+             "native_artifact_root: ../_build/bonsai-flutter/artifacts/journal/"));
   Alcotest.(check bool)
     "renderer dependency"
     true
@@ -631,6 +1628,147 @@ let test_scaffold_preserves_user_source () =
     (read_file adapter_path)
 ;;
 
+let test_scaffold_generates_and_preserves_application_lock () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "application-lock" in
+  let config = Config.parse_string valid_config |> get_ok in
+  Scaffold.initialize_workspace ~project_root:root ~config_text:valid_config ~config
+  |> get_ok;
+  let lock = Filename.concat root "journal.opam.locked" in
+  Alcotest.(check bool) "application lock exists" true (Sys.file_exists lock);
+  let contents = read_file lock in
+  [ "\"base\" {= \"v0.17.3\"}"
+  ; "\"bonsai\" {= \"v0.17.0\"}"
+  ; "\"bonsai_flutter\" {= \"0.1.0~dev\"}"
+  ; "\"incr_dom\" {= \"v0.17.0\"}"
+  ; "\"ocaml-ios64\" {= \"5.1.1\"}"
+  ; "\"virtual_dom\" {= \"v0.17.0\"}"
+  ]
+  |> List.iter (fun dependency ->
+    Alcotest.(check bool) dependency true (contains contents dependency));
+  let application_owned = "application-owned lock\n" in
+  write_file lock application_owned;
+  Scaffold.initialize_workspace ~project_root:root ~config_text:valid_config ~config
+  |> get_ok;
+  Alcotest.(check string) "existing application lock" application_owned (read_file lock)
+;;
+
+let test_scaffold_generates_dune_native_aliases () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "dune-aliases" in
+  let config = Config.parse_string valid_config |> get_ok in
+  Scaffold.initialize ~project_root:root ~config |> get_ok;
+  let dune_path = Filename.concat root "app/dune" in
+  let dune = read_file dune_path in
+  Alcotest.(check bool) "application Dune file exists" true (Sys.file_exists dune_path);
+  [ "(name native_embed)"
+  ; "(name bonsai-flutter-macos)"
+  ; "(enabled_if (= %{context_name} default))"
+  ; "(name bonsai-flutter-ios)"
+  ; "(enabled_if (= %{context_name} default.ios))"
+  ; "(deps native_embed.exe.o)"
+  ]
+  |> List.iter (fun expected ->
+    Alcotest.(check bool) expected true (contains dune expected));
+  Alcotest.(check bool)
+    "generated rules are workspace-relative"
+    false
+    (contains dune root);
+  Alcotest.(check bool)
+    "obsolete nested Dune integration is absent"
+    false
+    (Sys.file_exists (Filename.concat root "app/bonsai_flutter/dune"));
+  write_file
+    dune_path
+    {|(executable
+ (name user_owned)
+ (modules user_owned))
+|};
+  Scaffold.initialize ~project_root:root ~config |> get_ok;
+  let repaired = read_file dune_path in
+  Alcotest.(check bool)
+    "repeated initialization preserves user stanzas"
+    true
+    (contains repaired "(name user_owned)");
+  Alcotest.(check bool)
+    "repeated initialization repairs generated aliases"
+    true
+    (contains repaired "(name bonsai-flutter-ios)")
+;;
+
+let test_scaffold_quotes_dune_native_target () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "dune-quoted-target" in
+  let config =
+    valid_config
+    |> replace_once
+         ~pattern:"app/native_embed.exe.o"
+         ~replacement:"\"app/native embed.exe.o\""
+    |> Config.parse_string
+    |> get_ok
+  in
+  Scaffold.initialize ~project_root:root ~config |> get_ok;
+  Alcotest.(check bool)
+    "Dune dependency is quoted"
+    true
+    (contains
+       (read_file (Filename.concat root "app/dune"))
+       "(deps \"native embed.exe.o\")")
+;;
+
+let test_macos_dune_alias_build_is_incremental () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "dune-incremental" in
+  let app_root = Filename.concat root "app" in
+  let config = Config.parse_string valid_config |> get_ok in
+  write_file
+    (Filename.concat root "dune-project")
+    "(lang dune 3.17)\n(name dune_incremental_fixture)\n";
+  write_file
+    (Filename.concat app_root "dune")
+    {|(executable
+ (name native_embed)
+ (modules native_embed)
+ (enabled_if
+  (= %{env:BONSAI_FLUTTER_EMBED_OCAML=disabled} enabled))
+ (modes
+  (native object)))
+|};
+  let source = Filename.concat app_root "native_embed.ml" in
+  write_file source "let () = print_endline \"first\"\n";
+  Scaffold.initialize ~project_root:root ~config |> get_ok;
+  let build =
+    Plan.native_build
+      ~project_root:root
+      ~config
+      ~target:Plan.Macos
+      ~profile:Plan.Debug
+      ~toolchain_fingerprint:"incremental-host"
+      ~apple_sdk_root:"/Xcode/MacOSX.sdk"
+      ~apple_sdk_version:None
+    |> get_ok
+  in
+  Scaffold.ensure_directory (Filename.dirname build.build_directory);
+  Process_runner.run build.command |> get_ok;
+  let object_path = build.source_object in
+  Alcotest.(check bool)
+    "alias builds the complete object"
+    true
+    (Sys.file_exists object_path);
+  let first_mtime = (Unix.stat object_path).st_mtime in
+  let first_digest = Digest.file object_path in
+  Unix.sleep 1;
+  Process_runner.run build.command |> get_ok;
+  let second_mtime = (Unix.stat object_path).st_mtime in
+  Alcotest.(check (float 0.))
+    "unchanged source leaves object untouched"
+    first_mtime
+    second_mtime;
+  Unix.sleep 1;
+  write_file source "let () = print_endline \"second\"\n";
+  Process_runner.run build.command |> get_ok;
+  Alcotest.(check bool)
+    "changed OCaml source rebuilds the object"
+    true
+    (not (String.equal first_digest (Digest.file object_path)))
+;;
+
 let test_project_root_discovery () =
   let root = Filename.temp_dir "bonsai-flutter-tool" "root" in
   let config_path = Filename.concat root "bonsai-flutter.sexp" in
@@ -643,6 +1781,99 @@ let test_project_root_discovery () =
     "walks to configuration"
     (Ok (Unix.realpath root))
     (Project.find_root nested)
+;;
+
+let test_project_lock_serializes_processes () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "lock" in
+  let lock_path = Filename.concat root "_build/bonsai-flutter/locks/test.lock" in
+  let read_end, write_end = Unix.pipe () in
+  let child = ref None in
+  Lock.with_lock lock_path (fun () ->
+    match Unix.fork () with
+    | 0 ->
+      Unix.close read_end;
+      let status =
+        match
+          Lock.with_lock lock_path (fun () ->
+            ignore (Unix.write_substring write_end "1" 0 1);
+            Ok ())
+        with
+        | Ok () -> 0
+        | Error _ -> 1
+      in
+      Unix.close write_end;
+      Unix._exit status
+    | pid ->
+      child := Some pid;
+      Unix.close write_end;
+      let ready, _, _ = Unix.select [ read_end ] [] [] 0.2 in
+      Alcotest.(check int) "child waits while locked" 0 (List.length ready);
+      Ok ())
+  |> get_ok;
+  let ready, _, _ = Unix.select [ read_end ] [] [] 2.0 in
+  Alcotest.(check int) "child acquires after release" 1 (List.length ready);
+  let byte = Bytes.create 1 in
+  Alcotest.(check int) "child notification" 1 (Unix.read read_end byte 0 1);
+  Unix.close read_end;
+  (match !child with
+   | None -> Alcotest.fail "child process was not created"
+   | Some pid ->
+     let _, status = Unix.waitpid [] pid in
+     Alcotest.(check int)
+       "child exit"
+       0
+       (match status with
+        | Unix.WEXITED code -> code
+        | Unix.WSIGNALED _ | Unix.WSTOPPED _ -> 1));
+  Alcotest.(check bool) "project-local lock file" true (Sys.file_exists lock_path)
+;;
+
+let test_clean_removes_only_selected_platform () =
+  let project_root = Filename.temp_dir "bonsai-flutter-tool" "clean-platform" in
+  let build_root = Filename.concat project_root "_build/bonsai-flutter" in
+  let files =
+    [ "dune/macos/host/debug/object", "macos"
+    ; "artifacts/macos/arm64/debug/native_embed.exe.o", "macos"
+    ; "state/macos/debug/build-manifest.sexp", "macos"
+    ; "logs/macos/debug.log", "macos"
+    ; "locks/macos/debug.lock", "macos"
+    ; "dune/iphoneos/sdk/release/object", "iphoneos"
+    ; "artifacts/ios/iphoneos/arm64/release/native_embed.exe.o", "iphoneos"
+    ; "state/iphoneos/release/build-manifest.sexp", "iphoneos"
+    ; "logs/iphoneos/release.log", "iphoneos"
+    ; "locks/iphoneos/release.lock", "iphoneos"
+    ; "unrelated/keep", "unrelated"
+    ]
+  in
+  List.iter
+    (fun (path, contents) -> write_file (Filename.concat build_root path) contents)
+    files;
+  Clean.run ~project_root Clean.Macos |> get_ok;
+  files
+  |> List.iter (fun (path, platform) ->
+    Alcotest.(check bool)
+      path
+      (platform <> "macos")
+      (Sys.file_exists (Filename.concat build_root path)));
+  Clean.run ~project_root Clean.Macos |> get_ok
+;;
+
+let test_clean_all_does_not_follow_symlinks () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "clean-symlink" in
+  let project_root = Filename.concat root "project" in
+  let build_root = Filename.concat project_root "_build/bonsai-flutter" in
+  let external_root = Filename.concat root "global-switch" in
+  let external_sentinel = Filename.concat external_root "manifest.sexp" in
+  write_file external_sentinel "immutable global state";
+  write_file (Filename.concat build_root "state/macos/debug/build-manifest.sexp") "state";
+  Unix.symlink external_root (Filename.concat build_root "linked-global-state");
+  Clean.run ~project_root Clean.All |> get_ok;
+  Alcotest.(check bool) "project build root removed" false (Sys.file_exists build_root);
+  Alcotest.(check string)
+    "symlink target remains untouched"
+    "immutable global state"
+    (read_file external_sentinel);
+  Clean.run ~project_root Clean.All |> get_ok
 ;;
 
 let test_host_sync_check () =
@@ -661,6 +1892,410 @@ let test_host_sync_check () =
   Alcotest.(check string) "check does not modify" "// drift" still_drifted;
   let repaired = Host.sync ~project_root:root ~config ~mode:Host.Write |> get_ok in
   Alcotest.(check (list string)) "repairs only drift" [ "flutter/lib/main.dart" ] repaired
+;;
+
+let test_native_sync_only_manages_dune_aliases () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "native-sync" in
+  let project_root = Filename.concat root "project" in
+  let framework_root = Filename.concat root "framework" in
+  let config = Config.parse_string valid_config |> get_ok in
+  let pubspec = Filename.concat project_root "flutter/pubspec.yaml" in
+  let app_dune = Filename.concat project_root "app/dune" in
+  let obsolete_dune = Filename.concat project_root "app/bonsai_flutter/dune" in
+  let application_owned_drift = "# existing host state\n" in
+  write_file pubspec application_owned_drift;
+  write_file
+    app_dune
+    {|(library
+ (name application)
+ (libraries base))
+|};
+  write_file obsolete_dune "; obsolete generated alias file\n";
+  [ "bonsai_flutter"; "bonsai_flutter_native" ]
+  |> List.iter (fun package ->
+    write_file
+      (Filename.concat framework_root ("flutter/packages/" ^ package ^ "/pubspec.yaml"))
+      ("name: " ^ package ^ "\n"));
+  Build_system.synchronize ~framework_root ~project_root ~config |> get_ok;
+  Alcotest.(check string)
+    "native sync preserves Flutter host"
+    application_owned_drift
+    (read_file pubspec);
+  Alcotest.(check bool)
+    "native sync creates macOS alias in app/dune"
+    true
+    (contains (read_file app_dune) "(name bonsai-flutter-macos)");
+  Alcotest.(check bool)
+    "native sync creates context-gated iOS alias in app/dune"
+    true
+    (contains (read_file app_dune) "(enabled_if (= %{context_name} default.ios))");
+  Alcotest.(check bool)
+    "native sync preserves application Dune stanzas"
+    true
+    (contains (read_file app_dune) "(name application)");
+  Alcotest.(check bool)
+    "native sync removes obsolete nested alias file"
+    false
+    (Sys.file_exists obsolete_dune);
+  Alcotest.(check bool)
+    "native sync does not copy Flutter packages"
+    false
+    (Sys.file_exists
+       (Filename.concat
+          project_root
+          ".bonsai-flutter/flutter-packages/bonsai_flutter/pubspec.yaml"))
+;;
+
+let test_native_build_rejects_invalid_alias_contract_before_external_tools () =
+  let cases =
+    [ ( "missing aliases"
+      , {|(executable
+ (name native_embed)
+ (modules native_embed)
+ (modes (native object)))
+|}
+      )
+    ; ( "wrong iOS context"
+      , {|(alias
+ (name bonsai-flutter-macos)
+ (enabled_if (= %{context_name} default))
+ (deps native_embed.exe.o))
+
+(alias
+ (name bonsai-flutter-ios)
+ (enabled_if (= %{context_name} default))
+ (deps native_embed.exe.o))
+|}
+      )
+    ; ( "wrong dependency"
+      , {|(alias
+ (name bonsai-flutter-macos)
+ (enabled_if (= %{context_name} default))
+ (deps another.exe.o))
+
+(alias
+ (name bonsai-flutter-ios)
+ (enabled_if (= %{context_name} default.ios))
+ (deps another.exe.o))
+|}
+      )
+    ]
+  in
+  cases
+  |> List.iter (fun (name, dune) ->
+    let root = Filename.temp_dir "bonsai-flutter-tool" "invalid-alias" |> Unix.realpath in
+    let bin = Filename.concat root "bin" in
+    let command_log = Filename.concat root "commands.log" in
+    let config = Config.parse_string valid_config |> get_ok in
+    let dune_path = Filename.concat root "app/dune" in
+    write_file dune_path dune;
+    write_file command_log "";
+    write_executable
+      (Filename.concat bin "xcrun")
+      (command_logger "xcrun"
+       ^ {|exit 64
+|}
+      );
+    with_environment
+      [ "PATH", bin; "COMMAND_LOG", command_log ]
+      (fun () ->
+         Build_system.build_native
+           ~framework_root:(Filename.concat root "framework")
+           ~project_root:root
+           ~config
+           ~target:Plan.Macos
+           ~profile:Plan.Debug
+         |> check_error_contains "Invalid application Dune alias contract");
+    Alcotest.(check string) (name ^ " preserves app/dune") dune (read_file dune_path);
+    Alcotest.(check string)
+      (name ^ " stops before external tools")
+      ""
+      (read_file command_log))
+;;
+
+type native_build_fixture =
+  { native_project_root : string
+  ; native_framework_root : string
+  ; native_switch_prefix : string
+  ; native_bin : string
+  ; native_command_log : string
+  ; native_config : Config.t
+  ; native_alias_path : string
+  }
+
+let rec file_snapshot root path =
+  let absolute = Filename.concat root path in
+  if Sys.is_directory absolute
+  then
+    Sys.readdir absolute
+    |> Array.to_list
+    |> List.sort String.compare
+    |> List.concat_map (fun name ->
+      file_snapshot root (if path = "" then name else Filename.concat path name))
+  else [ path, Digest.file absolute ]
+;;
+
+let create_native_build_fixture () =
+  let native_root =
+    Filename.temp_dir "bonsai-flutter-tool" "native-build" |> Unix.realpath
+  in
+  let native_project_root = Filename.concat native_root "project" in
+  let native_framework_root = Filename.concat native_root "installed-tool-assets" in
+  let native_switch_prefix = Filename.concat native_root "global-switch-prefix" in
+  let native_bin = Filename.concat native_root "bin" in
+  let native_command_log =
+    Filename.concat native_project_root "_build/bonsai-flutter/logs/test-commands.log"
+  in
+  Scaffold.ensure_directory (Filename.dirname native_command_log);
+  let native_config = Config.parse_string valid_config |> get_ok in
+  let native_alias_path = Filename.concat native_project_root "app/dune" in
+  write_file
+    native_alias_path
+    {|(executable
+ (name native_embed)
+ (modules native_embed)
+ (modes (native object)))
+
+(alias
+ (name bonsai-flutter-macos)
+ (enabled_if (= %{context_name} default))
+ (deps native_embed.exe.o))
+
+(alias
+ (name bonsai-flutter-ios)
+ (enabled_if (= %{context_name} default.ios))
+ (deps native_embed.exe.o))
+|};
+  write_file
+    (Filename.concat native_project_root "journal.opam.locked")
+    {|opam-version: "2.0"
+name: "journal"
+version: "0.1.0"
+depends: [
+  "base" {= "v0.17.0"}
+  "bonsai_flutter" {= "0.1.0~dev"}
+]
+|};
+  [ "dune"; "ocamlc"; "ocamlfind" ]
+  |> List.iter (fun program ->
+    write_executable
+      (Filename.concat native_switch_prefix ("bin/" ^ program))
+      "#!/bin/sh\nexit 0\n");
+  write_file
+    (Filename.concat native_switch_prefix "share/bonsai_flutter_ios_sdk/manifest.sexp")
+    valid_sdk_manifest;
+  write_executable
+    (Filename.concat native_framework_root "tool/ios/verify_complete_object.sh")
+    (command_logger "verify_complete_object"
+     ^ {|exit "${VERIFY_EXIT:-0}"
+|}
+    );
+  write_executable
+    (Filename.concat native_bin "xcrun")
+    (command_logger "xcrun"
+     ^ {|case "$*" in
+  *"macosx --show-sdk-path"*) printf '%s\n' '/Xcode/MacOSX.sdk' ;;
+  *"iphoneos --show-sdk-path"*) printf '%s\n' '/Xcode/iPhoneOS.sdk' ;;
+  *"iphoneos --show-sdk-version"*) printf '%s\n' '26.0' ;;
+  *) exit 64 ;;
+esac
+|}
+    );
+  write_executable
+    (Filename.concat native_bin "opam")
+    (command_logger "opam"
+     ^ Printf.sprintf
+         {|case " $* " in
+  *" switch show --switch=bonsai-flutter-ios "*)
+    printf '%%s\n' 'bonsai-flutter-ios' ;;
+  *" var --switch=bonsai-flutter-ios prefix "*)
+    printf '%%s\n' '%s' ;;
+  *" exec --switch=bonsai-flutter-ios -- dune --version "*|*" exec -- dune --version "*)
+    printf '%%s\n' '3.18.2' ;;
+  *" exec --switch=bonsai-flutter-ios -- dune describe external-lib-deps "*)
+    build_directory=''
+    for argument in "$@"; do
+      case "$argument" in
+        --build-dir=*) build_directory="${argument#--build-dir=}" ;;
+      esac
+    done
+    test -n "$build_directory"
+    test -d "$(dirname "$build_directory")"
+    printf '%%s\n' '(11:default.ios((11:executables((5:names(12:native_embed))(10:extensions(6:.exe.o))(7:package())(10:source_dir3:app)(13:external_deps((4:base8:required)(17:bonsai_flutter.ui8:required)))(13:internal_deps())))))' ;;
+  *" exec --switch=bonsai-flutter-ios -- ocamlc -version "*|*" exec -- ocamlc -version "*)
+    printf '%%s\n' '5.1.1' ;;
+  *" exec --switch=bonsai-flutter-ios -- ocamlfind -toolchain ios printconf path "*)
+    printf '%%s\n' '%s/lib/ios' ;;
+  *" exec -- ocamlfind query -format %%v bonsai_flutter "*)
+    printf '%%s\n' '0.1.0~dev' ;;
+  *" dune build "*)
+    build_directory=''
+    context='default'
+    for argument in "$@"; do
+      case "$argument" in
+        --build-dir=*) build_directory="${argument#--build-dir=}" ;;
+        @app/bonsai-flutter-ios) context='default.ios' ;;
+      esac
+    done
+    test -n "$build_directory"
+    object="$build_directory/$context/app/native_embed.exe.o"
+    mkdir -p "$(dirname "$object")"
+    if test ! -f "$object" || test "${REWRITE_OBJECT:-false}" = true; then
+      printf '%%s' "${OBJECT_CONTENT:-complete-object}" > "$object"
+    fi ;;
+  *) exit 64 ;;
+esac
+|}
+         native_switch_prefix
+         native_switch_prefix);
+  { native_project_root
+  ; native_framework_root
+  ; native_switch_prefix
+  ; native_bin
+  ; native_command_log
+  ; native_config
+  ; native_alias_path
+  }
+;;
+
+let with_native_build_fixture ?(environment = []) fixture f =
+  with_environment
+    ([ "PATH", fixture.native_bin ^ ":" ^ Option.value ~default:"" (Sys.getenv_opt "PATH")
+     ; "COMMAND_LOG", fixture.native_command_log
+     ]
+     @ environment)
+    f
+;;
+
+let run_native_build fixture target profile =
+  Build_system.build_native
+    ~framework_root:fixture.native_framework_root
+    ~project_root:fixture.native_project_root
+    ~config:fixture.native_config
+    ~target
+    ~profile
+;;
+
+let test_native_builds_use_project_local_dune_workspaces () =
+  [ Plan.Macos, Plan.Debug; Plan.Iphoneos, Plan.Release ]
+  |> List.iter (fun (target, profile) ->
+    let fixture = create_native_build_fixture () in
+    let installed_tool_before = file_snapshot fixture.native_framework_root "" in
+    let global_switch_before = file_snapshot fixture.native_switch_prefix "" in
+    let alias_before = read_file fixture.native_alias_path in
+    let artifact =
+      with_native_build_fixture fixture (fun () ->
+        run_native_build fixture target profile |> get_ok)
+    in
+    Alcotest.(check bool)
+      "staged artifact is project-local"
+      true
+      (String.starts_with
+         ~prefix:(fixture.native_project_root ^ "/_build/bonsai-flutter/artifacts/")
+         artifact);
+    Alcotest.(check string) "staged content" "complete-object" (read_file artifact);
+    Alcotest.(check string)
+      "normal build does not synchronize Dune files"
+      alias_before
+      (read_file fixture.native_alias_path);
+    Alcotest.(check bool)
+      "installed tool assets are read-only inputs"
+      true
+      (installed_tool_before = file_snapshot fixture.native_framework_root "");
+    Alcotest.(check bool)
+      "global switch is a read-only input"
+      true
+      (global_switch_before = file_snapshot fixture.native_switch_prefix "");
+    let commands = read_file fixture.native_command_log |> non_empty_lines in
+    let dune_builds =
+      List.filter (fun command -> contains command "\tdune\tbuild\t") commands
+    in
+    Alcotest.(check int) "exactly one Dune build" 1 (List.length dune_builds);
+    (match target with
+     | Plan.Macos -> ()
+     | Plan.Iphoneos ->
+       let closure_queries =
+         List.filter
+           (fun command -> contains command "\tdune\tdescribe\texternal-lib-deps\t")
+           commands
+       in
+       Alcotest.(check int) "one reachable closure query" 1 (List.length closure_queries);
+       let closure_query = List.hd closure_queries in
+       Alcotest.(check bool)
+         "iOS closure context"
+         true
+         (contains closure_query "--context=default.ios"
+          && contains closure_query "\t-x\tios"
+          && contains closure_query ("--root=" ^ fixture.native_project_root)
+          && contains
+               closure_query
+               (fixture.native_project_root ^ "/_build/bonsai-flutter/dune/iphoneos/")));
+    let dune_build = List.hd dune_builds in
+    Alcotest.(check bool)
+      "application is the Dune root"
+      true
+      (contains dune_build ("--root=" ^ fixture.native_project_root));
+    Alcotest.(check bool)
+      "physical build directory is project-local"
+      true
+      (contains
+         dune_build
+         ("--build-dir=" ^ fixture.native_project_root ^ "/_build/bonsai-flutter/dune/"));
+    Alcotest.(check bool)
+      "removed shared workspace paths are absent"
+      false
+      (contains dune_build "external_apps"
+       || contains dune_build "sdk-cache"
+       || contains dune_build fixture.native_framework_root))
+;;
+
+let test_iphoneos_build_requires_committed_application_lock () =
+  let fixture = create_native_build_fixture () in
+  Sys.remove (Filename.concat fixture.native_project_root "journal.opam.locked");
+  with_native_build_fixture fixture (fun () ->
+    run_native_build fixture Plan.Iphoneos Plan.Release
+    |> check_error_contains "Application opam lock is missing");
+  let commands = read_file fixture.native_command_log |> non_empty_lines in
+  Alcotest.(check bool)
+    "closure is resolved before subset validation"
+    true
+    (List.exists
+       (fun command -> contains command "\tdune\tdescribe\texternal-lib-deps\t")
+       commands);
+  Alcotest.(check bool)
+    "missing lock stops before Dune build"
+    false
+    (List.exists (fun command -> contains command "\tdune\tbuild\t") commands)
+;;
+
+let test_unchanged_native_build_preserves_outputs () =
+  let fixture = create_native_build_fixture () in
+  let artifact =
+    with_native_build_fixture fixture (fun () ->
+      run_native_build fixture Plan.Iphoneos Plan.Release |> get_ok)
+  in
+  let manifest =
+    Filename.concat
+      fixture.native_project_root
+      "_build/bonsai-flutter/state/iphoneos/release/build-manifest.sexp"
+  in
+  Alcotest.(check bool) "build manifest exists" true (Sys.file_exists manifest);
+  Alcotest.(check bool)
+    "manifest records artifact digest"
+    true
+    (contains (read_file manifest) "(artifact_digest ");
+  Unix.utimes artifact 100.0 100.0;
+  Unix.utimes manifest 100.0 100.0;
+  with_native_build_fixture fixture (fun () ->
+    run_native_build fixture Plan.Iphoneos Plan.Release |> get_ok |> ignore);
+  Alcotest.(check (float 0.))
+    "unchanged staged artifact is untouched"
+    100.0
+    (Unix.stat artifact).st_mtime;
+  Alcotest.(check (float 0.))
+    "unchanged build manifest is untouched"
+    100.0
+    (Unix.stat manifest).st_mtime
 ;;
 
 let test_managed_adapter_sync_preserves_application_code () =
@@ -732,6 +2367,28 @@ let test_macos_host_settings_sync () =
   |> check_error_contains "BonsaiFlutter.xcconfig"
 ;;
 
+let test_host_scopes_artifact_profile_to_flutter_invocation () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "artifact-profile" in
+  let config = Config.parse_string valid_config |> get_ok in
+  let pubspec_path = Filename.concat root "flutter/pubspec.yaml" in
+  write_file pubspec_path (Host.pubspec config);
+  Host.with_artifact_profile
+    ~project_root:root
+    ~config
+    ~profile:"profile"
+    (fun () ->
+       Alcotest.(check bool)
+         "profile is visible to Native Assets"
+         true
+         (contains (read_file pubspec_path) "native_artifact_profile: profile");
+       Ok ())
+  |> get_ok;
+  Alcotest.(check string)
+    "canonical pubspec is restored"
+    (Host.pubspec config)
+    (read_file pubspec_path)
+;;
+
 let test_flutter_plans () =
   let config = Config.parse_string valid_config |> get_ok in
   let run =
@@ -750,6 +2407,10 @@ let test_flutter_plans () =
     "macOS run"
     [ "run"; "-d"; "macos"; "--dart-define=environment=development" ]
     run.arguments;
+  Alcotest.(check (list (pair string string)))
+    "debug artifact profile"
+    []
+    run.environment;
   let ios_debug =
     Plan.flutter
       ~project_root:"/work/journal"
@@ -765,6 +2426,10 @@ let test_flutter_plans () =
     "iOS debug continues through flutter run"
     [ "run"; "-d"; "physical-device"; "--dart-define=environment=development" ]
     ios_debug.arguments;
+  Alcotest.(check (list (pair string string)))
+    "iOS debug artifact profile"
+    []
+    ios_debug.environment;
   let ios =
     Plan.flutter
       ~project_root:"/work/journal"
@@ -779,7 +2444,97 @@ let test_flutter_plans () =
   Alcotest.(check (list string))
     "unsigned iOS release"
     [ "build"; "ios"; "--release"; "--no-codesign" ]
-    ios.arguments
+    ios.arguments;
+  Alcotest.(check (list (pair string string)))
+    "release artifact profile"
+    []
+    ios.environment;
+  let profile =
+    Plan.flutter
+      ~project_root:"/work/journal"
+      ~config
+      ~action:Plan.Build
+      ~platform:Plan.Macos_platform
+      ~profile:Plan.Profile
+      ~device:None
+      ~no_codesign:false
+      ~forwarded:[]
+  in
+  Alcotest.(check (list (pair string string)))
+    "profile artifact profile"
+    []
+    profile.environment
+;;
+
+let test_flutter_pub_get_runs_only_when_dependency_inputs_change () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "flutter-pub-get" |> Unix.realpath in
+  let project_root = Filename.concat root "project" in
+  let flutter_root = Filename.concat project_root "flutter" in
+  let packages_root = Filename.concat project_root ".bonsai-flutter/flutter-packages" in
+  let bonsai_flutter_pubspec =
+    Filename.concat packages_root "bonsai_flutter/pubspec.yaml"
+  in
+  let native_pubspec =
+    Filename.concat packages_root "bonsai_flutter_native/pubspec.yaml"
+  in
+  let package_config = Filename.concat flutter_root ".dart_tool/package_config.json" in
+  let state =
+    Filename.concat project_root "_build/bonsai-flutter/state/flutter/pub-get.sexp"
+  in
+  let bin = Filename.concat root "bin" in
+  let command_log = Filename.concat root "commands.log" in
+  let config = Config.parse_string valid_config |> get_ok in
+  write_file (Filename.concat flutter_root "pubspec.yaml") "name: journal\n";
+  write_file bonsai_flutter_pubspec "name: bonsai_flutter\nversion: 0.1.0\n";
+  write_file native_pubspec "name: bonsai_flutter_native\nversion: 0.1.0\n";
+  write_file command_log "";
+  write_executable
+    (Filename.concat bin "flutter")
+    (command_logger "flutter"
+     ^ {|mkdir -p .dart_tool
+printf '%s\n' '{"configVersion":2}' > .dart_tool/package_config.json
+|}
+    );
+  let path = bin ^ ":" ^ Sys.getenv "PATH" in
+  with_environment
+    [ "PATH", path; "COMMAND_LOG", command_log ]
+    (fun () ->
+       Build_system.flutter_pub_get ~project_root ~config |> get_ok;
+       Alcotest.(check int)
+         "first run"
+         1
+         (List.length (non_empty_lines (read_file command_log)));
+       Alcotest.(check bool) "state written" true (Sys.file_exists state);
+       Unix.utimes state 100. 100.;
+       Build_system.flutter_pub_get ~project_root ~config |> get_ok;
+       Alcotest.(check int)
+         "unchanged inputs skip pub get"
+         1
+         (List.length (non_empty_lines (read_file command_log)));
+       Alcotest.(check (float 0.))
+         "unchanged state timestamp"
+         100.
+         (Unix.stat state).st_mtime;
+       write_file bonsai_flutter_pubspec "name: bonsai_flutter\nversion: 0.2.0\n";
+       Build_system.flutter_pub_get ~project_root ~config |> get_ok;
+       Alcotest.(check int)
+         "path package change reruns pub get"
+         2
+         (List.length (non_empty_lines (read_file command_log)));
+       Sys.remove package_config;
+       Build_system.flutter_pub_get ~project_root ~config |> get_ok;
+       Alcotest.(check int)
+         "missing package config reruns pub get"
+         3
+         (List.length (non_empty_lines (read_file command_log))))
+;;
+
+let test_flutter_pub_get_requires_project_pubspec () =
+  let project_root = Filename.temp_dir "bonsai-flutter-tool" "missing-pubspec" in
+  let config = Config.parse_string valid_config |> get_ok in
+  Scaffold.ensure_directory (Filename.concat project_root config.Config.flutter_root);
+  Build_system.flutter_pub_get ~project_root ~config
+  |> check_error_contains "Flutter dependency input is missing"
 ;;
 
 let test_ios_app_bundle_paths () =
@@ -1033,53 +2788,67 @@ let test_ios_device_run_rejects_empty_bundle_identifier () =
 
 let test_artifact_layout () =
   let config = Config.parse_string valid_config |> get_ok in
+  let build =
+    Plan.native_build
+      ~project_root:"/work/journal"
+      ~config
+      ~target:Plan.Iphoneos
+      ~profile:Plan.Release
+      ~toolchain_fingerprint:"sdk-fingerprint"
+      ~apple_sdk_root:"/Xcode/iPhoneOS.sdk"
+      ~apple_sdk_version:(Some "26.0")
+    |> get_ok
+  in
   Alcotest.(check string)
-    "macOS source"
-    "/work/journal/_build/default/app/native_embed.exe.o"
-    (Artifact.source
-       ~project_root:"/work/journal"
-       ~config
-       ~target:Plan.Macos
-       ~profile:Plan.Debug);
+    "source follows custom Dune build directory"
+    "/work/journal/_build/bonsai-flutter/dune/iphoneos/sdk-fingerprint/release/default.ios/app/native_embed.exe.o"
+    build.source_object;
   Alcotest.(check string)
-    "iPhoneOS destination"
-    "/work/journal/_build/bonsai-flutter/native-artifacts/journal/ios/iphoneos/arm64/native_embed.exe.o"
-    (Artifact.destination
-       ~project_root:"/work/journal"
-       ~config
-       ~target:Plan.Iphoneos
-       ~profile:Plan.Release)
+    "staged artifact includes profile"
+    "/work/journal/_build/bonsai-flutter/artifacts/ios/iphoneos/arm64/release/native_embed.exe.o"
+    build.staged_object
 ;;
 
 let test_macos_artifact_staging_contract () =
-  let root = Filename.temp_dir "bonsai-flutter-tool" "macos-artifact" in
-  let project_root = Filename.concat root "project" in
-  let framework_root = Filename.concat root "framework" in
-  let config = Config.parse_string valid_config |> get_ok in
-  let source =
-    Artifact.source ~project_root ~config ~target:Plan.Macos ~profile:Plan.Release
-  in
-  write_file source "complete-object";
-  let log = Filename.concat root "verify.log" in
-  let verifier = Filename.concat framework_root "tool/ios/verify_complete_object.sh" in
-  write_executable
-    verifier
-    (Printf.sprintf
-       "#!/bin/sh\nset -eu\nprintf '%%s\\n' \"$@\" > %s\n"
-       (Filename.quote log));
+  let fixture = create_native_build_fixture () in
   let destination =
-    Artifact.stage
-      ~framework_root
-      ~project_root
-      ~config
-      ~target:Plan.Macos
-      ~profile:Plan.Release
-    |> get_ok
+    with_native_build_fixture fixture (fun () ->
+      run_native_build fixture Plan.Macos Plan.Release |> get_ok)
   in
-  Alcotest.(check (list string))
-    "verifier contract"
-    [ destination; "MACOS"; "26.0"; "arm64" ]
-    (read_file log |> non_empty_lines)
+  let verifier_commands =
+    read_file fixture.native_command_log
+    |> non_empty_lines
+    |> List.filter (fun command -> contains command "verify_complete_object")
+  in
+  Alcotest.(check bool)
+    "verifier receives staged sibling and platform contract"
+    true
+    (List.exists
+       (fun command ->
+          contains command "\tMACOS\t26.0\tarm64"
+          && not (contains command ("\t" ^ destination ^ "\t")))
+       verifier_commands);
+  with_native_build_fixture
+    ~environment:
+      [ "OBJECT_CONTENT", "rejected-complete-object"
+      ; "REWRITE_OBJECT", "true"
+      ; "VERIFY_EXIT", "9"
+      ]
+    fixture
+    (fun () ->
+       run_native_build fixture Plan.Macos Plan.Release
+       |> check_error_contains "exited with status 9");
+  Alcotest.(check string)
+    "failed verification preserves previous artifact"
+    "complete-object"
+    (read_file destination);
+  let siblings = Sys.readdir (Filename.dirname destination) |> Array.to_list in
+  Alcotest.(check bool)
+    "failed staging removes temporary sibling"
+    false
+    (List.exists
+       (fun name -> String.starts_with ~prefix:".native_embed.exe.o.tmp" name)
+       siblings)
 ;;
 
 let dune_description source =
@@ -1318,6 +3087,29 @@ let test_dune_closure_reports_missing_local_stanza () =
     actual
 ;;
 
+let test_dune_closure_accepts_selected_ios_context () =
+  let description =
+    dune_description
+      {|
+        (default.ios
+         ((executables
+           ((names (native_embed))
+            (extensions (.exe.o))
+            (package ())
+            (source_dir app)
+            (external_deps ((bonsai_flutter.ui required)))
+            (internal_deps ())))))
+      |}
+  in
+  Alcotest.(check (result (list string) string))
+    "iOS context dependency closure"
+    (Ok [ "bonsai_flutter.ui" ])
+    (Dune_closure.resolve_csexp
+       ~context:"default.ios"
+       ~target:"app/native_embed.exe.o"
+       description)
+;;
+
 let test_dune_closure_rejects_invalid_semantic_output () =
   let expected = Error "Malformed Dune external dependency description" in
   Alcotest.(check (result (list string) string))
@@ -1381,7 +3173,48 @@ let () =
             `Quick
             test_missing_host_requires_migration
         ] )
-    ; "plan", [ Alcotest.test_case "stable commands" `Quick test_command_plans ]
+    ; ( "plan"
+      , [ Alcotest.test_case "native build layout" `Quick test_command_plans
+        ; Alcotest.test_case "fixed iPhoneOS switch" `Quick test_fixed_iphoneos_switch
+        ] )
+    ; ( "sdk-manifest"
+      , [ Alcotest.test_case "contract" `Quick test_sdk_manifest_contract
+        ; Alcotest.test_case
+            "canonical fingerprint"
+            `Quick
+            test_sdk_manifest_fingerprint_is_canonical
+        ; Alcotest.test_case "read-only preflight" `Quick test_sdk_preflight_is_read_only
+        ; Alcotest.test_case
+            "reachable application lock subset"
+            `Quick
+            test_sdk_validates_only_reachable_application_lock_subset
+        ; Alcotest.test_case
+            "missing switch"
+            `Quick
+            test_sdk_preflight_reports_missing_switch
+        ] )
+    ; ( "toolchain"
+      , [ Alcotest.test_case
+            "versioned repository contract"
+            `Quick
+            test_ios_opam_repository_release_contract
+        ; Alcotest.test_case
+            "show and verify"
+            `Quick
+            test_toolchain_show_and_verify_are_read_only
+        ; Alcotest.test_case
+            "fixed remove"
+            `Quick
+            test_toolchain_remove_uses_only_fixed_switch
+        ; Alcotest.test_case
+            "locked install"
+            `Quick
+            test_toolchain_install_uses_locked_repository_and_exact_sdk
+        ; Alcotest.test_case
+            "install rejection"
+            `Quick
+            test_toolchain_install_rejects_existing_switch_and_tampered_repository
+        ] )
     ; "features", [ Alcotest.test_case "target closure" `Quick test_feature_validation ]
     ; "cache", [ Alcotest.test_case "deterministic keys" `Quick test_cache_keys ]
     ; ( "host"
@@ -1390,15 +3223,71 @@ let () =
             "generated managed adapter host"
             `Quick
             test_generated_managed_adapter_host
+        ; Alcotest.test_case
+            "scoped artifact profile"
+            `Quick
+            test_host_scopes_artifact_profile_to_flutter_invocation
         ] )
     ; ( "ios-host"
       , [ Alcotest.test_case "privacy manifest" `Quick test_ios_privacy_manifest ] )
     ; ( "init"
       , [ Alcotest.test_case "preserves source" `Quick test_scaffold_preserves_user_source
+        ; Alcotest.test_case
+            "application lock"
+            `Quick
+            test_scaffold_generates_and_preserves_application_lock
+        ; Alcotest.test_case
+            "generates Dune native aliases"
+            `Quick
+            test_scaffold_generates_dune_native_aliases
+        ; Alcotest.test_case
+            "Dune native alias is incremental"
+            `Quick
+            test_macos_dune_alias_build_is_incremental
+        ; Alcotest.test_case
+            "quotes Dune native target"
+            `Quick
+            test_scaffold_quotes_dune_native_target
         ] )
-    ; "project", [ Alcotest.test_case "find root" `Quick test_project_root_discovery ]
+    ; ( "project"
+      , [ Alcotest.test_case "find root" `Quick test_project_root_discovery
+        ; Alcotest.test_case
+            "project lock serialization"
+            `Quick
+            test_project_lock_serializes_processes
+        ] )
+    ; ( "clean"
+      , [ Alcotest.test_case
+            "selected platform"
+            `Quick
+            test_clean_removes_only_selected_platform
+        ; Alcotest.test_case
+            "all without symlink traversal"
+            `Quick
+            test_clean_all_does_not_follow_symlinks
+        ] )
     ; ( "sync"
       , [ Alcotest.test_case "check and repair" `Quick test_host_sync_check
+        ; Alcotest.test_case
+            "native build only manages Dune aliases"
+            `Quick
+            test_native_sync_only_manages_dune_aliases
+        ; Alcotest.test_case
+            "invalid alias contract stops before tools"
+            `Quick
+            test_native_build_rejects_invalid_alias_contract_before_external_tools
+        ; Alcotest.test_case
+            "project-local native builds"
+            `Quick
+            test_native_builds_use_project_local_dune_workspaces
+        ; Alcotest.test_case
+            "committed application lock"
+            `Quick
+            test_iphoneos_build_requires_committed_application_lock
+        ; Alcotest.test_case
+            "unchanged native outputs"
+            `Quick
+            test_unchanged_native_build_preserves_outputs
         ; Alcotest.test_case
             "macOS platform settings"
             `Quick
@@ -1410,6 +3299,14 @@ let () =
         ] )
     ; ( "flutter"
       , [ Alcotest.test_case "command plans" `Quick test_flutter_plans
+        ; Alcotest.test_case
+            "incremental pub get"
+            `Quick
+            test_flutter_pub_get_runs_only_when_dependency_inputs_change
+        ; Alcotest.test_case
+            "missing project pubspec"
+            `Quick
+            test_flutter_pub_get_requires_project_pubspec
         ; Alcotest.test_case "iOS bundle paths" `Quick test_ios_app_bundle_paths
         ; Alcotest.test_case "iOS device commands" `Quick test_ios_device_command_plans
         ] )
@@ -1470,6 +3367,10 @@ let () =
             "missing local stanza"
             `Quick
             test_dune_closure_reports_missing_local_stanza
+        ; Alcotest.test_case
+            "selected iOS context"
+            `Quick
+            test_dune_closure_accepts_selected_ios_context
         ; Alcotest.test_case
             "invalid semantic output"
             `Quick

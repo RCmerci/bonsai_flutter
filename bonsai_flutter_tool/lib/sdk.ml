@@ -4,245 +4,570 @@ let ( let* ) result f =
   | Error _ as error -> error
 ;;
 
-let command ~framework_root ?(environment = []) program arguments =
-  let command : Plan.command =
-    { program = Filename.concat framework_root program
-    ; arguments
-    ; working_directory = framework_root
-    ; environment
+module Manifest = struct
+  module String_map = Map.Make (String)
+
+  type library =
+    { package : string
+    ; version : string
+    ; components : string list
     }
-  in
-  Process_runner.run command
-;;
 
-let features_string features =
-  features
-  |> List.map Config.Feature.to_string
-  |> List.sort_uniq String.compare
-  |> String.concat ","
-;;
+  type t =
+    { raw : Sexplib.Sexp.t
+    ; format_version : string
+    ; bonsai_flutter_version : string
+    ; abi_version : string
+    ; ocaml_version : string
+    ; dune_minimum_version : string
+    ; dune_maximum_version : string
+    ; cross_compiler_package : string
+    ; cross_compiler_version : string
+    ; findlib_toolchain : string
+    ; architecture : string
+    ; platform : string
+    ; minimum_deployment_target : string
+    ; package_universe_digest : string
+    ; target_components_digest : string
+    ; required_frameworks : string list
+    ; required_system_libraries : string list
+    ; build_recipe_revision : string
+    ; packages : string String_map.t
+    ; libraries : library String_map.t
+    }
 
-let find_application_opam_file project_root =
-  let candidates =
-    Sys.readdir project_root
-    |> Array.to_list
-    |> List.filter (fun filename -> Filename.check_suffix filename ".opam")
-    |> List.sort String.compare
-  in
-  match candidates with
-  | [ filename ] -> Ok (Filename.concat project_root filename)
-  | [] -> Error "The application must provide one pinned top-level opam file"
-  | _ ->
-    Error "The application has multiple top-level opam files; select one package root"
-;;
+  let invalid format = Printf.ksprintf (fun message -> Error message) format
 
-let closure_lock_path project_root =
-  Filename.concat project_root "_build/bonsai-flutter/ios/runtime-closure.lock"
-;;
+  let fields entries =
+    let rec loop fields = function
+      | [] -> Ok fields
+      | Sexplib.Sexp.List (Sexplib.Sexp.Atom name :: values) :: rest ->
+        if String_map.mem name fields
+        then invalid "Duplicate SDK manifest field: %s" name
+        else loop (String_map.add name values fields) rest
+      | sexp :: _ ->
+        invalid "Invalid SDK manifest field: %s" (Sexplib.Sexp.to_string_hum sexp)
+    in
+    loop String_map.empty entries
+  ;;
 
-let sdk_identity_path project_root =
-  Filename.concat project_root "_build/bonsai-flutter/ios/sdk-identity"
-;;
+  let required name fields =
+    match String_map.find_opt name fields with
+    | Some values -> Ok values
+    | None -> invalid "Missing SDK manifest field: %s" name
+  ;;
 
-let read_file path =
+  let atom = function
+    | Sexplib.Sexp.Atom value -> Ok value
+    | sexp ->
+      invalid "Expected SDK manifest atom, found %s" (Sexplib.Sexp.to_string_hum sexp)
+  ;;
+
+  let one name fields =
+    let* values = required name fields in
+    match values with
+    | [ value ] -> atom value
+    | _ -> invalid "SDK manifest field %s must contain exactly one value" name
+  ;;
+
+  let two name fields =
+    let* values = required name fields in
+    match values with
+    | [ left; right ] ->
+      let* left = atom left in
+      let* right = atom right in
+      Ok (left, right)
+    | _ -> invalid "SDK manifest field %s must contain exactly two values" name
+  ;;
+
+  let atom_list name fields =
+    let* values = required name fields in
+    let rec loop reversed = function
+      | [] -> Ok (List.rev reversed)
+      | value :: rest ->
+        let* value = atom value in
+        loop (value :: reversed) rest
+    in
+    loop [] values
+  ;;
+
+  let package_map fields =
+    let* values = required "packages" fields in
+    let rec loop packages = function
+      | [] -> Ok packages
+      | Sexplib.Sexp.List [ Sexplib.Sexp.Atom name; Sexplib.Sexp.Atom version ] :: rest ->
+        if String_map.mem name packages
+        then invalid "Duplicate SDK package: %s" name
+        else loop (String_map.add name version packages) rest
+      | sexp :: _ ->
+        invalid "Invalid SDK package entry: %s" (Sexplib.Sexp.to_string_hum sexp)
+    in
+    loop String_map.empty values
+  ;;
+
+  let library_map packages fields =
+    let* values = required "libraries" fields in
+    let rec loop libraries = function
+      | [] -> Ok libraries
+      | Sexplib.Sexp.List
+          [ Sexplib.Sexp.Atom name
+          ; Sexplib.Sexp.Atom package
+          ; Sexplib.Sexp.Atom version
+          ; Sexplib.Sexp.List raw_components
+          ]
+        :: rest ->
+        if String_map.mem name libraries
+        then invalid "Duplicate SDK findlib library: %s" name
+        else
+          let* components =
+            let rec atoms reversed = function
+              | [] -> Ok (List.rev reversed)
+              | value :: values ->
+                let* value = atom value in
+                atoms (value :: reversed) values
+            in
+            atoms [] raw_components
+          in
+          if components = []
+          then invalid "SDK findlib library %s has no components" name
+          else if not (List.mem name components)
+          then invalid "SDK findlib library %s is absent from its components" name
+          else (
+            match String_map.find_opt package packages with
+            | None ->
+              invalid "SDK findlib library %s references unknown package %s" name package
+            | Some package_version when package_version <> version ->
+              invalid
+                "SDK findlib library %s version %s conflicts with package %s.%s"
+                name
+                version
+                package
+                package_version
+            | Some _ ->
+              loop (String_map.add name { package; version; components } libraries) rest)
+      | sexp :: _ ->
+        invalid "Invalid SDK findlib library entry: %s" (Sexplib.Sexp.to_string_hum sexp)
+    in
+    loop String_map.empty values
+  ;;
+
+  let parse source =
+    try
+      match Sexplib.Sexp.of_string source with
+      | Sexplib.Sexp.List (Sexplib.Sexp.Atom "sdk" :: entries) as raw ->
+        let* fields = fields entries in
+        let known =
+          [ "format_version"
+          ; "bonsai_flutter_version"
+          ; "abi_version"
+          ; "ocaml_version"
+          ; "dune_version_range"
+          ; "cross_compiler"
+          ; "findlib_toolchain"
+          ; "architecture"
+          ; "platform"
+          ; "minimum_deployment_target"
+          ; "package_universe_digest"
+          ; "target_components_digest"
+          ; "required_frameworks"
+          ; "required_system_libraries"
+          ; "build_recipe_revision"
+          ; "packages"
+          ; "libraries"
+          ]
+        in
+        let unknown =
+          String_map.fold
+            (fun name _ unknown ->
+               if List.mem name known then unknown else name :: unknown)
+            fields
+            []
+        in
+        (match unknown with
+         | name :: _ -> invalid "Unknown SDK manifest field: %s" name
+         | [] ->
+           let* format_version = one "format_version" fields in
+           let* bonsai_flutter_version = one "bonsai_flutter_version" fields in
+           let* abi_version = one "abi_version" fields in
+           let* ocaml_version = one "ocaml_version" fields in
+           let* dune_minimum_version, dune_maximum_version =
+             two "dune_version_range" fields
+           in
+           let* cross_compiler_package, cross_compiler_version =
+             two "cross_compiler" fields
+           in
+           let* findlib_toolchain = one "findlib_toolchain" fields in
+           let* architecture = one "architecture" fields in
+           let* platform = one "platform" fields in
+           let* minimum_deployment_target = one "minimum_deployment_target" fields in
+           let* package_universe_digest = one "package_universe_digest" fields in
+           let* target_components_digest = one "target_components_digest" fields in
+           let* required_frameworks = atom_list "required_frameworks" fields in
+           let* required_system_libraries =
+             atom_list "required_system_libraries" fields
+           in
+           let* build_recipe_revision = one "build_recipe_revision" fields in
+           let* packages = package_map fields in
+           let* libraries = library_map packages fields in
+           Ok
+             { raw
+             ; format_version
+             ; bonsai_flutter_version
+             ; abi_version
+             ; ocaml_version
+             ; dune_minimum_version
+             ; dune_maximum_version
+             ; cross_compiler_package
+             ; cross_compiler_version
+             ; findlib_toolchain
+             ; architecture
+             ; platform
+             ; minimum_deployment_target
+             ; package_universe_digest
+             ; target_components_digest
+             ; required_frameworks
+             ; required_system_libraries
+             ; build_recipe_revision
+             ; packages
+             ; libraries
+             })
+      | sexp ->
+        invalid
+          "Expected one (sdk ...) manifest, found %s"
+          (Sexplib.Sexp.to_string_hum sexp)
+    with
+    | Sexplib.Sexp.Parse_error _ as error ->
+      Error (Printf.sprintf "Invalid SDK manifest: %s" (Printexc.to_string error))
+  ;;
+
+  let version_components value =
+    let component part =
+      try Some (int_of_string part) with
+      | Failure _ -> None
+    in
+    let rec collect reversed = function
+      | [] -> Some (List.rev reversed)
+      | part :: rest ->
+        (match component part with
+         | Some value -> collect (value :: reversed) rest
+         | None -> None)
+    in
+    collect [] (String.split_on_char '.' value)
+  ;;
+
+  let compare_versions left right =
+    match version_components left, version_components right with
+    | Some left, Some right -> Ok (Stdlib.compare left right)
+    | _ -> invalid "Invalid numeric version comparison: %s and %s" left right
+  ;;
+
+  let incompatible bonsai_flutter_version =
+    Error
+      (Printf.sprintf
+         "The iPhoneOS switch SDK manifest is incompatible with bonsai-flutter %s. Run: \
+          bonsai-flutter toolchain remove iphoneos; bonsai-flutter toolchain install \
+          iphoneos"
+         bonsai_flutter_version)
+  ;;
+
+  let validate t ~bonsai_flutter_version ~abi_version ~minimum_deployment_target =
+    if
+      t.format_version <> "1"
+      || t.bonsai_flutter_version <> bonsai_flutter_version
+      || t.abi_version <> abi_version
+    then incompatible bonsai_flutter_version
+    else if t.findlib_toolchain <> "ios"
+    then invalid "Invalid SDK findlib toolchain %s; expected ios" t.findlib_toolchain
+    else if t.architecture <> "arm64"
+    then invalid "Invalid SDK architecture %s; expected arm64" t.architecture
+    else if t.platform <> "iphoneos"
+    then
+      invalid
+        "Invalid SDK manifest: expected Apple platform iphoneos, found %s"
+        t.platform
+    else
+      let* deployment_comparison =
+        compare_versions minimum_deployment_target t.minimum_deployment_target
+      in
+      if deployment_comparison < 0
+      then
+        invalid
+          "The configured iPhoneOS minimum deployment target %s is unsupported; the SDK \
+           requires %s or newer"
+          minimum_deployment_target
+          t.minimum_deployment_target
+      else Ok ()
+  ;;
+
+  let validate_dune_version t version =
+    let* minimum = compare_versions version t.dune_minimum_version in
+    let* maximum = compare_versions version t.dune_maximum_version in
+    if minimum >= 0 && maximum < 0
+    then Ok ()
+    else
+      invalid
+        "The iPhoneOS switch Dune version %s is outside the supported range [%s, %s)"
+        version
+        t.dune_minimum_version
+        t.dune_maximum_version
+  ;;
+
+  let validate_packages t required_packages =
+    let rec loop = function
+      | [] -> Ok ()
+      | (name, requested_version) :: rest ->
+        (match String_map.find_opt name t.packages with
+         | None ->
+           invalid
+             "Package %s.%s is not in the fixed iPhoneOS SDK package universe. Select a \
+              dependency version provided by bonsai-flutter-ios."
+             name
+             requested_version
+         | Some installed_version when installed_version <> requested_version ->
+           invalid
+             "Package %s.%s conflicts with iPhoneOS SDK package %s.%s"
+             name
+             requested_version
+             name
+             installed_version
+         | Some _ -> loop rest)
+    in
+    loop required_packages
+  ;;
+
+  let fingerprint t =
+    Sexplib.Sexp.to_string t.raw
+    |> Digestif.SHA256.digest_string
+    |> Digestif.SHA256.to_hex
+  ;;
+end
+
+module Application_lock = struct
+  module String_map = Map.Make (String)
+
+  type constraint_ =
+    | Exact of string
+    | Not_exact
+
+  let parse_dependency line =
+    let line = String.trim line in
+    if line = "" || line.[0] <> '"'
+    then Error (Printf.sprintf "Invalid dependency in application opam lock: %s" line)
+    else (
+      match String.index_from_opt line 1 '"' with
+      | None ->
+        Error (Printf.sprintf "Invalid dependency in application opam lock: %s" line)
+      | Some closing_quote ->
+        let name = String.sub line 1 (closing_quote - 1) in
+        let suffix =
+          String.sub line (closing_quote + 1) (String.length line - closing_quote - 1)
+          |> String.trim
+        in
+        let prefix = "{= \"" in
+        if String.starts_with ~prefix suffix && String.ends_with ~suffix:"\"}" suffix
+        then (
+          let version =
+            String.sub
+              suffix
+              (String.length prefix)
+              (String.length suffix - String.length prefix - 2)
+          in
+          Ok (name, Exact version))
+        else Ok (name, Not_exact))
+  ;;
+
+  let parse source =
+    let rec loop inside dependencies = function
+      | [] -> Ok dependencies
+      | line :: rest ->
+        let line = String.trim line in
+        if not inside
+        then
+          if line = "depends: ["
+          then loop true dependencies rest
+          else loop false dependencies rest
+        else if line = "]"
+        then Ok dependencies
+        else
+          let* name, constraint_ = parse_dependency line in
+          if String_map.mem name dependencies
+          then
+            Error (Printf.sprintf "Duplicate dependency %s in application opam lock" name)
+          else loop true (String_map.add name constraint_ dependencies) rest
+    in
+    loop false String_map.empty (String.split_on_char '\n' source)
+  ;;
+end
+
+type preflight =
+  { switch_prefix : string
+  ; manifest : Manifest.t
+  ; fingerprint : string
+  }
+
+let supported_bonsai_flutter_version = "0.1.0~dev"
+let supported_abi_version = "1"
+let supported_minimum_deployment_target = "15.0"
+
+let read_manifest path =
   try
     let channel = open_in_bin path in
-    let value = really_input_string channel (in_channel_length channel) in
+    let source = really_input_string channel (in_channel_length channel) in
     close_in channel;
-    Ok (String.trim value)
+    Manifest.parse source
   with
   | Sys_error message -> Error message
 ;;
 
-let write_file path contents =
-  try
-    Scaffold.ensure_directory (Filename.dirname path);
-    let channel = open_out_bin path in
-    output_string channel contents;
-    output_char channel '\n';
-    close_out channel;
-    Ok ()
-  with
-  | Sys_error message | Unix.Unix_error (_, _, message) -> Error message
-;;
-
-let application_sdk_root ~framework_root ~project_root =
-  let* identity = read_file (sdk_identity_path project_root) in
-  Ok (Filename.concat framework_root ("_build/ios/sdk-cache/" ^ identity))
-;;
-
-let application_target_lib ~framework_root ~project_root =
-  let* sdk_root = application_sdk_root ~framework_root ~project_root in
-  Ok (Filename.concat sdk_root "lib")
-;;
-
-let application_findlib_conf ~framework_root ~project_root =
-  let* sdk_root = application_sdk_root ~framework_root ~project_root in
-  Ok (Filename.concat sdk_root "findlib.conf")
-;;
-
-let current_executable () =
-  let executable = Sys.executable_name in
-  let candidates =
-    if Filename.is_relative executable && not (String.contains executable '/')
-    then
-      Sys.getenv_opt "PATH"
-      |> Option.value ~default:""
-      |> String.split_on_char ':'
-      |> List.map (fun directory ->
-        Filename.concat (if directory = "" then Sys.getcwd () else directory) executable)
-    else [ executable ]
-  in
-  let rec find = function
-    | [] ->
-      Error (Printf.sprintf "The running executable cannot be located: %s" executable)
-    | candidate :: rest ->
-      (try
-         Unix.access candidate [ Unix.X_OK ];
-         Ok (Unix.realpath candidate)
-       with
-       | Unix.Unix_error _ -> find rest)
-  in
-  find candidates
-;;
-
-let identity ~framework_root ~lock ~features =
-  let features = features_string features in
-  Process_runner.capture
-    ~working_directory:framework_root
-    ~environment:[]
-    (Filename.concat framework_root "tool/ios/resolve_application_closure.sh")
-    [ "--identity"; "--lock"; lock; "--features"; features ]
-;;
-
-let verify_lock ~framework_root ~lock ~features ~target_lib =
-  command
-    ~framework_root
-    ~environment:
-      [ "IPHONEOS_SWITCH", Filename.concat framework_root "_build/ios/switches/iphoneos" ]
-    "tool/ios/verify_runtime_closure.sh"
-    [ "--lock"; lock; "--features"; features_string features; "--target-lib"; target_lib ]
-;;
-
-let verify ~framework_root ~project_root ~features ~target =
-  match target with
-  | Plan.Macos -> Ok ()
-  | Plan.Iphoneos ->
-    let switch = Filename.concat framework_root "_build/ios/switches/iphoneos" in
-    if not (Sys.file_exists (Filename.concat switch "_opam/bin/ocamlc"))
-    then
-      Error
-        "The iPhoneOS SDK is not cached. Run: bonsai-flutter sdk build-from-source \
-         --target iphoneos"
-    else (
-      let lock = closure_lock_path project_root in
-      if not (Sys.file_exists lock)
-      then Error "The application iPhoneOS closure lock is missing; build its SDK first"
-      else
-        let* target_lib = application_target_lib ~framework_root ~project_root in
-        verify_lock ~framework_root ~lock ~features ~target_lib)
-;;
-
-let resolve_application_lock
-      ~framework_root
+let validate_application_lock
       ~project_root
-      ~native_target
-      ~features
-      ~application_opam_file
+      ~application_name
+      ~reachable_libraries
+      (manifest : Manifest.t)
   =
-  let lock = closure_lock_path project_root in
-  Scaffold.ensure_directory (Filename.dirname lock);
-  let switch = Filename.concat framework_root "_build/ios/switches/iphoneos" in
-  let* dune_closure_helper = current_executable () in
-  let environment =
-    [ "OPAMROOT", Filename.concat framework_root "_build/ios/opam-root"
-    ; "HOST_OCAML_SWITCH", switch
-    ; "APPLICATION_OPAM_FILE", application_opam_file
-    ; "BONSAI_FLUTTER_FEATURES", features_string features
-    ; "BONSAI_FLUTTER_DUNE_CLOSURE_HELPER", dune_closure_helper
-    ; "BONSAI_FLUTTER_NATIVE_TARGET", native_target
-    ]
-  in
-  let* () =
-    command
-      ~framework_root
-      ~environment
-      "tool/ios/resolve_application_closure.sh"
-      [ "iphoneos"; project_root; lock ]
-  in
-  Ok lock
+  let module String_map = Manifest.String_map in
+  let lock_name = application_name ^ ".opam.locked" in
+  let lock_path = Filename.concat project_root lock_name in
+  try
+    let channel = open_in_bin lock_path in
+    let source = really_input_string channel (in_channel_length channel) in
+    close_in channel;
+    let* locked = Application_lock.parse source in
+    let rec packages selected = function
+      | [] -> Ok selected
+      | library :: libraries ->
+        (match String_map.find_opt library manifest.libraries with
+         | None ->
+           Error
+             (Printf.sprintf
+                "Findlib library %s is not provided by the iPhoneOS SDK"
+                library)
+         | Some mapping ->
+           let selected = String_map.add mapping.package mapping.version selected in
+           packages selected libraries)
+    in
+    let* selected = packages String_map.empty reachable_libraries in
+    let selected = String_map.bindings selected in
+    let rec validate = function
+      | [] -> Ok selected
+      | (package, sdk_version) :: packages ->
+        (match Application_lock.String_map.find_opt package locked with
+         | None ->
+           Error
+             (Printf.sprintf
+                "Reachable SDK package %s.%s is missing from %s"
+                package
+                sdk_version
+                lock_name)
+         | Some Application_lock.Not_exact ->
+           Error
+             (Printf.sprintf
+                "Dependency %s in %s is not pinned exactly"
+                package
+                lock_name)
+         | Some (Application_lock.Exact locked_version) when locked_version <> sdk_version
+           ->
+           Error
+             (Printf.sprintf
+                "Package %s.%s conflicts with reachable SDK package %s.%s"
+                package
+                locked_version
+                package
+                sdk_version)
+         | Some (Application_lock.Exact _) -> validate packages)
+    in
+    validate selected
+  with
+  | Sys_error _ -> Error (Printf.sprintf "Application opam lock is missing: %s" lock_path)
 ;;
 
-let build_application_sdk ~framework_root ~project_root ~features =
-  let* application_opam_file = find_application_opam_file project_root in
-  let* config = Config.parse_file (Filename.concat project_root "bonsai-flutter.sexp") in
-  let common_environment =
-    [ "APPLICATION_OPAM_FILE", application_opam_file
-    ; "BONSAI_FLUTTER_FEATURES", features_string features
-    ; "SKIP_CLOSURE_VERIFY", "true"
-    ]
-  in
-  let* () = command ~framework_root "tool/ios/setup_toolchain.sh" [ "iphoneos" ] in
-  let* () =
-    command
-      ~framework_root
-      ~environment:common_environment
-      "tool/ios/setup_host_dependencies.sh"
-      [ "iphoneos" ]
-  in
-  let* lock =
-    resolve_application_lock
-      ~framework_root
+let opam_capture ~project_root arguments =
+  Process_runner.capture ~working_directory:project_root ~environment:[] "opam" arguments
+;;
+
+let preflight
       ~project_root
-      ~native_target:config.Config.native_target
-      ~features
-      ~application_opam_file
-  in
-  let* closure_digest = identity ~framework_root ~lock ~features in
-  let features_digest =
-    Digestif.SHA256.(to_hex (digest_string (features_string features)))
-  in
-  let sdk_cache_root =
-    Filename.concat framework_root ("_build/ios/sdk-cache/" ^ closure_digest)
-  in
-  let target_lib = Filename.concat sdk_cache_root "lib" in
-  Scaffold.ensure_directory target_lib;
-  let environment =
-    [ "RUNTIME_CLOSURE_LOCK", lock
-    ; "TARGET_LIB", target_lib
-    ; "BONSAI_FLUTTER_FEATURES", features_string features
-    ; "BONSAI_FLUTTER_CLOSURE_DIGEST", closure_digest
-    ; "BONSAI_FLUTTER_FEATURES_DIGEST", features_digest
-    ]
-  in
-  let* () =
-    command
-      ~framework_root
-      ~environment
-      "tool/ios/build_runtime_closure.sh"
-      [ "iphoneos" ]
-  in
-  let findlib_conf = Filename.concat sdk_cache_root "findlib.conf" in
-  let* () =
-    command ~framework_root "tool/ios/write_findlib_conf.sh" [ target_lib; findlib_conf ]
-  in
-  let* () = verify_lock ~framework_root ~lock ~features ~target_lib in
-  write_file (sdk_identity_path project_root) closure_digest
-;;
-
-let build_from_source ~framework_root ~project_root ~target ~features =
-  match target, project_root with
-  | Plan.Macos, _ -> Ok ()
-  | Plan.Iphoneos, Some project_root ->
-    build_application_sdk ~framework_root ~project_root ~features
-  | Plan.Iphoneos, None ->
+      ~bonsai_flutter_version
+      ~abi_version
+      ~minimum_deployment_target
+      ~required_packages
+  =
+  let switch_argument = "--switch=" ^ Plan.iphoneos_switch in
+  match opam_capture ~project_root [ "switch"; "show"; switch_argument ] with
+  | Error _ ->
     Error
-      "An iPhoneOS SDK build requires an application project root with pinned opam \
-       metadata"
-;;
-
-let fetch ~target:_ ~features:_ =
-  Error
-    "No prebuilt SDK distribution is configured for this development version. Run: \
-     bonsai-flutter sdk build-from-source --target iphoneos"
+      (Printf.sprintf
+         "The global iPhoneOS switch \"%s\" is missing. Run: bonsai-flutter toolchain \
+          install iphoneos"
+         Plan.iphoneos_switch)
+  | Ok selected when selected <> Plan.iphoneos_switch ->
+    Error
+      (Printf.sprintf
+         "opam resolved iPhoneOS switch %s instead of %s"
+         selected
+         Plan.iphoneos_switch)
+  | Ok _ ->
+    let* switch_prefix =
+      opam_capture ~project_root [ "var"; switch_argument; "prefix" ]
+    in
+    let required_executables = [ "dune"; "ocamlc"; "ocamlfind" ] in
+    let missing_executable =
+      List.find_opt
+        (fun executable ->
+           not (Sys.file_exists (Filename.concat switch_prefix ("bin/" ^ executable))))
+        required_executables
+    in
+    (match missing_executable with
+     | Some executable ->
+       Error
+         (Printf.sprintf
+            "The iPhoneOS switch is incomplete: missing %s. Run: bonsai-flutter \
+             toolchain remove iphoneos; bonsai-flutter toolchain install iphoneos"
+            executable)
+     | None ->
+       let manifest_path =
+         Filename.concat switch_prefix "share/bonsai_flutter_ios_sdk/manifest.sexp"
+       in
+       let* manifest = read_manifest manifest_path in
+       let* () =
+         Manifest.validate
+           manifest
+           ~bonsai_flutter_version
+           ~abi_version
+           ~minimum_deployment_target
+       in
+       let* () = Manifest.validate_packages manifest required_packages in
+       let* dune_version =
+         opam_capture ~project_root [ "exec"; switch_argument; "--"; "dune"; "--version" ]
+       in
+       let* () = Manifest.validate_dune_version manifest dune_version in
+       let* ocaml_version =
+         opam_capture
+           ~project_root
+           [ "exec"; switch_argument; "--"; "ocamlc"; "-version" ]
+       in
+       if ocaml_version <> manifest.ocaml_version
+       then
+         Error
+           (Printf.sprintf
+              "The iPhoneOS switch OCaml version %s does not match SDK manifest %s"
+              ocaml_version
+              manifest.ocaml_version)
+       else
+         let* findlib_path =
+           opam_capture
+             ~project_root
+             [ "exec"
+             ; switch_argument
+             ; "--"
+             ; "ocamlfind"
+             ; "-toolchain"
+             ; "ios"
+             ; "printconf"
+             ; "path"
+             ]
+         in
+         if findlib_path = ""
+         then Error "The iPhoneOS switch does not expose the ios findlib toolchain"
+         else Ok { switch_prefix; manifest; fingerprint = Manifest.fingerprint manifest })
 ;;

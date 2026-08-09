@@ -156,8 +156,8 @@ let parse_stanza id = function
   | _ -> unsupported
 ;;
 
-let parse_description = function
-  | List [ Atom "default"; List raw_stanzas ] ->
+let parse_description ~context = function
+  | List [ Atom actual_context; List raw_stanzas ] when actual_context = context ->
     let rec loop id reversed = function
       | [] -> Ok (List.rev reversed)
       | raw_stanza :: rest ->
@@ -249,19 +249,32 @@ let external_closure ~target stanzas =
   Ok (String_set.elements dependencies)
 ;;
 
-let resolve_csexp ~target input =
+let resolve_csexp ?(context = "default") ~target input =
   let* description = parse_csexp input in
-  let* stanzas = parse_description description in
+  let* stanzas = parse_description ~context description in
   external_closure ~target stanzas
 ;;
 
-let resolve_project ~project_root ~target =
+let resolve_project ~project_root ~target ~build_directory =
+  Scaffold.ensure_directory (Filename.dirname build_directory);
   let* description =
     Process_runner.capture
       ~working_directory:project_root
       ~environment:[]
-      "dune"
-      [ "describe"; "external-lib-deps"; "--format=csexp" ]
+      "opam"
+      [ "exec"
+      ; "--switch=" ^ Plan.iphoneos_switch
+      ; "--"
+      ; "dune"
+      ; "describe"
+      ; "external-lib-deps"
+      ; "--format=csexp"
+      ; "--context=default.ios"
+      ; "--root=" ^ project_root
+      ; "--build-dir=" ^ build_directory
+      ; "-x"
+      ; "ios"
+      ]
   in
-  resolve_csexp ~target description
+  resolve_csexp ~context:"default.ios" ~target description
 ;;

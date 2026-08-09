@@ -1,3 +1,9 @@
+let ( let* ) result f =
+  match result with
+  | Ok value -> f value
+  | Error _ as error -> error
+;;
+
 let rec ensure_directory path =
   if path = "" || path = Filename.dirname path || Sys.file_exists path
   then ()
@@ -13,6 +19,201 @@ let write_if_missing path contents =
     let channel = open_out_bin path in
     output_string channel contents;
     close_out channel)
+;;
+
+let read_file path =
+  if not (Sys.file_exists path)
+  then None
+  else (
+    let channel = open_in_bin path in
+    let contents = really_input_string channel (in_channel_length channel) in
+    close_in channel;
+    Some contents)
+;;
+
+let write_if_changed path contents =
+  if read_file path <> Some contents
+  then (
+    ensure_directory (Filename.dirname path);
+    let channel = open_out_bin path in
+    output_string channel contents;
+    close_out channel)
+;;
+
+let managed_aliases_begin = "; BEGIN bonsai-flutter native aliases"
+let managed_aliases_end = "; END bonsai-flutter native aliases"
+
+let dune_native_aliases config =
+  let dependency =
+    Sexplib.Sexp.Atom (Filename.basename config.Config.native_target)
+    |> Sexplib.Sexp.to_string
+  in
+  Printf.sprintf
+    "%s\n\
+     (alias\n\
+    \ (name bonsai-flutter-macos)\n\
+    \ (enabled_if (= %%{context_name} default))\n\
+    \ (deps %s))\n\n\
+     (alias\n\
+    \ (name bonsai-flutter-ios)\n\
+    \ (enabled_if (= %%{context_name} default.ios))\n\
+    \ (deps %s))\n\
+     %s\n"
+    managed_aliases_begin
+    dependency
+    dependency
+    managed_aliases_end
+;;
+
+let dune_alias_path ~project_root ~config =
+  Filename.concat
+    project_root
+    (Filename.concat (Filename.dirname config.Config.native_target) "dune")
+;;
+
+let obsolete_dune_alias_path ~project_root ~config =
+  Filename.concat
+    project_root
+    (Filename.concat (Filename.dirname config.Config.native_target) "bonsai_flutter/dune")
+;;
+
+let find_substring source pattern from =
+  let source_length = String.length source in
+  let pattern_length = String.length pattern in
+  let rec search index =
+    if index + pattern_length > source_length
+    then None
+    else if String.sub source index pattern_length = pattern
+    then Some index
+    else search (index + 1)
+  in
+  search from
+;;
+
+let replace_managed_aliases source replacement =
+  match find_substring source managed_aliases_begin 0 with
+  | None ->
+    let separator =
+      if source = "" || String.ends_with ~suffix:"\n" source then "" else "\n"
+    in
+    Ok (source ^ separator ^ "\n" ^ replacement)
+  | Some begin_index ->
+    (match find_substring source managed_aliases_end begin_index with
+     | None -> Error "The app/dune managed alias block has no end marker"
+     | Some end_index ->
+       let suffix_index = end_index + String.length managed_aliases_end in
+       let prefix = String.sub source 0 begin_index in
+       let suffix =
+         String.sub source suffix_index (String.length source - suffix_index)
+       in
+       Ok (prefix ^ replacement ^ suffix))
+;;
+
+let alias_contract config =
+  let dependency = Filename.basename config.Config.native_target in
+  [ "bonsai-flutter-macos", "default", dependency
+  ; "bonsai-flutter-ios", "default.ios", dependency
+  ]
+;;
+
+let alias_fields = function
+  | Sexplib.Sexp.List (Sexplib.Sexp.Atom "alias" :: fields) -> Some fields
+  | _ -> None
+;;
+
+let field name fields =
+  fields
+  |> List.filter_map (function
+    | Sexplib.Sexp.List (Sexplib.Sexp.Atom actual :: values) when actual = name ->
+      Some values
+    | _ -> None)
+;;
+
+let alias_matches ~name ~context ~dependency fields =
+  let expected_condition =
+    Sexplib.Sexp.List
+      [ Sexplib.Sexp.Atom "="
+      ; Sexplib.Sexp.Atom "%{context_name}"
+      ; Sexplib.Sexp.Atom context
+      ]
+  in
+  field "name" fields = [ [ Sexplib.Sexp.Atom name ] ]
+  && field "enabled_if" fields = [ [ expected_condition ] ]
+  && field "deps" fields = [ [ Sexplib.Sexp.Atom dependency ] ]
+  && List.length fields = 3
+;;
+
+let validate_dune_native_aliases ~project_root ~config =
+  let path = dune_alias_path ~project_root ~config in
+  let obsolete_path = obsolete_dune_alias_path ~project_root ~config in
+  let invalid detail =
+    Error
+      (Printf.sprintf
+         "Invalid application Dune alias contract in %s: %s. Run: bonsai-flutter \
+          sync-project"
+         path
+         detail)
+  in
+  if Sys.file_exists obsolete_path
+  then invalid (Printf.sprintf "obsolete alias file still exists at %s" obsolete_path)
+  else (
+    match read_file path with
+    | None -> invalid "file is missing"
+    | Some source ->
+      (try
+         let aliases =
+           Sexplib.Sexp.of_string_many source |> List.filter_map alias_fields
+         in
+         let invalid_alias =
+           alias_contract config
+           |> List.find_opt (fun (name, context, dependency) ->
+             aliases
+             |> List.filter (fun fields ->
+               field "name" fields = [ [ Sexplib.Sexp.Atom name ] ])
+             |> function
+             | [ fields ] -> not (alias_matches ~name ~context ~dependency fields)
+             | [] | _ :: _ :: _ -> true)
+         in
+         match invalid_alias with
+         | None -> Ok ()
+         | Some (name, _, _) ->
+           invalid (Printf.sprintf "alias %s is missing or invalid" name)
+       with
+       | Sexplib.Sexp.Parse_error _ -> invalid "file is not valid Dune syntax"))
+;;
+
+let remove_obsolete_dune_aliases ~project_root ~config =
+  let path = obsolete_dune_alias_path ~project_root ~config in
+  let directory = Filename.dirname path in
+  if Sys.file_exists path
+  then (
+    match (Unix.lstat directory).st_kind with
+    | Unix.S_DIR ->
+      Sys.remove path;
+      (try Unix.rmdir directory with
+       | Unix.Unix_error (Unix.ENOTEMPTY, _, _) -> ())
+    | Unix.S_LNK ->
+      raise
+        (Sys_error
+           (Printf.sprintf "Refusing to follow obsolete alias symlink: %s" directory))
+    | Unix.S_REG | Unix.S_CHR | Unix.S_BLK | Unix.S_FIFO | Unix.S_SOCK ->
+      raise (Sys_error (Printf.sprintf "Invalid obsolete alias directory: %s" directory)))
+;;
+
+let write_dune_native_aliases ~project_root ~config =
+  let path = dune_alias_path ~project_root ~config in
+  let source = Option.value ~default:"" (read_file path) in
+  match replace_managed_aliases source (dune_native_aliases config) with
+  | Error _ as error -> error
+  | Ok contents ->
+    write_if_changed path contents;
+    remove_obsolete_dune_aliases ~project_root ~config;
+    Ok ()
+;;
+
+let synchronize_dune_native_aliases ~project_root ~config =
+  try write_dune_native_aliases ~project_root ~config with
+  | Sys_error message | Unix.Unix_error (_, _, message) -> Error message
 ;;
 
 let generated_app_ml name =
@@ -207,6 +408,32 @@ build: [
     name
 ;;
 
+let opam_locked_manifest name =
+  Printf.sprintf
+    {|opam-version: "2.0"
+name: "%s"
+version: "0.1.0"
+synopsis: "%s Bonsai Flutter application lock"
+maintainer: "application authors"
+authors: ["application authors"]
+license: "MIT"
+depends: [
+  "ocaml" {= "5.1.1"}
+  "ocaml-ios64" {= "5.1.1"}
+  "dune" {= "3.23.1"}
+  "bonsai_flutter" {= "0.1.0~dev"}
+  "bonsai_flutter_tool" {= "0.1.0~dev"}
+  "base" {= "v0.17.3"}
+  "bonsai" {= "v0.17.0"}
+  "core" {= "v0.17.2"}
+  "incr_dom" {= "v0.17.0"}
+  "virtual_dom" {= "v0.17.0"}
+]
+|}
+    name
+    name
+;;
+
 let initialize ~project_root ~config =
   try
     let app_directory = Filename.concat project_root "app" in
@@ -223,6 +450,7 @@ let initialize ~project_root ~config =
          (Filename.concat project_root config.Config.flutter_root)
          config.host.adapter)
       application_host_adapter;
+    let* () = write_dune_native_aliases ~project_root ~config in
     List.iter
       (fun (relative_path, contents) ->
          write_if_missing (Filename.concat project_root relative_path) contents)
@@ -244,6 +472,9 @@ let initialize_workspace ~project_root ~config_text ~config =
     write_if_missing
       (Filename.concat project_root (config.name ^ ".opam"))
       (opam_manifest config.name);
+    write_if_missing
+      (Filename.concat project_root (config.name ^ ".opam.locked"))
+      (opam_locked_manifest config.name);
     initialize ~project_root ~config
   with
   | Sys_error message | Unix.Unix_error (_, _, message) -> Error message

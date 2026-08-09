@@ -131,7 +131,14 @@ patch_files=$(
     -type f \( -name '*.patch' -o -name '*.diff' \) -print |
     LC_ALL=C sort
 )
-expected_patch_files='./vendor/opam-ios/ocaml-ios64.5.1.1/files/ocamlmklib-failsafe.patch
+expected_patch_files='./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev/files/patches/base-host-generator.patch
+./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev/files/patches/eio-posix-darwin-protocol-zero.patch
+./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev/files/patches/eio-posix-darwin-socktype-hints.patch
+./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev/files/patches/jst-config-host-discover.patch
+./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev/files/patches/mirage-crypto-rng-apple-entropy.patch
+./tool/ios/opam-repository/0.1.0/packages/ocaml-ios64/ocaml-ios64.5.1.1/files/ocamlmklib-failsafe.patch
+./tool/ios/opam-repository/0.1.0/packages/ocaml-ios64/ocaml-ios64.5.1.1/files/sys.patch
+./vendor/opam-ios/ocaml-ios64.5.1.1/files/ocamlmklib-failsafe.patch
 ./vendor/patches/basement-macos.patch
 ./vendor/patches/ios/base-host-generator.patch
 ./vendor/patches/ios/eio-posix-darwin-protocol-zero.patch
@@ -591,12 +598,6 @@ for example in clock counter gallery host_effects host_navigation mail navigatio
     reject_text \
       "$example_pubspec" \
       "link_system_sqlite3" \
-      "$example Flutter build hook"
-  fi
-  if test "$example" = mail; then
-    require_text \
-      "$example_pubspec" \
-      "mode_specific_ocaml_artifacts: true" \
       "$example Flutter build hook"
   fi
   macos_config=$(cat "examples/$example/flutter/macos/Runner/Configs/BonsaiFlutter.xcconfig")

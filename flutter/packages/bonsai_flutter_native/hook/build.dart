@@ -14,8 +14,8 @@ void main(List<String> args) async {
     }
     final packageName = input.packageName;
     final requireOcamlBackend = _requireOcamlBackend(input);
-    final modeSpecificOcamlArtifacts = _modeSpecificOcamlArtifacts(input);
     final target = _ocamlTarget(input);
+    final nativeArtifactRoot = input.userDefines.path('native_artifact_root');
     File? ocamlObject;
     if (target == null) {
       if (requireOcamlBackend) {
@@ -25,15 +25,14 @@ void main(List<String> args) async {
         );
       }
     } else {
+      final variant = nativeArtifactRoot == null && !requireOcamlBackend
+          ? null
+          : OcamlArtifactVariant.fromProfileName(_artifactProfile(input));
       ocamlObject = await OcamlArtifactResolver().resolve(
-        nativeArtifactRoot: input.userDefines.path('native_artifact_root'),
+        nativeArtifactRoot: nativeArtifactRoot,
         requireOcamlBackend: requireOcamlBackend,
         target: target,
-        variant: modeSpecificOcamlArtifacts
-            ? OcamlArtifactVariant.fromLinkingEnabled(
-                input.config.linkingEnabled,
-              )
-            : null,
+        variant: variant,
       );
     }
     final embedOcaml = ocamlObject != null;
@@ -87,8 +86,13 @@ bool _requireOcamlBackend(BuildInput input) {
   return _booleanUserDefine(input, 'require_ocaml_backend');
 }
 
-bool _modeSpecificOcamlArtifacts(BuildInput input) {
-  return _booleanUserDefine(input, 'mode_specific_ocaml_artifacts');
+String? _artifactProfile(BuildInput input) {
+  final value = input.userDefines['native_artifact_profile'];
+  if (value == null || value is String) return value as String?;
+  throw FormatException(
+    'native_artifact_profile must be debug, profile, or release; '
+    'found $value.',
+  );
 }
 
 bool _booleanUserDefine(BuildInput input, String name) {
