@@ -171,6 +171,24 @@ let build platform profile no_codesign forwarded =
     ~forwarded
 ;;
 
+let exec profile command =
+  let working_directory = Sys.getcwd () in
+  let* project_root, config = load_project () in
+  let* framework_root = Assets.find_framework_root () in
+  match
+    Build_system.exec
+      ~framework_root
+      ~project_root
+      ~config
+      ~profile
+      ~working_directory
+      ~command
+  with
+  | Error _ as error -> error
+  | Ok 0 -> Ok ()
+  | Ok status -> exit status
+;;
+
 let sync_host check =
   let* project_root, config = load_project () in
   let mode = if check then Host.Check else Host.Write in
@@ -341,6 +359,20 @@ let build_command =
     Term.(const build $ platform $ profile $ no_codesign $ forwarded)
 ;;
 
+let exec_command =
+  let program = Arg.(required & pos 0 (some string) None & info [] ~docv:"COMMAND") in
+  let arguments = Arg.(value & pos_right 0 string [] & info [] ~docv:"ARGUMENT") in
+  Cmd.v
+    (Cmd.info
+       "exec"
+       ~doc:"Build the native artifact and run a command with its profile selected.")
+    Term.(
+      const (fun profile program arguments -> exec profile (program :: arguments))
+      $ profile
+      $ program
+      $ arguments)
+;;
+
 let sync_host_command =
   let check =
     Arg.(value & flag & info [ "check" ] ~doc:"Check without modifying files.")
@@ -408,6 +440,7 @@ let command =
     ; build_native_command
     ; run_command
     ; build_command
+    ; exec_command
     ; sync_host_command
     ; sync_project_command
     ; clean_command

@@ -2321,6 +2321,210 @@ let test_unchanged_native_build_preserves_outputs () =
     (Unix.stat manifest).st_mtime
 ;;
 
+type exec_fixture =
+  { exec_native : native_build_fixture
+  ; exec_working_directory : string
+  ; exec_log : string
+  ; exec_ready : string
+  ; exec_result : string
+  ; exec_pubspec : string
+  ; exec_artifact : string
+  }
+
+let create_exec_fixture () =
+  let exec_native = create_native_build_fixture () in
+  let project_root = exec_native.native_project_root in
+  let config = exec_native.native_config in
+  Host.render ~config
+  |> List.iter (fun (relative_path, contents) ->
+    write_file (Filename.concat project_root relative_path) contents);
+  let exec_working_directory = Filename.concat project_root "flutter/macos" in
+  let exec_log = Filename.concat project_root "exec.log" in
+  let exec_ready = Filename.concat project_root "exec.ready" in
+  let exec_result = Filename.concat project_root "exec.result" in
+  let exec_pubspec = Filename.concat project_root "flutter/pubspec.yaml" in
+  let exec_artifact =
+    Filename.concat
+      project_root
+      "_build/bonsai-flutter/artifacts/macos/arm64/debug/native_embed.exe.o"
+  in
+  Scaffold.ensure_directory exec_working_directory;
+  write_executable
+    (Filename.concat exec_native.native_bin "flutter")
+    {|#!/bin/sh
+set -eu
+test -f "$EXEC_ARTIFACT"
+grep -q 'native_artifact_profile: debug' "$EXEC_PUBSPEC"
+{
+  printf 'cwd=%s\n' "$PWD"
+  for argument in "$@"; do
+    printf 'argument=%s\n' "$argument"
+  done
+} > "$EXEC_LOG"
+if test -n "${EXEC_READY:-}"; then
+  : > "$EXEC_READY"
+fi
+if test "${EXEC_WAIT:-false}" = true; then
+  trap 'exit 130' INT
+  while :; do
+    sleep 1
+  done
+fi
+exit "${EXEC_EXIT:-0}"
+|};
+  { exec_native
+  ; exec_working_directory
+  ; exec_log
+  ; exec_ready
+  ; exec_result
+  ; exec_pubspec
+  ; exec_artifact
+  }
+;;
+
+let with_exec_fixture ?(environment = []) fixture f =
+  with_native_build_fixture
+    ~environment:
+      ([ "EXEC_ARTIFACT", fixture.exec_artifact
+       ; "EXEC_PUBSPEC", fixture.exec_pubspec
+       ; "EXEC_LOG", fixture.exec_log
+       ]
+       @ environment)
+    fixture.exec_native
+    f
+;;
+
+let run_exec fixture command =
+  Build_system.exec
+    ~framework_root:fixture.exec_native.native_framework_root
+    ~project_root:fixture.exec_native.native_project_root
+    ~config:fixture.exec_native.native_config
+    ~profile:Plan.Debug
+    ~working_directory:fixture.exec_working_directory
+    ~command
+;;
+
+let check_exec_host_is_canonical fixture =
+  Alcotest.(check string)
+    "canonical pubspec is restored"
+    (Host.pubspec fixture.exec_native.native_config)
+    (read_file fixture.exec_pubspec);
+  Alcotest.(check (list string))
+    "sync-host check is clean"
+    []
+    (Host.sync
+       ~project_root:fixture.exec_native.native_project_root
+       ~config:fixture.exec_native.native_config
+       ~mode:Host.Check
+     |> get_ok)
+;;
+
+let test_exec_builds_injects_and_runs_command_verbatim () =
+  let fixture = create_exec_fixture () in
+  let command = [ "flutter"; "test"; "--no-pub"; "test"; "argument with spaces" ] in
+  let status = with_exec_fixture fixture (fun () -> run_exec fixture command |> get_ok) in
+  Alcotest.(check int) "successful child status" 0 status;
+  Alcotest.(check (list string))
+    "cwd and arguments"
+    [ "cwd=" ^ fixture.exec_working_directory
+    ; "argument=test"
+    ; "argument=--no-pub"
+    ; "argument=test"
+    ; "argument=argument with spaces"
+    ]
+    (read_file fixture.exec_log |> non_empty_lines);
+  Alcotest.(check bool)
+    "debug artifact was built"
+    true
+    (Sys.file_exists fixture.exec_artifact);
+  Alcotest.(check bool)
+    "Flutter build lock was acquired"
+    true
+    (Sys.file_exists
+       (Filename.concat
+          fixture.exec_native.native_project_root
+          "_build/bonsai-flutter/locks/flutter.lock"));
+  check_exec_host_is_canonical fixture
+;;
+
+let test_exec_preserves_child_failure_status_and_restores_pubspec () =
+  let fixture = create_exec_fixture () in
+  let status =
+    with_exec_fixture
+      ~environment:[ "EXEC_EXIT", "37" ]
+      fixture
+      (fun () -> run_exec fixture [ "flutter"; "test" ] |> get_ok)
+  in
+  Alcotest.(check int) "child failure status" 37 status;
+  check_exec_host_is_canonical fixture
+;;
+
+let rec wait_for_file path attempts =
+  if Sys.file_exists path
+  then true
+  else if attempts = 0
+  then false
+  else (
+    Unix.sleepf 0.01;
+    wait_for_file path (attempts - 1))
+;;
+
+let test_exec_forwards_interrupt_and_restores_pubspec () =
+  let fixture = create_exec_fixture () in
+  match Unix.fork () with
+  | 0 ->
+    let status =
+      with_exec_fixture
+        ~environment:[ "EXEC_READY", fixture.exec_ready; "EXEC_WAIT", "true" ]
+        fixture
+        (fun () -> run_exec fixture [ "flutter"; "test" ] |> get_ok)
+    in
+    write_file fixture.exec_result (string_of_int status);
+    Unix._exit 0
+  | pid ->
+    if not (wait_for_file fixture.exec_ready 500)
+    then (
+      Unix.kill pid Sys.sigkill;
+      ignore (Unix.waitpid [] pid);
+      Alcotest.fail "timed out waiting for exec child command");
+    Unix.kill pid Sys.sigint;
+    let _, child_status = Unix.waitpid [] pid in
+    Alcotest.(check int)
+      "exec process completed cleanup"
+      0
+      (match child_status with
+       | Unix.WEXITED code -> code
+       | Unix.WSIGNALED signal | Unix.WSTOPPED signal -> 128 + signal);
+    Alcotest.(check string) "interrupt status" "130" (read_file fixture.exec_result);
+    check_exec_host_is_canonical fixture
+;;
+
+let test_exec_stops_before_command_when_native_build_fails () =
+  let fixture = create_exec_fixture () in
+  with_exec_fixture
+    ~environment:[ "VERIFY_EXIT", "55" ]
+    fixture
+    (fun () ->
+       run_exec fixture [ "flutter"; "test" ]
+       |> check_error_contains "verify_complete_object");
+  Alcotest.(check bool)
+    "child command was not run"
+    false
+    (Sys.file_exists fixture.exec_log);
+  check_exec_host_is_canonical fixture
+;;
+
+let test_exec_rejects_an_empty_command () =
+  let fixture = create_exec_fixture () in
+  with_exec_fixture fixture (fun () ->
+    run_exec fixture [] |> check_error_contains "command is required");
+  Alcotest.(check bool)
+    "native build was not started"
+    false
+    (Sys.file_exists fixture.exec_artifact);
+  check_exec_host_is_canonical fixture
+;;
+
 let test_managed_adapter_sync_preserves_application_code () =
   let root = Filename.temp_dir "bonsai-flutter-tool" "managed-sync" in
   let config = Config.parse_string managed_adapter_config |> get_ok in
@@ -2466,7 +2670,7 @@ let test_flutter_plans () =
   in
   Alcotest.(check (list string))
     "unsigned iOS release"
-    [ "build"; "ios"; "--release"; "--no-codesign" ]
+    [ "build"; "ios"; "--release"; "--no-codesign"; "--no-tree-shake-icons" ]
     ios.arguments;
   Alcotest.(check (list (pair string string)))
     "release artifact profile"
@@ -2487,6 +2691,119 @@ let test_flutter_plans () =
     "profile artifact profile"
     []
     profile.environment
+;;
+
+let count_argument expected arguments =
+  arguments |> List.filter (String.equal expected) |> List.length
+;;
+
+let flutter_plan ~action ~platform ~profile ~forwarded =
+  Plan.flutter
+    ~project_root:"/work/journal"
+    ~config:(Config.parse_string valid_config |> get_ok)
+    ~action
+    ~platform
+    ~profile
+    ~device:None
+    ~no_codesign:false
+    ~forwarded
+;;
+
+let check_icon_tree_shaking_disabled name command =
+  Alcotest.(check int)
+    (name ^ " has one disabling flag")
+    1
+    (count_argument "--no-tree-shake-icons" command.Plan.arguments);
+  Alcotest.(check int)
+    (name ^ " has no enabling flag")
+    0
+    (count_argument "--tree-shake-icons" command.arguments)
+;;
+
+let test_flutter_builds_preserve_runtime_material_icons () =
+  [ "macOS Profile", Plan.Macos_platform, Plan.Profile
+  ; "macOS Release", Plan.Macos_platform, Plan.Release
+  ; "iOS Profile", Plan.Ios_platform, Plan.Profile
+  ; "iOS Release", Plan.Ios_platform, Plan.Release
+  ]
+  |> List.iter (fun (name, platform, profile) ->
+    flutter_plan ~action:Plan.Build ~platform ~profile ~forwarded:[]
+    |> check_icon_tree_shaking_disabled name)
+;;
+
+let test_flutter_runs_preserve_runtime_material_icons () =
+  [ "macOS Profile", Plan.Macos_platform, Plan.Profile
+  ; "macOS Release", Plan.Macos_platform, Plan.Release
+  ; "iOS Profile", Plan.Ios_platform, Plan.Profile
+  ; "iOS Release", Plan.Ios_platform, Plan.Release
+  ]
+  |> List.iter (fun (name, platform, profile) ->
+    flutter_plan ~action:Plan.Run ~platform ~profile ~forwarded:[]
+    |> check_icon_tree_shaking_disabled name)
+;;
+
+let test_flutter_icon_protection_preserves_forwarded_arguments () =
+  let command =
+    flutter_plan
+      ~action:Plan.Build
+      ~platform:Plan.Macos_platform
+      ~profile:Plan.Release
+      ~forwarded:[ "--dart-define=environment=development"; "--"; "application-value" ]
+  in
+  Alcotest.(check (list string))
+    "framework flag precedes untouched forwarded arguments"
+    [ "build"
+    ; "macos"
+    ; "--release"
+    ; "--no-tree-shake-icons"
+    ; "--dart-define=environment=development"
+    ; "--"
+    ; "application-value"
+    ]
+    command.arguments
+;;
+
+let test_flutter_icon_protection_normalizes_conflicting_arguments () =
+  let command =
+    flutter_plan
+      ~action:Plan.Build
+      ~platform:Plan.Ios_platform
+      ~profile:Plan.Profile
+      ~forwarded:
+        [ "--no-tree-shake-icons"
+        ; "--dart-define=environment=development"
+        ; "--tree-shake-icons"
+        ; "--no-tree-shake-icons"
+        ]
+  in
+  Alcotest.(check (list string))
+    "unsafe and duplicate flags are normalized"
+    [ "build"
+    ; "ios"
+    ; "--profile"
+    ; "--no-tree-shake-icons"
+    ; "--dart-define=environment=development"
+    ]
+    command.arguments
+;;
+
+let test_flutter_debug_and_generated_host_remain_unchanged () =
+  let debug =
+    flutter_plan
+      ~action:Plan.Build
+      ~platform:Plan.Macos_platform
+      ~profile:Plan.Debug
+      ~forwarded:[ "--dart-define=environment=development" ]
+  in
+  Alcotest.(check (list string))
+    "Debug needs no explicit icon retention flag"
+    [ "build"; "macos"; "--debug"; "--dart-define=environment=development" ]
+    debug.arguments;
+  let pubspec = Host.pubspec (Config.parse_string valid_config |> get_ok) in
+  Alcotest.(check bool)
+    "generated pubspec contains no icon tree-shaking policy"
+    false
+    (contains pubspec "tree-shake-icons")
 ;;
 
 let test_flutter_pub_get_runs_only_when_dependency_inputs_change () =
@@ -2655,6 +2972,7 @@ let test_ios_release_device_run () =
         ; "build"
         ; "ios"
         ; "--release"
+        ; "--no-tree-shake-icons"
         ; "--dart-define=environment=production"
         ; "--verbose"
         ]
@@ -2721,6 +3039,7 @@ let test_ios_profile_device_run () =
        ; "build"
        ; "ios"
        ; "--profile"
+       ; "--no-tree-shake-icons"
        ; "--flavor"
        ; "internal"
        ])
@@ -3327,6 +3646,26 @@ let () =
     ; ( "flutter"
       , [ Alcotest.test_case "command plans" `Quick test_flutter_plans
         ; Alcotest.test_case
+            "runtime icons in builds"
+            `Quick
+            test_flutter_builds_preserve_runtime_material_icons
+        ; Alcotest.test_case
+            "runtime icons in runs"
+            `Quick
+            test_flutter_runs_preserve_runtime_material_icons
+        ; Alcotest.test_case
+            "icon-safe argument forwarding"
+            `Quick
+            test_flutter_icon_protection_preserves_forwarded_arguments
+        ; Alcotest.test_case
+            "icon flag normalization"
+            `Quick
+            test_flutter_icon_protection_normalizes_conflicting_arguments
+        ; Alcotest.test_case
+            "Debug and generated host"
+            `Quick
+            test_flutter_debug_and_generated_host_remain_unchanged
+        ; Alcotest.test_case
             "incremental pub get"
             `Quick
             test_flutter_pub_get_runs_only_when_dependency_inputs_change
@@ -3336,6 +3675,25 @@ let () =
             test_flutter_pub_get_requires_project_pubspec
         ; Alcotest.test_case "iOS bundle paths" `Quick test_ios_app_bundle_paths
         ; Alcotest.test_case "iOS device commands" `Quick test_ios_device_command_plans
+        ] )
+    ; ( "exec"
+      , [ Alcotest.test_case
+            "build, inject, and preserve argv"
+            `Quick
+            test_exec_builds_injects_and_runs_command_verbatim
+        ; Alcotest.test_case
+            "child failure status"
+            `Quick
+            test_exec_preserves_child_failure_status_and_restores_pubspec
+        ; Alcotest.test_case
+            "interrupt cleanup"
+            `Quick
+            test_exec_forwards_interrupt_and_restores_pubspec
+        ; Alcotest.test_case
+            "native build failure"
+            `Quick
+            test_exec_stops_before_command_when_native_build_fails
+        ; Alcotest.test_case "empty command" `Quick test_exec_rejects_an_empty_command
         ] )
     ; ( "ios-device-run"
       , [ Alcotest.test_case "release" `Quick test_ios_release_device_run

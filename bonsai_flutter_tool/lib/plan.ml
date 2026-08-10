@@ -238,6 +238,17 @@ let native_build
         })
 ;;
 
+let preserve_runtime_material_icons profile forwarded =
+  match profile with
+  | Debug -> forwarded
+  | Profile | Release ->
+    "--no-tree-shake-icons"
+    :: List.filter
+         (fun argument ->
+            argument <> "--no-tree-shake-icons" && argument <> "--tree-shake-icons")
+         forwarded
+;;
+
 let flutter
       ~project_root
       ~config
@@ -249,6 +260,7 @@ let flutter
       ~forwarded
   =
   let profile_flag = "--" ^ profile_name profile in
+  let forwarded = preserve_runtime_material_icons profile forwarded in
   let arguments =
     match action, platform with
     | Run, Macos_platform ->

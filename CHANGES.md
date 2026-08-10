@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Disabled Flutter icon tree shaking for every macOS and iOS Profile/Release
+  build and run because Material icon code points arrive through runtime
+  protocol frames and cannot be discovered by Flutter's static `IconData`
+  scanner. The complete font adds approximately 1.6 MB uncompressed; duplicate
+  or conflicting forwarded tree-shaking flags are normalized deterministically.
+- Added `bonsai-flutter exec --profile=PROFILE -- COMMAND` for Flutter and Xcode
+  tests that require a staged macOS native artifact. The command holds the
+  Flutter build lock, scopes the generated Native Assets profile to the child
+  process, preserves its exit status, and restores the generated manifest after
+  success, failure, or an interrupt.
 - Routed macOS and iPhoneOS application complete-object builds through managed
   Dune aliases, moved iPhoneOS packages into a commit- and checksum-locked
   immutable global SDK, validated application lock subsets from the reachable

@@ -385,3 +385,63 @@ let run_flutter
            ~no_codesign
            ~forwarded))
 ;;
+
+let forward_signal process signal =
+  try Unix.kill process signal with
+  | Unix.Unix_error ((Unix.ESRCH | Unix.EPERM), _, _) -> ()
+;;
+
+let with_forwarded_interrupts f =
+  let child = ref None in
+  let received_signal = ref None in
+  let handle_signal signal =
+    if Option.is_none !received_signal then received_signal := Some signal;
+    Option.iter (fun process -> forward_signal process signal) !child
+  in
+  let signals = [ Sys.sigint; Sys.sigterm; Sys.sighup; Sys.sigquit ] in
+  let previous_handlers =
+    List.map
+      (fun signal -> signal, Sys.signal signal (Sys.Signal_handle handle_signal))
+      signals
+  in
+  Fun.protect
+    ~finally:(fun () ->
+      List.iter
+        (fun (signal, handler) -> ignore (Sys.signal signal handler))
+        previous_handlers)
+    (fun () ->
+       let on_spawn process =
+         child := Some process;
+         Option.iter (forward_signal process) !received_signal
+       in
+       f ~on_spawn ~received_signal:(fun () -> !received_signal))
+;;
+
+let exec ~framework_root ~project_root ~config ~profile ~working_directory ~command =
+  match command with
+  | [] -> Error "A command is required after --"
+  | program :: arguments ->
+    let lock = Filename.concat project_root "_build/bonsai-flutter/locks/flutter.lock" in
+    Lock.with_lock lock (fun () ->
+      let* _artifact =
+        build_native ~framework_root ~project_root ~config ~target:Plan.Macos ~profile
+      in
+      with_forwarded_interrupts (fun ~on_spawn ~received_signal ->
+        let command : Plan.command =
+          { program; arguments; working_directory; environment = [] }
+        in
+        let result =
+          Host.with_artifact_profile
+            ~project_root
+            ~config
+            ~profile:(Plan.profile_name profile)
+            (fun () ->
+               match received_signal () with
+               | Some signal -> Ok (Process_runner.signal_exit_code signal)
+               | None -> Process_runner.run_status ~on_spawn command)
+        in
+        match result, received_signal () with
+        | Ok _, Some signal -> Ok (Process_runner.signal_exit_code signal)
+        | result, None -> result
+        | (Error _ as error), Some _ -> error))
+;;

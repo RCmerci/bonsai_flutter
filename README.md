@@ -131,6 +131,39 @@ bonsai-flutter doctor --target macos
 bonsai-flutter build macos --profile release
 ```
 
+Run Flutter or Xcode tests through the same native-artifact profile gate. The
+wrapped command runs unchanged from the caller's current directory, so invoke
+Flutter commands from the generated Flutter directory and Xcode commands from
+its `macos` directory:
+
+```sh
+cd flutter
+bonsai-flutter exec --profile=debug -- flutter test --no-pub test
+bonsai-flutter exec --profile=debug -- \
+  flutter test --no-pub -d macos integration_test/runtime_flow_test.dart
+
+cd macos
+bonsai-flutter exec --profile=debug -- \
+  xcodebuild test -workspace Runner.xcworkspace -scheme Runner
+```
+
+`exec` holds the project Flutter build lock, builds the selected macOS native
+artifact, temporarily selects that profile in the generated `pubspec.yaml`,
+and preserves the wrapped command's exit status. It restores the exact original
+manifest after success, failure, or an interrupt, keeping `sync-host --check`
+clean.
+
+Profile and Release `build` and `run` commands for both macOS and iOS always
+pass `--no-tree-shake-icons`. Bonsai Flutter icon code points arrive through
+runtime protocol frames, so Flutter's static Dart `IconData` scan cannot know
+which Material icons the application will use. Retaining the complete
+`MaterialIcons-Regular.otf` is therefore part of the framework contract and
+costs approximately 1.6 MB uncompressed. Forwarded duplicates are removed,
+and a forwarded `--tree-shake-icons` cannot override this requirement. Debug
+keeps Flutter's default behavior, which already retains the complete font. The
+policy lives only in command construction and does not modify generated host
+files.
+
 Install and verify the immutable global iPhoneOS SDK before building an iOS
 application:
 
