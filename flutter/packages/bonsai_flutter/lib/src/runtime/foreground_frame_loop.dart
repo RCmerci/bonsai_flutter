@@ -129,6 +129,11 @@ final class ForegroundFrameLoop {
     if (_eligible && accepted) _schedule(rescheduling: false);
   }
 
+  void requestFrame() {
+    if (_disposed || isTerminal || !_eligible) return;
+    _schedule(rescheduling: false);
+  }
+
   void addGuardedPostFrameCallback({
     required int generation,
     required FrameCallback callback,

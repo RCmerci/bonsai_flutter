@@ -1503,6 +1503,10 @@ let test_generated_host () =
     true
     (contains pubspec "path: ../.bonsai-flutter/flutter-packages/bonsai_flutter");
   Alcotest.(check bool)
+    "integration test dependency"
+    true
+    (contains pubspec "  integration_test:\n    sdk: flutter\n");
+  Alcotest.(check bool)
     "macOS deployment target user define"
     true
     (contains pubspec "macos_deployment_target: '26.0'");
@@ -1892,6 +1896,25 @@ let test_host_sync_check () =
   Alcotest.(check string) "check does not modify" "// drift" still_drifted;
   let repaired = Host.sync ~project_root:root ~config ~mode:Host.Write |> get_ok in
   Alcotest.(check (list string)) "repairs only drift" [ "flutter/lib/main.dart" ] repaired
+;;
+
+let test_host_sync_repairs_missing_integration_dependency () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "sync-integration-test" in
+  let config = Config.parse_string valid_config |> get_ok in
+  Host.sync ~project_root:root ~config ~mode:Host.Write |> get_ok |> ignore;
+  let pubspec_path = Filename.concat root "flutter/pubspec.yaml" in
+  let generated = read_file pubspec_path in
+  let dependency = "  integration_test:\n    sdk: flutter\n" in
+  let missing = replace_once generated ~pattern:dependency ~replacement:"" in
+  write_file pubspec_path missing;
+  Host.sync ~project_root:root ~config ~mode:Host.Check
+  |> check_error_contains "Generated host is out of date: flutter/pubspec.yaml";
+  let repaired = Host.sync ~project_root:root ~config ~mode:Host.Write |> get_ok in
+  Alcotest.(check (list string))
+    "repairs only generated pubspec"
+    [ "flutter/pubspec.yaml" ]
+    repaired;
+  Alcotest.(check string) "restores canonical pubspec" generated (read_file pubspec_path)
 ;;
 
 let test_native_sync_only_manages_dune_aliases () =
@@ -3268,6 +3291,10 @@ let () =
         ] )
     ; ( "sync"
       , [ Alcotest.test_case "check and repair" `Quick test_host_sync_check
+        ; Alcotest.test_case
+            "integration dependency"
+            `Quick
+            test_host_sync_repairs_missing_integration_dependency
         ; Alcotest.test_case
             "native build only manages Dune aliases"
             `Quick

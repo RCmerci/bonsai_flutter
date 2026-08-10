@@ -121,14 +121,11 @@ void main() {
     final firstBatch = EventBatchCodec.decode(
       runtime.successes.single.eventBatch,
     );
-    final response =
-        firstBatch.events
-                .where(
-                  (event) => event.eventTag == EventTagId.applicationResponse,
-                )
-                .single
-                .payload
-            as ApplicationResponseEventPayload;
+    final responseEvent = firstBatch.events
+        .where((event) => event.eventTag == EventTagId.applicationResponse)
+        .single;
+    expect(responseEvent.displayedRevision, 1);
+    final response = responseEvent.payload as ApplicationResponseEventPayload;
     expect(response.requestId, 201);
     expect(response.payload, [255, 1, 0]);
 

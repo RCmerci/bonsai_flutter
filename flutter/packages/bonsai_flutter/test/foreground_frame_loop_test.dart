@@ -200,6 +200,31 @@ void main() {
     expect(harness.loop.debugScheduledCallbackId, isNull);
   });
 
+  test('explicit frame request recovers a live loop without a successor', () {
+    final harness = LoopHarness();
+    harness.loop.start();
+    harness.scheduler.framesEnabledValue = false;
+    harness.scheduler.fire(1);
+    harness.scheduler.framesEnabledValue = true;
+
+    harness.loop.requestFrame();
+
+    expect(harness.scheduler.scheduled, hasLength(2));
+    expect(harness.scheduler.scheduled.last.rescheduling, isFalse);
+    expect(harness.loop.debugScheduledCallbackId, 2);
+  });
+
+  test('explicit frame request never duplicates a live callback', () {
+    final harness = LoopHarness();
+    harness.loop.start();
+
+    harness.loop.requestFrame();
+    harness.loop.requestFrame();
+
+    expect(harness.scheduler.scheduled, hasLength(1));
+    expect(harness.loop.debugScheduledCallbackId, 1);
+  });
+
   test('stale callback cannot clear a resumed generation callback id', () {
     final harness = LoopHarness();
     harness.loop.start();

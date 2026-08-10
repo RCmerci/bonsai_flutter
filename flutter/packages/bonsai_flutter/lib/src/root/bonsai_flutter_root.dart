@@ -345,6 +345,7 @@ final class _BonsaiFlutterRootState extends State<BonsaiFlutterRoot> {
     if (events == null || _error != null || _disposed) return;
     try {
       events.enqueue(event);
+      _frameLoop?.requestFrame();
     } catch (error, stackTrace) {
       _reportError(error, stackTrace);
     }

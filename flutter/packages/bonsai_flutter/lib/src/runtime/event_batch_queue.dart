@@ -190,4 +190,7 @@ bool _isCoalescible(int eventTag) =>
 bool _isRuntimeControl(int eventTag) =>
     eventTag == EventTagId.hostResponse ||
     eventTag == EventTagId.environmentChanged ||
-    eventTag == EventTagId.resyncRequested;
+    eventTag == EventTagId.resyncRequested ||
+    eventTag == EventTagId.applicationResponse ||
+    eventTag == EventTagId.applicationRequestError ||
+    eventTag == EventTagId.applicationEvent;

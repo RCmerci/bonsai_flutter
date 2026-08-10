@@ -494,6 +494,60 @@ void main() {
 
   group('event batch queue', () {
     test(
+      'rebases application controls to the carrying presentation revision',
+      () {
+        final queue = EventBatchQueue(
+          runtimeEpoch: 21,
+          displayedRevision: () => 3,
+        );
+        queue.enqueue(
+          RendererEvent(
+            nodeId: 0,
+            eventTag: EventTagId.applicationResponse,
+            handlerId: 0,
+            payload: ApplicationResponseEventPayload(
+              requestId: 41,
+              payload: Uint8List.fromList([1]),
+            ),
+          ),
+        );
+        queue.enqueue(
+          const RendererEvent(
+            nodeId: 0,
+            eventTag: EventTagId.applicationRequestError,
+            handlerId: 0,
+            payload: ApplicationRequestErrorEventPayload(
+              requestId: 42,
+              error: ApplicationPlatformBridgeError(
+                code: ApplicationPlatformErrorCode.handlerFailed,
+              ),
+            ),
+          ),
+        );
+        queue.enqueue(
+          RendererEvent(
+            nodeId: 0,
+            eventTag: EventTagId.applicationEvent,
+            handlerId: 0,
+            payload: ApplicationEventPayload(payload: Uint8List.fromList([2])),
+          ),
+        );
+        queue.enqueue(
+          rendererEvent(
+            eventTag: EventTagId.press,
+            payload: const UnitEventPayload(),
+          ),
+        );
+
+        final events = EventBatchCodec.decode(
+          queue.prepareBatch(runtimeControlRevision: 4).encodedBytes,
+        ).events;
+
+        expect(events.map((event) => event.displayedRevision), [4, 4, 4, 3]);
+      },
+    );
+
+    test(
       'coalesces bounded text limit notifications without text payloads',
       () {
         final queue = EventBatchQueue(
