@@ -153,16 +153,18 @@ and preserves the wrapped command's exit status. It restores the exact original
 manifest after success, failure, or an interrupt, keeping `sync-host --check`
 clean.
 
-Profile and Release `build` and `run` commands for both macOS and iOS always
-pass `--no-tree-shake-icons`. Bonsai Flutter icon code points arrive through
-runtime protocol frames, so Flutter's static Dart `IconData` scan cannot know
-which Material icons the application will use. Retaining the complete
+Profile and Release `build` commands for both macOS and iOS always pass
+`--no-tree-shake-icons`. Bonsai Flutter icon code points arrive through runtime
+protocol frames, so Flutter's static Dart `IconData` scan cannot know which
+Material icons the application will use. Retaining the complete
 `MaterialIcons-Regular.otf` is therefore part of the framework contract and
-costs approximately 1.6 MB uncompressed. Forwarded duplicates are removed,
-and a forwarded `--tree-shake-icons` cannot override this requirement. Debug
-keeps Flutter's default behavior, which already retains the complete font. The
-policy lives only in command construction and does not modify generated host
-files.
+costs approximately 1.6 MB uncompressed. Forwarded build duplicates are
+removed, and a forwarded `--tree-shake-icons` cannot override this requirement.
+Flutter `run` does not expose the build-only icon flag and already disables icon
+tree shaking in its generated build information, so run commands preserve that
+native behavior without injecting an unsupported argument. Debug keeps
+Flutter's default behavior, which already retains the complete font. The policy
+lives only in command construction and does not modify generated host files.
 
 Install and verify the immutable global iPhoneOS SDK before building an iOS
 application:

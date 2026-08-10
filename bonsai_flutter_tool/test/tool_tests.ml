@@ -2720,6 +2720,17 @@ let check_icon_tree_shaking_disabled name command =
     (count_argument "--tree-shake-icons" command.arguments)
 ;;
 
+let check_icon_tree_shaking_flags_absent name command =
+  Alcotest.(check int)
+    (name ^ " has no disabling build flag")
+    0
+    (count_argument "--no-tree-shake-icons" command.Plan.arguments);
+  Alcotest.(check int)
+    (name ^ " has no enabling build flag")
+    0
+    (count_argument "--tree-shake-icons" command.arguments)
+;;
+
 let test_flutter_builds_preserve_runtime_material_icons () =
   [ "macOS Profile", Plan.Macos_platform, Plan.Profile
   ; "macOS Release", Plan.Macos_platform, Plan.Release
@@ -2731,7 +2742,7 @@ let test_flutter_builds_preserve_runtime_material_icons () =
     |> check_icon_tree_shaking_disabled name)
 ;;
 
-let test_flutter_runs_preserve_runtime_material_icons () =
+let test_flutter_runs_omit_build_only_icon_flags () =
   [ "macOS Profile", Plan.Macos_platform, Plan.Profile
   ; "macOS Release", Plan.Macos_platform, Plan.Release
   ; "iOS Profile", Plan.Ios_platform, Plan.Profile
@@ -2739,7 +2750,28 @@ let test_flutter_runs_preserve_runtime_material_icons () =
   ]
   |> List.iter (fun (name, platform, profile) ->
     flutter_plan ~action:Plan.Run ~platform ~profile ~forwarded:[]
-    |> check_icon_tree_shaking_disabled name)
+    |> check_icon_tree_shaking_flags_absent name)
+;;
+
+let test_flutter_run_preserves_forwarded_arguments () =
+  let command =
+    flutter_plan
+      ~action:Plan.Run
+      ~platform:Plan.Macos_platform
+      ~profile:Plan.Release
+      ~forwarded:[ "--dart-define=environment=development"; "--route"; "/journal" ]
+  in
+  Alcotest.(check (list string))
+    "run arguments are forwarded without build-only icon flags"
+    [ "run"
+    ; "-d"
+    ; "macos"
+    ; "--release"
+    ; "--dart-define=environment=development"
+    ; "--route"
+    ; "/journal"
+    ]
+    command.arguments
 ;;
 
 let test_flutter_icon_protection_preserves_forwarded_arguments () =
@@ -3650,9 +3682,13 @@ let () =
             `Quick
             test_flutter_builds_preserve_runtime_material_icons
         ; Alcotest.test_case
-            "runtime icons in runs"
+            "runs omit build-only icon flags"
             `Quick
-            test_flutter_runs_preserve_runtime_material_icons
+            test_flutter_runs_omit_build_only_icon_flags
+        ; Alcotest.test_case
+            "run argument forwarding"
+            `Quick
+            test_flutter_run_preserves_forwarded_arguments
         ; Alcotest.test_case
             "icon-safe argument forwarding"
             `Quick
