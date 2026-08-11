@@ -602,7 +602,11 @@ let valid_sdk_manifest =
 (sdk
  (format_version 1)
  (bonsai_flutter_version 0.1.0~dev)
- (abi_version 1)
+ (bonsai_flutter_source
+  b570881ba27e8e376dc231ef014506d37ce8e662
+  sha256
+  253c523dc0fb2d9ea931e82f3b9174613ff6519e3718ad650f550ae02593d4dc)
+ (abi_version 2)
  (ocaml_version 5.1.1)
  (dune_version_range 3.17 4.0)
  (cross_compiler ocaml-ios64 5.1.1)
@@ -614,7 +618,7 @@ let valid_sdk_manifest =
  (target_components_digest component-digest)
  (required_frameworks Foundation Security)
  (required_system_libraries sqlite3)
- (build_recipe_revision 1)
+ (build_recipe_revision 2)
  (packages
   (base v0.17.0)
   (bonsai_flutter 0.1.0~dev)
@@ -633,7 +637,7 @@ let test_sdk_manifest_contract () =
   Sdk.Manifest.validate
     manifest
     ~bonsai_flutter_version:"0.1.0~dev"
-    ~abi_version:"1"
+    ~abi_version:"2"
     ~minimum_deployment_target:"15.0"
   |> get_ok;
   Sdk.Manifest.validate_packages
@@ -651,28 +655,82 @@ let test_sdk_manifest_contract () =
      |> replace_once ~pattern:"(platform iphoneos)" ~replacement:"(platform macos)"
      |> parse_sdk_manifest)
     ~bonsai_flutter_version:"0.1.0~dev"
-    ~abi_version:"1"
+    ~abi_version:"2"
     ~minimum_deployment_target:"15.0"
   |> check_error_contains "expected Apple platform iphoneos";
   Sdk.Manifest.validate
     manifest
     ~bonsai_flutter_version:"0.2.0"
-    ~abi_version:"1"
+    ~abi_version:"2"
     ~minimum_deployment_target:"15.0"
   |> check_error_contains
        "The iPhoneOS switch SDK manifest is incompatible with bonsai-flutter 0.2.0";
   Sdk.Manifest.validate
     manifest
     ~bonsai_flutter_version:"0.1.0~dev"
-    ~abi_version:"1"
+    ~abi_version:"2"
     ~minimum_deployment_target:"14.0"
   |> check_error_contains "minimum deployment target 14.0 is unsupported";
+  Sdk.Manifest.validate
+    (valid_sdk_manifest
+     |> replace_once ~pattern:"(abi_version 2)" ~replacement:"(abi_version 1)"
+     |> parse_sdk_manifest)
+    ~bonsai_flutter_version:"0.1.0~dev"
+    ~abi_version:"2"
+    ~minimum_deployment_target:"15.0"
+  |> check_error_contains
+       "Run: bonsai-flutter toolchain remove iphoneos; bonsai-flutter toolchain install \
+        iphoneos";
   valid_sdk_manifest
   |> replace_once
        ~pattern:" (target_components_digest component-digest)\n"
        ~replacement:""
   |> Sdk.Manifest.parse
   |> check_error_contains "Missing SDK manifest field: target_components_digest"
+;;
+
+let test_sdk_rejects_framework_source_drift () =
+  let stale_manifest =
+    valid_sdk_manifest
+    |> replace_once
+         ~pattern:"b570881ba27e8e376dc231ef014506d37ce8e662"
+         ~replacement:"ea5e96b4dd38795a901720c80e1ffc9eb684b86c"
+    |> replace_once
+         ~pattern:"253c523dc0fb2d9ea931e82f3b9174613ff6519e3718ad650f550ae02593d4dc"
+         ~replacement:"c20edc77779c24c411854a19d234887615a6ba0a352784d35a970fb0a7d148a5"
+    |> parse_sdk_manifest
+  in
+  Sdk.Manifest.validate
+    stale_manifest
+    ~bonsai_flutter_version:"0.1.0~dev"
+    ~abi_version:"2"
+    ~minimum_deployment_target:"15.0"
+  |> check_error_contains
+       "Run: bonsai-flutter toolchain remove iphoneos; bonsai-flutter toolchain install \
+        iphoneos"
+;;
+
+let test_sdk_rejects_unadvertised_framework_source_identity () =
+  let legacy_manifest =
+    valid_sdk_manifest
+    |> replace_once
+         ~pattern:
+           " (bonsai_flutter_source\n\
+           \  b570881ba27e8e376dc231ef014506d37ce8e662\n\
+           \  sha256\n\
+           \  253c523dc0fb2d9ea931e82f3b9174613ff6519e3718ad650f550ae02593d4dc)\n"
+         ~replacement:""
+    |> replace_once ~pattern:"(abi_version 2)" ~replacement:"(abi_version 1)"
+    |> parse_sdk_manifest
+  in
+  Sdk.Manifest.validate
+    legacy_manifest
+    ~bonsai_flutter_version:"0.1.0~dev"
+    ~abi_version:"1"
+    ~minimum_deployment_target:"15.0"
+  |> check_error_contains
+       "Run: bonsai-flutter toolchain remove iphoneos; bonsai-flutter toolchain install \
+        iphoneos"
 ;;
 
 let application_lock =
@@ -812,7 +870,7 @@ fi
          Sdk.preflight
            ~project_root
            ~bonsai_flutter_version:"0.1.0~dev"
-           ~abi_version:"1"
+           ~abi_version:"2"
            ~minimum_deployment_target:"15.0"
            ~required_packages:[ "base", "v0.17.0" ]
          |> get_ok
@@ -856,7 +914,7 @@ let test_sdk_preflight_reports_missing_switch () =
        Sdk.preflight
          ~project_root:(Filename.concat root "project")
          ~bonsai_flutter_version:"0.1.0~dev"
-         ~abi_version:"1"
+         ~abi_version:"2"
          ~minimum_deployment_target:"15.0"
          ~required_packages:[]
        |> check_error_contains
@@ -907,7 +965,7 @@ let repository_lock ~digest ~source_digest ~package_digest ~archive_digest =
  (default_repository https://github.com/RCmerci/opam-repository.git c98b21e24c088665ccae4c3b53eadadd3b755b15)
  (cross_repository https://github.com/ocaml-cross/opam-cross-ios.git 8380b52b0154752c26c6e221c04fbced3320aa48)
  (compiler ocaml-base-compiler 5.1.1)
- (sdk_package bonsai_flutter_ios_sdk 0.1.0~dev))
+ (sdk_package bonsai_flutter_ios_sdk 0.1.0~dev.2))
 |}
     digest
     source_digest
@@ -946,7 +1004,7 @@ let write_repository_fixture root =
   write_file
     (Filename.concat
        root
-       "packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev/opam")
+       "packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.2/opam")
     {|opam-version: "2.0"
 synopsis: "Bonsai Flutter iPhoneOS SDK"
 maintainer: "bonsai_flutter contributors"
@@ -972,7 +1030,7 @@ let test_ios_opam_repository_release_contract () =
   let meta =
     Filename.concat
       repository
-      "packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev/opam"
+      "packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.2/opam"
   in
   let cross_compiler_opam =
     Filename.concat repository "packages/ocaml-ios64/ocaml-ios64.5.1.1/opam"
@@ -982,10 +1040,13 @@ let test_ios_opam_repository_release_contract () =
   in
   let package_lock = Filename.concat repository "package-universe.lock" in
   let source_archive_lock = Filename.concat repository "source-archives.lock" in
+  let framework_url =
+    Filename.concat repository "packages/bonsai_flutter/bonsai_flutter.0.1.0~dev/url"
+  in
   let sdk_files =
     Filename.concat
       repository
-      "packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev/files"
+      "packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.2/files"
   in
   let sdk_manifest = Filename.concat sdk_files "manifest.sexp" in
   let installed_package_lock = Filename.concat sdk_files "package-lock.sexp" in
@@ -1011,6 +1072,16 @@ let test_ios_opam_repository_release_contract () =
     (contains ios_configuration "${ARCH}" || contains ios_configuration "${SUBARCH}");
   Alcotest.(check bool) "package universe lock" true (Sys.file_exists package_lock);
   Alcotest.(check bool) "source archive lock" true (Sys.file_exists source_archive_lock);
+  let expected_framework_revision = "b570881ba27e8e376dc231ef014506d37ce8e662" in
+  let expected_framework_sha256 =
+    "253c523dc0fb2d9ea931e82f3b9174613ff6519e3718ad650f550ae02593d4dc"
+  in
+  let framework_url_contents = read_file framework_url in
+  Alcotest.(check bool)
+    "framework package source identity"
+    true
+    (contains framework_url_contents expected_framework_revision
+     && contains framework_url_contents expected_framework_sha256);
   Alcotest.(check bool) "installable SDK manifest" true (Sys.file_exists sdk_manifest);
   Alcotest.(check bool)
     "installable SDK package lock"
@@ -1018,6 +1089,13 @@ let test_ios_opam_repository_release_contract () =
     (Sys.file_exists installed_package_lock);
   Alcotest.(check bool) "installable SDK builder" true (Sys.file_exists sdk_builder);
   let sdk_manifest_contents = read_file sdk_manifest in
+  Alcotest.(check bool)
+    "SDK manifest framework source identity and protocol ABI"
+    true
+    (contains sdk_manifest_contents expected_framework_revision
+     && contains sdk_manifest_contents expected_framework_sha256
+     && contains sdk_manifest_contents "(abi_version 2)"
+     && contains sdk_manifest_contents "(build_recipe_revision 2)");
   Alcotest.(check bool)
     "SDK manifest owns target standard libraries through the cross compiler"
     true
@@ -1038,7 +1116,7 @@ let test_ios_opam_repository_release_contract () =
   Alcotest.(check bool)
     "default repository commit"
     true
-    (contains lock_contents "c98b21e24c088665ccae4c3b53eadadd3b755b15");
+    (contains lock_contents "9fdd0666a192f1896963cf446f37f0c691bbd3db");
   Alcotest.(check bool)
     "cross repository commit"
     true
@@ -1057,6 +1135,13 @@ let test_ios_opam_repository_release_contract () =
           (Filename.concat source_root "vendor/opam-ios/runtime-closure.lock")));
   let meta_contents = read_file meta in
   Alcotest.(check bool)
+    "all framework source records advertise one identity"
+    true
+    (contains (read_file source_archive_lock) expected_framework_revision
+     && contains (read_file source_archive_lock) expected_framework_sha256
+     && contains meta_contents expected_framework_revision
+     && contains meta_contents expected_framework_sha256);
+  Alcotest.(check bool)
     "meta installs manifest"
     true
     (contains meta_contents "bonsai_flutter_ios_sdk/manifest.sexp");
@@ -1074,10 +1159,10 @@ let test_ios_opam_repository_release_contract () =
     (contains meta_contents "extra-source \"bonsai_flutter.tar.gz\""
      && contains
           meta_contents
-          "https://github.com/RCmerci/bonsai_flutter/archive/ea5e96b4dd38795a901720c80e1ffc9eb684b86c.tar.gz"
+          "https://github.com/RCmerci/bonsai_flutter/archive/b570881ba27e8e376dc231ef014506d37ce8e662.tar.gz"
      && contains
           meta_contents
-          "sha256=c20edc77779c24c411854a19d234887615a6ba0a352784d35a970fb0a7d148a5");
+          "sha256=253c523dc0fb2d9ea931e82f3b9174613ff6519e3718ad650f550ae02593d4dc");
   Alcotest.(check bool)
     "meta fetches checksummed runtime sources before the sandboxed build"
     true
@@ -1129,12 +1214,23 @@ let test_ios_opam_repository_release_contract () =
        "framework_archive_source=\"$script_directory/bonsai_flutter.tar.gz\""
      && not (contains sdk_builder_contents "framework_source_url="));
   Alcotest.(check bool)
+    "builder verifies the current framework archive"
+    true
+    (contains
+       sdk_builder_contents
+       "framework_source_sha256='253c523dc0fb2d9ea931e82f3b9174613ff6519e3718ad650f550ae02593d4dc'");
+  Alcotest.(check bool)
     "runtime builder consumes opam-fetched archives"
     true
     (contains
        runtime_builder_contents
        "source_archive_source=\"$SDK_ASSET_ROOT/runtime-$package_name-$source_sha256.archive\""
      && not (contains runtime_builder_contents "curl"));
+  Alcotest.(check bool)
+    "runtime builder keeps target dependencies in writable package work"
+    true
+    (contains runtime_builder_contents "SDK_PACKAGE_WORK_ROOT/dependencies/gmp"
+     && not (contains runtime_builder_contents "$switch_prefix/ios-deps"));
   Alcotest.(check bool)
     "builder stages the iOS cross-context install tree without nesting the sysroot"
     true
@@ -1148,7 +1244,7 @@ let test_ios_opam_repository_release_contract () =
   let package_rows =
     read_file package_lock |> non_empty_lines |> List.filter (fun line -> line.[0] <> '#')
   in
-  Alcotest.(check int) "complete solved package universe" 217 (List.length package_rows);
+  Alcotest.(check int) "complete solved package universe" 243 (List.length package_rows);
   let package_keys = ref [] in
   package_rows
   |> List.iter (fun line ->
@@ -1206,9 +1302,7 @@ let test_ios_opam_repository_release_contract () =
     "source archive digest"
     true
     (contains lock_contents (Artifact.digest source_archive_lock));
-  let closure_lock =
-    read_file (Filename.concat source_root "vendor/opam-ios/runtime-closure.lock")
-  in
+  let closure_lock = read_file (Filename.concat sdk_files "supported-closure.lock") in
   let manifest = read_file sdk_manifest |> parse_sdk_manifest in
   Alcotest.(check string)
     "installed package universe digest"
@@ -1229,10 +1323,17 @@ let test_ios_opam_repository_release_contract () =
       :: components
       :: _ ->
       Alcotest.(check int) (package ^ " source SHA-256") 64 (String.length sha);
-      Alcotest.(check bool)
-        (package ^ " exact meta dependency")
-        true
-        (contains meta_contents (Printf.sprintf "\"%s\" {= \"%s\"}" package version));
+      if package = "gmp-sys-ios"
+      then
+        Alcotest.(check bool)
+          "target-build pseudo-package source"
+          true
+          (contains meta_contents ("runtime-gmp-sys-ios-" ^ sha ^ ".archive"))
+      else
+        Alcotest.(check bool)
+          (package ^ " exact meta dependency")
+          true
+          (contains meta_contents (Printf.sprintf "\"%s\" {= \"%s\"}" package version));
       if List.mem role [ "target-build"; "target-package" ] && components <> "-"
       then (
         let expected_components = String.split_on_char ',' components in
@@ -1401,7 +1502,7 @@ let test_toolchain_install_uses_locked_repository_and_exact_sdk () =
   *" switch list --short "*)
     test -z "${SWITCH_EXISTS:-}" || printf '%s\n' 'bonsai-flutter-ios' ;;
   *" switch create bonsai-flutter-ios "*) exit 0 ;;
-  *" install --switch=bonsai-flutter-ios --yes bonsai_flutter_ios_sdk.0.1.0~dev "*)
+  *" install --switch=bonsai-flutter-ios --yes bonsai_flutter_ios_sdk.0.1.0~dev.2 "*)
     exit "${INSTALL_EXIT:-0}" ;;
   *) exit 64 ;;
 esac
@@ -1412,14 +1513,17 @@ esac
   let commands = read_file fixture.toolchain_log |> non_empty_lines in
   Alcotest.(check int) "one check, create, and install" 3 (List.length commands);
   let create = List.nth commands 1 in
+  let repository_name =
+    "bonsai-flutter-ios-" ^ String.sub (repository_digest repository) 0 12
+  in
   Alcotest.(check bool)
     "fixed switch creation"
     true
     (contains create "switch\tcreate\tbonsai-flutter-ios\tocaml-base-compiler.5.1.1");
   Alcotest.(check bool)
-    "local versioned repository"
+    "snapshot-qualified local repository"
     true
-    (contains create ("bonsai-flutter-ios=file://" ^ repository));
+    (contains create (repository_name ^ "=file://" ^ repository));
   Alcotest.(check bool)
     "locked default repository commit"
     true
@@ -1435,7 +1539,7 @@ esac
   Alcotest.(check bool)
     "exact SDK meta-package install"
     true
-    (contains (List.nth commands 2) "bonsai_flutter_ios_sdk.0.1.0~dev");
+    (contains (List.nth commands 2) "bonsai_flutter_ios_sdk.0.1.0~dev.2");
   Alcotest.(check bool)
     "non-interactive depext handling"
     true
@@ -3880,6 +3984,14 @@ let () =
             "canonical fingerprint"
             `Quick
             test_sdk_manifest_fingerprint_is_canonical
+        ; Alcotest.test_case
+            "framework source drift"
+            `Quick
+            test_sdk_rejects_framework_source_drift
+        ; Alcotest.test_case
+            "missing framework source identity"
+            `Quick
+            test_sdk_rejects_unadvertised_framework_source_identity
         ; Alcotest.test_case "read-only preflight" `Quick test_sdk_preflight_is_read_only
         ; Alcotest.test_case
             "reachable application lock subset"

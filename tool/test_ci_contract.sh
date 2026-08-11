@@ -176,6 +176,14 @@ require_text \
   "Makefile iPhoneOS toolchain installation"
 require_text \
   "$makefile" \
+  'ios-sdk-repository:' \
+  "Makefile reproducible iPhoneOS SDK repository generation"
+require_text \
+  "$makefile" \
+  'tool/ios/regenerate_sdk_repository.sh' \
+  "Makefile reproducible iPhoneOS SDK repository generation"
+require_text \
+  "$makefile" \
   '$(BONSAI_FLUTTER) toolchain install iphoneos' \
   "Makefile iPhoneOS toolchain installation"
 require_text \
@@ -255,11 +263,11 @@ patch_files=$(
     -type f \( -name '*.patch' -o -name '*.diff' \) -print |
     LC_ALL=C sort
 )
-expected_patch_files='./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev/files/patches/base-host-generator.patch
-./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev/files/patches/eio-posix-darwin-protocol-zero.patch
-./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev/files/patches/eio-posix-darwin-socktype-hints.patch
-./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev/files/patches/jst-config-host-discover.patch
-./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev/files/patches/mirage-crypto-rng-apple-entropy.patch
+expected_patch_files='./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.2/files/patches/base-host-generator.patch
+./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.2/files/patches/eio-posix-darwin-protocol-zero.patch
+./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.2/files/patches/eio-posix-darwin-socktype-hints.patch
+./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.2/files/patches/jst-config-host-discover.patch
+./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.2/files/patches/mirage-crypto-rng-apple-entropy.patch
 ./tool/ios/opam-repository/0.1.0/packages/ocaml-ios64/ocaml-ios64.5.1.1/files/ocamlmklib-failsafe.patch
 ./tool/ios/opam-repository/0.1.0/packages/ocaml-ios64/ocaml-ios64.5.1.1/files/sys.patch
 ./vendor/opam-ios/ocaml-ios64.5.1.1/files/ocamlmklib-failsafe.patch
@@ -637,6 +645,8 @@ require_file .github/workflows/ios-device.yml
 require_file tool/ci/install_ios_signing.sh
 require_file tool/ci/ios_device_preflight.sh
 require_file tool/ci/verify_ios_bundle.sh
+require_file tool/ios/sdk_repository.lock
+require_file tool/ios/regenerate_sdk_repository.sh
 ios_device_preflight=$(cat tool/ci/ios_device_preflight.sh)
 require_text \
   "$ios_device_preflight" \

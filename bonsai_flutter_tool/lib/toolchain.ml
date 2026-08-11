@@ -290,10 +290,13 @@ let install ~framework_root ~working_directory =
           toolchain verify iphoneos"
          Plan.iphoneos_switch)
   else (
+    let local_repository_name =
+      "bonsai-flutter-ios-" ^ String.sub repository.snapshot_sha256 0 12
+    in
     let repositories =
       String.concat
         ","
-        [ "bonsai-flutter-ios=file://" ^ repository.root
+        [ local_repository_name ^ "=file://" ^ repository.root
         ; "bonsai-flutter-ios-cross=git+"
           ^ repository.cross_url
           ^ "#"

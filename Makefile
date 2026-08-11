@@ -1,4 +1,4 @@
-.PHONY: build test viewport-type-test fmt protocol-generate protocol-check protocol-fixtures-generate protocol-fixtures-check dart-test flutter-test dart-analyze native-test native-analyze native-object integration-test ios-toolchains ios-cross-probes ci-contract ci-install-framework ci-install-consumers ci-install-ios-toolchain ci-ocaml ci-flutter ci-macos ci-sanitizers ci-ios ci-ios-device clean
+.PHONY: build test viewport-type-test fmt protocol-generate protocol-check protocol-fixtures-generate protocol-fixtures-check dart-test flutter-test dart-analyze native-test native-analyze native-object integration-test ios-toolchains ios-cross-probes ios-sdk-repository ci-contract ci-install-framework ci-install-consumers ci-install-ios-toolchain ci-ocaml ci-flutter ci-macos ci-sanitizers ci-ios ci-ios-device clean
 
 EXAMPLE ?= counter
 BONSAI_FLUTTER := $(CURDIR)/_build/default/bonsai_flutter_tool/bin/main.exe
@@ -60,6 +60,9 @@ ios-toolchains:
 
 ios-cross-probes: ios-toolchains
 	tool/ios/build_probe.sh iphoneos
+
+ios-sdk-repository:
+	tool/ios/regenerate_sdk_repository.sh --write
 
 ci-contract:
 	tool/test_ci_contract.sh

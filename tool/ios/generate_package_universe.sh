@@ -4,6 +4,9 @@ set -eu
 script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 framework_root=$(CDPATH= cd -- "$script_directory/../.." && pwd)
 
+# shellcheck source=tool/ios/sdk_repository.lock
+. "$script_directory/sdk_repository.lock"
+
 if [ "$#" -ne 5 ]; then
   echo "usage: $0 SOLUTION_JSON OPAM_REPO_CACHE OUTPUT_REPOSITORY SDK_META_OPAM SUPPORTED_CLOSURE_LOCK" >&2
   exit 64
@@ -28,6 +31,10 @@ sdk_files="$temporary_directory/files"
 mkdir -p "$sdk_files"
 mkdir -p "$sdk_files/patches" "$sdk_files/pkgconfig/iphoneos"
 cp "$script_directory/build_installed_sdk.sh" "$sdk_files/build-installed-sdk.sh"
+sed \
+  "s/^framework_source_sha256=.*/framework_source_sha256='$BONSAI_FLUTTER_SOURCE_SHA256'/" \
+  "$script_directory/build_installed_sdk.sh" \
+  > "$sdk_files/build-installed-sdk.sh"
 cp "$script_directory/build_runtime_closure.sh" "$sdk_files/build-runtime-closure.sh"
 cp "$script_directory/build_runtime_package.sh" "$sdk_files/build-runtime-package.sh"
 cp "$script_directory/verify_macho.sh" "$sdk_files/verify_macho.sh"
@@ -130,7 +137,7 @@ awk -F '|' '
     print $1 "\t" $2
   }
 ' "$supported_closure_lock" | LC_ALL=C sort -u > "$target_packages"
-printf '%s\t%s\n' bonsai_flutter 0.1.0~dev >> "$target_packages"
+printf '%s\t%s\n' bonsai_flutter "$BONSAI_FLUTTER_VERSION" >> "$target_packages"
 printf '%s\t%s\n' ocaml-ios64 5.1.1 >> "$target_packages"
 LC_ALL=C sort -u "$target_packages" -o "$target_packages"
 
@@ -138,8 +145,12 @@ LC_ALL=C sort -u "$target_packages" -o "$target_packages"
   printf '%s\n' \
     '(sdk' \
     ' (format_version 1)' \
-    ' (bonsai_flutter_version 0.1.0~dev)' \
-    ' (abi_version 1)' \
+    " (bonsai_flutter_version $BONSAI_FLUTTER_VERSION)" \
+    ' (bonsai_flutter_source' \
+    "  $BONSAI_FLUTTER_SOURCE_REVISION" \
+    '  sha256' \
+    "  $BONSAI_FLUTTER_SOURCE_SHA256)" \
+    " (abi_version $SDK_ABI_VERSION)" \
     ' (ocaml_version 5.1.1)' \
     ' (dune_version_range 3.17 4.0)' \
     ' (cross_compiler ocaml-ios64 5.1.1)' \
@@ -151,7 +162,7 @@ LC_ALL=C sort -u "$target_packages" -o "$target_packages"
     " (target_components_digest $target_components_digest)" \
     ' (required_frameworks Foundation Security)' \
     ' (required_system_libraries sqlite3)' \
-    ' (build_recipe_revision 1)' \
+    " (build_recipe_revision $SDK_BUILD_RECIPE_REVISION)" \
     ' (packages'
   while IFS="$(printf '\t')" read -r package version; do
     printf '  (%s %s)\n' "$package" "$version"
@@ -175,14 +186,15 @@ LC_ALL=C sort -u "$target_packages" -o "$target_packages"
   done
   framework_components='bonsai_flutter bonsai_flutter.driver bonsai_flutter.native_backend bonsai_flutter.protocol bonsai_flutter.runtime bonsai_flutter.runtime_adapter bonsai_flutter.spec bonsai_flutter.spec_impl bonsai_flutter.ui'
   for library in $framework_components; do
-    printf '  (%s bonsai_flutter 0.1.0~dev (%s))\n' "$library" "$framework_components"
+    printf '  (%s bonsai_flutter %s (%s))\n' \
+      "$library" "$BONSAI_FLUTTER_VERSION" "$framework_components"
   done
   printf '%s\n' ' ))'
 } > "$sdk_files/manifest.sexp"
 
 framework_source_record=$(awk -F '|' '
-  $1 == "bonsai_flutter" && $2 == "0.1.0~dev" { print; exit }
-' "$source_lock")
+  $1 == package && $2 == version { print; exit }
+' package="bonsai_flutter" version="$BONSAI_FLUTTER_VERSION" "$source_lock")
 test -n "$framework_source_record" || {
   echo "missing Bonsai Flutter source archive lock" >&2
   exit 1
@@ -196,6 +208,15 @@ framework_source_checksum_algorithm=$4
 framework_source_checksum=$5
 test "$framework_source_checksum_algorithm" = sha256 || {
   echo "Bonsai Flutter source must use SHA-256" >&2
+  exit 1
+}
+test "$framework_source_url" = \
+  "https://github.com/RCmerci/bonsai_flutter/archive/$BONSAI_FLUTTER_SOURCE_REVISION.tar.gz" || {
+  echo "Bonsai Flutter source revision differs from sdk_repository.lock" >&2
+  exit 1
+}
+test "$framework_source_checksum" = "$BONSAI_FLUTTER_SOURCE_SHA256" || {
+  echo "Bonsai Flutter source checksum differs from sdk_repository.lock" >&2
   exit 1
 }
 

@@ -34,6 +34,15 @@ reject_pattern() {
   fi
 }
 
+reject_text() {
+  haystack=$1
+  needle=$2
+  label=$3
+  if printf '%s' "$haystack" | grep -F -- "$needle" >/dev/null; then
+    fail "$label contains forbidden text: $needle"
+  fi
+}
+
 for path in \
   examples/network/flutter/ios/Flutter/AppFrameworkInfo.plist \
   examples/network/flutter/ios/Flutter/Debug.xcconfig \
@@ -228,7 +237,14 @@ require_text \
 
 runtime_builder=$(cat tool/ios/build_runtime_package.sh)
 require_text "$runtime_builder" 'gmp-sys-ios' "iOS static GMP target recipe"
-require_text "$runtime_builder" 'ios-deps/gmp' "iOS static GMP staging"
+require_text \
+  "$runtime_builder" \
+  'SDK_PACKAGE_WORK_ROOT/dependencies/gmp' \
+  "iOS writable static GMP staging"
+reject_pattern \
+  "$runtime_builder" \
+  '\$switch_prefix/ios-deps' \
+  "iOS immutable switch prefix"
 require_text "$runtime_builder" 'zarith' "iOS Zarith target recipe"
 require_text \
   "$runtime_builder" \
@@ -262,6 +278,22 @@ require_text \
   "$package_universe_generator" \
   'supported-closure.lock' \
   "iOS package-universe supported closure"
+require_text \
+  "$(cat ocaml/ui/widget.mli)" \
+  '?presentation:Navigation.page_presentation' \
+  "Bonsai Flutter Page presentation API"
+reject_text \
+  "$(cat ocaml/ui/widget.mli)" \
+  '?transition:Navigation.page_transition' \
+  "obsolete Bonsai Flutter Page transition API"
+require_text \
+  "$(cat ocaml/ui/navigation.mli)" \
+  'module Modal_bottom_sheet' \
+  "Bonsai Flutter modal bottom sheet API"
+require_text \
+  "$(cat ocaml/protocol/wire_frame.ml)" \
+  'Modal_bottom_sheet' \
+  "Bonsai Flutter modal bottom sheet wire protocol"
 
 device_probe=$(cat tool/network_spike/test_ios_device_probe.sh)
 require_text \

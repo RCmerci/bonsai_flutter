@@ -289,7 +289,7 @@ export PKG_CONFIG_SYSROOT_DIR="$sdk_root"
 export SQLITE3_DISABLE_LOADABLE_EXTENSIONS=1
 
 if test "$package_name" = gmp-sys-ios; then
-  target_dependency_root="$switch_prefix/ios-deps/gmp"
+  target_dependency_root="$SDK_PACKAGE_WORK_ROOT/dependencies/gmp"
   gmp_build_directory="$build_directory/gmp"
   target_cc="$switch_prefix/ios-sysroot/bin/ios-cc"
   target_cflags="-O2 -arch arm64 -isysroot $sdk_root -miphoneos-version-min=$IOS_DEPLOYMENT_TARGET"
@@ -357,7 +357,7 @@ for metadata_name in META dune-package opam; do
 done
 
 if test "$package_name" = zarith; then
-  gmp_root="$switch_prefix/ios-deps/gmp"
+  gmp_root="$SDK_PACKAGE_WORK_ROOT/dependencies/gmp"
   zarith_tool_directory="$build_directory/toolchain"
   test -f "$gmp_root/include/gmp.h" ||
     fail "target GMP headers are missing; build gmp-sys-ios first"

@@ -176,6 +176,16 @@ bonsai-flutter build ios --profile release --no-codesign
 
 The versioned SDK repository pins its commits, exact package versions, source
 checksums, target components, and `bonsai_flutter_ios_sdk` meta-package.
+Its manifest also binds the exact Bonsai Flutter source revision and archive
+checksum to the advertised framework version and protocol ABI. Regenerate the
+complete repository, including package metadata, locks, SDK files, and snapshot
+digests, with:
+
+```sh
+make ios-sdk-repository
+tool/ios/regenerate_sdk_repository.sh --check
+```
+
 Applications commit their generated `.opam.locked` file. Native builds validate
 only the Dune-reachable package subset, then select `@app/bonsai-flutter-macos`
 or `@app/bonsai-flutter-ios`. They never mutate or rebuild the installed SDK,

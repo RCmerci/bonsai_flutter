@@ -213,7 +213,8 @@ able to select it with `-x ios` without an application-specific
 `manifest.sexp` records at least:
 
 - SDK format version;
-- Bonsai Flutter version and ABI version;
+- Bonsai Flutter version, exact source revision, archive checksum, and ABI
+  version;
 - OCaml version;
 - Dune version range;
 - cross-compiler package and version;
@@ -307,6 +308,13 @@ bonsai-flutter toolchain verify iphoneos
 This replacement is intentionally disruptive. Builds fail while the switch is
 absent. The CLI must never attempt to preserve compatibility with the removed
 universe or mix files from the old and new installations.
+
+The CLI rejects a manifest whose source revision, source checksum, ABI version,
+or build recipe revision differs from the framework executable, even when the
+advertised package version is unchanged. The diagnostic requires the same
+explicit remove-and-install sequence. Repository maintainers regenerate every
+derived package and digest through `make ios-sdk-repository`; direct edits to a
+single URL, checksum, manifest, or repository digest are not a release path.
 
 ## Application Dune contract
 

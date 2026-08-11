@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Bound the immutable iPhoneOS SDK manifest to the exact Bonsai Flutter source
+  revision and archive checksum, advanced its protocol ABI and build recipe to
+  revision 2, published the SDK recipe as `0.1.0~dev.2`, and added one
+  reproducible command for all repository locks and digests. Target GMP staging
+  now stays inside writable package build storage instead of the immutable opam
+  switch prefix.
 - Added generic declarative modal-bottom-sheet Page presentation with typed
   barrier, focus, safe-area, keyboard-inset, restoration, and motion policies.
   The Flutter renderer uses a real non-opaque Material route, reads live

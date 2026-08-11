@@ -4,6 +4,17 @@ let ( let* ) result f =
   | Error _ as error -> error
 ;;
 
+let supported_bonsai_flutter_version = "0.1.0~dev"
+let supported_bonsai_flutter_source_revision = "b570881ba27e8e376dc231ef014506d37ce8e662"
+
+let supported_bonsai_flutter_source_sha256 =
+  "253c523dc0fb2d9ea931e82f3b9174613ff6519e3718ad650f550ae02593d4dc"
+;;
+
+let supported_abi_version = "2"
+let supported_build_recipe_revision = "2"
+let supported_minimum_deployment_target = "15.0"
+
 module Manifest = struct
   module String_map = Map.Make (String)
 
@@ -17,6 +28,9 @@ module Manifest = struct
     { raw : Sexplib.Sexp.t
     ; format_version : string
     ; bonsai_flutter_version : string
+    ; bonsai_flutter_source_revision : string
+    ; bonsai_flutter_source_checksum_algorithm : string
+    ; bonsai_flutter_source_checksum : string
     ; abi_version : string
     ; ocaml_version : string
     ; dune_minimum_version : string
@@ -78,6 +92,17 @@ module Manifest = struct
       let* right = atom right in
       Ok (left, right)
     | _ -> invalid "SDK manifest field %s must contain exactly two values" name
+  ;;
+
+  let optional_three name fields =
+    match String_map.find_opt name fields with
+    | None -> Ok ("", "", "")
+    | Some [ first; second; third ] ->
+      let* first = atom first in
+      let* second = atom second in
+      let* third = atom third in
+      Ok (first, second, third)
+    | Some _ -> invalid "SDK manifest field %s must contain exactly three values" name
   ;;
 
   let atom_list name fields =
@@ -159,6 +184,7 @@ module Manifest = struct
         let known =
           [ "format_version"
           ; "bonsai_flutter_version"
+          ; "bonsai_flutter_source"
           ; "abi_version"
           ; "ocaml_version"
           ; "dune_version_range"
@@ -188,6 +214,12 @@ module Manifest = struct
          | [] ->
            let* format_version = one "format_version" fields in
            let* bonsai_flutter_version = one "bonsai_flutter_version" fields in
+           let* ( bonsai_flutter_source_revision
+                , bonsai_flutter_source_checksum_algorithm
+                , bonsai_flutter_source_checksum )
+             =
+             optional_three "bonsai_flutter_source" fields
+           in
            let* abi_version = one "abi_version" fields in
            let* ocaml_version = one "ocaml_version" fields in
            let* dune_minimum_version, dune_maximum_version =
@@ -213,6 +245,9 @@ module Manifest = struct
              { raw
              ; format_version
              ; bonsai_flutter_version
+             ; bonsai_flutter_source_revision
+             ; bonsai_flutter_source_checksum_algorithm
+             ; bonsai_flutter_source_checksum
              ; abi_version
              ; ocaml_version
              ; dune_minimum_version
@@ -275,6 +310,10 @@ module Manifest = struct
       t.format_version <> "1"
       || t.bonsai_flutter_version <> bonsai_flutter_version
       || t.abi_version <> abi_version
+      || t.bonsai_flutter_source_revision <> supported_bonsai_flutter_source_revision
+      || t.bonsai_flutter_source_checksum_algorithm <> "sha256"
+      || t.bonsai_flutter_source_checksum <> supported_bonsai_flutter_source_sha256
+      || t.build_recipe_revision <> supported_build_recipe_revision
     then incompatible bonsai_flutter_version
     else if t.findlib_toolchain <> "ios"
     then invalid "Invalid SDK findlib toolchain %s; expected ios" t.findlib_toolchain
@@ -404,10 +443,6 @@ type preflight =
   ; manifest : Manifest.t
   ; fingerprint : string
   }
-
-let supported_bonsai_flutter_version = "0.1.0~dev"
-let supported_abi_version = "1"
-let supported_minimum_deployment_target = "15.0"
 
 let read_manifest path =
   try
