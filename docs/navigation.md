@@ -75,15 +75,26 @@ The configuration defaults are:
 | `transition_duration_ms` | `250` | Nonnegative `u32` entrance duration. |
 | `reverse_transition_duration_ms` | `200` | Nonnegative `u32` exit duration. |
 
-The route is the single keyboard-inset owner. It applies
+The route is the single keyboard-inset and outer-surface owner. It applies
 `MediaQuery.viewInsets.bottom` once outside the child and removes that bottom
 view inset from the child's `MediaQuery`. Consumers must not apply the keyboard
-inset again. Product padding, scrolling, surface shape, and content layout
-remain consumer owned. The route supplies a transparent Material host surface.
+inset again. Every sizing mode receives the theme surface color, 24 logical
+pixel top corners, and anti-aliased clipping from Flutter. OCaml consumers own
+product padding, scrolling, and content layout, but do not configure the outer
+sheet shape or clipping.
+
+The modal route delegates its animation to the route immediately below it to
+create a receding depth treatment. The lower route scales to 92 percent, moves
+upward by 3 percent of its height, and gains rounded top corners on the same
+timeline as the native sheet entrance and barrier fade. The lower page remains
+mounted once in its own Navigator route; it is not copied into the sheet. The
+native modal barrier remains the only scrim and interaction blocker.
 
 `MediaQuery.disableAnimations` or `accessibleNavigation` resolves both route
 durations to zero. A change while the route is mounted updates the active route
-and its animation controller without replacing child state.
+and its animation controller without replacing child state. Reduced motion
+removes intermediate interpolation while preserving the final modal
+composition and settled depth treatment.
 
 `Sizing.Detented` supports `Medium`, `Large`, or both. `Medium` is half of the
 keyboard-adjusted route viewport and `Large` fills it. The initial detent must

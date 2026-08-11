@@ -224,6 +224,252 @@ void main() {
   });
 
   group('Modal bottom sheet navigation', () {
+    for (final (name, sizing, brightness)
+        in <(String, ModalBottomSheetSizing, Brightness)>[
+          (
+            'content-bounded',
+            const ContentBoundedModalSheetSizing(),
+            Brightness.light,
+          ),
+          (
+            'scroll-controlled',
+            const ScrollControlledModalSheetSizing(),
+            Brightness.dark,
+          ),
+        ]) {
+      testWidgets('$name sheet owns a rounded clipped surface', (tester) async {
+        await _pumpModalFixture(tester, sizing: sizing, brightness: brightness);
+
+        _expectRoundedModalSheetSurface(tester, childText: 'Modal editor');
+      });
+    }
+
+    testWidgets('detented sheet clips an opaque child to the rounded surface', (
+      tester,
+    ) async {
+      await _pumpDetentedFixture(tester, brightness: Brightness.dark);
+
+      _expectRoundedModalSheetSurface(tester, childText: 'Detented editor');
+    });
+
+    for (final (transition, direction, brightness, size) in [
+      (
+        PageTransition.none,
+        TextDirection.ltr,
+        Brightness.light,
+        const Size(400, 300),
+      ),
+      (
+        PageTransition.fade,
+        TextDirection.ltr,
+        Brightness.dark,
+        const Size(400, 300),
+      ),
+      (
+        PageTransition.slide,
+        TextDirection.rtl,
+        Brightness.light,
+        const Size(400, 300),
+      ),
+      (
+        PageTransition.none,
+        TextDirection.rtl,
+        Brightness.dark,
+        const Size(400, 220),
+      ),
+    ]) {
+      testWidgets('modal entrance recedes the same mounted lower page for '
+          '$transition $direction $brightness $size', (tester) async {
+        final fixture = await _pumpModalFixture(
+          tester,
+          startWithModal: false,
+          lowerTransition: transition,
+          direction: direction,
+          brightness: brightness,
+          size: size,
+        );
+        final lowerFinder = find.byKey(_lowerSurfaceKey, skipOffstage: false);
+        final lowerElement = tester.element(lowerFinder);
+        final originalRect = tester.getRect(lowerFinder);
+
+        fixture.pushModal();
+        await tester.pumpAndSettle();
+
+        final settledRect = tester.getRect(lowerFinder);
+        final modalRoute = ModalRoute.of(
+          tester.element(find.text('Modal editor')),
+        );
+        expect(tester.element(lowerFinder), same(lowerElement));
+        expect(lowerElement.mounted, isTrue);
+        expect(settledRect.width, closeTo(originalRect.width * 0.92, 1));
+        expect(
+          settledRect.top,
+          closeTo(originalRect.top - originalRect.height * 0.03, 1),
+        );
+        expect(settledRect.overlaps(Offset.zero & size), isTrue);
+        expect(modalRoute, isA<ModalBottomSheetRoute<void>>());
+      });
+    }
+
+    testWidgets('modal and lower route share entrance progress', (
+      tester,
+    ) async {
+      final fixture = await _pumpModalFixture(
+        tester,
+        startWithModal: false,
+        transitionDurationMilliseconds: 400,
+      );
+      final lowerFinder = find.byKey(_lowerSurfaceKey, skipOffstage: false);
+      final lowerStart = tester.getRect(lowerFinder);
+
+      fixture.pushModal();
+      await tester.pump();
+      final sheetStart = tester.getRect(find.byType(BottomSheet));
+      await tester.pump(const Duration(milliseconds: 100));
+      final lowerMid = tester.getRect(lowerFinder);
+      final sheetMid = tester.getRect(find.byType(BottomSheet));
+      await tester.pumpAndSettle();
+      final lowerEnd = tester.getRect(lowerFinder);
+      final sheetEnd = tester.getRect(find.byType(BottomSheet));
+
+      expect(
+        lowerMid.width,
+        inExclusiveRange(lowerEnd.width, lowerStart.width),
+      );
+      expect(lowerMid.top, inExclusiveRange(lowerEnd.top, lowerStart.top));
+      expect(sheetMid.top, inExclusiveRange(sheetEnd.top, sheetStart.top));
+    });
+
+    testWidgets('modal exit restores lower geometry and emits one pop', (
+      tester,
+    ) async {
+      final fixture = await _pumpModalFixture(tester, startWithModal: false);
+      final lowerFinder = find.byKey(_lowerSurfaceKey, skipOffstage: false);
+      final lowerElement = tester.element(lowerFinder);
+      final originalRect = tester.getRect(lowerFinder);
+
+      fixture.pushModal();
+      await tester.pumpAndSettle();
+      expect(
+        tester.getRect(lowerFinder).width,
+        closeTo(originalRect.width * 0.92, 1),
+      );
+      await tester
+          .state<NavigatorState>(find.byType(Navigator).last)
+          .maybePop();
+      await tester.pumpAndSettle();
+
+      expect(tester.getRect(lowerFinder), originalRect);
+      expect(tester.element(lowerFinder), same(lowerElement));
+      expect(fixture.events, hasLength(1));
+      expect(
+        fixture.events.single.payload,
+        const RoutePopEventPayload(pageKey: 'editor', result: null),
+      );
+    });
+
+    testWidgets('reduced motion skips intermediate lower-route movement', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      final fixture = await _pumpModalFixture(
+        tester,
+        startWithModal: false,
+        disableAnimations: true,
+      );
+      final lowerFinder = find.byKey(_lowerSurfaceKey, skipOffstage: false);
+      final originalRect = tester.getRect(lowerFinder);
+
+      fixture.pushModal();
+      await tester.pump();
+
+      final presentedRect = tester.getRect(lowerFinder);
+      expect(presentedRect.width, closeTo(originalRect.width * 0.92, 1));
+      expect(
+        presentedRect.top,
+        closeTo(originalRect.top - originalRect.height * 0.03, 1),
+      );
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(find.byType(ModalBarrier), findsWidgets);
+      expect(find.text('Modal editor'), findsOneWidget);
+      expect(
+        tester
+            .widget<EditableText>(find.byType(EditableText))
+            .focusNode
+            .hasFocus,
+        isTrue,
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.getSemantics(find.text('Modal editor')),
+        matchesSemantics(label: 'Modal editor'),
+      );
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('Lower action')).owner,
+        isNull,
+      );
+      semantics.dispose();
+    });
+
+    testWidgets('standard page does not recede the lower route', (
+      tester,
+    ) async {
+      final fixture = await _pumpModalFixture(tester, startWithModal: false);
+      final lowerFinder = find.byKey(_lowerSurfaceKey, skipOffstage: false);
+      final originalRect = tester.getRect(lowerFinder);
+
+      fixture.pushModal();
+      await tester.pumpAndSettle();
+      expect(
+        tester.getRect(lowerFinder).width,
+        closeTo(originalRect.width * 0.92, 1),
+      );
+      await tester
+          .state<NavigatorState>(find.byType(Navigator).last)
+          .maybePop();
+      await tester.pumpAndSettle();
+      fixture.removeModal();
+      await tester.pump();
+
+      fixture.pushStandardPage();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(tester.getRect(lowerFinder), originalRect);
+      await tester.pumpAndSettle();
+      expect(tester.getRect(lowerFinder), originalRect);
+      expect(find.text('Standard detail'), findsOneWidget);
+    });
+
+    testWidgets('stacked modals transform only the immediate lower route', (
+      tester,
+    ) async {
+      final fixture = await _pumpModalFixture(
+        tester,
+        startWithModal: false,
+        secondModal: true,
+      );
+      final lowerFinder = find.byKey(_lowerSurfaceKey, skipOffstage: false);
+      final lowerElement = tester.element(lowerFinder);
+
+      fixture.pushModal();
+      await tester.pumpAndSettle();
+      final lowerWithFirstModal = tester.getRect(lowerFinder);
+      final firstModalFinder = find.text('Modal editor', skipOffstage: false);
+      final firstModalElement = tester.element(firstModalFinder);
+      final firstModalBefore = tester.getRect(firstModalFinder);
+
+      fixture.pushSecondModal();
+      await tester.pumpAndSettle();
+
+      expect(tester.getRect(lowerFinder), lowerWithFirstModal);
+      expect(tester.element(lowerFinder), same(lowerElement));
+      expect(tester.element(firstModalFinder), same(firstModalElement));
+      expect(
+        tester.getRect(firstModalFinder).width,
+        closeTo(firstModalBefore.width * 0.92, 1),
+      );
+      expect(find.text('Top picker'), findsOneWidget);
+    });
+
     testWidgets(
       'uses a non-opaque page route and keeps the lower page mounted',
       (tester) async {
@@ -445,6 +691,9 @@ void main() {
       (tester) async {
         final fixture = await _pumpModalFixture(tester);
         final first = ModalRoute.of(tester.element(find.text('Modal editor')));
+        final lowerFinder = find.byKey(_lowerSurfaceKey, skipOffstage: false);
+        final lowerElement = tester.element(lowerFinder);
+        final lowerRect = tester.getRect(lowerFinder);
 
         fixture.updateModal(barrierLabel: 'Dismiss editor');
         await tester.pump();
@@ -458,6 +707,8 @@ void main() {
               .semanticsLabel,
           'Dismiss editor',
         );
+        expect(tester.element(lowerFinder), same(lowerElement));
+        expect(tester.getRect(lowerFinder), lowerRect);
 
         fixture.updateModal(
           pageKey: 'editor-2',
@@ -468,6 +719,8 @@ void main() {
         expect(second, isNot(same(first)));
         expect(second!.settings.name, 'editor-2');
         expect((second.settings as Page<void>).restorationId, 'editor-page-2');
+        expect(tester.element(lowerFinder), same(lowerElement));
+        expect(tester.getRect(lowerFinder), lowerRect);
       },
     );
 
@@ -1344,6 +1597,154 @@ final class _ModalFixture {
   PageProps props;
   int _revision = 1;
 
+  void pushModal() {
+    store.apply(
+      Frame(
+        runtimeEpoch: 74,
+        baseRevision: _revision,
+        targetRevision: ++_revision,
+        kind: FrameKind.incremental,
+        operations: [
+          CreateNode(
+            nodeId: 5,
+            kind: NodeKind.page,
+            props: props,
+            eventBindings: const [],
+          ),
+          const CreateNode(
+            nodeId: 6,
+            kind: NodeKind.sizedBox,
+            props: SizedBoxProps(width: null, height: 150),
+            eventBindings: [],
+          ),
+          const CreateNode(
+            nodeId: 7,
+            kind: NodeKind.column,
+            props: LinearProps(),
+            eventBindings: [],
+          ),
+          const CreateNode(
+            nodeId: 8,
+            kind: NodeKind.text,
+            props: TextProps('Modal editor'),
+            eventBindings: [],
+          ),
+          const CreateNode(
+            nodeId: 9,
+            kind: NodeKind.textInput,
+            props: TextInputProps(
+              sessionId: 74,
+              documentRevision: 1,
+              value: TextEditingStateValue(
+                text: '',
+                selection: TextRangeValue(startUtf16: 0, endUtf16: 0),
+                composing: null,
+              ),
+              enabled: true,
+              readOnly: false,
+              obscureText: false,
+              keyboardType: TextKeyboardType.text,
+              inputAction: TextInputActionKind.done,
+              acceptedLocalRevision: 0,
+              updateMode: TextUpdateMode.forceReplace,
+              autofocus: true,
+            ),
+            eventBindings: [],
+          ),
+          const SetChildren(nodeId: 1, children: [2, 5]),
+          const SetChildren(nodeId: 5, children: [6]),
+          const SetChildren(nodeId: 6, children: [7]),
+          const SetChildren(nodeId: 7, children: [8, 9]),
+        ],
+      ),
+    );
+  }
+
+  void pushSecondModal() {
+    store.apply(
+      Frame(
+        runtimeEpoch: 74,
+        baseRevision: _revision,
+        targetRevision: ++_revision,
+        kind: FrameKind.incremental,
+        operations: [
+          CreateNode(
+            nodeId: 20,
+            kind: NodeKind.page,
+            props: _modalPageProps(
+              pageKey: 'picker',
+              restorationId: 'picker-page',
+              canPop: true,
+              barrierDismissible: true,
+              barrierColorArgb: 0x66000000,
+              barrierLabel: 'Close picker',
+              sizing: const ContentBoundedModalSheetSizing(),
+              useSafeArea: false,
+              requestFocus: true,
+              transitionDurationMilliseconds: 250,
+              reverseTransitionDurationMilliseconds: 200,
+            ),
+            eventBindings: const [],
+          ),
+          const CreateNode(
+            nodeId: 21,
+            kind: NodeKind.sizedBox,
+            props: SizedBoxProps(width: null, height: 80),
+            eventBindings: [],
+          ),
+          const CreateNode(
+            nodeId: 22,
+            kind: NodeKind.text,
+            props: TextProps('Top picker'),
+            eventBindings: [],
+          ),
+          const SetChildren(nodeId: 1, children: [2, 5, 20]),
+          const SetChildren(nodeId: 20, children: [21]),
+          const SetChildren(nodeId: 21, children: [22]),
+        ],
+      ),
+    );
+  }
+
+  void pushStandardPage() {
+    store.apply(
+      Frame(
+        runtimeEpoch: 74,
+        baseRevision: _revision,
+        targetRevision: ++_revision,
+        kind: FrameKind.incremental,
+        operations: const [
+          CreateNode(
+            nodeId: 30,
+            kind: NodeKind.page,
+            props: PageProps(
+              pageKey: 'standard-detail',
+              presentation: StandardPagePresentation(PageTransition.fade),
+              canPop: true,
+              restorationId: 'standard-detail-page',
+            ),
+            eventBindings: [],
+          ),
+          CreateNode(
+            nodeId: 31,
+            kind: NodeKind.materialScaffold,
+            props: MaterialScaffoldProps(hasAppBar: false),
+            eventBindings: [],
+          ),
+          CreateNode(
+            nodeId: 32,
+            kind: NodeKind.text,
+            props: TextProps('Standard detail'),
+            eventBindings: [],
+          ),
+          SetChildren(nodeId: 1, children: [2, 30]),
+          SetChildren(nodeId: 30, children: [31]),
+          SetChildren(nodeId: 31, children: [32]),
+        ],
+      ),
+    );
+  }
+
   void updateModal({
     String? pageKey,
     String? restorationId,
@@ -1427,7 +1828,10 @@ Future<_ModalFixture> _pumpModalFixture(
   Brightness brightness = Brightness.light,
   TextScaler textScaler = TextScaler.noScaling,
   Size size = const Size(400, 300),
+  PageTransition lowerTransition = PageTransition.none,
+  bool startWithModal = true,
   bool secondModal = false,
+  bool disableAnimations = false,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -1447,7 +1851,14 @@ Future<_ModalFixture> _pumpModalFixture(
         reverseTransitionDurationMilliseconds,
   );
   final store = NodeStore()
-    ..apply(_modalSnapshot(modalProps, secondModal: secondModal));
+    ..apply(
+      _modalSnapshot(
+        modalProps,
+        lowerTransition: lowerTransition,
+        startWithModal: startWithModal,
+        secondModal: secondModal,
+      ),
+    );
   final events = <RendererEvent>[];
 
   Future<void> pumpApp(bool reducedMotion) async {
@@ -1478,7 +1889,7 @@ Future<_ModalFixture> _pumpModalFixture(
     await tester.pumpAndSettle();
   }
 
-  await pumpApp(false);
+  await pumpApp(disableAnimations);
   return _ModalFixture(
     tester: tester,
     store: store,
@@ -1517,137 +1928,188 @@ PageProps _modalPageProps({
   restorationId: restorationId,
 );
 
-Frame _modalSnapshot(PageProps modalProps, {required bool secondModal}) =>
-    Frame(
-      runtimeEpoch: 74,
-      baseRevision: 0,
-      targetRevision: 1,
-      kind: FrameKind.fullSnapshot,
-      operations: [
-        const CreateNode(
-          nodeId: 1,
-          kind: NodeKind.navigator,
-          props: NavigatorProps(restorationScopeId: 'modal-test'),
-          eventBindings: [
-            EventBinding(eventTag: EventTagId.routePop, handlerId: 740),
-          ],
-        ),
-        const CreateNode(
-          nodeId: 2,
-          kind: NodeKind.page,
-          props: PageProps(
-            pageKey: 'lower',
-            presentation: StandardPagePresentation(PageTransition.none),
-            canPop: false,
-            restorationId: 'lower-page',
-          ),
-          eventBindings: [],
-        ),
-        const CreateNode(
-          nodeId: 3,
-          kind: NodeKind.button,
-          props: ButtonProps(enabled: true),
-          eventBindings: [
-            EventBinding(eventTag: EventTagId.press, handlerId: 741),
-          ],
-        ),
-        const CreateNode(
-          nodeId: 4,
-          kind: NodeKind.text,
-          props: TextProps('Lower action'),
-          eventBindings: [],
-        ),
-        CreateNode(
-          nodeId: 5,
-          kind: NodeKind.page,
-          props: modalProps,
-          eventBindings: const [],
-        ),
-        const CreateNode(
-          nodeId: 6,
-          kind: NodeKind.sizedBox,
-          props: SizedBoxProps(width: null, height: 150),
-          eventBindings: [],
-        ),
-        const CreateNode(
-          nodeId: 7,
-          kind: NodeKind.column,
-          props: LinearProps(),
-          eventBindings: [],
-        ),
-        const CreateNode(
-          nodeId: 8,
-          kind: NodeKind.text,
-          props: TextProps('Modal editor'),
-          eventBindings: [],
-        ),
-        const CreateNode(
-          nodeId: 9,
-          kind: NodeKind.textInput,
-          props: TextInputProps(
-            sessionId: 74,
-            documentRevision: 1,
-            value: TextEditingStateValue(
-              text: '',
-              selection: TextRangeValue(startUtf16: 0, endUtf16: 0),
-              composing: null,
-            ),
-            enabled: true,
-            readOnly: false,
-            obscureText: false,
-            keyboardType: TextKeyboardType.text,
-            inputAction: TextInputActionKind.done,
-            acceptedLocalRevision: 0,
-            updateMode: TextUpdateMode.forceReplace,
-            autofocus: true,
-          ),
-          eventBindings: [],
-        ),
-        if (secondModal) ...[
-          CreateNode(
-            nodeId: 20,
-            kind: NodeKind.page,
-            props: _modalPageProps(
-              pageKey: 'picker',
-              restorationId: 'picker-page',
-              canPop: true,
-              barrierDismissible: true,
-              barrierColorArgb: 0x66000000,
-              barrierLabel: 'Close picker',
-              sizing: const ContentBoundedModalSheetSizing(),
-              useSafeArea: false,
-              requestFocus: true,
-              transitionDurationMilliseconds: 250,
-              reverseTransitionDurationMilliseconds: 200,
-            ),
-            eventBindings: const [],
-          ),
-          const CreateNode(
-            nodeId: 21,
-            kind: NodeKind.sizedBox,
-            props: SizedBoxProps(width: null, height: 80),
-            eventBindings: [],
-          ),
-          const CreateNode(
-            nodeId: 22,
-            kind: NodeKind.text,
-            props: TextProps('Top picker'),
-            eventBindings: [],
-          ),
-        ],
-        SetChildren(nodeId: 1, children: [2, 5, if (secondModal) 20]),
-        const SetChildren(nodeId: 2, children: [3]),
-        const SetChildren(nodeId: 3, children: [4]),
-        const SetChildren(nodeId: 5, children: [6]),
-        const SetChildren(nodeId: 6, children: [7]),
-        const SetChildren(nodeId: 7, children: [8, 9]),
-        if (secondModal) ...[
-          const SetChildren(nodeId: 20, children: [21]),
-          const SetChildren(nodeId: 21, children: [22]),
-        ],
-        const SetRoot(1),
+const Key _lowerSurfaceKey = ValueKey<int>(3);
+
+Frame _modalSnapshot(
+  PageProps modalProps, {
+  required PageTransition lowerTransition,
+  required bool startWithModal,
+  required bool secondModal,
+}) => Frame(
+  runtimeEpoch: 74,
+  baseRevision: 0,
+  targetRevision: 1,
+  kind: FrameKind.fullSnapshot,
+  operations: [
+    const CreateNode(
+      nodeId: 1,
+      kind: NodeKind.navigator,
+      props: NavigatorProps(restorationScopeId: 'modal-test'),
+      eventBindings: [
+        EventBinding(eventTag: EventTagId.routePop, handlerId: 740),
       ],
-    );
+    ),
+    CreateNode(
+      nodeId: 2,
+      kind: NodeKind.page,
+      props: PageProps(
+        pageKey: 'lower',
+        presentation: StandardPagePresentation(lowerTransition),
+        canPop: false,
+        restorationId: 'lower-page',
+      ),
+      eventBindings: const [],
+    ),
+    const CreateNode(
+      nodeId: 3,
+      kind: NodeKind.materialScaffold,
+      props: MaterialScaffoldProps(hasAppBar: false),
+      eventBindings: [],
+    ),
+    const CreateNode(
+      nodeId: 4,
+      kind: NodeKind.button,
+      props: ButtonProps(enabled: true),
+      eventBindings: [EventBinding(eventTag: EventTagId.press, handlerId: 741)],
+    ),
+    const CreateNode(
+      nodeId: 10,
+      kind: NodeKind.text,
+      props: TextProps('Lower action'),
+      eventBindings: [],
+    ),
+    if (startWithModal) ...[
+      CreateNode(
+        nodeId: 5,
+        kind: NodeKind.page,
+        props: modalProps,
+        eventBindings: const [],
+      ),
+      const CreateNode(
+        nodeId: 6,
+        kind: NodeKind.sizedBox,
+        props: SizedBoxProps(width: null, height: 150),
+        eventBindings: [],
+      ),
+      const CreateNode(
+        nodeId: 7,
+        kind: NodeKind.column,
+        props: LinearProps(),
+        eventBindings: [],
+      ),
+      const CreateNode(
+        nodeId: 8,
+        kind: NodeKind.text,
+        props: TextProps('Modal editor'),
+        eventBindings: [],
+      ),
+      const CreateNode(
+        nodeId: 9,
+        kind: NodeKind.textInput,
+        props: TextInputProps(
+          sessionId: 74,
+          documentRevision: 1,
+          value: TextEditingStateValue(
+            text: '',
+            selection: TextRangeValue(startUtf16: 0, endUtf16: 0),
+            composing: null,
+          ),
+          enabled: true,
+          readOnly: false,
+          obscureText: false,
+          keyboardType: TextKeyboardType.text,
+          inputAction: TextInputActionKind.done,
+          acceptedLocalRevision: 0,
+          updateMode: TextUpdateMode.forceReplace,
+          autofocus: true,
+        ),
+        eventBindings: [],
+      ),
+    ],
+    if (startWithModal && secondModal) ...[
+      CreateNode(
+        nodeId: 20,
+        kind: NodeKind.page,
+        props: _modalPageProps(
+          pageKey: 'picker',
+          restorationId: 'picker-page',
+          canPop: true,
+          barrierDismissible: true,
+          barrierColorArgb: 0x66000000,
+          barrierLabel: 'Close picker',
+          sizing: const ContentBoundedModalSheetSizing(),
+          useSafeArea: false,
+          requestFocus: true,
+          transitionDurationMilliseconds: 250,
+          reverseTransitionDurationMilliseconds: 200,
+        ),
+        eventBindings: const [],
+      ),
+      const CreateNode(
+        nodeId: 21,
+        kind: NodeKind.sizedBox,
+        props: SizedBoxProps(width: null, height: 80),
+        eventBindings: [],
+      ),
+      const CreateNode(
+        nodeId: 22,
+        kind: NodeKind.text,
+        props: TextProps('Top picker'),
+        eventBindings: [],
+      ),
+    ],
+    SetChildren(
+      nodeId: 1,
+      children: [
+        2,
+        if (startWithModal) 5,
+        if (startWithModal && secondModal) 20,
+      ],
+    ),
+    const SetChildren(nodeId: 2, children: [3]),
+    const SetChildren(nodeId: 3, children: [4]),
+    const SetChildren(nodeId: 4, children: [10]),
+    if (startWithModal) ...[
+      const SetChildren(nodeId: 5, children: [6]),
+      const SetChildren(nodeId: 6, children: [7]),
+      const SetChildren(nodeId: 7, children: [8, 9]),
+    ],
+    if (startWithModal && secondModal) ...[
+      const SetChildren(nodeId: 20, children: [21]),
+      const SetChildren(nodeId: 21, children: [22]),
+    ],
+    const SetRoot(1),
+  ],
+);
+
+void _expectRoundedModalSheetSurface(
+  WidgetTester tester, {
+  required String childText,
+}) {
+  final childContext = tester.element(find.text(childText));
+  final expectedColor = Theme.of(childContext).colorScheme.surface;
+  final expectedBorderRadius = const BorderRadius.vertical(
+    top: Radius.circular(24),
+  );
+  final textDirection = Directionality.of(childContext);
+  final matchingSurfaces = tester
+      .widgetList<Material>(
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.byType(Material),
+        ),
+      )
+      .where((material) {
+        final shape = material.shape;
+        return material.color == expectedColor &&
+            material.clipBehavior == Clip.antiAlias &&
+            shape is RoundedRectangleBorder &&
+            shape.borderRadius.resolve(textDirection) == expectedBorderRadius;
+      })
+      .toList(growable: false);
+
+  expect(matchingSurfaces, hasLength(1));
+}
 
 double _sheetHeight(WidgetTester tester) =>
     tester.getRect(find.byType(BottomSheet).last).height;

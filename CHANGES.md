@@ -16,6 +16,12 @@
   scroll-controlled, and `Medium`/`Large` detented sizing supports coordinated
   resize-then-scroll gestures, preflighted drag dismissal, pointer and
   accessibility handle actions, and route-borrowed primary scroll controllers.
+  Flutter owns one theme-backed, 24-pixel rounded and clipped outer surface for
+  every sizing mode, so OCaml content does not configure sheet geometry.
+  Modal presentation now coordinates the sheet, native barrier, and a receding
+  transition on the immediately lower route while preserving that route's
+  mounted identity. Navigator, modal-route, background-transition, and detented
+  interaction responsibilities now live in focused internal renderer modules.
 - Disabled Flutter icon tree shaking for every macOS and iOS Profile/Release
   build because Material icon code points arrive through runtime protocol
   frames and cannot be discovered by Flutter's static `IconData` scanner. The
