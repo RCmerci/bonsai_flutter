@@ -50,45 +50,55 @@ do
   require_file "$path"
 done
 
-native_builder=$(cat tool/ios/build_native_objects.sh)
-network_loop_entries=$(
-  printf '%s\n' "$native_builder" |
-    grep -F '  network \' |
-    wc -l |
-    tr -d ' '
-)
-test "$network_loop_entries" -eq 2 ||
-  fail "network must appear once in each iOS build and staging loop"
+network_config=$(cat examples/network/bonsai-flutter.sexp 2>/dev/null || true)
+require_text "$network_config" '(lang 2)' "network consumer config"
+require_text "$network_config" '(mode custom)' "network consumer config"
+require_text "$network_config" '(features network)' "network consumer config"
+require_file examples/network/bonsai_flutter_network_example.opam.locked
+
+artifact_stager=$(cat bonsai_flutter_tool/lib/artifact.ml)
+require_text "$artifact_stager" '"pkg-config"' "macOS Network GMP discovery"
+require_text "$artifact_stager" '"libgmp.a"' "macOS Network static GMP staging"
+require_text "$artifact_stager" '"clang"' "macOS Network relocatable link"
 require_text \
-  "$native_builder" \
-  'artifact_root/$example/ios/$target/arm64' \
-  "iOS native-object staging destination"
-require_text "$native_builder" 'nm -u' "iOS unresolved-symbol audit"
-require_text "$native_builder" 'openssl' "iOS prohibited TLS-backend audit"
+  "$artifact_stager" \
+  'The network complete object still contains unresolved GMP symbols' \
+  "macOS Network GMP verification"
 
 makefile=$(cat Makefile)
 require_text \
   "$makefile" \
-  'cd examples/network/flutter && flutter build ios --debug --no-codesign' \
+  'cd examples/network && $(BONSAI_FLUTTER) build ios --profile debug --no-codesign' \
   "ci-ios network debug build"
 require_text \
   "$makefile" \
-  'cd examples/network/flutter && flutter build ios --profile --no-codesign' \
+  'cd examples/network && $(BONSAI_FLUTTER) build ios --profile profile --no-codesign' \
   "ci-ios network profile build"
 require_text \
   "$makefile" \
-  'cd examples/network/flutter && flutter build ios --release --no-codesign' \
+  'cd examples/network && $(BONSAI_FLUTTER) build ios --profile release --no-codesign' \
   "ci-ios network release build"
-require_text \
-  "$makefile" \
-  'examples/network/flutter/build/ios/iphoneos/Runner.app' \
-  "ci-ios network bundle audit"
-require_text \
-  "$makefile" \
-  'tool/network_spike/test_ios_device_probe.sh' \
-  "signed network device probe"
-
 closure_lock=$(cat vendor/opam-ios/runtime-closure.lock)
+require_file vendor/opam-ios/supported-closure.lock
+supported_closure_lock=$(cat vendor/opam-ios/supported-closure.lock)
+require_text \
+  "$supported_closure_lock" \
+  'digestif,digestif.c' \
+  "iOS Digestif default implementation components"
+require_text \
+  "$supported_closure_lock" \
+  'mirage-ptime,mirage-ptime.unix' \
+  "iOS Mirage ptime default implementation components"
+require_text \
+  "$supported_closure_lock" \
+  '# metadata.features=core,network,sqlite' \
+  "iOS supported closure lock"
+for package in ca-certs-nss httpun-eio httpun-ws tls-eio x509 zarith; do
+  require_text \
+    "$supported_closure_lock" \
+    "$package|" \
+    "iOS supported Network closure"
+done
 closure_rows=$(printf '%s\n' "$closure_lock" | awk -F '|' '!/^#/ && NF { count++ } END { print count + 0 }')
 target_rows=$(printf '%s\n' "$closure_lock" | awk -F '|' '$3 == "target-package" { count++ } END { print count + 0 }')
 host_rows=$(printf '%s\n' "$closure_lock" | awk -F '|' '$3 == "host-package" { count++ } END { print count + 0 }')
@@ -153,9 +163,17 @@ require_text \
   'application opam metadata has no dependency roots' \
   "application package metadata"
 reject_pattern "$resolver" 'network_root|network roots' "application closure resolver"
+require_text \
+  "$resolver" \
+  'build_mechanism=zarith' \
+  "Zarith application closure build mechanism"
+require_text \
+  "$resolver" \
+  'ocaml-ios64' \
+  "application closure compiler-package exclusion"
 
 network_dune=$(cat examples/network/ocaml/dune)
-network_opam=$(cat bonsai_flutter_network_example.opam)
+network_opam=$(cat examples/network/bonsai_flutter_network_example.opam 2>/dev/null || true)
 for library in ca-certs-nss httpun-eio httpun-ws mirage-crypto-rng.unix tls-eio x509; do
   require_text "$network_dune" "$library" "network application Dune roots"
 done
@@ -193,10 +211,37 @@ do
   require_text "$toolchain_lock" "$pin" "iOS network toolchain lock"
 done
 
+cross_compiler_opam=$(cat tool/ios/opam-repository/0.1.0/packages/ocaml-ios64/ocaml-ios64.5.1.1/opam)
+require_text \
+  "$cross_compiler_opam" \
+  '"ocamlmklib-failsafe.patch" "sha256=b51bd717117618cca4b47960769d336a2bb0922176e627c24e453b507b75823e"' \
+  "iOS cross-compiler patch checksum"
+sdk_repository_lock=$(cat tool/ios/opam-repository/0.1.0/repository.sexp)
+require_text \
+  "$sdk_repository_lock" \
+  'https://github.com/ocaml/opam-repository.git' \
+  "iOS default opam repository"
+require_text \
+  "$sdk_repository_lock" \
+  '9fdd0666a192f1896963cf446f37f0c691bbd3db' \
+  "iOS default opam repository commit"
+
 runtime_builder=$(cat tool/ios/build_runtime_package.sh)
 require_text "$runtime_builder" 'gmp-sys-ios' "iOS static GMP target recipe"
 require_text "$runtime_builder" 'ios-deps/gmp' "iOS static GMP staging"
 require_text "$runtime_builder" 'zarith' "iOS Zarith target recipe"
+require_text \
+  "$runtime_builder" \
+  'printf '\''%s\n'\'' zarith' \
+  "iOS Zarith build-mechanism detection"
+reject_pattern \
+  "$runtime_builder" \
+  'virtual_target_prefix/native' \
+  "iOS virtual-library interface build"
+require_text \
+  "$runtime_builder" \
+  'virtual-interface-only' \
+  "iOS virtual-library interface verification"
 require_file vendor/patches/ios/mirage-crypto-rng-apple-entropy.patch
 require_text \
   "$runtime_builder" \
@@ -206,6 +251,17 @@ reject_pattern \
   "$runtime_builder" \
   '(openssl|libssl|libcrypto|securetransport)' \
   "iOS runtime package builder"
+
+installed_sdk_builder=$(cat tool/ios/build_installed_sdk.sh)
+require_text \
+  "$installed_sdk_builder" \
+  'supported-closure.lock' \
+  "iOS installed SDK supported closure"
+package_universe_generator=$(cat tool/ios/generate_package_universe.sh)
+require_text \
+  "$package_universe_generator" \
+  'supported-closure.lock' \
+  "iOS package-universe supported closure"
 
 device_probe=$(cat tool/network_spike/test_ios_device_probe.sh)
 require_text \

@@ -66,7 +66,7 @@ let component handlers graph =
       let home =
         Ui.Widget.page
           ~page_key:home_page_key
-          ~transition:Ui.Navigation.None
+          ~presentation:(Ui.Navigation.Standard Ui.Navigation.None)
           ~can_pop:false
           ~restoration_id:(ID.Navigation.Restoration_id.of_string "home-page")
           (Ui.Widget.column
@@ -88,7 +88,7 @@ let component handlers graph =
           let settings =
             Ui.Widget.page
               ~page_key:settings_page_key
-              ~transition:Ui.Navigation.Fade
+              ~presentation:(Ui.Navigation.Standard Ui.Navigation.Fade)
               ~restoration_id:(ID.Navigation.Restoration_id.of_string "settings-page")
               (Ui.Widget.column
                  [ Ui.Widget.text "Settings"

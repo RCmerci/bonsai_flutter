@@ -173,7 +173,9 @@ if test ! -f "$source_marker"; then
 fi
 
 detect_build_mechanism() {
-  if test -f "$source_directory/dune-project"; then
+  if test "$package_name" = zarith; then
+    printf '%s\n' zarith
+  elif test -f "$source_directory/dune-project"; then
     printf '%s\n' dune
   elif test -f "$source_directory/pkg/pkg.ml"; then
     printf '%s\n' topkg
@@ -634,6 +636,8 @@ if test "$package_name" = domain-local-await; then
 fi
 
 component_order_file="$work_root/components.ordered"
+virtual_interface_marker="$work_root/virtual-interface-only"
+rm -f "$virtual_interface_marker"
 : >"$component_order_file.unsorted"
 printf '%s\n' "$package_components" | tr ',' '\n' |
   while IFS= read -r component; do
@@ -721,8 +725,7 @@ while IFS= read -r component; do
           --profile=release \
           -j "${JOBS:-4}" \
           -x ios \
-          "$virtual_target_prefix/byte/$dune_name.cmi" \
-          "$virtual_target_prefix/native/$dune_name.cmx"
+          "$virtual_target_prefix/byte/$dune_name.cmi"
       find "$component_host_directory" \
         -maxdepth 1 \
         \( -type f -o -type l \) \
@@ -750,6 +753,7 @@ while IFS= read -r component; do
       find "$target_component_directory" -maxdepth 1 -type f -name '*.cmi' |
         grep . >/dev/null ||
         fail "virtual component $component has no target interface artifacts"
+      : >"$virtual_interface_marker"
       continue
     fi
 
@@ -986,10 +990,10 @@ if test -n "$representative_object"; then
     arm64 \
     "$expected_minimum"
 else
-  test "$package_name" = stdlib-shims ||
+  test "$package_name" = stdlib-shims || test -f "$virtual_interface_marker" ||
     fail "no representative target object was produced for $package_name"
   printf '%s\n' \
-    "No Mach-O object is expected for metadata-only package $package_name"
+    "No Mach-O object is expected for interface-only package $package_name"
 fi
 
 if rg -a -l \

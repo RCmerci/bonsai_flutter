@@ -1,5 +1,6 @@
 (library
  (name bonsai_flutter_mail_example)
+ (package bonsai_flutter_mail_example)
  (wrapped false)
  (modules mail)
  (libraries
@@ -12,37 +13,27 @@
   incr_dom.ui_incr
   virtual_dom.ui_effect))
 
-(library
- (name bonsai_flutter_mail_native_embed)
- (wrapped false)
+(executable
+ (name native_embed)
  (modules native_embed)
+ (enabled_if
+  (= %{env:BONSAI_FLUTTER_EMBED_OCAML=disabled} enabled))
  (libraries
   bonsai_flutter.spec_impl
-  bonsai_flutter_trace
   bonsai_flutter_mail_example
   bonsai_flutter.driver
-  bonsai_flutter.native_backend))
-
-(executable
- (name native_embed_debug)
- (modules native_embed_debug)
- (enabled_if
-  (= %{env:BONSAI_FLUTTER_EMBED_OCAML=disabled} enabled))
- (libraries
-  bonsai_flutter.spec_impl
-  bonsai_flutter_trace_debug
-  bonsai_flutter_mail_native_embed)
+  bonsai_flutter.native_backend)
  (modes
   (native object)))
 
-(executable
- (name native_embed_release)
- (modules native_embed_release)
- (enabled_if
-  (= %{env:BONSAI_FLUTTER_EMBED_OCAML=disabled} enabled))
- (libraries
-  bonsai_flutter.spec_impl
-  bonsai_flutter_trace_release
-  bonsai_flutter_mail_native_embed)
- (modes
-  (native object)))
+; BEGIN bonsai-flutter native aliases
+(alias
+ (name bonsai-flutter-macos)
+ (enabled_if (= %{context_name} default))
+ (deps native_embed.exe.o))
+
+(alias
+ (name bonsai-flutter-ios)
+ (enabled_if (= %{context_name} default.ios))
+ (deps native_embed.exe.o))
+; END bonsai-flutter native aliases

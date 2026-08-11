@@ -3,6 +3,7 @@ _opam/
 *.install
 *.merlin
 .dart_tool/
+.bonsai-flutter/
 .flutter-plugins
 .flutter-plugins-dependencies
 .packages

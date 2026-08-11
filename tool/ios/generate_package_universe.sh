@@ -5,7 +5,7 @@ script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 framework_root=$(CDPATH= cd -- "$script_directory/../.." && pwd)
 
 if [ "$#" -ne 5 ]; then
-  echo "usage: $0 SOLUTION_JSON OPAM_REPO_CACHE OUTPUT_REPOSITORY SDK_META_OPAM RUNTIME_CLOSURE_LOCK" >&2
+  echo "usage: $0 SOLUTION_JSON OPAM_REPO_CACHE OUTPUT_REPOSITORY SDK_META_OPAM SUPPORTED_CLOSURE_LOCK" >&2
   exit 64
 fi
 
@@ -13,7 +13,7 @@ solution_json=$1
 repo_cache=$2
 output_repository=$3
 sdk_meta_opam=$4
-runtime_closure_lock=$5
+supported_closure_lock=$5
 temporary_directory=$(mktemp -d)
 trap 'rm -rf "$temporary_directory"' EXIT HUP INT TERM
 
@@ -32,8 +32,12 @@ cp "$script_directory/build_runtime_closure.sh" "$sdk_files/build-runtime-closur
 cp "$script_directory/build_runtime_package.sh" "$sdk_files/build-runtime-package.sh"
 cp "$script_directory/verify_macho.sh" "$sdk_files/verify_macho.sh"
 cp "$script_directory/toolchain.lock" "$sdk_files/toolchain.lock"
-cp "$runtime_closure_lock" "$sdk_files/runtime-closure.lock"
+cp "$supported_closure_lock" "$sdk_files/supported-closure.lock"
 cp "$framework_root/vendor/patches/ios/"*.patch "$sdk_files/patches/"
+for patch_file in "$sdk_files/patches/"*.patch; do
+  sed 's/^ $//' "$patch_file" >"$patch_file.normalized"
+  mv "$patch_file.normalized" "$patch_file"
+done
 cp "$framework_root/vendor/pkgconfig/iphoneos/sqlite3.pc" "$sdk_files/pkgconfig/iphoneos/"
 chmod +x "$sdk_files/"*.sh
 
@@ -119,13 +123,13 @@ done < "$packages_tsv"
 } > "$sdk_files/package-lock.sexp"
 
 package_lock_digest=$(shasum -a 256 "$sdk_files/package-lock.sexp" | cut -d ' ' -f 1)
-target_components_digest=$(shasum -a 256 "$runtime_closure_lock" | cut -d ' ' -f 1)
+target_components_digest=$(shasum -a 256 "$supported_closure_lock" | cut -d ' ' -f 1)
 target_packages="$temporary_directory/target-packages.tsv"
 awk -F '|' '
   $1 !~ /^#/ && ($3 == "target-build" || $3 == "target-package") {
     print $1 "\t" $2
   }
-' "$runtime_closure_lock" | LC_ALL=C sort -u > "$target_packages"
+' "$supported_closure_lock" | LC_ALL=C sort -u > "$target_packages"
 printf '%s\t%s\n' bonsai_flutter 0.1.0~dev >> "$target_packages"
 printf '%s\t%s\n' ocaml-ios64 5.1.1 >> "$target_packages"
 LC_ALL=C sort -u "$target_packages" -o "$target_packages"
@@ -164,7 +168,7 @@ LC_ALL=C sort -u "$target_packages" -o "$target_packages"
         printf "  (%s %s %s (%s))\n", components[component_index], $1, $2, substr(component_list, 2)
       }
     }
-  ' "$runtime_closure_lock"
+  ' "$supported_closure_lock"
   standard_library_components='threads unix str dynlink'
   for library in $standard_library_components; do
     printf '  (%s ocaml-ios64 5.1.1 (%s))\n' "$library" "$standard_library_components"
@@ -221,7 +225,7 @@ test "$framework_source_checksum_algorithm" = sha256 || {
       printf "  checksum: [\"sha256=%s\"]\n", $7
       print "}"
     }
-  ' "$runtime_closure_lock"
+  ' "$supported_closure_lock"
   printf '%s\n' 'extra-files: ['
   find "$sdk_files" -type f -print | LC_ALL=C sort | while IFS= read -r file; do
     relative=${file#"$sdk_files"/}

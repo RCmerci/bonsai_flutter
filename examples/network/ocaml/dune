@@ -67,3 +67,15 @@
   eio.core
   eio.unix
   eio_posix))
+
+; BEGIN bonsai-flutter native aliases
+(alias
+ (name bonsai-flutter-macos)
+ (enabled_if (= %{context_name} default))
+ (deps native_embed.exe.o))
+
+(alias
+ (name bonsai-flutter-ios)
+ (enabled_if (= %{context_name} default.ios))
+ (deps native_embed.exe.o))
+; END bonsai-flutter native aliases

@@ -3,10 +3,11 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
-import 'package:bonsai_flutter_sqlite_worker_example/application_support_bootstrap.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider/path_provider.dart';
+
+import 'support/application_support_bootstrap.dart';
 
 const _timeout = Duration(seconds: 15);
 const _slice = Duration(milliseconds: 10);

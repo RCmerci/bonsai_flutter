@@ -49,6 +49,22 @@ sequence, and typed payload. OCaml resolves the handler, schedules its Bonsai
 effect, flushes once, reconciles once, and returns at most one atomic frame.
 OCaml never calls back into a Dart UI isolate.
 
+## Consumer build boundary
+
+Every example and the aggregate integration harness is an independent consumer
+workspace with its own `dune-project`, locked opam package, and
+`bonsai-flutter.sexp`. Native-backed Flutter commands run through
+`bonsai-flutter build`, `run`, or `exec`; the tool owns the platform/profile
+artifact selection and stages complete objects only below the consumer's
+`_build/bonsai-flutter` tree.
+
+The consumer owns its pubspec metadata and non-framework dependencies. The
+tool owns only the marked local-package and native-hook regions. Managed hosts
+also give the tool ownership of generated `lib/main.dart` and widget tests;
+custom hosts retain their Dart entrypoint and tests. Profile injection is
+serialized, scoped to the native-hook region, and restores the original
+pubspec bytes when the child command finishes or is interrupted.
+
 ## Three distinct trees
 
 1. The logical UI tree is an immutable OCaml `Widget.t`. It contains typed

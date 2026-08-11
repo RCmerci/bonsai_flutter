@@ -27,7 +27,7 @@ The current decoder rejects a wrong magic, unsupported major or newer minor
 version, short or noncanonical header, nonzero flags, nonzero checksum or
 reserved fields, an inconsistent payload length, truncated input, trailing
 operation bytes, and frames above the configured maximum. CRC32C negotiation
-is reserved for a later compatible protocol minor version; version 1.14
+is reserved for a later compatible protocol minor version; version 1.18
 requires the flags and checksum fields to be zero.
 
 ## Frame kinds
@@ -43,7 +43,7 @@ Payload operations have a one-byte opcode, a four-byte byte length, and a
 kind-specific generated body. A decoder validates the body length before
 allocating.
 
-Version 1.14 uses these primitive encodings:
+Version 1.18 uses these primitive encodings:
 
 - integers are unsigned little-endian values of their declared width;
 - runtime IDs and revisions are restricted to the positive `int64` range;
@@ -114,7 +114,7 @@ implemented kind-specific property layouts are:
 | TextInput | `session_id:u64`, `document_revision:u64`, editing value, three bool flags, keyboard type, input action, `accepted_local_revision:u64`, update mode, `autofocus:bool` |
 | Overlay | `alignment:u8`, `dismissible:bool` |
 | Navigator | `restoration_scope_id:optional string` |
-| Page | `page_key:string`, transition `u8`, `can_pop:bool`, `restoration_id:optional string` |
+| Page | `page_key:string`, standard transition `u8`, `can_pop:bool`, `restoration_id:optional string`, presentation `u8`, typed modal flags and values |
 | MaterialDialog | `barrier_dismissible:bool` |
 | Pressable | `overlay_color:u32 ARGB`, `release_delay_ms:u16` |
 
@@ -122,6 +122,15 @@ implemented kind-specific property layouts are:
 typed property value. Empty and linear values use mask zero; multi-property
 values set each implemented field bit. Future fields extend the
 kind-specific generated layout rather than inserting a dynamic property map.
+Protocol 1.18 includes the Page presentation discriminator, optional modal
+barrier ARGB and label, barrier/focus/safe-area flags, two `u32` motion
+durations, typed modal sizing and detent fields, required detent-handle
+semantics, and the vertical scrollable `primary` flag.
+Standard pages encode canonical zero modal fields; modal pages must encode
+`No_transition` in the standard transition slot because presentation, not
+transition, selects the route class. Both decoders reject invalid
+discriminators, booleans, optional values, noncanonical standard fields, and
+out-of-range encoded values.
 Protocol 1.13 extends Text with optional font size, font weight, line height,
 and ARGB color, followed by alignment, an optional positive line limit, and
 overflow behavior. A missing style preserves Flutter defaults.
@@ -130,7 +139,7 @@ selection offsets, and an optional ordered pair of `u32` composing offsets.
 Every offset is a UTF-16 code-unit boundary. Keyboard type, input action, and
 update mode are bounded `u8` enums.
 
-Version 1.14 decoders continue to accept earlier 1.x frames whose operations
+Version 1.18 decoders continue to accept earlier 1.x frames whose operations
 use layouts defined by that earlier minor version. In particular, the protocol
 test suite decodes the value-only Text layout from 1.12 and the unchanged
 `Opacity` layout from 1.11.

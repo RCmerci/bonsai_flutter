@@ -271,12 +271,14 @@ end
 module Scroll_view_prop : sig
   val axis : Bonsai_flutter_spec.Id.Protocol.property
   val reverse : Bonsai_flutter_spec.Id.Protocol.property
+  val primary : Bonsai_flutter_spec.Id.Protocol.property
   val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
 end
 
 module List_view_prop : sig
   val axis : Bonsai_flutter_spec.Id.Protocol.property
   val reverse : Bonsai_flutter_spec.Id.Protocol.property
+  val primary : Bonsai_flutter_spec.Id.Protocol.property
   val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
 end
 
@@ -431,6 +433,21 @@ module Page_prop : sig
   val transition : Bonsai_flutter_spec.Id.Protocol.property
   val can_pop : Bonsai_flutter_spec.Id.Protocol.property
   val restoration_id : Bonsai_flutter_spec.Id.Protocol.property
+  val presentation : Bonsai_flutter_spec.Id.Protocol.property
+  val modal_barrier_dismissible : Bonsai_flutter_spec.Id.Protocol.property
+  val modal_barrier_color : Bonsai_flutter_spec.Id.Protocol.property
+  val modal_barrier_label : Bonsai_flutter_spec.Id.Protocol.property
+  val modal_use_safe_area : Bonsai_flutter_spec.Id.Protocol.property
+  val modal_request_focus : Bonsai_flutter_spec.Id.Protocol.property
+  val modal_transition_duration_ms : Bonsai_flutter_spec.Id.Protocol.property
+  val modal_reverse_transition_duration_ms : Bonsai_flutter_spec.Id.Protocol.property
+  val modal_sizing : Bonsai_flutter_spec.Id.Protocol.property
+  val modal_detents : Bonsai_flutter_spec.Id.Protocol.property
+  val modal_initial_detent : Bonsai_flutter_spec.Id.Protocol.property
+  val modal_dismiss_on_drag : Bonsai_flutter_spec.Id.Protocol.property
+  val modal_handle_semantics_label : Bonsai_flutter_spec.Id.Protocol.property
+  val modal_medium_semantics_value : Bonsai_flutter_spec.Id.Protocol.property
+  val modal_large_semantics_value : Bonsai_flutter_spec.Id.Protocol.property
   val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
 end
 

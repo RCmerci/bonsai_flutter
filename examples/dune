@@ -1,0 +1,12 @@
+(data_only_dirs
+ clock
+ counter
+ gallery
+ host_effects
+ host_navigation
+ mail
+ navigation
+ network
+ sqlite_worker
+ text_input
+ todo)

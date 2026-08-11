@@ -114,7 +114,7 @@ void main() {
             nodeId: 30,
             props: PageProps(
               pageKey: 'settings',
-              transition: PageTransition.fade,
+              presentation: StandardPagePresentation(PageTransition.fade),
               canPop: true,
               restorationId: 'settings-page',
             ),
@@ -141,9 +141,429 @@ void main() {
         (decoded.operations[3] as UpdateProps).props,
         const PageProps(
           pageKey: 'settings',
-          transition: PageTransition.fade,
+          presentation: StandardPagePresentation(PageTransition.fade),
           canPop: true,
           restorationId: 'settings-page',
+        ),
+      );
+    });
+
+    test('round trips every modal bottom sheet option and stable updates', () {
+      const before = PageProps(
+        pageKey: 'editor',
+        presentation: ModalBottomSheetPresentation(
+          barrierDismissible: false,
+          barrierColorArgb: 0x7f102030,
+          barrierLabel: 'Close editor',
+          sizing: DetentedModalSheetSizing(
+            detents: ModalSheetDetentSet.mediumAndLarge,
+            initialDetent: ModalSheetDetent.medium,
+            dismissOnDrag: true,
+            handleSemantics: ModalSheetHandleSemantics(
+              label: 'Adjust sheet height',
+              mediumValue: 'Half height',
+              largeValue: 'Full height',
+            ),
+          ),
+          useSafeArea: true,
+          requestFocus: false,
+          transitionDurationMilliseconds: 0,
+          reverseTransitionDurationMilliseconds: 175,
+        ),
+        canPop: false,
+        restorationId: 'editor-page',
+      );
+      const after = PageProps(
+        pageKey: 'editor',
+        presentation: ModalBottomSheetPresentation(
+          barrierDismissible: true,
+          barrierColorArgb: 0x7f102030,
+          barrierLabel: 'Close editor',
+          sizing: DetentedModalSheetSizing(
+            detents: ModalSheetDetentSet.mediumAndLarge,
+            initialDetent: ModalSheetDetent.large,
+            dismissOnDrag: false,
+            handleSemantics: ModalSheetHandleSemantics(
+              label: 'Resize editor',
+              mediumValue: 'Collapsed',
+              largeValue: 'Expanded',
+            ),
+          ),
+          useSafeArea: true,
+          requestFocus: true,
+          transitionDurationMilliseconds: 325,
+          reverseTransitionDurationMilliseconds: 175,
+        ),
+        canPop: true,
+        restorationId: 'editor-page',
+      );
+      const frame = Frame(
+        runtimeEpoch: 73,
+        baseRevision: 4,
+        targetRevision: 5,
+        kind: FrameKind.incremental,
+        operations: [
+          UpdateProps(nodeId: 30, props: before),
+          UpdateProps(nodeId: 30, props: after),
+        ],
+      );
+
+      final decoded = FrameCodec.decode(FrameCodec.encode(frame));
+      final updates = decoded.operations.cast<UpdateProps>();
+      final decodedBefore = updates.first.props as PageProps;
+      final decodedAfter = updates.last.props as PageProps;
+
+      expect(decodedBefore.canPop, isFalse);
+      expect(decodedAfter.canPop, isTrue);
+      final beforeModal =
+          decodedBefore.presentation as ModalBottomSheetPresentation;
+      final afterModal =
+          decodedAfter.presentation as ModalBottomSheetPresentation;
+      expect(beforeModal.barrierDismissible, isFalse);
+      expect(afterModal.barrierDismissible, isTrue);
+      expect(beforeModal.requestFocus, isFalse);
+      expect(afterModal.requestFocus, isTrue);
+      expect(beforeModal.transitionDurationMilliseconds, 0);
+      expect(afterModal.transitionDurationMilliseconds, 325);
+      expect(afterModal.reverseTransitionDurationMilliseconds, 175);
+      expect(afterModal.barrierColorArgb, 0x7f102030);
+      expect(afterModal.barrierLabel, 'Close editor');
+      expect(
+        beforeModal.sizing,
+        const DetentedModalSheetSizing(
+          detents: ModalSheetDetentSet.mediumAndLarge,
+          initialDetent: ModalSheetDetent.medium,
+          dismissOnDrag: true,
+          handleSemantics: ModalSheetHandleSemantics(
+            label: 'Adjust sheet height',
+            mediumValue: 'Half height',
+            largeValue: 'Full height',
+          ),
+        ),
+      );
+      expect(
+        afterModal.sizing,
+        const DetentedModalSheetSizing(
+          detents: ModalSheetDetentSet.mediumAndLarge,
+          initialDetent: ModalSheetDetent.large,
+          dismissOnDrag: false,
+          handleSemantics: ModalSheetHandleSemantics(
+            label: 'Resize editor',
+            mediumValue: 'Collapsed',
+            largeValue: 'Expanded',
+          ),
+        ),
+      );
+    });
+
+    test('round trips bounded and scroll-controlled modal sizing', () {
+      for (final sizing in const <ModalBottomSheetSizing>[
+        ContentBoundedModalSheetSizing(),
+        ScrollControlledModalSheetSizing(),
+      ]) {
+        final props = PageProps(
+          pageKey: 'modal',
+          presentation: ModalBottomSheetPresentation(
+            barrierDismissible: true,
+            barrierColorArgb: null,
+            barrierLabel: null,
+            sizing: sizing,
+            useSafeArea: false,
+            requestFocus: true,
+            transitionDurationMilliseconds: 250,
+            reverseTransitionDurationMilliseconds: 200,
+          ),
+          canPop: true,
+          restorationId: null,
+        );
+        final frame = Frame(
+          runtimeEpoch: 73,
+          baseRevision: 4,
+          targetRevision: 5,
+          kind: FrameKind.incremental,
+          operations: [UpdateProps(nodeId: 30, props: props)],
+        );
+
+        expect(
+          (FrameCodec.decode(FrameCodec.encode(frame)).operations.single
+                  as UpdateProps)
+              .props,
+          props,
+        );
+      }
+    });
+
+    test('round trips every configured modal detent set', () {
+      const semantics = ModalSheetHandleSemantics(
+        label: 'Adjust sheet height',
+        mediumValue: 'Half height',
+        largeValue: 'Full height',
+      );
+      for (final sizing in const [
+        DetentedModalSheetSizing(
+          detents: ModalSheetDetentSet.medium,
+          initialDetent: ModalSheetDetent.medium,
+          dismissOnDrag: true,
+          handleSemantics: semantics,
+        ),
+        DetentedModalSheetSizing(
+          detents: ModalSheetDetentSet.large,
+          initialDetent: ModalSheetDetent.large,
+          dismissOnDrag: false,
+          handleSemantics: semantics,
+        ),
+        DetentedModalSheetSizing(
+          detents: ModalSheetDetentSet.mediumAndLarge,
+          initialDetent: ModalSheetDetent.large,
+          dismissOnDrag: true,
+          handleSemantics: semantics,
+        ),
+      ]) {
+        final props = PageProps(
+          pageKey: 'detents',
+          presentation: ModalBottomSheetPresentation(
+            barrierDismissible: true,
+            barrierColorArgb: null,
+            barrierLabel: null,
+            sizing: sizing,
+            useSafeArea: false,
+            requestFocus: true,
+            transitionDurationMilliseconds: 250,
+            reverseTransitionDurationMilliseconds: 200,
+          ),
+          canPop: true,
+          restorationId: null,
+        );
+        final frame = Frame(
+          runtimeEpoch: 74,
+          baseRevision: 1,
+          targetRevision: 2,
+          kind: FrameKind.incremental,
+          operations: [UpdateProps(nodeId: 30, props: props)],
+        );
+
+        expect(
+          (FrameCodec.decode(FrameCodec.encode(frame)).operations.single
+                  as UpdateProps)
+              .props,
+          props,
+        );
+      }
+    });
+
+    test('rejects invalid modal enum, flags, colors, and durations', () {
+      PageProps modal({
+        int? barrierColorArgb = 0x7f102030,
+        int transitionDurationMilliseconds = 250,
+        int reverseTransitionDurationMilliseconds = 200,
+        ModalBottomSheetSizing sizing = const ContentBoundedModalSheetSizing(),
+      }) => PageProps(
+        pageKey: 'modal',
+        presentation: ModalBottomSheetPresentation(
+          barrierDismissible: true,
+          barrierColorArgb: barrierColorArgb,
+          barrierLabel: null,
+          sizing: sizing,
+          useSafeArea: false,
+          requestFocus: true,
+          transitionDurationMilliseconds: transitionDurationMilliseconds,
+          reverseTransitionDurationMilliseconds:
+              reverseTransitionDurationMilliseconds,
+        ),
+        canPop: true,
+        restorationId: null,
+      );
+
+      Frame frame(PageProps props) => Frame(
+        runtimeEpoch: 73,
+        baseRevision: 4,
+        targetRevision: 5,
+        kind: FrameKind.incremental,
+        operations: [UpdateProps(nodeId: 30, props: props)],
+      );
+
+      for (final invalid in [-1, 0x100000000]) {
+        expect(
+          () => FrameCodec.encode(
+            frame(modal(transitionDurationMilliseconds: invalid)),
+          ),
+          throwsProtocolCode(ProtocolErrorCode.invalidProps),
+        );
+        expect(
+          () => FrameCodec.encode(
+            frame(modal(reverseTransitionDurationMilliseconds: invalid)),
+          ),
+          throwsProtocolCode(ProtocolErrorCode.invalidProps),
+        );
+      }
+      for (final invalid in [-1, 0x100000000]) {
+        expect(
+          () => FrameCodec.encode(frame(modal(barrierColorArgb: invalid))),
+          throwsProtocolCode(ProtocolErrorCode.invalidProps),
+        );
+      }
+
+      final encoded = FrameCodec.encode(frame(modal()));
+      const propsOffset = ProtocolLimits.headerBytes + 5 + 5 + 8 + 2 + 8;
+      const pageKeyBytes = 4 + 5;
+      const transitionBytes = 1;
+      const canPopBytes = 1;
+      const restorationIdBytes = 1;
+      const presentationOffset =
+          propsOffset +
+          pageKeyBytes +
+          transitionBytes +
+          canPopBytes +
+          restorationIdBytes;
+      expectDecodeError(
+        mutate(encoded, presentationOffset, 0xff),
+        ProtocolErrorCode.invalidProps,
+      );
+
+      const modalSizingOffset = presentationOffset + 8;
+      expectDecodeError(
+        mutate(encoded, modalSizingOffset, 0xff),
+        ProtocolErrorCode.invalidProps,
+      );
+
+      final detentedEncoded = FrameCodec.encode(
+        frame(
+          modal(
+            sizing: const DetentedModalSheetSizing(
+              detents: ModalSheetDetentSet.mediumAndLarge,
+              initialDetent: ModalSheetDetent.medium,
+              dismissOnDrag: true,
+              handleSemantics: ModalSheetHandleSemantics(
+                label: 'Adjust sheet height',
+                mediumValue: 'Half height',
+                largeValue: 'Full height',
+              ),
+            ),
+          ),
+        ),
+      );
+      const modalDetentsOffset = presentationOffset + 19;
+      const modalInitialDetentOffset = presentationOffset + 20;
+      const modalDismissOnDragOffset = presentationOffset + 21;
+      expectDecodeError(
+        mutate(detentedEncoded, modalDetentsOffset, 0xff),
+        ProtocolErrorCode.invalidProps,
+      );
+      expectDecodeError(
+        mutate(detentedEncoded, modalInitialDetentOffset, 0xff),
+        ProtocolErrorCode.invalidProps,
+      );
+      expectDecodeError(
+        mutate(detentedEncoded, modalDismissOnDragOffset, 2),
+        ProtocolErrorCode.invalidProps,
+      );
+      expectDecodeError(
+        mutate(detentedEncoded, modalSizingOffset, 0),
+        ProtocolErrorCode.invalidProps,
+      );
+      expectDecodeError(
+        mutate(encoded, modalSizingOffset, 2),
+        ProtocolErrorCode.invalidProps,
+      );
+
+      expect(
+        () => FrameCodec.encode(
+          frame(
+            modal(
+              sizing: const DetentedModalSheetSizing(
+                detents: ModalSheetDetentSet.medium,
+                initialDetent: ModalSheetDetent.large,
+                dismissOnDrag: true,
+                handleSemantics: ModalSheetHandleSemantics(
+                  label: 'Adjust sheet height',
+                  mediumValue: 'Half height',
+                  largeValue: 'Full height',
+                ),
+              ),
+            ),
+          ),
+        ),
+        throwsProtocolCode(ProtocolErrorCode.invalidProps),
+      );
+      for (final semantics in const [
+        ModalSheetHandleSemantics(
+          label: '',
+          mediumValue: 'Half height',
+          largeValue: 'Full height',
+        ),
+        ModalSheetHandleSemantics(
+          label: 'Adjust sheet height',
+          mediumValue: '',
+          largeValue: 'Full height',
+        ),
+        ModalSheetHandleSemantics(
+          label: 'Adjust sheet height',
+          mediumValue: 'Half height',
+          largeValue: '',
+        ),
+        ModalSheetHandleSemantics(
+          label: '   ',
+          mediumValue: 'Half height',
+          largeValue: 'Full height',
+        ),
+      ]) {
+        expect(
+          () => FrameCodec.encode(
+            frame(
+              modal(
+                sizing: DetentedModalSheetSizing(
+                  detents: ModalSheetDetentSet.mediumAndLarge,
+                  initialDetent: ModalSheetDetent.medium,
+                  dismissOnDrag: true,
+                  handleSemantics: semantics,
+                ),
+              ),
+            ),
+          ),
+          throwsProtocolCode(ProtocolErrorCode.invalidProps),
+        );
+      }
+      final modalFlagsStart = presentationOffset + 1;
+      expectDecodeError(
+        mutate(encoded, modalFlagsStart, 2),
+        ProtocolErrorCode.invalidProps,
+      );
+      final requestFocusOffset = presentationOffset + 10;
+      expectDecodeError(
+        mutate(encoded, requestFocusOffset, 2),
+        ProtocolErrorCode.invalidProps,
+      );
+    });
+
+    test('decodes the generated cross-language modal fixture', () {
+      final frame = FrameCodec.decode(
+        readHexFixture('ocaml_modal_bottom_sheet_update.hex'),
+      );
+      final props = (frame.operations.single as UpdateProps).props as PageProps;
+
+      expect(props.pageKey, 'editor');
+      expect(props.canPop, isTrue);
+      expect(props.restorationId, 'editor-page');
+      expect(
+        props.presentation,
+        const ModalBottomSheetPresentation(
+          barrierDismissible: true,
+          barrierColorArgb: 0x7f102030,
+          barrierLabel: 'Close editor',
+          sizing: DetentedModalSheetSizing(
+            detents: ModalSheetDetentSet.mediumAndLarge,
+            initialDetent: ModalSheetDetent.medium,
+            dismissOnDrag: true,
+            handleSemantics: ModalSheetHandleSemantics(
+              label: 'Adjust sheet height',
+              mediumValue: 'Half height',
+              largeValue: 'Full height',
+            ),
+          ),
+          useSafeArea: true,
+          requestFocus: true,
+          transitionDurationMilliseconds: 325,
+          reverseTransitionDurationMilliseconds: 175,
         ),
       );
     });
@@ -244,7 +664,11 @@ void main() {
           CreateNode(
             nodeId: 3,
             kind: NodeKind.scrollView,
-            props: ScrollViewProps(axis: ScrollAxis.vertical, reverse: false),
+            props: ScrollViewProps(
+              axis: ScrollAxis.vertical,
+              reverse: false,
+              primary: true,
+            ),
             eventBindings: [
               EventBinding(
                 eventTag: EventTagId.scrollNotification,
@@ -303,7 +727,11 @@ void main() {
             EdgeInsetsValue(left: 12, top: 8, right: 12, bottom: 8),
           ),
           const CenterProps(widthFactor: null, heightFactor: 1.5),
-          const ScrollViewProps(axis: ScrollAxis.vertical, reverse: false),
+          const ScrollViewProps(
+            axis: ScrollAxis.vertical,
+            reverse: false,
+            primary: true,
+          ),
           const SemanticsProps(
             label: 'Accept terms',
             role: SemanticsRoleValue.checkbox,
@@ -317,6 +745,45 @@ void main() {
           const MaterialCheckboxProps(value: false, enabled: true),
         ]),
       );
+    });
+
+    test('rejects primary horizontal scrollables', () {
+      for (final props in const <UiProps>[
+        ScrollViewProps(
+          axis: ScrollAxis.horizontal,
+          reverse: false,
+          primary: true,
+        ),
+        ListViewProps(
+          axis: ScrollAxis.horizontal,
+          reverse: false,
+          primary: true,
+        ),
+      ]) {
+        final kind = props is ScrollViewProps
+            ? NodeKind.scrollView
+            : NodeKind.listView;
+        final frame = Frame(
+          runtimeEpoch: 9,
+          baseRevision: 0,
+          targetRevision: 1,
+          kind: FrameKind.fullSnapshot,
+          operations: [
+            CreateNode(
+              nodeId: 1,
+              kind: kind,
+              props: props,
+              eventBindings: const [],
+            ),
+            const SetRoot(1),
+          ],
+        );
+
+        expect(
+          () => FrameCodec.encode(frame),
+          throwsProtocolCode(ProtocolErrorCode.invalidProps),
+        );
+      }
     });
 
     test('round trips revisioned UTF-16 text input properties', () {
@@ -484,7 +951,11 @@ void main() {
           ),
           UpdateProps(
             nodeId: 11,
-            props: ListViewProps(axis: ScrollAxis.vertical, reverse: false),
+            props: ListViewProps(
+              axis: ScrollAxis.vertical,
+              reverse: false,
+              primary: true,
+            ),
           ),
           UpdateProps(
             nodeId: 12,

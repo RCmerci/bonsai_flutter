@@ -106,11 +106,23 @@ final class AnimationResourceHandle {
   }
 }
 
+final class _ScrollControllerBinding {
+  const _ScrollControllerBinding({
+    required this.controller,
+    required this.owned,
+  });
+
+  final ScrollController controller;
+  final bool owned;
+}
+
 final class RendererResourceStore implements RendererHostResources {
   final Map<int, TextInputResourceHandle> _textInputs = {};
-  final Map<int, ScrollController> _scrollControllers = {};
+  final Map<int, _ScrollControllerBinding> _scrollControllers = {};
   final Map<int, AnimationResourceHandle> _animations = {};
   final Map<int, _NativeResourceEntry> _nativeResources = {};
+  final Map<int, int> _mountedNodeCounts = {};
+  Set<int> _currentNodeIds = const {};
   int? _runtimeEpoch;
   int? _resourceGeneration;
   int _createdResourceCount = 0;
@@ -125,6 +137,24 @@ final class RendererResourceStore implements RendererHostResources {
   int get createdResourceCount => _createdResourceCount;
   int get disposedResourceCount => _disposedResourceCount;
   bool get isDisposed => _disposed;
+
+  void mountNode(int nodeId) {
+    if (_disposed) return;
+    _mountedNodeCounts.update(nodeId, (count) => count + 1, ifAbsent: () => 1);
+  }
+
+  void unmountNode(int nodeId) {
+    final count = _mountedNodeCounts[nodeId];
+    if (count == null) return;
+    if (count > 1) {
+      _mountedNodeCounts[nodeId] = count - 1;
+      return;
+    }
+    _mountedNodeCounts.remove(nodeId);
+    if (!_currentNodeIds.contains(nodeId)) {
+      _disposeNodeResources(nodeId);
+    }
+  }
 
   TextInputResourceHandle acquireTextInput(int nodeId, TextInputProps props) {
     if (_disposed) {
@@ -146,10 +176,70 @@ final class RendererResourceStore implements RendererHostResources {
     if (_runtimeEpoch == null) {
       throw StateError('RendererResourceStore is not synchronized');
     }
-    return _scrollControllers.putIfAbsent(nodeId, () {
-      _createdResourceCount += 1;
-      return ScrollController();
-    });
+    final existing = _scrollControllers[nodeId];
+    if (existing != null) {
+      if (!existing.owned) {
+        throw StateError('Scroll node $nodeId uses a borrowed controller');
+      }
+      return existing.controller;
+    }
+    final controller = ScrollController();
+    _scrollControllers[nodeId] = _ScrollControllerBinding(
+      controller: controller,
+      owned: true,
+    );
+    _createdResourceCount += 1;
+    return controller;
+  }
+
+  void bindBorrowedScrollController(int nodeId, ScrollController controller) {
+    if (_disposed) {
+      throw StateError('RendererResourceStore has been disposed');
+    }
+    if (_runtimeEpoch == null) {
+      throw StateError('RendererResourceStore is not synchronized');
+    }
+    final existing = _scrollControllers[nodeId];
+    if (existing != null) {
+      if (!existing.owned && identical(existing.controller, controller)) return;
+      if (!existing.owned) {
+        throw StateError(
+          'Scroll node $nodeId already uses another borrowed controller',
+        );
+      }
+      _disposeScrollController(nodeId);
+    }
+    _scrollControllers[nodeId] = _ScrollControllerBinding(
+      controller: controller,
+      owned: false,
+    );
+  }
+
+  void replaceBorrowedScrollController(
+    int nodeId,
+    ScrollController controller,
+  ) {
+    if (_disposed) {
+      throw StateError('RendererResourceStore has been disposed');
+    }
+    if (_runtimeEpoch == null) {
+      throw StateError('RendererResourceStore is not synchronized');
+    }
+    final existing = _scrollControllers[nodeId];
+    if (existing?.owned == true) {
+      _disposeScrollController(nodeId);
+    }
+    _scrollControllers[nodeId] = _ScrollControllerBinding(
+      controller: controller,
+      owned: false,
+    );
+  }
+
+  void unbindBorrowedScrollController(int nodeId, ScrollController controller) {
+    final existing = _scrollControllers[nodeId];
+    if (existing == null || existing.owned) return;
+    if (!identical(existing.controller, controller)) return;
+    _scrollControllers.remove(nodeId);
   }
 
   AnimationResourceHandle acquireAnimation({
@@ -200,10 +290,11 @@ final class RendererResourceStore implements RendererHostResources {
     if (_disposed) {
       throw StateError('RendererResourceStore has been disposed');
     }
-    final controller = _scrollControllers[nodeId];
-    if (controller == null) {
+    final binding = _scrollControllers[nodeId];
+    if (binding == null) {
       throw StateError('Node $nodeId has no scroll resource');
     }
+    final controller = binding.controller;
     if (!controller.hasClients) {
       throw StateError('Scroll node $nodeId is not attached');
     }
@@ -263,26 +354,36 @@ final class RendererResourceStore implements RendererHostResources {
     }
     _runtimeEpoch = epoch;
     _resourceGeneration = generation;
+    _currentNodeIds = store.nodes.keys.toSet();
     final retained = store.nodes.entries
         .where((entry) => entry.value.kind == NodeKind.textInput)
         .map((entry) => entry.key)
         .toSet();
     for (final nodeId in _textInputs.keys.toList(growable: false)) {
-      if (!retained.contains(nodeId)) {
+      if (!retained.contains(nodeId) &&
+          !_mountedNodeCounts.containsKey(nodeId)) {
         _disposeTextInput(nodeId);
       }
     }
-    final retainedScrollControllers = store.nodes.entries
-        .where(
-          (entry) =>
-              entry.value.kind == NodeKind.scrollView ||
-              entry.value.kind == NodeKind.listView,
-        )
-        .map((entry) => entry.key)
-        .toSet();
-    for (final nodeId in _scrollControllers.keys.toList(growable: false)) {
-      if (!retainedScrollControllers.contains(nodeId)) {
-        _disposeScrollController(nodeId);
+    final retainedScrollControllers = <int, bool>{
+      for (final entry in store.nodes.entries)
+        if (entry.value.props case ScrollViewProps(:final primary))
+          entry.key: primary,
+      for (final entry in store.nodes.entries)
+        if (entry.value.props case ListViewProps(:final primary))
+          entry.key: primary,
+    };
+    for (final entry in _scrollControllers.entries.toList(growable: false)) {
+      final primary = retainedScrollControllers[entry.key];
+      if (primary == null) {
+        if (!_mountedNodeCounts.containsKey(entry.key)) {
+          _disposeScrollController(entry.key);
+        }
+      } else {
+        final shouldBeOwned = !primary;
+        if (entry.value.owned != shouldBeOwned) {
+          _disposeScrollController(entry.key);
+        }
       }
     }
     final retainedAnimations = store.nodes.entries
@@ -290,7 +391,8 @@ final class RendererResourceStore implements RendererHostResources {
         .map((entry) => entry.key)
         .toSet();
     for (final nodeId in _animations.keys.toList(growable: false)) {
-      if (!retainedAnimations.contains(nodeId)) {
+      if (!retainedAnimations.contains(nodeId) &&
+          !_mountedNodeCounts.containsKey(nodeId)) {
         _disposeAnimation(nodeId);
       }
     }
@@ -301,12 +403,22 @@ final class RendererResourceStore implements RendererHostResources {
     };
     for (final entry in _nativeResources.entries.toList(growable: false)) {
       final props = retainedNative[entry.key];
-      if (props == null ||
-          props.kindId != entry.value.kindId ||
+      if (props == null) {
+        if (!_mountedNodeCounts.containsKey(entry.key)) {
+          _disposeNative(entry.key);
+        }
+      } else if (props.kindId != entry.value.kindId ||
           props.version != entry.value.version) {
         _disposeNative(entry.key);
       }
     }
+  }
+
+  void _disposeNodeResources(int nodeId) {
+    _disposeTextInput(nodeId);
+    _disposeScrollController(nodeId);
+    _disposeAnimation(nodeId);
+    _disposeNative(nodeId);
   }
 
   void dispose() {
@@ -330,9 +442,9 @@ final class RendererResourceStore implements RendererHostResources {
   }
 
   void _disposeScrollController(int nodeId) {
-    final controller = _scrollControllers.remove(nodeId);
-    if (controller == null) return;
-    controller.dispose();
+    final binding = _scrollControllers.remove(nodeId);
+    if (binding == null || !binding.owned) return;
+    binding.controller.dispose();
     _disposedResourceCount += 1;
   }
 

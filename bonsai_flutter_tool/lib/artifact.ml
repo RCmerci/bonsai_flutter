@@ -1,3 +1,9 @@
+let ( let* ) result f =
+  match result with
+  | Ok value -> f value
+  | Error _ as error -> error
+;;
+
 let only_architecture = function
   | [ architecture ] -> architecture
   | _ -> invalid_arg "validated platform must contain exactly one architecture"
@@ -75,6 +81,79 @@ let temporary_sibling destination =
   choose 0
 ;;
 
+let contains ~needle haystack =
+  let needle_length = String.length needle in
+  let haystack_length = String.length haystack in
+  let rec search index =
+    index + needle_length <= haystack_length
+    && (String.sub haystack index needle_length = needle || search (index + 1))
+  in
+  needle_length = 0 || search 0
+;;
+
+let embed_macos_network_gmp ~(build : Plan.native_build) ~config destination =
+  let project_root = build.command.working_directory in
+  let* libdir =
+    Process_runner.capture
+      ~working_directory:project_root
+      ~environment:[]
+      "pkg-config"
+      [ "--variable=libdir"; "gmp" ]
+  in
+  let archive = Filename.concat libdir "libgmp.a" in
+  if not (Sys.file_exists archive)
+  then Error (Printf.sprintf "The static GMP archive is missing: %s" archive)
+  else (
+    let sdk_root =
+      List.assoc_opt "BONSAI_FLUTTER_APPLE_SDK_ROOT" build.command.environment
+    in
+    match sdk_root with
+    | None -> Error "The macOS SDK root is missing from the native build plan"
+    | Some sdk_root ->
+      let architecture = only_architecture config.Config.macos.architectures in
+      let minimum_version = config.macos.minimum_version in
+      let command : Plan.command =
+        { program = "clang"
+        ; arguments =
+            [ "-r"
+            ; "-target"
+            ; Printf.sprintf "%s-apple-macos%s" architecture minimum_version
+            ; "-mmacosx-version-min=" ^ minimum_version
+            ; "-isysroot"
+            ; sdk_root
+            ; build.source_object
+            ; archive
+            ; "-o"
+            ; destination
+            ]
+        ; working_directory = project_root
+        ; environment = []
+        }
+      in
+      let* () = Process_runner.run command in
+      let* undefined_symbols =
+        Process_runner.capture
+          ~working_directory:project_root
+          ~environment:[]
+          "nm"
+          [ "-u"; destination ]
+      in
+      let undefined_symbols = String.lowercase_ascii undefined_symbols in
+      if contains ~needle:"gmp" undefined_symbols
+      then Error "The network complete object still contains unresolved GMP symbols"
+      else Ok ())
+;;
+
+let prepare_source ~(build : Plan.native_build) ~config ~target destination =
+  match target with
+  | Plan.Macos
+    when List.exists (Config.Feature.equal Config.Feature.Network) config.Config.features
+    -> embed_macos_network_gmp ~build ~config destination
+  | Plan.Macos | Plan.Iphoneos ->
+    copy_file build.source_object destination;
+    Ok ()
+;;
+
 let verify ~framework_root ~project_root ~config ~target path =
   let platform, minimum_version, architecture =
     match target with
@@ -103,37 +182,30 @@ let stage ~framework_root ~(build : Plan.native_build) ~config ~target =
     Error (Printf.sprintf "The native complete object is missing: %s" build.source_object)
   else (
     try
-      if files_equal build.source_object build.staged_object
-      then (
-        match
-          verify
-            ~framework_root
-            ~project_root:build.command.working_directory
-            ~config
-            ~target
-            build.staged_object
-        with
-        | Ok () -> Ok build.staged_object
-        | Error _ as error -> error)
-      else (
-        Scaffold.ensure_directory (Filename.dirname build.staged_object);
-        let temporary = temporary_sibling build.staged_object in
-        Fun.protect
-          ~finally:(fun () -> if Sys.file_exists temporary then Sys.remove temporary)
-          (fun () ->
-             copy_file build.source_object temporary;
-             match
-               verify
-                 ~framework_root
-                 ~project_root:build.command.working_directory
-                 ~config
-                 ~target
-                 temporary
-             with
-             | Error _ as error -> error
-             | Ok () ->
-               Unix.rename temporary build.staged_object;
-               Ok build.staged_object))
+      Scaffold.ensure_directory (Filename.dirname build.staged_object);
+      let temporary = temporary_sibling build.staged_object in
+      Fun.protect
+        ~finally:(fun () -> if Sys.file_exists temporary then Sys.remove temporary)
+        (fun () ->
+           let* () = prepare_source ~build ~config ~target temporary in
+           let candidate =
+             if files_equal temporary build.staged_object
+             then build.staged_object
+             else temporary
+           in
+           match
+             verify
+               ~framework_root
+               ~project_root:build.command.working_directory
+               ~config
+               ~target
+               candidate
+           with
+           | Error _ as error -> error
+           | Ok () ->
+             if String.equal candidate temporary
+             then Unix.rename temporary build.staged_object;
+             Ok build.staged_object)
     with
     | Sys_error message | Unix.Unix_error (_, _, message) -> Error message)
 ;;

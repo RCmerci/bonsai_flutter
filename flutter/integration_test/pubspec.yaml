@@ -10,21 +10,21 @@ environment:
 hooks:
   user_defines:
     bonsai_flutter_native:
-      native_artifact_root: ../../_build/native-artifacts/integration_test/
+      # bonsai-flutter:begin native-hook
+      native_artifact_root: ./_build/bonsai-flutter/artifacts/
       macos_deployment_target: '26.0'
       ios_deployment_target: '15.0'
       require_ocaml_backend: true
       link_system_sqlite3: true
+      # bonsai-flutter:end native-hook
 
 dependencies:
+  # bonsai-flutter:begin packages
   bonsai_flutter:
-    path: ../packages/bonsai_flutter
-  bonsai_flutter_native:
-    path: ../packages/bonsai_flutter_native
+    path: ./.bonsai-flutter/flutter-packages/bonsai_flutter
+  # bonsai-flutter:end packages
   flutter:
     sdk: flutter
-  bonsai_flutter_sqlite_worker_example:
-    path: ../../examples/sqlite_worker/flutter
   path: ^1.9.1
   path_provider: ^2.1.5
 

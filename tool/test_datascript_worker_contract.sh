@@ -113,7 +113,6 @@ require_text "$device_test" 'BONSAI_DATASCRIPT_WORKER_RESTORED' "relaunch eviden
 require_text "$device_test" '--terminate-existing' "runtime relaunch"
 
 require_text "$(cat Makefile)" 'tool/test_datascript_worker_contract.sh' "CI contract target"
-require_text "$(cat Makefile)" 'tool/ios/test_datascript_worker_device.sh' "physical-device target"
 
 if test "$failures" -ne 0; then
   printf '%s\n' "DataScript Worker contract failed with $failures violation(s)" >&2

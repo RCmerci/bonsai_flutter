@@ -45,7 +45,7 @@ extra-files: [
   ["remove.sh" "md5=d8660f646b5a3155094e68d25ef00ff9"]
   ["s-ios.h" "md5=bcfd63d45db211005f64708ded08c746"]
   ["sys.patch" "md5=9a4afd84bf8b488fe3afec1f2d2dd3a4"]
-  ["ocamlmklib-failsafe.patch" "md5=f93b6e2c0732c5713f69c85fce112c0a"]
+  ["ocamlmklib-failsafe.patch" "sha256=b51bd717117618cca4b47960769d336a2bb0922176e627c24e453b507b75823e"]
 ]
 url {
   src: "https://github.com/ocaml/ocaml/archive/5.1.1.tar.gz"

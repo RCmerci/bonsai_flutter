@@ -1,29 +1,9 @@
-.PHONY: build test viewport-type-test fmt protocol-generate protocol-check protocol-fixtures-generate protocol-fixtures-check dart-test flutter-test dart-analyze native-test native-analyze native-object native-objects integration-native-object integration-test ios-toolchains ios-cross-probes ios-device-native-objects ci-contract ci-ocaml ci-flutter ci-macos ci-sanitizers ci-ios ci-ios-device clean
+.PHONY: build test viewport-type-test fmt protocol-generate protocol-check protocol-fixtures-generate protocol-fixtures-check dart-test flutter-test dart-analyze native-test native-analyze native-object integration-test ios-toolchains ios-cross-probes ci-contract ci-install-framework ci-install-consumers ci-install-ios-toolchain ci-ocaml ci-flutter ci-macos ci-sanitizers ci-ios ci-ios-device clean
 
 EXAMPLE ?= counter
-NATIVE_OBJECT_TARGET = examples/$(EXAMPLE)/ocaml/native_embed.exe.o
-ifeq ($(EXAMPLE),mail)
-NATIVE_OBJECT_TARGET = \
-	examples/mail/ocaml/native_embed_debug.exe.o \
-	examples/mail/ocaml/native_embed_release.exe.o
-endif
-NATIVE_OBJECT_TARGETS = \
-	examples/clock/ocaml/native_embed.exe.o \
-	examples/counter/ocaml/native_embed.exe.o \
-	examples/gallery/ocaml/native_embed.exe.o \
-	examples/host_effects/ocaml/native_embed.exe.o \
-	examples/host_navigation/ocaml/native_embed.exe.o \
-	examples/mail/ocaml/native_embed_debug.exe.o \
-	examples/mail/ocaml/native_embed_release.exe.o \
-	examples/navigation/ocaml/native_embed.exe.o \
-	examples/network/ocaml/native_embed.exe.o \
-	examples/sqlite_worker/ocaml/native_embed.exe.o \
-	examples/text_input/ocaml/native_embed.exe.o \
-	examples/todo/ocaml/native_embed.exe.o
-IOS_REFERENCE_OPAM = $(CURDIR)/tool/ios/fixtures/application-closure/bonsai_flutter_ios_closure_fixture.opam
-IOS_REFERENCE_CLOSURE = $(CURDIR)/vendor/opam-ios/runtime-closure.lock
-MACOS_MINIMUM_VERSION = 26.0
-MACOS_ARCHITECTURE = arm64
+BONSAI_FLUTTER := $(CURDIR)/_build/default/bonsai_flutter_tool/bin/main.exe
+CONSUMERS := clock counter gallery host_effects host_navigation mail navigation network sqlite_worker text_input todo
+CONSUMER_ROOTS := $(addprefix ./examples/,$(CONSUMERS))
 
 build:
 	dune build @all
@@ -68,20 +48,12 @@ native-analyze:
 	cd flutter/packages/bonsai_flutter_native && dart analyze
 
 native-object:
-	MACOSX_DEPLOYMENT_TARGET="$(MACOS_MINIMUM_VERSION)" BONSAI_FLUTTER_APPLE_SDK_ROOT="$$(xcrun --sdk macosx --show-sdk-path)" BONSAI_FLUTTER_EMBED_OCAML=enabled dune build $(NATIVE_OBJECT_TARGET)
-	tool/macos/stage_native_objects.sh "$(MACOS_MINIMUM_VERSION)" "$(MACOS_ARCHITECTURE)" example $(EXAMPLE)
+	dune build bonsai_flutter_tool/bin/main.exe
+	cd examples/$(EXAMPLE) && $(BONSAI_FLUTTER) build macos --profile debug
 
-native-objects:
-	MACOSX_DEPLOYMENT_TARGET="$(MACOS_MINIMUM_VERSION)" BONSAI_FLUTTER_APPLE_SDK_ROOT="$$(xcrun --sdk macosx --show-sdk-path)" BONSAI_FLUTTER_EMBED_OCAML=enabled dune build $(NATIVE_OBJECT_TARGETS)
-	tool/macos/stage_native_objects.sh "$(MACOS_MINIMUM_VERSION)" "$(MACOS_ARCHITECTURE)" examples
-
-integration-native-object:
-	MACOSX_DEPLOYMENT_TARGET="$(MACOS_MINIMUM_VERSION)" BONSAI_FLUTTER_APPLE_SDK_ROOT="$$(xcrun --sdk macosx --show-sdk-path)" BONSAI_FLUTTER_EMBED_OCAML=enabled dune build flutter/integration_test/ocaml/native_integration_embed.exe.o
-	tool/macos/stage_native_objects.sh "$(MACOS_MINIMUM_VERSION)" "$(MACOS_ARCHITECTURE)" integration
-
-integration-test: integration-native-object
-	cd flutter/integration_test && flutter pub get
-	cd flutter/integration_test && NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost flutter test
+integration-test:
+	dune build bonsai_flutter_tool/bin/main.exe
+	cd flutter/integration_test && $(BONSAI_FLUTTER) exec --profile=debug -- flutter test --no-pub
 
 ios-toolchains:
 	tool/ios/setup_toolchain.sh all
@@ -89,16 +61,24 @@ ios-toolchains:
 ios-cross-probes: ios-toolchains
 	tool/ios/build_probe.sh iphoneos
 
-ios-device-native-objects:
-	APPLICATION_OPAM_FILE="$(IOS_REFERENCE_OPAM)" RUNTIME_CLOSURE_LOCK="$(IOS_REFERENCE_CLOSURE)" BONSAI_FLUTTER_FEATURES=core,network,sqlite tool/ios/build_native_objects.sh iphoneos
-
 ci-contract:
 	tool/test_ci_contract.sh
 	tool/test_ios_closure_lock.sh
 	tool/test_datascript_worker_contract.sh
 
-ci-ocaml:
+ci-install-framework:
 	opam install . --deps-only --with-test --yes
+	opam install . --yes
+
+ci-install-consumers: ci-install-framework
+	opam install $(CONSUMER_ROOTS) --yes
+
+ci-install-ios-toolchain:
+	dune build bonsai_flutter_tool/bin/main.exe
+	@$(BONSAI_FLUTTER) toolchain show iphoneos >/dev/null 2>&1 || $(BONSAI_FLUTTER) toolchain install iphoneos
+	$(BONSAI_FLUTTER) toolchain verify iphoneos
+
+ci-ocaml: ci-install-consumers
 	dune build @all
 	dune runtest
 	tool/check_viewport_types.sh
@@ -106,9 +86,11 @@ ci-ocaml:
 	dune exec protocol/generator/generate.exe -- --check
 	dune exec protocol/generator/generate_fixtures.exe -- --check
 	dune build --profile release ocaml/bench/runtime_bench.exe
-	opam lint bonsai_flutter.opam bonsai_flutter_test.opam bonsai_flutter_network_example.opam
+	opam lint bonsai_flutter.opam bonsai_flutter_test.opam bonsai_flutter_tool.opam
+	@set -e; for consumer in $(CONSUMERS); do 	  (cd "examples/$$consumer" && dune build --root=. @all && dune runtest --root=.); 	done
 
-ci-flutter:
+ci-flutter: ci-install-consumers
+	dune build bonsai_flutter_tool/bin/main.exe
 	cd flutter/packages/bonsai_flutter && flutter pub get
 	cd flutter/packages/bonsai_flutter && dart run tool/generate_input_fixtures.dart --check
 	cd flutter/packages/bonsai_flutter && dart format --output=none --set-exit-if-changed lib test benchmark tool
@@ -120,76 +102,44 @@ ci-flutter:
 	cd flutter/packages/bonsai_flutter_native && dart test
 	cd flutter/packages/bonsai_flutter_native && dart run ffigen --config ffigen.yaml
 	git diff --exit-code -- flutter/packages/bonsai_flutter_native/lib/bonsai_flutter_native_bindings_generated.dart
-	cd flutter/integration_test && flutter pub get
+	@set -e; for consumer in $(CONSUMERS); do 	  (cd "examples/$$consumer" && 	    $(BONSAI_FLUTTER) sync-host --check && 	    cd flutter && 	    dart format --output=none --set-exit-if-changed lib test && 	    $(BONSAI_FLUTTER) exec --profile=debug -- flutter analyze && 	    if find test -type f -name '*_test.dart' | grep -q .; then 	      NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost $(BONSAI_FLUTTER) exec --profile=debug -- flutter test --no-pub; 	    fi); 	done
 	cd flutter/integration_test && dart format --output=none --set-exit-if-changed benchmark integration_test lib test test_driver
-	cd flutter/integration_test && flutter analyze
-	@set -e; for example in clock counter todo text_input host_effects navigation gallery host_navigation mail sqlite_worker network; do \
-	  (cd "examples/$$example/flutter" && \
-	    flutter pub get && \
-	    dart format --output=none --set-exit-if-changed lib && \
-	    if test -d test; then \
-	      dart format --output=none --set-exit-if-changed test; \
-	    fi && \
-	    flutter analyze && \
-	    if test -d test && find test -type f -name '*_test.dart' | grep -q .; then \
-	      NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost flutter test; \
-	    fi); \
-	done
+	cd flutter/integration_test && $(BONSAI_FLUTTER) sync-host --check
+	cd flutter/integration_test && $(BONSAI_FLUTTER) exec --profile=debug -- flutter analyze
+	cd flutter/integration_test && NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost $(BONSAI_FLUTTER) exec --profile=debug -- flutter test --no-pub
 
 ci-macos: ci-ocaml
-	$(MAKE) native-objects
-	cd examples/counter/flutter && flutter pub get
-	cd examples/counter/flutter && flutter build macos --debug
-	cd examples/counter/flutter && flutter build macos --profile
-	cd examples/counter/flutter && flutter build macos --release
-	cd examples/network/flutter && flutter pub get
-	cd examples/network/flutter && NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost flutter test
-	cd examples/network/flutter && flutter build macos --debug
-	cd examples/network/flutter && flutter build macos --profile
-	cd examples/network/flutter && flutter build macos --release
-	$(MAKE) integration-native-object
-	cd flutter/integration_test && flutter pub get
-	cd flutter/integration_test && NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost flutter test
+	dune build bonsai_flutter_tool/bin/main.exe
+	cd examples/counter && $(BONSAI_FLUTTER) build macos --profile debug
+	cd examples/counter && $(BONSAI_FLUTTER) build macos --profile profile
+	cd examples/counter && $(BONSAI_FLUTTER) build macos --profile release
+	cd examples/network && $(BONSAI_FLUTTER) build macos --profile debug
+	cd examples/network && $(BONSAI_FLUTTER) build macos --profile profile
+	cd examples/network && $(BONSAI_FLUTTER) build macos --profile release
+	cd flutter/integration_test && $(BONSAI_FLUTTER) exec --profile=debug -- flutter test --no-pub
 
-ci-ios:
-	$(MAKE) ios-device-native-objects
-	cd examples/counter/flutter && flutter pub get
-	cd examples/counter/flutter && flutter build ios --debug --no-codesign
-	tool/ios/verify_app_bundle.sh examples/counter/flutter/build/ios/iphoneos/Runner.app
-	cd examples/counter/flutter && flutter build ios --profile --no-codesign
-	tool/ios/verify_app_bundle.sh examples/counter/flutter/build/ios/iphoneos/Runner.app examples/counter/flutter/build/ios/Profile-iphoneos/bonsai_flutter_native.framework.dSYM
-	cd examples/counter/flutter && flutter build ios --release --no-codesign
-	tool/ios/verify_app_bundle.sh examples/counter/flutter/build/ios/iphoneos/Runner.app examples/counter/flutter/build/ios/Release-iphoneos/bonsai_flutter_native.framework.dSYM
-	cd examples/sqlite_worker/flutter && flutter pub get
-	cd examples/sqlite_worker/flutter && flutter build ios --debug --no-codesign
-	tool/ios/verify_app_bundle.sh examples/sqlite_worker/flutter/build/ios/iphoneos/Runner.app require-sqlite
-	cd examples/sqlite_worker/flutter && flutter build ios --profile --no-codesign
-	tool/ios/verify_app_bundle.sh examples/sqlite_worker/flutter/build/ios/iphoneos/Runner.app examples/sqlite_worker/flutter/build/ios/Profile-iphoneos/bonsai_flutter_native.framework.dSYM require-sqlite
-	cd examples/sqlite_worker/flutter && flutter build ios --release --no-codesign
-	tool/ios/verify_app_bundle.sh examples/sqlite_worker/flutter/build/ios/iphoneos/Runner.app examples/sqlite_worker/flutter/build/ios/Release-iphoneos/bonsai_flutter_native.framework.dSYM require-sqlite
-	cd examples/network/flutter && flutter pub get
-	cd examples/network/flutter && flutter build ios --debug --no-codesign
-	tool/ios/verify_app_bundle.sh examples/network/flutter/build/ios/iphoneos/Runner.app
-	cd examples/network/flutter && flutter build ios --profile --no-codesign
-	tool/ios/verify_app_bundle.sh examples/network/flutter/build/ios/iphoneos/Runner.app examples/network/flutter/build/ios/Profile-iphoneos/bonsai_flutter_native.framework.dSYM
-	cd examples/network/flutter && flutter build ios --release --no-codesign
-	tool/ios/verify_app_bundle.sh examples/network/flutter/build/ios/iphoneos/Runner.app examples/network/flutter/build/ios/Release-iphoneos/bonsai_flutter_native.framework.dSYM
+ci-ios: ci-install-ios-toolchain
+	dune build bonsai_flutter_tool/bin/main.exe
+	cd examples/counter && $(BONSAI_FLUTTER) build ios --profile debug --no-codesign
+	cd examples/counter && $(BONSAI_FLUTTER) build ios --profile profile --no-codesign
+	cd examples/counter && $(BONSAI_FLUTTER) build ios --profile release --no-codesign
+	cd examples/sqlite_worker && $(BONSAI_FLUTTER) build ios --profile debug --no-codesign
+	cd examples/sqlite_worker && $(BONSAI_FLUTTER) build ios --profile profile --no-codesign
+	cd examples/sqlite_worker && $(BONSAI_FLUTTER) build ios --profile release --no-codesign
+	cd examples/network && $(BONSAI_FLUTTER) build ios --profile debug --no-codesign
+	cd examples/network && $(BONSAI_FLUTTER) build ios --profile profile --no-codesign
+	cd examples/network && $(BONSAI_FLUTTER) build ios --profile release --no-codesign
+	cd flutter/integration_test && $(BONSAI_FLUTTER) build ios --profile release --no-codesign
 
-ci-ios-device:
+ci-ios-device: ci-install-consumers ci-install-ios-toolchain
 	@test -n "$(IOS_DEVICE_ID)" || (echo "IOS_DEVICE_ID is required" >&2; exit 1)
-	@tool/ios/run_device_tests.sh "$(IOS_DEVICE_ID)" --debug --profile --release
-	@tool/network_spike/test_ios_device_probe.sh
-	@tool/ios/test_datascript_worker_device.sh
+	@tool/ci/ios_device_preflight.sh
+	dune build bonsai_flutter_tool/bin/main.exe
+	cd flutter/integration_test && $(BONSAI_FLUTTER) run ios --profile debug --device "$(IOS_DEVICE_ID)"
 
 ci-sanitizers:
 	mkdir -p _build/ci
-	@set -e; if test "$$(uname -s)" = Darwin; then \
-	  clang -std=c11 -Wall -Wextra -Werror -g -DBF_WITH_OCAML flutter/packages/bonsai_flutter_native/src/bonsai_flutter_native.c flutter/packages/bonsai_flutter_native/test/mock_ocaml_bridge.c flutter/packages/bonsai_flutter_native/test/native_bridge_test.c -o _build/ci/native_bridge_sanitized; \
-	  _build/ci/native_bridge_sanitized; \
-	else \
-	  clang -std=c11 -Wall -Wextra -Werror -g -DBF_WITH_OCAML -fsanitize=address,undefined -fno-omit-frame-pointer flutter/packages/bonsai_flutter_native/src/bonsai_flutter_native.c flutter/packages/bonsai_flutter_native/test/mock_ocaml_bridge.c flutter/packages/bonsai_flutter_native/test/native_bridge_test.c -o _build/ci/native_bridge_sanitized; \
-	  ASAN_OPTIONS=detect_leaks=1 _build/ci/native_bridge_sanitized; \
-	fi
+	@set -e; if test "$$(uname -s)" = Darwin; then 	  clang -std=c11 -Wall -Wextra -Werror -g -DBF_WITH_OCAML flutter/packages/bonsai_flutter_native/src/bonsai_flutter_native.c flutter/packages/bonsai_flutter_native/test/mock_ocaml_bridge.c flutter/packages/bonsai_flutter_native/test/native_bridge_test.c -o _build/ci/native_bridge_sanitized; 	  _build/ci/native_bridge_sanitized; 	else 	  clang -std=c11 -Wall -Wextra -Werror -g -DBF_WITH_OCAML -fsanitize=address,undefined -fno-omit-frame-pointer flutter/packages/bonsai_flutter_native/src/bonsai_flutter_native.c flutter/packages/bonsai_flutter_native/test/mock_ocaml_bridge.c flutter/packages/bonsai_flutter_native/test/native_bridge_test.c -o _build/ci/native_bridge_sanitized; 	  ASAN_OPTIONS=detect_leaks=1 _build/ci/native_bridge_sanitized; 	fi
 	cd flutter/packages/bonsai_flutter && NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost flutter test test/binary_codec_test.dart test/native_resource_store_test.dart
 
 clean:

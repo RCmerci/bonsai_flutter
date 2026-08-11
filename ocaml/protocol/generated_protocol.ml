@@ -3,7 +3,7 @@
 module ID = Bonsai_flutter_spec.Id
 
 let protocol_major = 1
-let protocol_minor = 16
+let protocol_minor = 18
 
 module Limits = struct
   let header_bytes = 48
@@ -529,11 +529,13 @@ end
 module Scroll_view_prop = struct
   let axis = ID.Protocol.Property.of_int 1
   let reverse = ID.Protocol.Property.of_int 2
+  let primary = ID.Protocol.Property.of_int 3
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "axis"
     | 2 -> Some "reverse"
+    | 3 -> Some "primary"
     | _ -> None
   ;;
 end
@@ -541,11 +543,13 @@ end
 module List_view_prop = struct
   let axis = ID.Protocol.Property.of_int 1
   let reverse = ID.Protocol.Property.of_int 2
+  let primary = ID.Protocol.Property.of_int 3
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "axis"
     | 2 -> Some "reverse"
+    | 3 -> Some "primary"
     | _ -> None
   ;;
 end
@@ -847,6 +851,21 @@ module Page_prop = struct
   let transition = ID.Protocol.Property.of_int 2
   let can_pop = ID.Protocol.Property.of_int 3
   let restoration_id = ID.Protocol.Property.of_int 4
+  let presentation = ID.Protocol.Property.of_int 5
+  let modal_barrier_dismissible = ID.Protocol.Property.of_int 6
+  let modal_barrier_color = ID.Protocol.Property.of_int 7
+  let modal_barrier_label = ID.Protocol.Property.of_int 8
+  let modal_use_safe_area = ID.Protocol.Property.of_int 10
+  let modal_request_focus = ID.Protocol.Property.of_int 11
+  let modal_transition_duration_ms = ID.Protocol.Property.of_int 12
+  let modal_reverse_transition_duration_ms = ID.Protocol.Property.of_int 13
+  let modal_sizing = ID.Protocol.Property.of_int 14
+  let modal_detents = ID.Protocol.Property.of_int 15
+  let modal_initial_detent = ID.Protocol.Property.of_int 16
+  let modal_dismiss_on_drag = ID.Protocol.Property.of_int 17
+  let modal_handle_semantics_label = ID.Protocol.Property.of_int 18
+  let modal_medium_semantics_value = ID.Protocol.Property.of_int 19
+  let modal_large_semantics_value = ID.Protocol.Property.of_int 20
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
@@ -854,6 +873,21 @@ module Page_prop = struct
     | 2 -> Some "transition"
     | 3 -> Some "can_pop"
     | 4 -> Some "restoration_id"
+    | 5 -> Some "presentation"
+    | 6 -> Some "modal_barrier_dismissible"
+    | 7 -> Some "modal_barrier_color"
+    | 8 -> Some "modal_barrier_label"
+    | 10 -> Some "modal_use_safe_area"
+    | 11 -> Some "modal_request_focus"
+    | 12 -> Some "modal_transition_duration_ms"
+    | 13 -> Some "modal_reverse_transition_duration_ms"
+    | 14 -> Some "modal_sizing"
+    | 15 -> Some "modal_detents"
+    | 16 -> Some "modal_initial_detent"
+    | 17 -> Some "modal_dismiss_on_drag"
+    | 18 -> Some "modal_handle_semantics_label"
+    | 19 -> Some "modal_medium_semantics_value"
+    | 20 -> Some "modal_large_semantics_value"
     | _ -> None
   ;;
 end

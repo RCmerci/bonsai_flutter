@@ -29,7 +29,7 @@ mkdir -p "$target_lib" "$package_work_root"
 export SDK_ASSET_ROOT=$script_directory
 export SDK_OPAM_SWITCH
 export SDK_PACKAGE_WORK_ROOT=$package_work_root
-export RUNTIME_CLOSURE_LOCK="$script_directory/runtime-closure.lock"
+export RUNTIME_CLOSURE_LOCK="$script_directory/supported-closure.lock"
 export TARGET_LIB=$target_lib
 
 sh "$script_directory/build-runtime-closure.sh" iphoneos

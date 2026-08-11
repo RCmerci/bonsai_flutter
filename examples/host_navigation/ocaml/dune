@@ -1,5 +1,6 @@
 (library
  (name bonsai_flutter_host_navigation_example)
+ (package bonsai_flutter_host_navigation_example)
  (wrapped false)
  (modules host_navigation)
  (libraries
@@ -23,3 +24,15 @@
   bonsai_flutter.native_backend)
  (modes
   (native object)))
+
+; BEGIN bonsai-flutter native aliases
+(alias
+ (name bonsai-flutter-macos)
+ (enabled_if (= %{context_name} default))
+ (deps native_embed.exe.o))
+
+(alias
+ (name bonsai-flutter-ios)
+ (enabled_if (= %{context_name} default.ios))
+ (deps native_embed.exe.o))
+; END bonsai-flutter native aliases

@@ -253,6 +253,56 @@ let fixtures : (string * Protocol.Wire_frame.t) list =
               }
           ]
       } )
+  ; ( "ocaml_modal_bottom_sheet_update.hex"
+    , { runtime_epoch = epoch 73L
+      ; base_revision = revision 4L
+      ; target_revision = revision 5L
+      ; kind = Incremental_frame
+      ; operations =
+          [ Update_props
+              { node_id = node 30L
+              ; props =
+                  Page_props
+                    { page_key = ID.Navigation.Page_key.of_string "editor"
+                    ; presentation =
+                        Modal_bottom_sheet
+                          { barrier_dismissible = true
+                          ; barrier_color_argb = Some (Int32.of_string "0x7f102030")
+                          ; barrier_label = Some "Close editor"
+                          ; sizing =
+                              Detented_sizing
+                                { detents = Medium_and_large
+                                ; initial_detent = Medium_detent
+                                ; dismiss_on_drag = true
+                                ; handle_semantics_label = "Adjust sheet height"
+                                ; medium_semantics_value = "Half height"
+                                ; large_semantics_value = "Full height"
+                                }
+                          ; use_safe_area = true
+                          ; request_focus = true
+                          ; transition_duration_ms = 325
+                          ; reverse_transition_duration_ms = 175
+                          }
+                    ; can_pop = true
+                    ; restoration_id =
+                        Some (ID.Navigation.Restoration_id.of_string "editor-page")
+                    }
+              }
+          ]
+      } )
+  ; ( "ocaml_primary_scroll.hex"
+    , { runtime_epoch = epoch 74L
+      ; base_revision = revision 5L
+      ; target_revision = revision 6L
+      ; kind = Incremental_frame
+      ; operations =
+          [ Update_props
+              { node_id = node 71L
+              ; props =
+                  List_view_props { axis = Vertical; reverse = false; primary = true }
+              }
+          ]
+      } )
   ; ( "ocaml_bounded_text_input.hex"
     , { runtime_epoch = epoch 10L
       ; base_revision = revision 4L

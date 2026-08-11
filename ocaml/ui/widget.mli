@@ -95,6 +95,7 @@ module Scroll_view : sig
   val vertical
     :  ?key:Key.t
     -> ?reverse:bool
+    -> ?primary:bool
     -> on_scroll:Event.Handler.t
     -> t
     -> unit
@@ -113,6 +114,7 @@ module List_view : sig
   val vertical
     :  ?key:Key.t
     -> ?reverse:bool
+    -> ?primary:bool
     -> on_scroll:Event.Handler.t
     -> t list
     -> unit
@@ -188,10 +190,12 @@ val navigator
   -> t list
   -> t
 
+(** [page] creates a declarative Navigator page. [presentation] defaults to
+    [Navigation.Standard Navigation.None]. *)
 val page
   :  ?key:Key.t
   -> page_key:Bonsai_flutter_spec.Id.Navigation.page_key
-  -> ?transition:Navigation.page_transition
+  -> ?presentation:Navigation.page_presentation
   -> ?can_pop:bool
   -> ?restoration_id:Bonsai_flutter_spec.Id.Navigation.restoration_id
   -> t
@@ -469,10 +473,12 @@ module Private : sig
     | Scroll_view_props of
         { axis : Layout.Axis.t
         ; reverse : bool
+        ; primary : bool
         }
     | List_view_props of
         { axis : Layout.Axis.t
         ; reverse : bool
+        ; primary : bool
         }
     | Gesture_props
     | Focus_scope_props of { autofocus : bool }
@@ -554,7 +560,7 @@ module Private : sig
         }
     | Page_props of
         { page_key : Bonsai_flutter_spec.Id.Navigation.page_key
-        ; transition : Navigation.page_transition
+        ; presentation : Navigation.page_presentation
         ; can_pop : bool
         ; restoration_id : Bonsai_flutter_spec.Id.Navigation.restoration_id option
         }

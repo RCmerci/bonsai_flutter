@@ -2,6 +2,20 @@
 
 Testing is split by boundary.
 
+Modal navigation behavior is covered at every boundary. OCaml public-surface
+tests verify standard and modal typed presentation values, protocol tests cover
+round trips and stable-node updates, and Flutter widget tests exercise real
+Navigator routes, barriers, live pop vetoes, focus, semantics, keyboard insets,
+safe areas, restoration identity, directionality, themes, and reduced motion.
+The focused local command is:
+
+```sh
+dune runtest ocaml/test
+cd flutter/packages/bonsai_flutter
+flutter test test/navigation_host_test.dart test/binary_codec_test.dart \
+  test/cross_language_fixture_test.dart
+```
+
 The supported desktop test boundary is macOS 26.0 or newer on Apple Silicon
 arm64. Intel Mac and universal macOS builds are unsupported. The mobile
 boundary remains physical-device iPhoneOS 15.0 or newer on arm64.
@@ -10,11 +24,15 @@ boundary remains physical-device iPhoneOS 15.0 or newer on arm64.
 
 The repository has five required GitHub Actions workflows:
 
-- `ocaml.yml` runs the complete OCaml 5.1.1 build, test, formatting, generated
-  protocol and OCaml-frame fixture checks, release benchmark compilation, and
-  opam metadata gates on Linux.
-- `flutter.yml` runs renderer, native package, generated FFI binding, example,
-  Dart-event fixture, malformed-input, and native sanitizer gates on Linux.
+- `ocaml.yml` installs the local framework and all standalone consumer
+  packages, then runs the complete OCaml 5.1.1 build, test, formatting,
+  generated protocol and OCaml-frame fixture checks, release benchmark
+  compilation, and opam metadata gates on Linux.
+- `flutter.yml` installs the same local OCaml packages, then runs renderer,
+  native package, generated FFI binding, example, aggregate integration,
+  Dart-event fixture, malformed-input, and native sanitizer gates on macOS
+  arm64. The macOS host is required because every example command builds its
+  real native artifact through `bonsai-flutter exec`.
 - `macos.yml` links the real OCaml object, builds the Counter application in
   Debug, Profile, and Release modes, and runs the cross-language integration
   suite on macOS arm64.
@@ -32,7 +50,6 @@ make ci-ocaml
 make ci-flutter
 make ci-sanitizers
 make ci-macos
-make ios-device-native-objects
 make ci-ios
 make ci-ios-device IOS_DEVICE_ID=<physical-device-id>
 ```
@@ -40,6 +57,11 @@ make ci-ios-device IOS_DEVICE_ID=<physical-device-id>
 The equivalent `just ci-*` recipes delegate to these canonical Make targets.
 `ci-macos` includes `ci-ocaml`; it requires the Flutter SDK, Xcode, and an
 OCaml 5.1.1 switch prepared as described in the repository README.
+
+The OCaml, Flutter, and macOS targets install the framework and consumer opam
+packages from the current checkout before entering standalone Dune roots. This
+keeps nested projects on the same installed-package boundary as external
+consumers and prevents them from reaching through the repository root.
 
 `ci-ios` builds and audits unsigned iPhoneOS Debug, Profile, and Release
 applications. It does not install or execute them on hardware.
@@ -289,11 +311,15 @@ unsupported.
 
 ## iOS unsigned packaging
 
-Create the isolated cross environments and target-qualified objects:
+Create the isolated cross environment, then build a consumer through the
+public tool:
 
 ```sh
-make ios-toolchains
-make ios-device-native-objects
+dune build bonsai_flutter_tool/bin/main.exe
+_build/default/bonsai_flutter_tool/bin/main.exe toolchain install iphoneos
+cd examples/counter
+../../_build/default/bonsai_flutter_tool/bin/main.exe build ios \
+  --profile release --no-codesign
 ```
 
 Run the complete hosted boundary:
@@ -302,9 +328,12 @@ Run the complete hosted boundary:
 make ci-ios
 ```
 
-The repository contains ten standalone examples. Unsigned iPhoneOS arm64
-objects are built for all examples and the aggregate integration application.
-Counter and SQLite Worker Debug, Profile, and Release frameworks pass their
+`ci-ios` installs the locked SDK when the fixed switch is absent and verifies
+an existing switch before building any consumer.
+
+The repository contains eleven standalone consumer workspaces. The hosted
+unsigned matrix builds Counter, SQLite Worker, and Network in Debug, Profile,
+and Release through `bonsai-flutter`. Their frameworks pass their
 artifact audits. The SQLite mode additionally requires Apple system SQLite
 imports and rejects any change to the public `bf_*` export boundary. The audit
 checks the final Mach-O platform, architecture, minimum version, Bitcode,
@@ -321,9 +350,8 @@ make ci-ios-device IOS_DEVICE_ID=<physical-device-id>
 
 The canonical runner validates the explicit target as a physical, paired,
 trusted, booted iPhone with Developer Mode enabled and unlocked since boot.
-It then runs Debug Flutter integration tests, a Debug hot-restart assertion,
-Profile and Release XCTest, a Release archive/export audit, installation, and
-cold launch.
+After signing preflight, `bonsai-flutter run ios` builds and audits the
+integration consumer, installs it, and launches it on the selected device.
 
 On the measured host, hardware preflight passed but signing preflight stopped
 before the build because no matching development/distribution identities,

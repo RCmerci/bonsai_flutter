@@ -363,7 +363,7 @@ prepare_source() {
   source_directory="$source_cache/$url_digest.source"
   if test ! -f "$archive"; then
     rm -f "$archive.partial"
-    curl \
+    if ! curl \
       --fail \
       --location \
       --retry 5 \
@@ -371,7 +371,10 @@ prepare_source() {
       --silent \
       --show-error \
       --output "$archive.partial" \
-      "$source_url"
+      "$source_url"; then
+      rm -f "$archive.partial"
+      fail "$package source is unavailable: $source_url"
+    fi
     mv "$archive.partial" "$archive"
   fi
   if test ! -d "$source_directory"; then
@@ -484,7 +487,7 @@ resolve_host_build_packages() {
     --columns=name |
     sort -u |
     comm -23 - "$all_target_packages_file" |
-    grep -Ev '^(base-(bigarray|bytes|domains|nnp|threads|unix)|conf-|dune|ocaml|ocaml-base-compiler|ocaml-config|ocaml-options-vanilla|ocamlfind|seq)$' \
+    grep -Ev '^(base-(bigarray|bytes|domains|nnp|threads|unix)|conf-|dune|ocaml|ocaml-base-compiler|ocaml-config|ocaml-ios64|ocaml-options-vanilla|ocamlfind|seq)$' \
       >"$host_packages_file" || true
 }
 
@@ -632,7 +635,9 @@ row_for_package() {
         dependencies="$dependencies,gmp-sys-ios"
       fi
     fi
-    if test -f "$source_directory/dune-project"; then
+    if test "$package" = zarith; then
+      build_mechanism=zarith
+    elif test -f "$source_directory/dune-project"; then
       build_mechanism=dune
     elif test -f "$source_directory/pkg/pkg.ml"; then
       build_mechanism=topkg

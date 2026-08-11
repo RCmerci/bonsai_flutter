@@ -56,7 +56,7 @@ let component handlers graph =
           [ home
           ; Ui.Widget.page
               ~page_key:details_page_key
-              ~transition:Ui.Navigation.Slide
+              ~presentation:(Ui.Navigation.Standard Ui.Navigation.Slide)
               (Ui.Material.scaffold
                  ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Details") ())
                  ~body:

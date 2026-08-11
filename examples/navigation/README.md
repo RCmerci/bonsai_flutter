@@ -4,17 +4,16 @@ The route stack and page identity live in OCaml. Flutter mechanically maps the
 page list to a native `Navigator` and returns typed pop events.
 
 ```sh
-make native-object EXAMPLE=navigation
-cd examples/navigation/flutter
-flutter run -d macos
+cd examples/navigation
+../../_build/default/bonsai_flutter_tool/bin/main.exe run macos --profile debug
 ```
 
 Build the target-qualified unsigned iPhoneOS application:
 
 ```sh
-make ios-device-native-objects
-cd examples/navigation/flutter
-flutter build ios --debug --no-codesign
+cd examples/navigation
+../../_build/default/bonsai_flutter_tool/bin/main.exe build ios \
+  --profile debug --no-codesign
 ```
 
 See `docs/ios-device-testing.md` for the signed physical-device matrix.

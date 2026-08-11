@@ -8,6 +8,11 @@ environment:
   sdk: ^3.12.2
   flutter: ">=3.44.0"
 
+hooks:
+  user_defines:
+    bonsai_flutter_native:
+      macos_deployment_target: '26.0'
+
 dependencies:
   bonsai_flutter_native:
     path: ../bonsai_flutter_native

@@ -202,10 +202,12 @@ type props =
   | Scroll_view_props of
       { axis : Layout.Axis.t
       ; reverse : bool
+      ; primary : bool
       }
   | List_view_props of
       { axis : Layout.Axis.t
       ; reverse : bool
+      ; primary : bool
       }
   | Gesture_props
   | Focus_scope_props of { autofocus : bool }
@@ -285,7 +287,7 @@ type props =
       { restoration_scope_id : ID.Navigation.restoration_scope_id option }
   | Page_props of
       { page_key : ID.Navigation.page_key
-      ; transition : Navigation.page_transition
+      ; presentation : Navigation.page_presentation
       ; can_pop : bool
       ; restoration_id : ID.Navigation.restoration_id option
       }
@@ -390,9 +392,13 @@ let props_equal left right =
     Array.length left.matrix4 = Array.length right.matrix4
     && Array.for_all2 Float.equal left.matrix4 right.matrix4
   | Scroll_view_props left, Scroll_view_props right ->
-    left.axis = right.axis && Bool.equal left.reverse right.reverse
+    left.axis = right.axis
+    && Bool.equal left.reverse right.reverse
+    && Bool.equal left.primary right.primary
   | List_view_props left, List_view_props right ->
-    left.axis = right.axis && Bool.equal left.reverse right.reverse
+    left.axis = right.axis
+    && Bool.equal left.reverse right.reverse
+    && Bool.equal left.primary right.primary
   | Focus_scope_props left, Focus_scope_props right ->
     Bool.equal left.autofocus right.autofocus
   | Mouse_region_props left, Mouse_region_props right ->
@@ -469,7 +475,7 @@ let props_equal left right =
       right.restoration_scope_id
   | Page_props left, Page_props right ->
     ID.Navigation.Page_key.equal left.page_key right.page_key
-    && left.transition = right.transition
+    && left.presentation = right.presentation
     && Bool.equal left.can_pop right.can_pop
     && Option.equal
          ID.Navigation.Restoration_id.equal
@@ -813,20 +819,36 @@ let transform ?key ~transform child =
     ~children:(plain_children [ child ])
 ;;
 
-let scroll_view_widget ?key ~axis ?(reverse = false) ~on_scroll child () =
+let scroll_view_widget
+      ?key
+      ~axis
+      ?(reverse = false)
+      ?(primary = false)
+      ~on_scroll
+      child
+      ()
+  =
   create
     ~key
     ~kind:Kind.Scroll_view
-    ~props:(Scroll_view_props { axis; reverse })
+    ~props:(Scroll_view_props { axis; reverse; primary })
     ~event_bindings:[| { tag = Event.Tag.Scroll_notification; handler = on_scroll } |]
     ~children:(plain_children [ child ])
 ;;
 
-let list_view_widget ?key ~axis ?(reverse = false) ~on_scroll children () =
+let list_view_widget
+      ?key
+      ~axis
+      ?(reverse = false)
+      ?(primary = false)
+      ~on_scroll
+      children
+      ()
+  =
   create
     ~key
     ~kind:Kind.List_view
-    ~props:(List_view_props { axis; reverse })
+    ~props:(List_view_props { axis; reverse; primary })
     ~event_bindings:[| { tag = Event.Tag.Scroll_notification; handler = on_scroll } |]
     ~children:(plain_children children)
 ;;
@@ -992,7 +1014,7 @@ let navigator ?key ?restoration_scope_id ~on_pop pages =
 let page
       ?key
       ~page_key
-      ?(transition = Navigation.None)
+      ?(presentation = Navigation.Standard Navigation.None)
       ?(can_pop = true)
       ?restoration_id
       child
@@ -1002,7 +1024,7 @@ let page
   create
     ~key
     ~kind:Kind.Page
-    ~props:(Page_props { page_key; transition; can_pop; restoration_id })
+    ~props:(Page_props { page_key; presentation; can_pop; restoration_id })
     ~event_bindings:[||]
     ~children:(plain_children [ child ])
 ;;
@@ -1360,8 +1382,15 @@ module Viewport = struct
 end
 
 module Scroll_view = struct
-  let vertical ?key ?reverse ~on_scroll child () =
-    scroll_view_widget ?key ~axis:Layout.Axis.Vertical ?reverse ~on_scroll child ()
+  let vertical ?key ?reverse ?primary ~on_scroll child () =
+    scroll_view_widget
+      ?key
+      ~axis:Layout.Axis.Vertical
+      ?reverse
+      ?primary
+      ~on_scroll
+      child
+      ()
     |> vertical_viewport
   ;;
 
@@ -1372,8 +1401,15 @@ module Scroll_view = struct
 end
 
 module List_view = struct
-  let vertical ?key ?reverse ~on_scroll children () =
-    list_view_widget ?key ~axis:Layout.Axis.Vertical ?reverse ~on_scroll children ()
+  let vertical ?key ?reverse ?primary ~on_scroll children () =
+    list_view_widget
+      ?key
+      ~axis:Layout.Axis.Vertical
+      ?reverse
+      ?primary
+      ~on_scroll
+      children
+      ()
     |> vertical_viewport
   ;;
 
@@ -1584,10 +1620,12 @@ module Private = struct
     | Scroll_view_props of
         { axis : Layout.Axis.t
         ; reverse : bool
+        ; primary : bool
         }
     | List_view_props of
         { axis : Layout.Axis.t
         ; reverse : bool
+        ; primary : bool
         }
     | Gesture_props
     | Focus_scope_props of { autofocus : bool }
@@ -1667,7 +1705,7 @@ module Private = struct
         { restoration_scope_id : ID.Navigation.restoration_scope_id option }
     | Page_props of
         { page_key : ID.Navigation.page_key
-        ; transition : Navigation.page_transition
+        ; presentation : Navigation.page_presentation
         ; can_pop : bool
         ; restoration_id : ID.Navigation.restoration_id option
         }

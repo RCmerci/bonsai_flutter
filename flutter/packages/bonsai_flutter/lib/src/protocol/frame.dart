@@ -130,6 +130,147 @@ enum TextUpdateMode { ack, correction, forceReplace }
 
 enum PageTransition { none, fade, slide }
 
+sealed class PagePresentation {
+  const PagePresentation();
+}
+
+final class StandardPagePresentation extends PagePresentation {
+  const StandardPagePresentation(this.transition);
+
+  final PageTransition transition;
+
+  @override
+  bool operator ==(Object other) =>
+      other is StandardPagePresentation && other.transition == transition;
+
+  @override
+  int get hashCode => Object.hash(StandardPagePresentation, transition);
+}
+
+enum ModalSheetDetent { medium, large }
+
+enum ModalSheetDetentSet { medium, large, mediumAndLarge }
+
+sealed class ModalBottomSheetSizing {
+  const ModalBottomSheetSizing();
+}
+
+final class ContentBoundedModalSheetSizing extends ModalBottomSheetSizing {
+  const ContentBoundedModalSheetSizing();
+
+  @override
+  bool operator ==(Object other) => other is ContentBoundedModalSheetSizing;
+
+  @override
+  int get hashCode => Object.hash(ContentBoundedModalSheetSizing, 0);
+}
+
+final class ScrollControlledModalSheetSizing extends ModalBottomSheetSizing {
+  const ScrollControlledModalSheetSizing();
+
+  @override
+  bool operator ==(Object other) => other is ScrollControlledModalSheetSizing;
+
+  @override
+  int get hashCode => Object.hash(ScrollControlledModalSheetSizing, 0);
+}
+
+final class ModalSheetHandleSemantics {
+  const ModalSheetHandleSemantics({
+    required this.label,
+    required this.mediumValue,
+    required this.largeValue,
+  });
+
+  final String label;
+  final String mediumValue;
+  final String largeValue;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ModalSheetHandleSemantics &&
+      other.label == label &&
+      other.mediumValue == mediumValue &&
+      other.largeValue == largeValue;
+
+  @override
+  int get hashCode => Object.hash(label, mediumValue, largeValue);
+}
+
+final class DetentedModalSheetSizing extends ModalBottomSheetSizing {
+  const DetentedModalSheetSizing({
+    required this.detents,
+    required this.initialDetent,
+    required this.dismissOnDrag,
+    required this.handleSemantics,
+  });
+
+  final ModalSheetDetentSet detents;
+  final ModalSheetDetent initialDetent;
+  final bool dismissOnDrag;
+  final ModalSheetHandleSemantics handleSemantics;
+
+  @override
+  bool operator ==(Object other) =>
+      other is DetentedModalSheetSizing &&
+      other.detents == detents &&
+      other.initialDetent == initialDetent &&
+      other.dismissOnDrag == dismissOnDrag &&
+      other.handleSemantics == handleSemantics;
+
+  @override
+  int get hashCode =>
+      Object.hash(detents, initialDetent, dismissOnDrag, handleSemantics);
+}
+
+final class ModalBottomSheetPresentation extends PagePresentation {
+  const ModalBottomSheetPresentation({
+    required this.barrierDismissible,
+    required this.barrierColorArgb,
+    required this.barrierLabel,
+    required this.sizing,
+    required this.useSafeArea,
+    required this.requestFocus,
+    required this.transitionDurationMilliseconds,
+    required this.reverseTransitionDurationMilliseconds,
+  });
+
+  final bool barrierDismissible;
+  final int? barrierColorArgb;
+  final String? barrierLabel;
+  final ModalBottomSheetSizing sizing;
+  final bool useSafeArea;
+  final bool requestFocus;
+  final int transitionDurationMilliseconds;
+  final int reverseTransitionDurationMilliseconds;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ModalBottomSheetPresentation &&
+      other.barrierDismissible == barrierDismissible &&
+      other.barrierColorArgb == barrierColorArgb &&
+      other.barrierLabel == barrierLabel &&
+      other.sizing == sizing &&
+      other.useSafeArea == useSafeArea &&
+      other.requestFocus == requestFocus &&
+      other.transitionDurationMilliseconds == transitionDurationMilliseconds &&
+      other.reverseTransitionDurationMilliseconds ==
+          reverseTransitionDurationMilliseconds;
+
+  @override
+  int get hashCode => Object.hash(
+    ModalBottomSheetPresentation,
+    barrierDismissible,
+    barrierColorArgb,
+    barrierLabel,
+    sizing,
+    useSafeArea,
+    requestFocus,
+    transitionDurationMilliseconds,
+    reverseTransitionDurationMilliseconds,
+  );
+}
+
 enum OverlayAlignment {
   topStart,
   topCenter,
@@ -479,26 +620,47 @@ final class TransformProps extends UiProps {
 }
 
 final class ScrollViewProps extends UiProps {
-  const ScrollViewProps({required this.axis, required this.reverse});
+  const ScrollViewProps({
+    required this.axis,
+    required this.reverse,
+    this.primary = false,
+  });
 
   final ScrollAxis axis;
   final bool reverse;
+  final bool primary;
 
   @override
   bool operator ==(Object other) =>
       other is ScrollViewProps &&
       other.axis == axis &&
-      other.reverse == reverse;
+      other.reverse == reverse &&
+      other.primary == primary;
 
   @override
-  int get hashCode => Object.hash(ScrollViewProps, axis, reverse);
+  int get hashCode => Object.hash(ScrollViewProps, axis, reverse, primary);
 }
 
 final class ListViewProps extends UiProps {
-  const ListViewProps({required this.axis, required this.reverse});
+  const ListViewProps({
+    required this.axis,
+    required this.reverse,
+    this.primary = false,
+  });
 
   final ScrollAxis axis;
   final bool reverse;
+  final bool primary;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ListViewProps &&
+      other.axis == axis &&
+      other.reverse == reverse &&
+      other.primary == primary;
+
+  @override
+  int get hashCode => Object.hash(ListViewProps, axis, reverse, primary);
 }
 
 final class GestureProps extends UiProps {
@@ -839,13 +1001,13 @@ final class NavigatorProps extends UiProps {
 final class PageProps extends UiProps {
   const PageProps({
     required this.pageKey,
-    required this.transition,
+    required this.presentation,
     required this.canPop,
     required this.restorationId,
   });
 
   final String pageKey;
-  final PageTransition transition;
+  final PagePresentation presentation;
   final bool canPop;
   final String? restorationId;
 
@@ -853,13 +1015,13 @@ final class PageProps extends UiProps {
   bool operator ==(Object other) =>
       other is PageProps &&
       other.pageKey == pageKey &&
-      other.transition == transition &&
+      other.presentation == presentation &&
       other.canPop == canPop &&
       other.restorationId == restorationId;
 
   @override
   int get hashCode =>
-      Object.hash(PageProps, pageKey, transition, canPop, restorationId);
+      Object.hash(PageProps, pageKey, presentation, canPop, restorationId);
 }
 
 final class SafeAreaProps extends UiProps {

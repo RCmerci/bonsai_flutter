@@ -423,9 +423,11 @@ let exec ~framework_root ~project_root ~config ~profile ~working_directory ~comm
   | program :: arguments ->
     let lock = Filename.concat project_root "_build/bonsai-flutter/locks/flutter.lock" in
     Lock.with_lock lock (fun () ->
+      let* () = synchronize_flutter ~framework_root ~project_root ~config in
       let* _artifact =
         build_native ~framework_root ~project_root ~config ~target:Plan.Macos ~profile
       in
+      let* () = flutter_pub_get ~project_root ~config in
       with_forwarded_interrupts (fun ~on_spawn ~received_signal ->
         let command : Plan.command =
           { program; arguments; working_directory; environment = [] }

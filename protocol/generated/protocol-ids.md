@@ -2,7 +2,7 @@
 
 # Protocol IDs
 
-Protocol version: `1.16`
+Protocol version: `1.18`
 
 ## Frame kind
 
@@ -289,6 +289,7 @@ Protocol version: `1.16`
 |---|---:|---|
 | `axis` | 1 | `axis` |
 | `reverse` | 2 | `bool` |
+| `primary` | 3 | `bool` |
 
 ## List view properties
 
@@ -296,6 +297,7 @@ Protocol version: `1.16`
 |---|---:|---|
 | `axis` | 1 | `axis` |
 | `reverse` | 2 | `bool` |
+| `primary` | 3 | `bool` |
 
 ## Focus scope properties
 
@@ -473,6 +475,21 @@ Protocol version: `1.16`
 | `transition` | 2 | `page_transition` |
 | `can_pop` | 3 | `bool` |
 | `restoration_id` | 4 | `optional_string` |
+| `presentation` | 5 | `page_presentation` |
+| `modal_barrier_dismissible` | 6 | `bool` |
+| `modal_barrier_color` | 7 | `optional_argb32` |
+| `modal_barrier_label` | 8 | `optional_string` |
+| `modal_use_safe_area` | 10 | `bool` |
+| `modal_request_focus` | 11 | `bool` |
+| `modal_transition_duration_ms` | 12 | `u32` |
+| `modal_reverse_transition_duration_ms` | 13 | `u32` |
+| `modal_sizing` | 14 | `modal_sheet_sizing` |
+| `modal_detents` | 15 | `modal_sheet_detents` |
+| `modal_initial_detent` | 16 | `modal_sheet_detent` |
+| `modal_dismiss_on_drag` | 17 | `bool` |
+| `modal_handle_semantics_label` | 18 | `optional_string` |
+| `modal_medium_semantics_value` | 19 | `optional_string` |
+| `modal_large_semantics_value` | 20 | `optional_string` |
 
 ## Safe area properties
 

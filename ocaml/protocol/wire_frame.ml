@@ -169,6 +169,44 @@ type page_transition =
   | Fade
   | Slide
 
+type modal_sheet_detent =
+  | Medium_detent
+  | Large_detent
+
+type modal_sheet_detents =
+  | Medium_only
+  | Large_only
+  | Medium_and_large
+
+type detented_sheet_sizing =
+  { detents : modal_sheet_detents
+  ; initial_detent : modal_sheet_detent
+  ; dismiss_on_drag : bool
+  ; handle_semantics_label : string
+  ; medium_semantics_value : string
+  ; large_semantics_value : string
+  }
+
+type modal_sheet_sizing =
+  | Content_bounded_sizing
+  | Scroll_controlled_sizing
+  | Detented_sizing of detented_sheet_sizing
+
+type modal_bottom_sheet_presentation =
+  { barrier_dismissible : bool
+  ; barrier_color_argb : int32 option
+  ; barrier_label : string option
+  ; sizing : modal_sheet_sizing
+  ; use_safe_area : bool
+  ; request_focus : bool
+  ; transition_duration_ms : int
+  ; reverse_transition_duration_ms : int
+  }
+
+type page_presentation =
+  | Standard_page of page_transition
+  | Modal_bottom_sheet of modal_bottom_sheet_presentation
+
 type overlay_alignment =
   | Top_start
   | Top_center
@@ -277,10 +315,12 @@ type props =
   | Scroll_view_props of
       { axis : axis
       ; reverse : bool
+      ; primary : bool
       }
   | List_view_props of
       { axis : axis
       ; reverse : bool
+      ; primary : bool
       }
   | Gesture_props
   | Focus_scope_props of { autofocus : bool }
@@ -360,7 +400,7 @@ type props =
       { restoration_scope_id : ID.Navigation.restoration_scope_id option }
   | Page_props of
       { page_key : ID.Navigation.page_key
-      ; transition : page_transition
+      ; presentation : page_presentation
       ; can_pop : bool
       ; restoration_id : ID.Navigation.restoration_id option
       }

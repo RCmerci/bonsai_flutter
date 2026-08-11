@@ -7,15 +7,18 @@ state logic.
 
 ## macOS
 
-Build and stage the OCaml complete object before running Flutter:
+Build, analyze, test, and run through the consumer workflow:
 
 ```sh
-make EXAMPLE=network native-object
-cd examples/network/flutter
-flutter pub get
-flutter analyze
-flutter test
-flutter run -d macos
+cd examples/network
+../../_build/default/bonsai_flutter_tool/bin/main.exe build macos --profile debug
+cd flutter
+../../../_build/default/bonsai_flutter_tool/bin/main.exe exec \
+  --profile=debug -- flutter analyze
+../../../_build/default/bonsai_flutter_tool/bin/main.exe exec \
+  --profile=debug -- flutter test --no-pub
+cd ..
+../../_build/default/bonsai_flutter_tool/bin/main.exe run macos --profile debug
 ```
 
 The deterministic OCaml and Flutter test suites use no public network service.
@@ -26,8 +29,8 @@ After deterministic tests pass, exercise the production HTTPS and WebSocket
 providers against the configured public endpoints with:
 
 ```sh
-opam exec --switch=bonsai-flutter-v017-exact -- \
-  dune exec examples/network/ocaml/network_smoke_cli.exe
+cd examples/network
+dune exec --root=. ocaml/network_smoke_cli.exe
 ```
 
 This command is manual-only and is intentionally excluded from CI.

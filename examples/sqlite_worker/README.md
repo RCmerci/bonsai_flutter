@@ -27,25 +27,21 @@ path.
 
 ## Run on macOS
 
-From the repository root, build and stage the application-specific complete
-object:
+From the repository root, run the independent consumer workspace:
 
 ```sh
-make native-object EXAMPLE=sqlite_worker
-cd examples/sqlite_worker/flutter
-flutter pub get
-flutter run -d macos
+cd examples/sqlite_worker
+../../_build/default/bonsai_flutter_tool/bin/main.exe run macos --profile debug
 ```
 
 Run the focused OCaml and Flutter tests with:
 
 ```sh
-dune runtest ocaml/test/sqlite_worker_store_tests.exe \
-  ocaml/test/sqlite_worker_example_tests.exe \
-  ocaml/test/sqlite_worker_file_demo_tests.exe \
-  ocaml/test/worker_eio_environment_tests.exe
-cd examples/sqlite_worker/flutter
-flutter test
+cd examples/sqlite_worker
+dune runtest --root=.
+cd flutter
+../../../_build/default/bonsai_flutter_tool/bin/main.exe exec \
+  --profile=debug -- flutter test --no-pub
 ```
 
 The aggregate real-FFI persistence test is part of:
@@ -71,10 +67,9 @@ The supported Apple mobile artifact is physical-device arm64 iPhoneOS with a
 minimum deployment target of iOS 15.0. iOS Simulator is not supported.
 
 ```sh
-make ios-device-native-objects
-cd examples/sqlite_worker/flutter
-flutter pub get
-flutter build ios --debug --no-codesign
+cd examples/sqlite_worker
+../../_build/default/bonsai_flutter_tool/bin/main.exe build ios \
+  --profile debug --no-codesign
 ```
 
 The unsigned build proves packaging only. Installation and execution require

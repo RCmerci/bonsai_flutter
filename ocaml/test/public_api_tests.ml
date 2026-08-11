@@ -40,8 +40,39 @@ let worker_component client _context _graph =
 
 let viewport_handler = Ui.Event.Handler.create (fun _ -> ())
 
+let modal_handle_semantics =
+  Ui.Navigation.Modal_bottom_sheet.Handle_semantics.create
+    ~label:"Adjust sheet height"
+    ~medium_value:"Half height"
+    ~large_value:"Full height"
+;;
+
+let modal_detents =
+  Ui.Navigation.Modal_bottom_sheet.Detents.create
+    ~initial:Ui.Navigation.Modal_bottom_sheet.Detent.Medium
+    ~semantics:modal_handle_semantics
+    [ Ui.Navigation.Modal_bottom_sheet.Detent.Medium
+    ; Ui.Navigation.Modal_bottom_sheet.Detent.Large
+    ]
+;;
+
+let (_ : Ui.Navigation.page_presentation) =
+  Ui.Navigation.Modal_bottom_sheet
+    (Ui.Navigation.Modal_bottom_sheet.create
+       ~barrier_dismissible:true
+       ~barrier_color:(Ui.Style.Color.rgb ~red:1 ~green:2 ~blue:3)
+       ~barrier_label:"Close filter"
+       ~sizing:(Ui.Navigation.Modal_bottom_sheet.Sizing.Detented modal_detents)
+       ~use_safe_area:true
+       ~request_focus:true
+       ~transition_duration_ms:250
+       ~reverse_transition_duration_ms:200
+       ())
+;;
+
 let (_ : Ui.Viewport.Vertical.t) =
   Ui.Widget.List_view.vertical
+    ~primary:true
     ~on_scroll:viewport_handler
     [ Ui.Widget.text "Public row" ]
     ()

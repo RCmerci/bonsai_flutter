@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added generic declarative modal-bottom-sheet Page presentation with typed
+  barrier, focus, safe-area, keyboard-inset, restoration, and motion policies.
+  The Flutter renderer uses a real non-opaque Material route, reads live
+  same-key `can_pop` updates before Back, Escape, or barrier dismissal, and
+  emits one typed RoutePop after an allowed removal. Typed content-bounded,
+  scroll-controlled, and `Medium`/`Large` detented sizing supports coordinated
+  resize-then-scroll gestures, preflighted drag dismissal, pointer and
+  accessibility handle actions, and route-borrowed primary scroll controllers.
 - Disabled Flutter icon tree shaking for every macOS and iOS Profile/Release
   build because Material icon code points arrive through runtime protocol
   frames and cannot be discovered by Flutter's static `IconData` scanner. The

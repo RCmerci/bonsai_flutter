@@ -6,17 +6,16 @@ key and session ID so a keyed reorder preserves its Flutter controller and
 focus resource.
 
 ```sh
-make native-object EXAMPLE=todo
-cd examples/todo/flutter
-flutter run -d macos
+cd examples/todo
+../../_build/default/bonsai_flutter_tool/bin/main.exe run macos --profile debug
 ```
 
 Build the target-qualified unsigned iPhoneOS application:
 
 ```sh
-make ios-device-native-objects
-cd examples/todo/flutter
-flutter build ios --debug --no-codesign
+cd examples/todo
+../../_build/default/bonsai_flutter_tool/bin/main.exe build ios \
+  --profile debug --no-codesign
 ```
 
 The signed physical-device matrix is documented in

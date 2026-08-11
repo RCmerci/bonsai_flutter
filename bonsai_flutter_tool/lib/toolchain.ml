@@ -294,14 +294,14 @@ let install ~framework_root ~working_directory =
       String.concat
         ","
         [ "bonsai-flutter-ios=file://" ^ repository.root
-        ; ("bonsai-flutter-ios-cross=git+"
-           ^ repository.cross_url
-           ^ "#"
-           ^ repository.cross_commit)
-        ; ("bonsai-flutter-default=git+"
-           ^ repository.default_url
-           ^ "#"
-           ^ repository.default_commit)
+        ; "bonsai-flutter-ios-cross=git+"
+          ^ repository.cross_url
+          ^ "#"
+          ^ repository.cross_commit
+        ; "bonsai-flutter-default=git+"
+          ^ repository.default_url
+          ^ "#"
+          ^ repository.default_commit
         ]
     in
     let create : Plan.command =

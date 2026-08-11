@@ -361,6 +361,22 @@ void main() {
       );
       expectFixtureMatchesDartEncoding('ocaml_viewport_body.hex', frame);
     });
+
+    test('decodes an OCaml primary vertical scrollable byte-exactly', () {
+      final frame = decodeOcamlFixture('ocaml_primary_scroll.hex');
+      final update = frame.operations.single as UpdateProps;
+
+      expect(update.nodeId, 71);
+      expect(
+        update.props,
+        const ListViewProps(
+          axis: ScrollAxis.vertical,
+          reverse: false,
+          primary: true,
+        ),
+      );
+      expectFixtureMatchesDartEncoding('ocaml_primary_scroll.hex', frame);
+    });
   });
 }
 

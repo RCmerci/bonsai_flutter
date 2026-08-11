@@ -369,20 +369,20 @@ let wire_props = function
     in
     Ok (Animated_opacity_props { opacity; animation })
   | Transform_props { matrix4 } -> Ok (Transform_props { matrix4 = Array.copy matrix4 })
-  | Scroll_view_props { axis; reverse } ->
+  | Scroll_view_props { axis; reverse; primary } ->
     let axis =
       match axis with
       | Ui.Layout.Axis.Horizontal -> Protocol.Wire_frame.Horizontal
       | Vertical -> Vertical
     in
-    Ok (Scroll_view_props { axis; reverse })
-  | List_view_props { axis; reverse } ->
+    Ok (Scroll_view_props { axis; reverse; primary })
+  | List_view_props { axis; reverse; primary } ->
     let axis =
       match axis with
       | Ui.Layout.Axis.Horizontal -> Protocol.Wire_frame.Horizontal
       | Vertical -> Vertical
     in
-    Ok (List_view_props { axis; reverse })
+    Ok (List_view_props { axis; reverse; primary })
   | Gesture_props -> Ok Gesture_props
   | Focus_scope_props { autofocus } -> Ok (Focus_scope_props { autofocus })
   | Mouse_region_props { opaque } -> Ok (Mouse_region_props { opaque })
@@ -553,14 +553,65 @@ let wire_props = function
     Ok (Overlay_props { alignment; dismissible })
   | Navigator_props { restoration_scope_id } ->
     Ok (Navigator_props { restoration_scope_id })
-  | Page_props { page_key; transition; can_pop; restoration_id } ->
-    let transition =
-      match transition with
-      | Ui.Navigation.None -> Protocol.Wire_frame.No_transition
-      | Fade -> Fade
-      | Slide -> Slide
+  | Page_props { page_key; presentation; can_pop; restoration_id } ->
+    let presentation =
+      match presentation with
+      | Ui.Navigation.Standard transition ->
+        let transition =
+          match transition with
+          | Ui.Navigation.None -> Protocol.Wire_frame.No_transition
+          | Fade -> Fade
+          | Slide -> Slide
+        in
+        Protocol.Wire_frame.Standard_page transition
+      | Modal_bottom_sheet modal ->
+        let modal = Ui.Navigation.Modal_bottom_sheet.Private.view modal in
+        let sizing =
+          match modal.sizing with
+          | Ui.Navigation.Modal_bottom_sheet.Sizing.Content_bounded ->
+            Protocol.Wire_frame.Content_bounded_sizing
+          | Scroll_controlled -> Scroll_controlled_sizing
+          | Detented detents ->
+            let detents = Ui.Navigation.Modal_bottom_sheet.Detents.Private.view detents in
+            let detent = function
+              | Ui.Navigation.Modal_bottom_sheet.Detent.Medium ->
+                Protocol.Wire_frame.Medium_detent
+              | Large -> Large_detent
+            in
+            let detent_set =
+              match detents.detents with
+              | [ Ui.Navigation.Modal_bottom_sheet.Detent.Medium ] ->
+                Protocol.Wire_frame.Medium_only
+              | [ Large ] -> Large_only
+              | [ Medium; Large ] -> Medium_and_large
+              | _ -> assert false
+            in
+            let semantics =
+              Ui.Navigation.Modal_bottom_sheet.Handle_semantics.Private.view
+                detents.semantics
+            in
+            Detented_sizing
+              { detents = detent_set
+              ; initial_detent = detent detents.initial
+              ; dismiss_on_drag = detents.dismiss_on_drag
+              ; handle_semantics_label = semantics.label
+              ; medium_semantics_value = semantics.medium_value
+              ; large_semantics_value = semantics.large_value
+              }
+        in
+        Modal_bottom_sheet
+          { barrier_dismissible = modal.barrier_dismissible
+          ; barrier_color_argb =
+              Option.map Ui.Style.Color.Private.to_argb32 modal.barrier_color
+          ; barrier_label = modal.barrier_label
+          ; sizing
+          ; use_safe_area = modal.use_safe_area
+          ; request_focus = modal.request_focus
+          ; transition_duration_ms = modal.transition_duration_ms
+          ; reverse_transition_duration_ms = modal.reverse_transition_duration_ms
+          }
     in
-    Ok (Page_props { page_key; transition; can_pop; restoration_id })
+    Ok (Page_props { page_key; presentation; can_pop; restoration_id })
   | Safe_area_props
       { left
       ; top

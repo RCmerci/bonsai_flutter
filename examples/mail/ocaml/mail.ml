@@ -1582,7 +1582,7 @@ let render_detail_page
   Ui.Widget.page
     ~key:(Ui.Key.string page_key)
     ~page_key:(ID.Navigation.Page_key.of_string page_key)
-    ~transition:Ui.Navigation.Slide
+    ~presentation:(Ui.Navigation.Standard Ui.Navigation.Slide)
     (Ui.Material.scaffold
        ~body:
          (content

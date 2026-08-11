@@ -506,10 +506,16 @@ Widget _buildScrollView(
   _expectChildCount(node, children, 1);
   final props = _expectProps<ScrollViewProps>(node);
   final binding = _binding(node, EventTagId.scrollNotification);
-  final controller = RendererResourceScope.of(
-    context,
-  ).acquireScrollController(node.id);
-  return _guardedScrollable(
+  final resources = RendererResourceScope.of(context);
+  final controller = props.primary
+      ? PrimaryScrollController.maybeOf(context)
+      : resources.acquireScrollController(node.id);
+  if (controller == null) {
+    throw RendererBuildException(
+      'Primary ScrollView node ${node.id} has no route scroll controller',
+    );
+  }
+  final viewport = _guardedScrollable(
     node: node,
     widgetKind: 'ScrollView',
     axis: props.axis,
@@ -524,6 +530,14 @@ Widget _buildScrollView(
       child: children.single,
     ),
   );
+  return props.primary
+      ? _BorrowedScrollControllerHost(
+          nodeId: node.id,
+          resources: resources,
+          controller: controller,
+          child: viewport,
+        )
+      : viewport;
 }
 
 Widget _buildListView(
@@ -534,10 +548,16 @@ Widget _buildListView(
 ) {
   final props = _expectProps<ListViewProps>(node);
   final binding = _binding(node, EventTagId.scrollNotification);
-  final controller = RendererResourceScope.of(
-    context,
-  ).acquireScrollController(node.id);
-  return _guardedScrollable(
+  final resources = RendererResourceScope.of(context);
+  final controller = props.primary
+      ? PrimaryScrollController.maybeOf(context)
+      : resources.acquireScrollController(node.id);
+  if (controller == null) {
+    throw RendererBuildException(
+      'Primary ListView node ${node.id} has no route scroll controller',
+    );
+  }
+  final viewport = _guardedScrollable(
     node: node,
     widgetKind: 'ListView',
     axis: props.axis,
@@ -552,6 +572,78 @@ Widget _buildListView(
       children: children,
     ),
   );
+  return props.primary
+      ? _BorrowedScrollControllerHost(
+          nodeId: node.id,
+          resources: resources,
+          controller: controller,
+          child: viewport,
+        )
+      : viewport;
+}
+
+final class _BorrowedScrollControllerHost extends StatefulWidget {
+  const _BorrowedScrollControllerHost({
+    required this.nodeId,
+    required this.resources,
+    required this.controller,
+    required this.child,
+  });
+
+  final int nodeId;
+  final RendererResourceStore resources;
+  final ScrollController controller;
+  final Widget child;
+
+  @override
+  State<_BorrowedScrollControllerHost> createState() =>
+      _BorrowedScrollControllerHostState();
+}
+
+final class _BorrowedScrollControllerHostState
+    extends State<_BorrowedScrollControllerHost> {
+  @override
+  void initState() {
+    super.initState();
+    widget.resources.replaceBorrowedScrollController(
+      widget.nodeId,
+      widget.controller,
+    );
+  }
+
+  @override
+  void didUpdateWidget(_BorrowedScrollControllerHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.nodeId == widget.nodeId &&
+        identical(oldWidget.resources, widget.resources) &&
+        identical(oldWidget.controller, widget.controller)) {
+      widget.resources.replaceBorrowedScrollController(
+        widget.nodeId,
+        widget.controller,
+      );
+      return;
+    }
+    oldWidget.resources.unbindBorrowedScrollController(
+      oldWidget.nodeId,
+      oldWidget.controller,
+    );
+    widget.resources.replaceBorrowedScrollController(
+      widget.nodeId,
+      widget.controller,
+    );
+  }
+
+  @override
+  void dispose() {
+    widget.resources.unbindBorrowedScrollController(
+      widget.nodeId,
+      widget.controller,
+    );
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 Widget _guardedScrollable({
@@ -1114,46 +1206,66 @@ Widget _buildNavigator(
         'Navigator node ${node.id} children must all be Page nodes',
       );
     }
-    pages.add((props: pageNode.props as PageProps, child: child));
+    final pageProps = pageNode.props as PageProps;
+    if (pageProps.presentation case ModalBottomSheetPresentation(
+      sizing: DetentedModalSheetSizing(),
+    )) {
+      final primaryNodeIds = <int>[];
+      void visit(int nodeId) {
+        final descendant = child.store.node(nodeId);
+        switch (descendant.props) {
+          case ScrollViewProps(:final axis, primary: true):
+            if (axis != ScrollAxis.vertical) {
+              throw RendererBuildException(
+                'Detented Page ${pageProps.pageKey} has horizontal primary '
+                'ScrollView node $nodeId',
+              );
+            }
+            primaryNodeIds.add(nodeId);
+          case ListViewProps(:final axis, primary: true):
+            if (axis != ScrollAxis.vertical) {
+              throw RendererBuildException(
+                'Detented Page ${pageProps.pageKey} has horizontal primary '
+                'ListView node $nodeId',
+              );
+            }
+            primaryNodeIds.add(nodeId);
+          case _:
+        }
+        for (final descendantId in descendant.children) {
+          visit(descendantId);
+        }
+      }
+
+      for (final descendantId in pageNode.children) {
+        visit(descendantId);
+      }
+      if (primaryNodeIds.length != 1) {
+        throw RendererBuildException(
+          'Detented Page ${pageProps.pageKey} requires exactly one primary '
+          'vertical scrollable; found ${primaryNodeIds.length}: '
+          '$primaryNodeIds',
+        );
+      }
+    }
+    pages.add((props: pageProps, child: child));
   }
   if (pages.isEmpty) {
     throw RendererBuildException(
       'Navigator node ${node.id} must contain at least one Page',
     );
   }
-  return Navigator(
+  if (pages.first.props.presentation is ModalBottomSheetPresentation) {
+    throw RendererBuildException(
+      'Navigator node ${node.id} cannot use a modal bottom sheet as its first Page',
+    );
+  }
+  return _BonsaiNavigator(
     restorationScopeId: props.restorationScopeId,
-    pages: [
-      for (final page in pages)
-        if (page.props.transition == PageTransition.slide)
-          cupertino.CupertinoPage<void>(
-            key: ValueKey<String>(page.props.pageKey),
-            name: page.props.pageKey,
-            restorationId: page.props.restorationId,
-            canPop: page.props.canPop,
-            child: page.child,
-          )
-        else
-          _BonsaiPage(
-            key: ValueKey<String>(page.props.pageKey),
-            name: page.props.pageKey,
-            restorationId: page.props.restorationId,
-            canPop: page.props.canPop,
-            transition: page.props.transition,
-            child: page.child,
-          ),
-    ],
-    onDidRemovePage: (page) {
-      if (binding == null || onEvent == null) return;
-      onEvent(
-        RendererEvent(
-          nodeId: node.id,
-          eventTag: binding.eventTag,
-          handlerId: binding.handlerId,
-          payload: RoutePopEventPayload(pageKey: page.name!, result: null),
-        ),
-      );
-    },
+    pages: pages,
+    nodeId: node.id,
+    binding: binding,
+    onEvent: onEvent,
   );
 }
 
@@ -1337,6 +1449,603 @@ final class _BonsaiPage extends Page<void> {
       'Slide pages must use CupertinoPage',
     ),
   };
+}
+
+final class _BonsaiNavigator extends StatefulWidget {
+  const _BonsaiNavigator({
+    required this.restorationScopeId,
+    required this.pages,
+    required this.nodeId,
+    required this.binding,
+    required this.onEvent,
+  });
+
+  final String? restorationScopeId;
+  final List<({PageProps props, Widget child})> pages;
+  final int nodeId;
+  final EventBinding? binding;
+  final RendererEventCallback? onEvent;
+
+  @override
+  State<_BonsaiNavigator> createState() => _BonsaiNavigatorState();
+}
+
+final class _BonsaiNavigatorState extends State<_BonsaiNavigator> {
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
+  @override
+  Widget build(BuildContext context) => NavigatorPopHandler<void>(
+    onPopWithResult: (_) => _navigatorKey.currentState?.maybePop(),
+    child: Navigator(
+      key: _navigatorKey,
+      restorationScopeId: widget.restorationScopeId,
+      pages: [
+        for (final page in widget.pages)
+          switch (page.props.presentation) {
+            StandardPagePresentation(transition: PageTransition.slide) =>
+              cupertino.CupertinoPage<void>(
+                key: ValueKey<String>(page.props.pageKey),
+                name: page.props.pageKey,
+                restorationId: page.props.restorationId,
+                canPop: page.props.canPop,
+                child: page.child,
+              ),
+            StandardPagePresentation(:final transition) => _BonsaiPage(
+              key: ValueKey<String>(page.props.pageKey),
+              name: page.props.pageKey,
+              restorationId: page.props.restorationId,
+              canPop: page.props.canPop,
+              transition: transition,
+              child: page.child,
+            ),
+            final ModalBottomSheetPresentation presentation =>
+              _BonsaiModalBottomSheetPage(
+                key: ValueKey<String>(page.props.pageKey),
+                name: page.props.pageKey,
+                restorationId: page.props.restorationId,
+                canPop: page.props.canPop,
+                presentation: presentation,
+                child: page.child,
+              ),
+          },
+      ],
+      onDidRemovePage: (page) {
+        final binding = widget.binding;
+        final onEvent = widget.onEvent;
+        if (binding == null || onEvent == null) return;
+        onEvent(
+          RendererEvent(
+            nodeId: widget.nodeId,
+            eventTag: binding.eventTag,
+            handlerId: binding.handlerId,
+            payload: RoutePopEventPayload(pageKey: page.name!, result: null),
+          ),
+        );
+      },
+    ),
+  );
+}
+
+final class _BonsaiModalBottomSheetPage extends Page<void> {
+  const _BonsaiModalBottomSheetPage({
+    required this.child,
+    required this.presentation,
+    super.key,
+    super.name,
+    super.restorationId,
+    super.canPop,
+  });
+
+  final Widget child;
+  final ModalBottomSheetPresentation presentation;
+
+  @override
+  Route<void> createRoute(BuildContext context) => _BonsaiModalBottomSheetRoute(
+    page: this,
+    defaultBarrierLabel: MaterialLocalizations.of(context).scrimLabel,
+  );
+}
+
+final class _BonsaiModalBottomSheetRoute extends ModalBottomSheetRoute<void> {
+  _BonsaiModalBottomSheetRoute({
+    required _BonsaiModalBottomSheetPage page,
+    required String defaultBarrierLabel,
+  }) : _defaultBarrierLabel = defaultBarrierLabel,
+       super(
+         settings: page,
+         builder: (_) => page.child,
+         barrierLabel: page.presentation.barrierLabel ?? defaultBarrierLabel,
+         modalBarrierColor: page.presentation.barrierColorArgb == null
+             ? null
+             : Color(page.presentation.barrierColorArgb!),
+         isDismissible: page.presentation.barrierDismissible,
+         isScrollControlled:
+             page.presentation.sizing is! ContentBoundedModalSheetSizing,
+         useSafeArea: page.presentation.useSafeArea,
+         requestFocus: page.presentation.requestFocus,
+         enableDrag: false,
+         showDragHandle: false,
+         backgroundColor: Colors.transparent,
+         elevation: 0,
+         sheetAnimationStyle: AnimationStyle(
+           duration: Duration(
+             milliseconds: page.presentation.transitionDurationMilliseconds,
+           ),
+           reverseDuration: Duration(
+             milliseconds:
+                 page.presentation.reverseTransitionDurationMilliseconds,
+           ),
+         ),
+       );
+
+  final String _defaultBarrierLabel;
+
+  _BonsaiModalBottomSheetPage get _page =>
+      settings as _BonsaiModalBottomSheetPage;
+  ModalBottomSheetPresentation get _presentation => _page.presentation;
+
+  bool get _reducedMotion {
+    final context = navigator?.context;
+    if (context == null) return false;
+    final media = MediaQuery.maybeOf(context);
+    return media?.disableAnimations == true ||
+        media?.accessibleNavigation == true;
+  }
+
+  @override
+  WidgetBuilder get builder => (context) {
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final sizing = _presentation.sizing;
+    Widget child = _page.child;
+    if (sizing is DetentedModalSheetSizing) {
+      bool canDismiss() => sizing.dismissOnDrag && _page.canPop;
+      final pageChild = child;
+      child = BottomSheet(
+        onClosing: () {},
+        enableDrag: false,
+        showDragHandle: false,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        builder: (_) => _DetentedModalSheetHost(
+          sizing: sizing,
+          canDismiss: canDismiss,
+          requestDismiss: () async {
+            if (!canDismiss()) return false;
+            return navigator?.maybePop() ?? false;
+          },
+          reducedMotion: _reducedMotion,
+          child: pageChild,
+        ),
+      );
+    }
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: MediaQuery.removeViewInsets(
+        context: context,
+        removeBottom: true,
+        child: child,
+      ),
+    );
+  };
+
+  @override
+  bool get barrierDismissible => _presentation.barrierDismissible;
+
+  @override
+  Color get barrierColor => _presentation.barrierColorArgb == null
+      ? Colors.black54
+      : Color(_presentation.barrierColorArgb!);
+
+  @override
+  String get barrierLabel => _presentation.barrierLabel ?? _defaultBarrierLabel;
+
+  @override
+  bool get isScrollControlled =>
+      _presentation.sizing is! ContentBoundedModalSheetSizing;
+
+  @override
+  bool get useSafeArea => _presentation.useSafeArea;
+
+  @override
+  bool get requestFocus => _presentation.requestFocus;
+
+  @override
+  bool get enableDrag => false;
+
+  @override
+  bool get showDragHandle => false;
+
+  @override
+  AnimationStyle get sheetAnimationStyle => _reducedMotion
+      ? AnimationStyle.noAnimation
+      : AnimationStyle(
+          duration: Duration(
+            milliseconds: _presentation.transitionDurationMilliseconds,
+          ),
+          reverseDuration: Duration(
+            milliseconds: _presentation.reverseTransitionDurationMilliseconds,
+          ),
+        );
+
+  @override
+  Duration get transitionDuration => _reducedMotion
+      ? Duration.zero
+      : Duration(milliseconds: _presentation.transitionDurationMilliseconds);
+
+  @override
+  Duration get reverseTransitionDuration => _reducedMotion
+      ? Duration.zero
+      : Duration(
+          milliseconds: _presentation.reverseTransitionDurationMilliseconds,
+        );
+
+  @override
+  void changedInternalState() {
+    super.changedInternalState();
+    _synchronizeAnimationDurations();
+  }
+
+  @override
+  void changedExternalState() {
+    super.changedExternalState();
+    _synchronizeAnimationDurations();
+  }
+
+  void _synchronizeAnimationDurations() {
+    controller
+      ?..duration = transitionDuration
+      ..reverseDuration = reverseTransitionDuration;
+  }
+}
+
+final class _DetentedModalSheetHost extends StatefulWidget {
+  const _DetentedModalSheetHost({
+    required this.sizing,
+    required this.canDismiss,
+    required this.requestDismiss,
+    required this.reducedMotion,
+    required this.child,
+  });
+
+  final DetentedModalSheetSizing sizing;
+  final bool Function() canDismiss;
+  final Future<bool> Function() requestDismiss;
+  final bool reducedMotion;
+  final Widget child;
+
+  @override
+  State<_DetentedModalSheetHost> createState() =>
+      _DetentedModalSheetHostState();
+}
+
+final class _DetentedModalSheetHostState
+    extends State<_DetentedModalSheetHost> {
+  static const _mediumExtent = 0.5;
+  static const _largeExtent = 1.0;
+  static const _dismissExtent = 0.0;
+  static const _epsilon = 0.001;
+  static const _animationDuration = Duration(milliseconds: 200);
+  // Flutter treats null as its default ballistic snap and rejects zero.
+  static const _reducedMotionSnapDuration = Duration(milliseconds: 1);
+
+  final DraggableScrollableController _controller =
+      DraggableScrollableController();
+  late double _reportedExtent = _detentExtent(widget.sizing.initialDetent);
+  bool _extentUpdateScheduled = false;
+  bool _dismissScheduled = false;
+  double _handleDragDelta = 0;
+
+  List<double> get _visibleExtents => switch (widget.sizing.detents) {
+    ModalSheetDetentSet.medium => const [_mediumExtent],
+    ModalSheetDetentSet.large => const [_largeExtent],
+    ModalSheetDetentSet.mediumAndLarge => const [_mediumExtent, _largeExtent],
+  };
+
+  bool get _dismissEnabled => widget.canDismiss();
+
+  double get _minimumVisibleExtent => _visibleExtents.first;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_scheduleExtentUpdate);
+  }
+
+  @override
+  void didUpdateWidget(_DetentedModalSheetHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_controller.isAttached) return;
+      final allowed = _visibleExtents;
+      final current = _controller.size;
+      if (current < _minimumVisibleExtent && !_dismissEnabled) {
+        _moveTo(_minimumVisibleExtent);
+        return;
+      }
+      if (!allowed.any((extent) => (extent - current).abs() <= _epsilon) &&
+          current >= _minimumVisibleExtent) {
+        _moveTo(_nearestExtent(current, allowed));
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_scheduleExtentUpdate)
+      ..dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = _visibleExtents;
+    final dismissEnabled = _dismissEnabled;
+    final minExtent = dismissEnabled ? _dismissExtent : visible.first;
+    final maxExtent = visible.last;
+    final initialExtent = _detentExtent(
+      widget.sizing.initialDetent,
+    ).clamp(minExtent, maxExtent);
+    final snapSizes = visible
+        .where((extent) => extent > minExtent && extent < maxExtent)
+        .toList(growable: false);
+
+    return NotificationListener<DraggableScrollableNotification>(
+      onNotification: _handleDragNotification,
+      child: DraggableScrollableSheet(
+        controller: _controller,
+        expand: false,
+        initialChildSize: initialExtent,
+        minChildSize: minExtent,
+        maxChildSize: maxExtent,
+        snap: true,
+        snapSizes: snapSizes,
+        snapAnimationDuration: widget.reducedMotion
+            ? _reducedMotionSnapDuration
+            : _animationDuration,
+        shouldCloseOnMinExtent: false,
+        builder: (context, scrollController) => PrimaryScrollController(
+          controller: scrollController,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 48),
+                child: widget.child,
+              ),
+              Align(
+                alignment: Alignment.topCenter,
+                child: _buildHandle(context),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHandle(BuildContext context) {
+    final visible = _visibleExtents;
+    final currentIndex = _nearestExtentIndex(_reportedExtent, visible);
+    final currentExtent = visible[currentIndex];
+    final semantics = widget.sizing.handleSemantics;
+    final currentValue = currentExtent == _mediumExtent
+        ? semantics.mediumValue
+        : semantics.largeValue;
+    final canIncrease = currentIndex < visible.length - 1;
+    final canDecrease = currentIndex > 0 || _dismissEnabled;
+
+    KeyEventResult handleKeyEvent(FocusNode _, KeyEvent event) {
+      if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+        return KeyEventResult.ignored;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.arrowUp && canIncrease) {
+        _moveTo(visible[currentIndex + 1]);
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.arrowDown && canDecrease) {
+        _decreaseFrom(currentIndex, visible);
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
+
+    return Focus(
+      onKeyEvent: handleKeyEvent,
+      child: Semantics(
+        label: semantics.label,
+        value: currentValue,
+        increasedValue: canIncrease
+            ? _semanticsValue(visible[currentIndex + 1])
+            : null,
+        decreasedValue: canDecrease
+            ? currentIndex > 0
+                  ? _semanticsValue(visible[currentIndex - 1])
+                  : currentValue
+            : null,
+        onIncrease: canIncrease
+            ? () => _moveTo(visible[currentIndex + 1])
+            : null,
+        onDecrease: canDecrease
+            ? () => _decreaseFrom(currentIndex, visible)
+            : null,
+        child: Listener(
+          onPointerDown: (event) {
+            if (event.kind == PointerDeviceKind.mouse) _handleDragDelta = 0;
+          },
+          onPointerMove: (event) {
+            if (event.kind == PointerDeviceKind.mouse) {
+              _dragHandleBy(event.delta.dy);
+            }
+          },
+          onPointerUp: (event) {
+            if (event.kind == PointerDeviceKind.mouse) _endHandleDragWith(0);
+          },
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            excludeFromSemantics: true,
+            supportedDevices: const {
+              PointerDeviceKind.touch,
+              PointerDeviceKind.stylus,
+              PointerDeviceKind.invertedStylus,
+            },
+            onTap: _cycleDetent,
+            onVerticalDragStart: (_) => _handleDragDelta = 0,
+            onVerticalDragUpdate: _dragHandle,
+            onVerticalDragEnd: _endHandleDrag,
+            child: SizedBox(
+              width: 72,
+              height: 48,
+              child: Center(
+                child: Container(
+                  width: 32,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _decreaseFrom(int currentIndex, List<double> visible) {
+    _moveTo(currentIndex > 0 ? visible[currentIndex - 1] : _dismissExtent);
+  }
+
+  String _semanticsValue(double extent) => extent == _mediumExtent
+      ? widget.sizing.handleSemantics.mediumValue
+      : widget.sizing.handleSemantics.largeValue;
+
+  void _cycleDetent() {
+    final visible = _visibleExtents;
+    final current = _controller.isAttached ? _controller.size : _reportedExtent;
+    final index = _nearestExtentIndex(current, visible);
+    _moveTo(visible[(index + 1) % visible.length]);
+  }
+
+  void _dragHandle(DragUpdateDetails details) {
+    _dragHandleBy(details.delta.dy);
+  }
+
+  void _dragHandleBy(double deltaPixels) {
+    if (!_controller.isAttached) return;
+    _handleDragDelta += deltaPixels;
+    final delta = _controller.pixelsToSize(deltaPixels);
+    final minimum = _dismissEnabled ? _dismissExtent : _minimumVisibleExtent;
+    _controller.jumpTo(
+      (_controller.size - delta).clamp(minimum, _visibleExtents.last),
+    );
+  }
+
+  void _endHandleDrag(DragEndDetails details) {
+    _endHandleDragWith(details.primaryVelocity ?? 0);
+  }
+
+  void _endHandleDragWith(double velocity) {
+    if (!_controller.isAttached) return;
+    final targets = <double>[
+      if (_dismissEnabled) _dismissExtent,
+      ..._visibleExtents,
+    ];
+    final current = _controller.size;
+    double target;
+    if (_handleDragDelta < -20 || velocity < -300) {
+      target = targets.firstWhere(
+        (extent) => extent > current + _epsilon,
+        orElse: () => targets.last,
+      );
+    } else if (_handleDragDelta > 20 || velocity > 300) {
+      target = targets.lastWhere(
+        (extent) => extent < current - _epsilon,
+        orElse: () => targets.first,
+      );
+    } else {
+      target = _nearestExtent(current, targets);
+    }
+    _moveTo(target);
+  }
+
+  bool _handleDragNotification(DraggableScrollableNotification notification) {
+    if (notification.depth != 0) return false;
+    if (notification.extent <= _epsilon) {
+      _scheduleDismissal();
+    }
+    return false;
+  }
+
+  void _scheduleExtentUpdate() {
+    if (_extentUpdateScheduled) return;
+    _extentUpdateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _extentUpdateScheduled = false;
+      if (!mounted || !_controller.isAttached) return;
+      final next = _controller.size;
+      if ((next - _reportedExtent).abs() <= _epsilon) return;
+      setState(() => _reportedExtent = next);
+      if (next <= _epsilon) _scheduleDismissal();
+    });
+  }
+
+  void _scheduleDismissal() {
+    if (_dismissScheduled) return;
+    _dismissScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      _dismissScheduled = false;
+      if (!mounted || !_controller.isAttached) return;
+      if (_controller.size > _epsilon) return;
+      if (!widget.canDismiss()) {
+        _moveTo(_minimumVisibleExtent);
+        return;
+      }
+      final dismissed = await widget.requestDismiss();
+      if (mounted && _controller.isAttached && !dismissed) {
+        _moveTo(_minimumVisibleExtent);
+      }
+    });
+  }
+
+  void _moveTo(double extent) {
+    if (!_controller.isAttached) return;
+    if (widget.reducedMotion) {
+      _controller.jumpTo(extent);
+      if ((extent - _reportedExtent).abs() > _epsilon) {
+        setState(() => _reportedExtent = extent);
+      }
+      if (extent <= _epsilon) _scheduleDismissal();
+      return;
+    }
+    _controller
+        .animateTo(extent, duration: _animationDuration, curve: Curves.easeOut)
+        .then((_) {
+          if (extent <= _epsilon) _scheduleDismissal();
+        });
+  }
+
+  static double _detentExtent(ModalSheetDetent detent) => switch (detent) {
+    ModalSheetDetent.medium => _mediumExtent,
+    ModalSheetDetent.large => _largeExtent,
+  };
+
+  static int _nearestExtentIndex(double value, List<double> extents) {
+    var bestIndex = 0;
+    var bestDistance = (value - extents.first).abs();
+    for (var index = 1; index < extents.length; index += 1) {
+      final distance = (value - extents[index]).abs();
+      if (distance <= bestDistance) {
+        bestIndex = index;
+        bestDistance = distance;
+      }
+    }
+    return bestIndex;
+  }
+
+  static double _nearestExtent(double value, List<double> extents) =>
+      extents[_nearestExtentIndex(value, extents)];
 }
 
 T _expectProps<T extends UiProps>(UiNode node) {

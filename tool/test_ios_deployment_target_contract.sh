@@ -83,7 +83,6 @@ grep -F 'ios_deployment_target' \
   fail "the native build hook does not consume ios_deployment_target"
 
 for script in \
-  "$ios_tool_directory/build_native_objects.sh" \
   "$ios_tool_directory/verify_app_bundle.sh" \
   "$repository_root/tool/eio_worker_spike/build_ios_complete_object.sh" \
   "$repository_root/tool/eio_worker_spike/test_ios_complete_object.sh"

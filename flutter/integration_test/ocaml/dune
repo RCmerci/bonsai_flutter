@@ -1,6 +1,38 @@
+(library
+ (name integration_consumer_fixtures)
+ (wrapped false)
+ (modules
+  counter
+  gallery
+  host_navigation
+  mail
+  sqlite_worker_config
+  sqlite_worker_example
+  sqlite_worker_file_demo
+  sqlite_worker_protocol
+  sqlite_worker_service
+  sqlite_worker_store
+  text_input_example
+  todo)
+ (libraries
+  base
+  core
+  bonsai
+  bonsai_flutter.spec_impl
+  bonsai_flutter.driver
+  bonsai_flutter.ui
+  cstruct
+  eio
+  eio.core
+  incr_dom.ui_incr
+  optint
+  sqlite3
+  unix
+  virtual_dom.ui_effect))
+
 (executable
- (name native_integration_embed)
- (modules autonomous_pump_fixture native_integration_embed)
+ (name native_embed)
+ (modules autonomous_pump_fixture native_embed)
  (enabled_if
   (= %{env:BONSAI_FLUTTER_EMBED_OCAML=disabled} enabled))
  (libraries
@@ -11,13 +43,7 @@
   bonsai_flutter.native_backend
   bonsai_flutter.driver
   bonsai_flutter.ui
-  bonsai_flutter_counter_example
-  bonsai_flutter_gallery
-  bonsai_flutter_host_navigation_example
-  bonsai_flutter_mail_example
-  bonsai_flutter_sqlite_worker_example
-  bonsai_flutter_text_input_example
-  bonsai_flutter_todo_example
+  integration_consumer_fixtures
   incr_dom.ui_incr
   incr_dom.ui_time_source
   sqlite3
@@ -26,3 +52,19 @@
   (:standard -cclib -L%{env:BONSAI_FLUTTER_APPLE_SDK_ROOT=}/usr/lib))
  (modes
   (native object)))
+
+; BEGIN bonsai-flutter native aliases
+
+(alias
+ (name bonsai-flutter-macos)
+ (enabled_if
+  (= %{context_name} default))
+ (deps native_embed.exe.o))
+
+(alias
+ (name bonsai-flutter-ios)
+ (enabled_if
+  (= %{context_name} default.ios))
+ (deps native_embed.exe.o))
+
+; END bonsai-flutter native aliases

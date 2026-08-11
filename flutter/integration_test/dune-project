@@ -1,0 +1,8 @@
+(lang dune 3.17)
+(name bonsai_flutter_integration_test)
+(generate_opam_files false)
+(implicit_transitive_deps false)
+(license MIT)
+(package
+ (name bonsai_flutter_integration_test)
+ (allow_empty))

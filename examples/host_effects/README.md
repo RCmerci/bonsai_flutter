@@ -4,17 +4,16 @@ OCaml owns the request flow and rendered result. Flutter supplies the native
 clipboard implementation and returns a typed response through the runtime.
 
 ```sh
-make native-object EXAMPLE=host_effects
-cd examples/host_effects/flutter
-flutter run -d macos
+cd examples/host_effects
+../../_build/default/bonsai_flutter_tool/bin/main.exe run macos --profile debug
 ```
 
 Build the target-qualified unsigned iPhoneOS application:
 
 ```sh
-make ios-device-native-objects
-cd examples/host_effects/flutter
-flutter build ios --debug --no-codesign
+cd examples/host_effects
+../../_build/default/bonsai_flutter_tool/bin/main.exe build ios \
+  --profile debug --no-codesign
 ```
 
 The real iOS clipboard path is part of the signed physical-device suite in

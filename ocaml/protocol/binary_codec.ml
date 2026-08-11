@@ -281,6 +281,106 @@ let page_transition_id = function
   | Slide -> 2
 ;;
 
+let modal_sheet_detent_id = function
+  | Wire_frame.Medium_detent -> 0
+  | Large_detent -> 1
+;;
+
+let modal_sheet_detents_id = function
+  | Wire_frame.Medium_only -> 0
+  | Large_only -> 1
+  | Medium_and_large -> 2
+;;
+
+let detent_is_in_set detent detents =
+  match detent, detents with
+  | Wire_frame.Medium_detent, (Medium_only | Medium_and_large)
+  | Large_detent, (Large_only | Medium_and_large) -> true
+  | _ -> false
+;;
+
+let require_nonempty_modal_string name value =
+  if String.length (String.trim value) = 0
+  then fail Invalid_props "modal %s must not be empty" name
+;;
+
+let write_page_presentation writer = function
+  | Wire_frame.Standard_page _ ->
+    Writer.u8 writer 0;
+    write_bool writer false;
+    write_optional_argb32 writer None;
+    write_optional_string writer None;
+    Writer.u8 writer 0;
+    write_bool writer false;
+    write_bool writer false;
+    Writer.u32 writer 0;
+    Writer.u32 writer 0;
+    Writer.u8 writer 0;
+    Writer.u8 writer 0;
+    write_bool writer false;
+    write_optional_string writer None;
+    write_optional_string writer None;
+    write_optional_string writer None
+  | Modal_bottom_sheet
+      { barrier_dismissible
+      ; barrier_color_argb
+      ; barrier_label
+      ; sizing
+      ; use_safe_area
+      ; request_focus
+      ; transition_duration_ms
+      ; reverse_transition_duration_ms
+      } ->
+    check_u32 "modal transition duration" transition_duration_ms;
+    check_u32 "modal reverse transition duration" reverse_transition_duration_ms;
+    Writer.u8 writer 1;
+    write_bool writer barrier_dismissible;
+    write_optional_argb32 writer barrier_color_argb;
+    write_optional_string writer barrier_label;
+    let sizing_id, detents, initial_detent, dismiss_on_drag, semantics =
+      match sizing with
+      | Wire_frame.Content_bounded_sizing -> 0, Medium_only, Medium_detent, false, None
+      | Scroll_controlled_sizing -> 1, Medium_only, Medium_detent, false, None
+      | Detented_sizing detented ->
+        if not (detent_is_in_set detented.initial_detent detented.detents)
+        then fail Invalid_props "modal initial detent must belong to detents";
+        require_nonempty_modal_string
+          "handle semantics label"
+          detented.handle_semantics_label;
+        require_nonempty_modal_string
+          "medium semantics value"
+          detented.medium_semantics_value;
+        require_nonempty_modal_string
+          "large semantics value"
+          detented.large_semantics_value;
+        ( 2
+        , detented.detents
+        , detented.initial_detent
+        , detented.dismiss_on_drag
+        , Some
+            ( detented.handle_semantics_label
+            , detented.medium_semantics_value
+            , detented.large_semantics_value ) )
+    in
+    Writer.u8 writer sizing_id;
+    write_bool writer use_safe_area;
+    write_bool writer request_focus;
+    Writer.u32 writer transition_duration_ms;
+    Writer.u32 writer reverse_transition_duration_ms;
+    Writer.u8 writer (modal_sheet_detents_id detents);
+    Writer.u8 writer (modal_sheet_detent_id initial_detent);
+    write_bool writer dismiss_on_drag;
+    let label, medium_value, large_value =
+      match semantics with
+      | None -> None, None, None
+      | Some (label, medium_value, large_value) ->
+        Some label, Some medium_value, Some large_value
+    in
+    write_optional_string writer label;
+    write_optional_string writer medium_value;
+    write_optional_string writer large_value
+;;
+
 let overlay_alignment_id = function
   | Wire_frame.Top_start -> 0
   | Top_center -> 1
@@ -451,20 +551,22 @@ let write_props writer kind props =
     if Array.length matrix4 <> 16
     then fail Invalid_props "transform matrix must contain 16 values";
     Array.iter (Writer.f64 writer) matrix4
-  | Scroll_view, Scroll_view_props { axis; reverse } ->
+  | Scroll_view, Scroll_view_props { axis; reverse; primary } ->
     Writer.u8
       writer
       (match axis with
        | Horizontal -> 0
        | Vertical -> 1);
-    write_bool writer reverse
-  | List_view, List_view_props { axis; reverse } ->
+    write_bool writer reverse;
+    write_bool writer primary
+  | List_view, List_view_props { axis; reverse; primary } ->
     Writer.u8
       writer
       (match axis with
        | Horizontal -> 0
        | Vertical -> 1);
-    write_bool writer reverse
+    write_bool writer reverse;
+    write_bool writer primary
   | Gesture, Gesture_props -> ()
   | Focus_scope, Focus_scope_props { autofocus } -> write_bool writer autofocus
   | Mouse_region, Mouse_region_props { opaque } -> write_bool writer opaque
@@ -588,13 +690,19 @@ let write_props writer kind props =
     write_optional_string
       writer
       (Option.map ID.Navigation.Restoration_scope_id.to_string restoration_scope_id)
-  | Page, Page_props { page_key; transition; can_pop; restoration_id } ->
+  | Page, Page_props { page_key; presentation; can_pop; restoration_id } ->
     write_string writer (ID.Navigation.Page_key.to_string page_key);
-    Writer.u8 writer (page_transition_id transition);
+    Writer.u8
+      writer
+      (page_transition_id
+         (match presentation with
+          | Wire_frame.Standard_page transition -> transition
+          | Modal_bottom_sheet _ -> No_transition));
     write_bool writer can_pop;
     write_optional_string
       writer
-      (Option.map ID.Navigation.Restoration_id.to_string restoration_id)
+      (Option.map ID.Navigation.Restoration_id.to_string restoration_id);
+    write_page_presentation writer presentation
   | ( Safe_area
     , Safe_area_props
         { left
@@ -760,13 +868,21 @@ let changed_fields = function
       ]
   | Transform_props _ -> field_mask Generated_protocol.Transform_prop.matrix4
   | Scroll_view_props _ ->
-    Int64.logor
-      (field_mask Generated_protocol.Scroll_view_prop.axis)
-      (field_mask Generated_protocol.Scroll_view_prop.reverse)
+    List.fold_left
+      Int64.logor
+      0L
+      [ field_mask Generated_protocol.Scroll_view_prop.axis
+      ; field_mask Generated_protocol.Scroll_view_prop.reverse
+      ; field_mask Generated_protocol.Scroll_view_prop.primary
+      ]
   | List_view_props _ ->
-    Int64.logor
-      (field_mask Generated_protocol.List_view_prop.axis)
-      (field_mask Generated_protocol.List_view_prop.reverse)
+    List.fold_left
+      Int64.logor
+      0L
+      [ field_mask Generated_protocol.List_view_prop.axis
+      ; field_mask Generated_protocol.List_view_prop.reverse
+      ; field_mask Generated_protocol.List_view_prop.primary
+      ]
   | Focus_scope_props _ -> field_mask Generated_protocol.Focus_scope_prop.autofocus
   | Mouse_region_props _ -> field_mask Generated_protocol.Mouse_region_prop.opaque
   | Keyboard_listener_props _ ->
@@ -872,6 +988,21 @@ let changed_fields = function
       ; field_mask Generated_protocol.Page_prop.transition
       ; field_mask Generated_protocol.Page_prop.can_pop
       ; field_mask Generated_protocol.Page_prop.restoration_id
+      ; field_mask Generated_protocol.Page_prop.presentation
+      ; field_mask Generated_protocol.Page_prop.modal_barrier_dismissible
+      ; field_mask Generated_protocol.Page_prop.modal_barrier_color
+      ; field_mask Generated_protocol.Page_prop.modal_barrier_label
+      ; field_mask Generated_protocol.Page_prop.modal_use_safe_area
+      ; field_mask Generated_protocol.Page_prop.modal_request_focus
+      ; field_mask Generated_protocol.Page_prop.modal_transition_duration_ms
+      ; field_mask Generated_protocol.Page_prop.modal_reverse_transition_duration_ms
+      ; field_mask Generated_protocol.Page_prop.modal_sizing
+      ; field_mask Generated_protocol.Page_prop.modal_detents
+      ; field_mask Generated_protocol.Page_prop.modal_initial_detent
+      ; field_mask Generated_protocol.Page_prop.modal_dismiss_on_drag
+      ; field_mask Generated_protocol.Page_prop.modal_handle_semantics_label
+      ; field_mask Generated_protocol.Page_prop.modal_medium_semantics_value
+      ; field_mask Generated_protocol.Page_prop.modal_large_semantics_value
       ]
   | Safe_area_props _ ->
     List.fold_left
@@ -952,20 +1083,22 @@ let write_update_props writer props =
     if Array.length matrix4 <> 16
     then fail Invalid_props "transform matrix must contain 16 values";
     Array.iter (Writer.f64 writer) matrix4
-  | Scroll_view_props { axis; reverse } ->
+  | Scroll_view_props { axis; reverse; primary } ->
     Writer.u8
       writer
       (match axis with
        | Horizontal -> 0
        | Vertical -> 1);
-    write_bool writer reverse
-  | List_view_props { axis; reverse } ->
+    write_bool writer reverse;
+    write_bool writer primary
+  | List_view_props { axis; reverse; primary } ->
     Writer.u8
       writer
       (match axis with
        | Horizontal -> 0
        | Vertical -> 1);
-    write_bool writer reverse
+    write_bool writer reverse;
+    write_bool writer primary
   | Focus_scope_props { autofocus } -> write_bool writer autofocus
   | Mouse_region_props { opaque } -> write_bool writer opaque
   | Keyboard_listener_props { autofocus; key_policy } ->
@@ -1081,13 +1214,19 @@ let write_update_props writer props =
     write_optional_string
       writer
       (Option.map ID.Navigation.Restoration_scope_id.to_string restoration_scope_id)
-  | Page_props { page_key; transition; can_pop; restoration_id } ->
+  | Page_props { page_key; presentation; can_pop; restoration_id } ->
     write_string writer (ID.Navigation.Page_key.to_string page_key);
-    Writer.u8 writer (page_transition_id transition);
+    Writer.u8
+      writer
+      (page_transition_id
+         (match presentation with
+          | Wire_frame.Standard_page transition -> transition
+          | Modal_bottom_sheet _ -> No_transition));
     write_bool writer can_pop;
     write_optional_string
       writer
-      (Option.map ID.Navigation.Restoration_id.to_string restoration_id)
+      (Option.map ID.Navigation.Restoration_id.to_string restoration_id);
+    write_page_presentation writer presentation
   | Safe_area_props
       { left
       ; top
@@ -1966,7 +2105,11 @@ let read_props reader kind ~protocol_minor =
       | 1 -> Vertical
       | value -> fail Invalid_props "invalid scroll axis %d" value
     in
-    Scroll_view_props { axis; reverse = read_bool reader }
+    let reverse = read_bool reader in
+    let primary = read_bool reader in
+    if axis = Horizontal && primary
+    then fail Invalid_props "horizontal scroll view cannot be primary";
+    Scroll_view_props { axis; reverse; primary }
   | List_view ->
     let axis =
       match Reader.u8 reader with
@@ -1974,7 +2117,11 @@ let read_props reader kind ~protocol_minor =
       | 1 -> Vertical
       | value -> fail Invalid_props "invalid list axis %d" value
     in
-    List_view_props { axis; reverse = read_bool reader }
+    let reverse = read_bool reader in
+    let primary = read_bool reader in
+    if axis = Horizontal && primary
+    then fail Invalid_props "horizontal list view cannot be primary";
+    List_view_props { axis; reverse; primary }
   | Gesture -> Gesture_props
   | Focus_scope -> Focus_scope_props { autofocus = read_bool reader }
   | Mouse_region -> Mouse_region_props { opaque = read_bool reader }
@@ -2178,7 +2325,105 @@ let read_props reader kind ~protocol_minor =
     let restoration_id =
       Option.map ID.Navigation.Restoration_id.of_string (read_optional_string reader)
     in
-    Page_props { page_key; transition; can_pop; restoration_id }
+    let presentation_kind = Reader.u8 reader in
+    let barrier_dismissible = read_bool reader in
+    let barrier_color_argb = read_optional_argb32 reader in
+    let barrier_label = read_optional_string reader in
+    let sizing_kind = Reader.u8 reader in
+    let use_safe_area = read_bool reader in
+    let request_focus = read_bool reader in
+    let transition_duration_ms = Reader.u32 reader in
+    let reverse_transition_duration_ms = Reader.u32 reader in
+    let detents =
+      match Reader.u8 reader with
+      | 0 -> Wire_frame.Medium_only
+      | 1 -> Large_only
+      | 2 -> Medium_and_large
+      | value -> fail Invalid_props "invalid modal detent set %d" value
+    in
+    let initial_detent =
+      match Reader.u8 reader with
+      | 0 -> Wire_frame.Medium_detent
+      | 1 -> Large_detent
+      | value -> fail Invalid_props "invalid modal initial detent %d" value
+    in
+    let dismiss_on_drag = read_bool reader in
+    let handle_semantics_label = read_optional_string reader in
+    let medium_semantics_value = read_optional_string reader in
+    let large_semantics_value = read_optional_string reader in
+    let presentation =
+      match presentation_kind with
+      | 0 ->
+        if
+          barrier_dismissible
+          || Option.is_some barrier_color_argb
+          || Option.is_some barrier_label
+          || sizing_kind <> 0
+          || use_safe_area
+          || request_focus
+          || transition_duration_ms <> 0
+          || reverse_transition_duration_ms <> 0
+          || detents <> Wire_frame.Medium_only
+          || initial_detent <> Wire_frame.Medium_detent
+          || dismiss_on_drag
+          || Option.is_some handle_semantics_label
+          || Option.is_some medium_semantics_value
+          || Option.is_some large_semantics_value
+        then fail Invalid_props "standard page has noncanonical modal properties";
+        Wire_frame.Standard_page transition
+      | 1 ->
+        if transition <> Wire_frame.No_transition
+        then fail Invalid_props "modal bottom sheet cannot carry a standard transition";
+        let sizing =
+          match sizing_kind with
+          | 0 -> Wire_frame.Content_bounded_sizing
+          | 1 -> Scroll_controlled_sizing
+          | 2 ->
+            if not (detent_is_in_set initial_detent detents)
+            then fail Invalid_props "modal initial detent must belong to detents";
+            let require_some name = function
+              | Some value ->
+                require_nonempty_modal_string name value;
+                value
+              | None -> fail Invalid_props "detented modal must include %s" name
+            in
+            Detented_sizing
+              { detents
+              ; initial_detent
+              ; dismiss_on_drag
+              ; handle_semantics_label =
+                  require_some "handle semantics label" handle_semantics_label
+              ; medium_semantics_value =
+                  require_some "medium semantics value" medium_semantics_value
+              ; large_semantics_value =
+                  require_some "large semantics value" large_semantics_value
+              }
+          | value -> fail Invalid_props "invalid modal sizing %d" value
+        in
+        (match sizing with
+         | Wire_frame.Detented_sizing _ -> ()
+         | Content_bounded_sizing | Scroll_controlled_sizing ->
+           if
+             detents <> Wire_frame.Medium_only
+             || initial_detent <> Wire_frame.Medium_detent
+             || dismiss_on_drag
+             || Option.is_some handle_semantics_label
+             || Option.is_some medium_semantics_value
+             || Option.is_some large_semantics_value
+           then fail Invalid_props "non-detented modal has noncanonical detent properties");
+        Modal_bottom_sheet
+          { barrier_dismissible
+          ; barrier_color_argb
+          ; barrier_label
+          ; sizing
+          ; use_safe_area
+          ; request_focus
+          ; transition_duration_ms
+          ; reverse_transition_duration_ms
+          }
+      | value -> fail Invalid_props "invalid page presentation %d" value
+    in
+    Page_props { page_key; presentation; can_pop; restoration_id }
   | Safe_area ->
     Safe_area_props
       { left = read_bool reader

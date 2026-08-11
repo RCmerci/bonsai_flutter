@@ -53,66 +53,23 @@ the same card expanded and retains the list offset.
 From the repository root:
 
 ```sh
-make native-object EXAMPLE=mail
-cd examples/mail/flutter
-flutter pub get
-flutter run -d macos
+cd examples/mail
+../../_build/default/bonsai_flutter_tool/bin/main.exe run macos --profile debug
 ```
 
-The debug run selects the `mail-debug` entrypoint and prints a concise runtime
-trace to the terminal. Profile and release builds select the untraced `mail`
-entrypoint. The trace shows startup, visibility generations, cycles that emit a
-renderer frame or recoverable diagnostic, event-batch ordering, presentation
-identities, revisions, frame byte counts, acknowledgments for emitted frames,
-and shutdown. Successful idle pumps are intentionally silent. Event payloads
-and native error messages are omitted.
-
-The OCaml side prints only the logical widgets changed by each reconciliation,
-a summary of every frame sent to Flutter, every event batch received from
-Flutter, and acknowledgments for presentations that emitted a frame. The
-initial full snapshot contains the complete tree because every widget is new.
-Text payload contents are not logged; only their byte lengths are shown.
-
-The OCaml trace uses a workspace-internal virtual `Trace` module. It has no
-public Dune name and is not installed as part of the `bonsai_flutter` package.
-Its Debug implementation invokes the supplied action, while its Profile/Release
-implementation ignores it. The native build stages separate complete objects
-and the Flutter build hook selects the matching object before linking.
-
-For example:
-
-```text
-[Bonsai Mail][runtime] start entrypoint=mail-debug configBytes=10
-[Bonsai Mail][ocaml][widget-diff] targetRevision=1 kind=full_snapshot
-Theme
-  Center
-    Constrained_box
-      Navigator
-[Bonsai Mail][ocaml][outbound-frame] direction=ocaml->flutter epoch=... kind=full_snapshot baseRevision=0 targetRevision=1 operations=... bytes=...
-[Bonsai Mail][runtime] ready
-[Bonsai Mail][visibility] generation=1 eligible=true
-[Bonsai Mail][cycle] presentation=1 revision=1 frameBytes=14352 recoverable=none
-[Bonsai Mail][event-batch] epoch=... events=1 sequences=1..1 displayedRevision=1 tags=tap
-[Bonsai Mail][ocaml][inbound-event-batch] direction=flutter->ocaml epoch=... events=1
-  sequence=1 displayedRevision=1 node=... handler=... tag=tap payload=tap
-[Bonsai Mail][presentation] succeeded generation=1 presentation=2 revision=2 eventBytes=...
-[Bonsai Mail][ocaml][presentation-ack] presentationId=2 revision=2 direction=flutter->ocaml
-[Bonsai Mail][ocaml][widget-diff] targetRevision=2 kind=incremental_frame
-  updateProps node=... Text "Updated subject"
-```
-
-The exact byte counts, revisions, epoch, and timings come from the live runtime
-and vary between runs.
+All profiles use the same public `ocaml/native_embed.exe.o` target and the
+registered `mail` entrypoint. The profile-specific complete object is produced
+and selected by `bonsai-flutter`; the example has no private debug/release
+native targets.
 
 ## Build an unsigned iPhoneOS application
 
 From the repository root:
 
 ```sh
-make ios-device-native-objects
-cd examples/mail/flutter
-flutter pub get
-flutter build ios --debug --no-codesign
+cd examples/mail
+../../_build/default/bonsai_flutter_tool/bin/main.exe build ios \
+  --profile debug --no-codesign
 ```
 
 macOS arm64 remains the only tested runtime platform. The iPhoneOS build is an

@@ -158,8 +158,11 @@ final class NodeHost extends StatefulWidget {
 
 final class _NodeHostState extends State<NodeHost> {
   void Function()? _unsubscribe;
+  final Map<int, void Function()> _navigationPageUnsubscribes = {};
   RendererBoundaryError? _buildError;
   int? _failedLocalRevision;
+  RendererResourceStore? _leasedResources;
+  int? _leasedNodeId;
 
   @override
   void initState() {
@@ -168,19 +171,49 @@ final class _NodeHostState extends State<NodeHost> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _updateResourceLease(RendererResourceScope.of(context), widget.nodeId);
+  }
+
+  @override
   void didUpdateWidget(NodeHost oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.store, widget.store) ||
         oldWidget.nodeId != widget.nodeId) {
       _unsubscribe?.call();
+      _clearNavigationPageSubscriptions();
       _subscribe();
+    }
+    if (oldWidget.nodeId != widget.nodeId && _leasedResources != null) {
+      _updateResourceLease(_leasedResources!, widget.nodeId);
     }
   }
 
   @override
   void dispose() {
     _unsubscribe?.call();
+    _clearNavigationPageSubscriptions();
+    final resources = _leasedResources;
+    final nodeId = _leasedNodeId;
+    if (resources != null && nodeId != null) {
+      resources.unmountNode(nodeId);
+    }
     super.dispose();
+  }
+
+  void _updateResourceLease(RendererResourceStore resources, int nodeId) {
+    if (identical(_leasedResources, resources) && _leasedNodeId == nodeId) {
+      return;
+    }
+    final previousResources = _leasedResources;
+    final previousNodeId = _leasedNodeId;
+    if (previousResources != null && previousNodeId != null) {
+      previousResources.unmountNode(previousNodeId);
+    }
+    resources.mountNode(nodeId);
+    _leasedResources = resources;
+    _leasedNodeId = nodeId;
   }
 
   void _subscribe() {
@@ -192,6 +225,7 @@ final class _NodeHostState extends State<NodeHost> {
   @override
   Widget build(BuildContext context) {
     final node = widget.store.node(widget.nodeId);
+    _synchronizeNavigationPageSubscriptions(node);
     final sourceRevision = widget.store.revision;
     if (_failedLocalRevision == node.localRevision && _buildError != null) {
       return BonsaiRendererErrorWidget(error: _buildError!);
@@ -280,5 +314,32 @@ final class _NodeHostState extends State<NodeHost> {
       );
       return BonsaiRendererErrorWidget(error: error);
     }
+  }
+
+  void _synchronizeNavigationPageSubscriptions(UiNode node) {
+    final desired = node.kind == NodeKind.navigator
+        ? node.children.toSet()
+        : const <int>{};
+    for (final nodeId
+        in _navigationPageUnsubscribes.keys
+            .where((nodeId) => !desired.contains(nodeId))
+            .toList(growable: false)) {
+      _navigationPageUnsubscribes.remove(nodeId)?.call();
+    }
+    for (final nodeId in desired) {
+      _navigationPageUnsubscribes.putIfAbsent(
+        nodeId,
+        () => widget.store.subscribe(nodeId, () {
+          if (mounted) setState(() {});
+        }),
+      );
+    }
+  }
+
+  void _clearNavigationPageSubscriptions() {
+    for (final unsubscribe in _navigationPageUnsubscribes.values) {
+      unsubscribe();
+    }
+    _navigationPageUnsubscribes.clear();
   }
 }

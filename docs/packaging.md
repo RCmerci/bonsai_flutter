@@ -11,26 +11,37 @@ and entrypoint, the OCaml runtime, the shared C bridge, and the exported
 `bf_*` ABI. Complete objects are never shared across Apple platforms or SDK
 kinds.
 
-The build hook resolves one of these paths below an application-specific
-`native_artifact_root`:
+The build hook resolves one of these paths below the consumer-local artifact
+root managed by `bonsai-flutter`:
 
 | Target | Relative complete-object path | Measured minimum |
 | --- | --- | --- |
-| macOS arm64 | `macos/arm64/native_embed.exe.o` | macOS 26.0 |
-| iPhoneOS arm64 | `ios/iphoneos/arm64/native_embed.exe.o` | iOS 15.0 |
+| macOS arm64 | `macos/arm64/<profile>/native_embed.exe.o` | macOS 26.0 |
+| iPhoneOS arm64 | `ios/iphoneos/arm64/<profile>/native_embed.exe.o` | iOS 15.0 |
 
-A consuming workspace configures the root and makes the real backend
-mandatory:
+A consuming workspace owns the surrounding pubspec while the tool synchronizes
+the marked package and native-hook regions:
 
 ```yaml
 hooks:
   user_defines:
     bonsai_flutter_native:
-      native_artifact_root: ../../../_build/native-artifacts/counter/
+      # bonsai-flutter:begin native-hook
+      native_artifact_root: ../_build/bonsai-flutter/artifacts/
       macos_deployment_target: '26.0'
       ios_deployment_target: '15.0'
       require_ocaml_backend: true
+      # bonsai-flutter:end native-hook
+
+dependencies:
+  # bonsai-flutter:begin packages
+  bonsai_flutter:
+    path: ../.bonsai-flutter/flutter-packages/bonsai_flutter
+  # bonsai-flutter:end packages
 ```
+
+`exec` temporarily adds `native_artifact_profile` inside the native-hook region
+and restores the original pubspec bytes after the child command exits.
 
 The generated macOS host passes the quoted `macos_deployment_target` to the
 hook and includes `BonsaiFlutter.xcconfig` from the Debug, Release/Profile, and
@@ -48,18 +59,9 @@ linking. It rejects a missing object, wrong architecture, wrong platform,
 wrong SDK kind, inconsistent minimum version, Bitcode, and an optional
 C-only fallback when `require_ocaml_backend` is true.
 
-Applications that use the SQLite binding opt into the Apple system library:
-
-```yaml
-hooks:
-  user_defines:
-    bonsai_flutter_native:
-      native_artifact_root: ../../../_build/native-artifacts/sqlite_worker/
-      macos_deployment_target: '26.0'
-      ios_deployment_target: '15.0'
-      require_ocaml_backend: true
-      link_system_sqlite3: true
-```
+Applications that declare `(features sqlite)` in `bonsai-flutter.sexp` opt into
+the Apple system SQLite library. The tool writes `link_system_sqlite3: true`
+inside the owned native-hook region.
 
 `link_system_sqlite3` is a strict boolean and is accepted only for Apple
 targets. The build hook adds `-lsqlite3` only when opted in; every other
@@ -67,16 +69,18 @@ application remains free of a SQLite dependency.
 
 ## macOS
 
-Build and stage all standalone macOS objects:
+Build one consumer from its own root:
 
 ```sh
-make native-objects
+cd examples/counter
+../../_build/default/bonsai_flutter_tool/bin/main.exe build macos --profile release
 ```
 
-The aggregate integration object is separate:
+Run a Flutter command with the matching native profile selected temporarily:
 
 ```sh
-make integration-native-object
+../../_build/default/bonsai_flutter_tool/bin/main.exe exec --profile=debug -- \
+  flutter test --no-pub
 ```
 
 The macOS contract is minimum 26.0 and Apple Silicon arm64 only. The native
@@ -86,12 +90,15 @@ the hook rejects an x86_64 request before artifact resolution.
 
 ## iPhoneOS
 
-The cross environments are isolated below ignored `_build/ios` paths and do
-not mutate a developer's default opam switch:
+The immutable cross SDK uses the fixed global `bonsai-flutter-ios` opam switch
+and never changes the developer's active switch:
 
 ```sh
-make ios-toolchains
-make ios-device-native-objects
+dune build bonsai_flutter_tool/bin/main.exe
+_build/default/bonsai_flutter_tool/bin/main.exe toolchain install iphoneos
+cd examples/counter
+../../_build/default/bonsai_flutter_tool/bin/main.exe build ios \
+  --profile release --no-codesign
 ```
 
 `tool/ios/toolchain.lock` pins OCaml 5.1.1, opam-cross-ios, target triples,
@@ -101,7 +108,12 @@ libraries into a deterministic closure lock. The lock pins every version,
 source commit or archive, SHA-256 digest, target component, host-only package,
 capability, and target dependency. `vendor/opam-ios/runtime-closure.lock` is
 the checked-in DataScript SQLite fixture result and verification baseline, not
-a fixed union imposed on every application. Host PPX executables and
+a fixed union imposed on every application.
+`vendor/opam-ios/supported-closure.lock` is the independently generated union
+installed in the immutable SDK for the repository's supported core, network,
+and SQLite feature families. Each consumer still resolves its own reachable
+application closure from pinned metadata and may use only packages present in
+that supported SDK closure. Host PPX executables and
 generators remain native macOS processes. Their locked descriptions are
 available to Dune's cross context, but only resolved target components enter
 the iOS artifact set.
@@ -167,10 +179,10 @@ non-SQLite examples from accidental global linkage.
 
 ## Current evidence boundary
 
-The repository contains ten standalone examples. All ten examples and the
-aggregate integration application build as unsigned iPhoneOS arm64
-applications. Counter Debug, Profile, and Release frameworks pass the
-repository bundle audit.
+The repository contains eleven standalone consumer examples. CI analyzes and
+tests all eleven through the public tool. The hosted iOS matrix builds Counter,
+SQLite Worker, and Network as unsigned iPhoneOS arm64 applications; Counter
+Debug, Profile, and Release frameworks pass the repository bundle audit.
 
 Development-signed installation and launch have been verified on a physical
 iPhone. Release archive export and distribution signing remain outside the

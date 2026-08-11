@@ -37,12 +37,18 @@ type managed_adapter =
   ; launch_policy : launch_policy
   }
 
+type custom_host = { main : string }
+
+type host =
+  | Managed_adapter of managed_adapter
+  | Custom of custom_host
+
 type t =
   { name : string
   ; flutter_root : string
   ; native_target : string
   ; features : Feature.t list
-  ; host : managed_adapter
+  ; host : host
   ; macos : platform
   ; ios : ios
   }
@@ -170,24 +176,42 @@ let validate_adapter_path value =
   then invalid "host.adapter must use lower_snake_case path components"
 ;;
 
+let validate_main_path value =
+  if String.contains value '\\' then invalid "host.main must use forward slashes";
+  validate_relative_path ~field:"host.main" value;
+  if not (String.starts_with ~prefix:"lib/" value)
+  then invalid "host.main must be inside flutter lib";
+  if not (String.ends_with ~suffix:".dart" value)
+  then invalid "host.main must name a .dart file"
+;;
+
 let parse_host values =
   let scope = "host" in
   let fields = named_fields ~scope values in
-  reject_unknown ~scope ~known:[ "mode"; "adapter"; "entrypoint"; "launch_policy" ] fields;
   let mode = single_atom ~scope ~name:"mode" fields in
-  if not (String.equal mode "managed_adapter")
-  then invalid "Unsupported host mode: %s" mode;
-  let adapter = single_atom ~scope ~name:"adapter" fields in
-  validate_adapter_path adapter;
-  let entrypoint = single_atom ~scope ~name:"entrypoint" fields in
-  validate_host_entrypoint entrypoint;
-  let launch_policy =
-    match single_atom ~scope ~name:"launch_policy" fields with
-    | "fresh" -> Fresh
-    | "replace_existing" -> Replace_existing
-    | value -> invalid "Unsupported host launch policy: %s" value
-  in
-  { adapter; entrypoint; launch_policy }
+  match mode with
+  | "managed_adapter" ->
+    reject_unknown
+      ~scope
+      ~known:[ "mode"; "adapter"; "entrypoint"; "launch_policy" ]
+      fields;
+    let adapter = single_atom ~scope ~name:"adapter" fields in
+    validate_adapter_path adapter;
+    let entrypoint = single_atom ~scope ~name:"entrypoint" fields in
+    validate_host_entrypoint entrypoint;
+    let launch_policy =
+      match single_atom ~scope ~name:"launch_policy" fields with
+      | "fresh" -> Fresh
+      | "replace_existing" -> Replace_existing
+      | value -> invalid "Unsupported host launch policy: %s" value
+    in
+    Managed_adapter { adapter; entrypoint; launch_policy }
+  | "custom" ->
+    reject_unknown ~scope ~known:[ "mode"; "main" ] fields;
+    let main = single_atom ~scope ~name:"main" fields in
+    validate_main_path main;
+    Custom { main }
+  | value -> invalid "Unsupported host mode: %s" value
 ;;
 
 let parse_macos values =
@@ -276,12 +300,12 @@ let parse_app values =
 let parse_string input =
   try
     match Sexplib.Sexp.of_string_many input with
-    | [ Sexplib.Sexp.List [ Sexplib.Sexp.Atom "lang"; Sexplib.Sexp.Atom "1" ]
+    | [ Sexplib.Sexp.List [ Sexplib.Sexp.Atom "lang"; Sexplib.Sexp.Atom "2" ]
       ; Sexplib.Sexp.List (Sexplib.Sexp.Atom "app" :: values)
       ] -> Ok (parse_app values)
     | Sexplib.Sexp.List [ Sexplib.Sexp.Atom "lang"; Sexplib.Sexp.Atom version ] :: _ ->
       Error (Printf.sprintf "Unsupported schema version: %s" version)
-    | _ -> Error "Expected exactly (lang 1) followed by one (app ...) form"
+    | _ -> Error "Expected exactly (lang 2) followed by one (app ...) form"
   with
   | Invalid message -> Error message
   | exn ->

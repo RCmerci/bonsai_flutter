@@ -13,9 +13,8 @@ range.
 Build and run this standalone app from the repository root:
 
 ```sh
-make native-object EXAMPLE=text_input
-cd examples/text_input/flutter
-flutter run -d macos
+cd examples/text_input
+../../_build/default/bonsai_flutter_tool/bin/main.exe run macos --profile debug
 ```
 
 The integration test, run with `make integration-test`, simulates editing
@@ -25,9 +24,9 @@ A distributable macOS runner and physical IME automation remain unclaimed.
 Build the target-qualified unsigned iPhoneOS application:
 
 ```sh
-make ios-device-native-objects
-cd examples/text_input/flutter
-flutter build ios --debug --no-codesign
+cd examples/text_input
+../../_build/default/bonsai_flutter_tool/bin/main.exe build ios \
+  --profile debug --no-codesign
 ```
 
 The signed device suite covers composing text, emoji, and selection when the

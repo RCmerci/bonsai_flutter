@@ -2,7 +2,7 @@ open Bonsai_flutter_tool
 
 let valid_config =
   {|
-(lang 1)
+(lang 2)
 
 (app
  (name journal)
@@ -25,7 +25,7 @@ let valid_config =
 
 let managed_adapter_config =
   {|
-(lang 1)
+(lang 2)
 
 (app
  (name journal)
@@ -44,6 +44,51 @@ let managed_adapter_config =
   (minimum_version 15.0)
   (architectures arm64)))
 |}
+;;
+
+let custom_host_config =
+  {|
+(lang 2)
+
+(app
+ (name journal)
+ (flutter_root flutter)
+ (native_target ocaml/native_embed.exe.o)
+ (features sqlite)
+ (host
+  (mode custom)
+  (main lib/main.dart))
+ (macos
+  (minimum_version 26.0)
+  (architectures arm64))
+ (ios
+  (minimum_version 15.0)
+  (architectures arm64)))
+|}
+;;
+
+let consumer_pubspec ?(line_ending = "\n") () =
+  [ "name: journal_host"
+  ; "# consumer comment"
+  ; "dependencies:"
+  ; "  path_provider: ^2.1.5"
+  ; "  # bonsai-flutter:begin packages"
+  ; "  bonsai_flutter:"
+  ; "    path: old/path"
+  ; "  # bonsai-flutter:end packages"
+  ; "hooks:"
+  ; "  unrelated_hook: keep-me"
+  ; "  user_defines:"
+  ; "    bonsai_flutter_native:"
+  ; "      # bonsai-flutter:begin native-hook"
+  ; "      native_artifact_root: old/artifacts"
+  ; "      ios_deployment_target: '14.0'"
+  ; "      # bonsai-flutter:end native-hook"
+  ; "dev_dependencies:"
+  ; "  test: ^1.31.0"
+  ; ""
+  ]
+  |> String.concat line_ending
 ;;
 
 let get_ok = function
@@ -228,7 +273,7 @@ let test_parse_valid_config () =
 
 let test_invalid_configs () =
   [ ( "unsupported schema"
-    , replace_once valid_config ~pattern:"(lang 1)" ~replacement:"(lang 2)"
+    , replace_once valid_config ~pattern:"(lang 2)" ~replacement:"(lang 1)"
     , "Unsupported schema version" )
   ; ( "unknown field"
     , replace_once
@@ -369,10 +414,43 @@ let test_managed_adapter_config_validation () =
     invalid
 ;;
 
+let test_custom_host_config_validation () =
+  Config.parse_string custom_host_config |> get_ok |> ignore;
+  [ ( "custom adapter"
+    , replace_once
+        custom_host_config
+        ~pattern:"(main lib/main.dart)"
+        ~replacement:"(main lib/main.dart) (adapter lib/adapter.dart)"
+    , "Unknown host field" )
+  ; ( "custom entrypoint"
+    , replace_once
+        custom_host_config
+        ~pattern:"(main lib/main.dart)"
+        ~replacement:"(main lib/main.dart) (entrypoint journal)"
+    , "Unknown host field" )
+  ; ( "missing custom main"
+    , replace_once custom_host_config ~pattern:"(main lib/main.dart)" ~replacement:""
+    , "Missing host field: main" )
+  ; ( "absolute custom main"
+    , replace_once
+        custom_host_config
+        ~pattern:"lib/main.dart"
+        ~replacement:"/tmp/main.dart"
+    , "host.main must be a relative path" )
+  ; ( "traversing custom main"
+    , replace_once custom_host_config ~pattern:"lib/main.dart" ~replacement:"../main.dart"
+    , "host.main must not contain parent traversal" )
+  ]
+  |> List.iter (fun (name, input, expected) ->
+    match Config.parse_string input with
+    | Error message -> Alcotest.(check bool) name true (contains message expected)
+    | Ok _ -> Alcotest.failf "%s: expected an error containing %S" name expected)
+;;
+
 let test_missing_host_requires_migration () =
   let without_host =
     {|
-(lang 1)
+(lang 2)
 
 (app
  (name journal)
@@ -965,10 +1043,11 @@ let test_ios_opam_repository_release_contract () =
     "cross repository commit"
     true
     (contains lock_contents "8380b52b0154752c26c6e221c04fbced3320aa48");
+  let actual_repository_digest = repository_digest repository in
   Alcotest.(check bool)
-    "repository snapshot digest"
+    ("repository snapshot digest: " ^ actual_repository_digest)
     true
-    (contains lock_contents (repository_digest repository));
+    (contains lock_contents actual_repository_digest);
   Alcotest.(check bool)
     "source checksum lock digest"
     true
@@ -1004,7 +1083,8 @@ let test_ios_opam_repository_release_contract () =
     true
     (contains
        meta_contents
-       "extra-source \"runtime-jst-config-2cf345e33bed0ee4c325667e77dfc5bee8f12afd56318b7c9acf81ec875ecf6e.archive\""
+       "extra-source \
+        \"runtime-jst-config-2cf345e33bed0ee4c325667e77dfc5bee8f12afd56318b7c9acf81ec875ecf6e.archive\""
      && contains
           meta_contents
           "https://github.com/janestreet/jst-config/archive/refs/tags/v0.17.0.tar.gz"
@@ -1493,7 +1573,7 @@ let test_generated_host () =
     "relative native artifacts"
     true
     (contains pubspec "native_artifact_root: ../_build/bonsai-flutter/artifacts/"
-     && not (contains pubspec "native-artifacts")
+     && (not (contains pubspec "native-artifacts"))
      && not
           (contains
              pubspec
@@ -1564,11 +1644,118 @@ let test_generated_managed_adapter_host () =
     true
     (contains widget_test "application_host_adapter.dart");
   Alcotest.(check bool)
+    "generated Flutter construction test declares its relative import policy"
+    true
+    (contains widget_test "// ignore_for_file: avoid_relative_lib_imports");
+  Alcotest.(check bool)
     "generated Flutter construction test constructs adapter host"
     true
     (contains
        widget_test
        "BonsaiFlutterHost(adapter: application.createBonsaiFlutterHostAdapter())")
+;;
+
+let test_mixed_ownership_pubspec_sync () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "owned-pubspec" in
+  let config = Config.parse_string valid_config |> get_ok in
+  let pubspec_path = Filename.concat root "flutter/pubspec.yaml" in
+  let original = consumer_pubspec () in
+  write_file pubspec_path original;
+  Host.sync ~project_root:root ~config ~mode:Host.Write |> get_ok |> ignore;
+  let synchronized = read_file pubspec_path in
+  [ "# consumer comment"
+  ; "  path_provider: ^2.1.5"
+  ; "  unrelated_hook: keep-me"
+  ; "  test: ^1.31.0"
+  ; "path: ../.bonsai-flutter/flutter-packages/bonsai_flutter"
+  ; "native_artifact_root: ../_build/bonsai-flutter/artifacts/"
+  ]
+  |> List.iter (fun expected ->
+    Alcotest.(check bool) expected true (contains synchronized expected));
+  Alcotest.(check bool)
+    "obsolete package path removed"
+    false
+    (contains synchronized "old/path");
+  Alcotest.(check bool)
+    "obsolete artifact root removed"
+    false
+    (contains synchronized "old/artifacts")
+;;
+
+let test_pubspec_marker_validation () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "invalid-markers" in
+  let config = Config.parse_string valid_config |> get_ok in
+  let pubspec_path = Filename.concat root "flutter/pubspec.yaml" in
+  [ ( "missing package marker"
+    , replace_once
+        (consumer_pubspec ())
+        ~pattern:"  # bonsai-flutter:begin packages\n"
+        ~replacement:""
+    , "packages marker" )
+  ; ( "duplicate package marker"
+    , replace_once
+        (consumer_pubspec ())
+        ~pattern:"  # bonsai-flutter:begin packages\n"
+        ~replacement:
+          "  # bonsai-flutter:begin packages\n  # bonsai-flutter:begin packages\n"
+    , "packages marker" )
+  ; ( "reversed native marker"
+    , consumer_pubspec ()
+      |> replace_once
+           ~pattern:"# bonsai-flutter:begin native-hook"
+           ~replacement:"# bonsai-flutter:temporary native-hook"
+      |> replace_once
+           ~pattern:"# bonsai-flutter:end native-hook"
+           ~replacement:"# bonsai-flutter:begin native-hook"
+      |> replace_once
+           ~pattern:"# bonsai-flutter:temporary native-hook"
+           ~replacement:"# bonsai-flutter:end native-hook"
+    , "native-hook marker" )
+  ]
+  |> List.iter (fun (name, contents, expected) ->
+    write_file pubspec_path contents;
+    match Host.sync ~project_root:root ~config ~mode:Host.Write with
+    | Error message -> Alcotest.(check bool) name true (contains message expected)
+    | Ok _ -> Alcotest.failf "%s: expected marker validation failure" name)
+;;
+
+let test_pubspec_sync_preserves_crlf () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "crlf-pubspec" in
+  let config = Config.parse_string valid_config |> get_ok in
+  let pubspec_path = Filename.concat root "flutter/pubspec.yaml" in
+  write_file pubspec_path (consumer_pubspec ~line_ending:"\r\n" ());
+  Host.sync ~project_root:root ~config ~mode:Host.Write |> get_ok |> ignore;
+  let synchronized = read_file pubspec_path in
+  let without_crlf = Str.global_replace (Str.regexp_string "\r\n") "" synchronized in
+  Alcotest.(check bool) "CRLF is retained" false (contains without_crlf "\n")
+;;
+
+let test_custom_host_sync_preserves_consumer_source () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "custom-host" in
+  let config = Config.parse_string custom_host_config |> get_ok in
+  let main_path = Filename.concat root "flutter/lib/main.dart" in
+  let test_path = Filename.concat root "flutter/test/custom_host_test.dart" in
+  let main = "// consumer-owned main\nvoid main() {}\n" in
+  let test = "// consumer-owned test\n" in
+  write_file main_path main;
+  write_file test_path test;
+  write_file (Filename.concat root "flutter/pubspec.yaml") (consumer_pubspec ());
+  Host.sync ~project_root:root ~config ~mode:Host.Write |> get_ok |> ignore;
+  Alcotest.(check string) "custom main" main (read_file main_path);
+  Alcotest.(check string) "custom tests" test (read_file test_path);
+  Sys.remove main_path;
+  Host.sync ~project_root:root ~config ~mode:Host.Write
+  |> check_error_contains "Custom host entrypoint is missing"
+;;
+
+let test_managed_host_rejects_edited_generated_source () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "managed-edit" in
+  let config = Config.parse_string valid_config |> get_ok in
+  Host.sync ~project_root:root ~config ~mode:Host.Write |> get_ok |> ignore;
+  let main_path = Filename.concat root "flutter/lib/main.dart" in
+  write_file main_path "// consumer edit\n";
+  Host.sync ~project_root:root ~config ~mode:Host.Write
+  |> check_error_contains "managed generated file was edited"
 ;;
 
 let test_ios_privacy_manifest () =
@@ -1630,6 +1817,36 @@ let test_scaffold_preserves_user_source () =
     "repeated init preserves application-owned adapter"
     application_owned
     (read_file adapter_path)
+;;
+
+let test_scaffold_adopts_existing_layout_without_default_app () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "adopt-layout" in
+  write_file (Filename.concat root "ocaml/native_embed.ml") "let () = ()\n";
+  write_file
+    (Filename.concat root "ocaml/dune")
+    "(executable (name native_embed) (modules native_embed) (modes (native object)))\n";
+  write_file (Filename.concat root "flutter/lib/main.dart") "void main() {}\n";
+  write_file (Filename.concat root "flutter/pubspec.yaml") (consumer_pubspec ());
+  let config = Config.parse_string custom_host_config |> get_ok in
+  Scaffold.adopt_workspace ~project_root:root ~config_text:custom_host_config ~config
+  |> get_ok;
+  Alcotest.(check bool)
+    "default app directory is absent"
+    false
+    (Sys.file_exists (Filename.concat root "app"));
+  Alcotest.(check bool)
+    "consumer OCaml entrypoint is preserved"
+    true
+    (Sys.file_exists (Filename.concat root "ocaml/native_embed.ml"))
+;;
+
+let test_scaffold_adoption_rejects_conflicting_config () =
+  let root = Filename.temp_dir "bonsai-flutter-tool" "adopt-conflict" in
+  write_file (Filename.concat root "bonsai-flutter.sexp") valid_config;
+  write_file (Filename.concat root "ocaml/dune") "(executable (name native_embed))\n";
+  let config = Config.parse_string custom_host_config |> get_ok in
+  Scaffold.adopt_workspace ~project_root:root ~config_text:custom_host_config ~config
+  |> check_error_contains "bonsai-flutter.sexp conflicts"
 ;;
 
 let test_scaffold_generates_and_preserves_application_lock () =
@@ -1894,11 +2111,14 @@ let test_host_sync_check () =
   let still_drifted = input_line channel in
   close_in channel;
   Alcotest.(check string) "check does not modify" "// drift" still_drifted;
+  Host.sync ~project_root:root ~config ~mode:Host.Write
+  |> check_error_contains "managed generated file was edited";
+  Sys.remove main_path;
   let repaired = Host.sync ~project_root:root ~config ~mode:Host.Write |> get_ok in
   Alcotest.(check (list string)) "repairs only drift" [ "flutter/lib/main.dart" ] repaired
 ;;
 
-let test_host_sync_repairs_missing_integration_dependency () =
+let test_host_sync_preserves_consumer_dependency_changes () =
   let root = Filename.temp_dir "bonsai-flutter-tool" "sync-integration-test" in
   let config = Config.parse_string valid_config |> get_ok in
   Host.sync ~project_root:root ~config ~mode:Host.Write |> get_ok |> ignore;
@@ -1907,14 +2127,13 @@ let test_host_sync_repairs_missing_integration_dependency () =
   let dependency = "  integration_test:\n    sdk: flutter\n" in
   let missing = replace_once generated ~pattern:dependency ~replacement:"" in
   write_file pubspec_path missing;
-  Host.sync ~project_root:root ~config ~mode:Host.Check
-  |> check_error_contains "Generated host is out of date: flutter/pubspec.yaml";
-  let repaired = Host.sync ~project_root:root ~config ~mode:Host.Write |> get_ok in
   Alcotest.(check (list string))
-    "repairs only generated pubspec"
-    [ "flutter/pubspec.yaml" ]
-    repaired;
-  Alcotest.(check string) "restores canonical pubspec" generated (read_file pubspec_path)
+    "consumer dependency is outside managed regions"
+    []
+    (Host.sync ~project_root:root ~config ~mode:Host.Check |> get_ok);
+  let repaired = Host.sync ~project_root:root ~config ~mode:Host.Write |> get_ok in
+  Alcotest.(check (list string)) "consumer dependency change is untouched" [] repaired;
+  Alcotest.(check string) "preserves consumer pubspec" missing (read_file pubspec_path)
 ;;
 
 let test_native_sync_only_manages_dune_aliases () =
@@ -2113,6 +2332,13 @@ depends: [
      ^ {|exit "${VERIFY_EXIT:-0}"
 |}
     );
+  [ "bonsai_flutter"; "bonsai_flutter_native" ]
+  |> List.iter (fun package ->
+    write_file
+      (Filename.concat
+         native_framework_root
+         ("flutter/packages/" ^ package ^ "/pubspec.yaml"))
+      ("name: " ^ package ^ "\nversion: 0.1.0\n"));
   write_executable
     (Filename.concat native_bin "xcrun")
     (command_logger "xcrun"
@@ -2171,6 +2397,30 @@ esac
 |}
          native_switch_prefix
          native_switch_prefix);
+  let gmp_directory = Filename.concat native_root "static-gmp" in
+  write_file (Filename.concat gmp_directory "libgmp.a") "static-gmp";
+  write_executable
+    (Filename.concat native_bin "pkg-config")
+    (command_logger "pkg-config" ^ Printf.sprintf "printf '%%s\\n' '%s'\n" gmp_directory);
+  write_executable
+    (Filename.concat native_bin "clang")
+    (command_logger "clang"
+     ^ {|source=''
+output=''
+previous=''
+for argument in "$@"; do
+  if test "$previous" = -o; then output=$argument; fi
+  case "$argument" in
+    *.exe.o) if test -z "$source"; then source=$argument; fi ;;
+  esac
+  previous=$argument
+done
+test -n "$source"
+test -n "$output"
+cp "$source" "$output"
+|}
+    );
+  write_executable (Filename.concat native_bin "nm") (command_logger "nm" ^ "exit 0\n");
   { native_project_root
   ; native_framework_root
   ; native_switch_prefix
@@ -2325,6 +2575,7 @@ type exec_fixture =
   { exec_native : native_build_fixture
   ; exec_working_directory : string
   ; exec_log : string
+  ; exec_pub_get_log : string
   ; exec_ready : string
   ; exec_result : string
   ; exec_pubspec : string
@@ -2340,6 +2591,7 @@ let create_exec_fixture () =
     write_file (Filename.concat project_root relative_path) contents);
   let exec_working_directory = Filename.concat project_root "flutter/macos" in
   let exec_log = Filename.concat project_root "exec.log" in
+  let exec_pub_get_log = Filename.concat project_root "pub-get.log" in
   let exec_ready = Filename.concat project_root "exec.ready" in
   let exec_result = Filename.concat project_root "exec.result" in
   let exec_pubspec = Filename.concat project_root "flutter/pubspec.yaml" in
@@ -2353,6 +2605,12 @@ let create_exec_fixture () =
     (Filename.concat exec_native.native_bin "flutter")
     {|#!/bin/sh
 set -eu
+if test "${1:-}" = pub && test "${2:-}" = get; then
+  mkdir -p .dart_tool
+  printf '%s\n' '{"configVersion":2}' > .dart_tool/package_config.json
+  printf '%s\n' 'pub get' >> "$EXEC_PUB_GET_LOG"
+  exit 0
+fi
 test -f "$EXEC_ARTIFACT"
 grep -q 'native_artifact_profile: debug' "$EXEC_PUBSPEC"
 {
@@ -2375,6 +2633,7 @@ exit "${EXEC_EXIT:-0}"
   { exec_native
   ; exec_working_directory
   ; exec_log
+  ; exec_pub_get_log
   ; exec_ready
   ; exec_result
   ; exec_pubspec
@@ -2388,6 +2647,7 @@ let with_exec_fixture ?(environment = []) fixture f =
       ([ "EXEC_ARTIFACT", fixture.exec_artifact
        ; "EXEC_PUBSPEC", fixture.exec_pubspec
        ; "EXEC_LOG", fixture.exec_log
+       ; "EXEC_PUB_GET_LOG", fixture.exec_pub_get_log
        ]
        @ environment)
     fixture.exec_native
@@ -2424,6 +2684,10 @@ let test_exec_builds_injects_and_runs_command_verbatim () =
   let command = [ "flutter"; "test"; "--no-pub"; "test"; "argument with spaces" ] in
   let status = with_exec_fixture fixture (fun () -> run_exec fixture command |> get_ok) in
   Alcotest.(check int) "successful child status" 0 status;
+  Alcotest.(check (list string))
+    "pub get runs before the child command"
+    [ "pub get" ]
+    (read_file fixture.exec_pub_get_log |> non_empty_lines);
   Alcotest.(check (list string))
     "cwd and arguments"
     [ "cwd=" ^ fixture.exec_working_directory
@@ -2599,16 +2863,12 @@ let test_host_scopes_artifact_profile_to_flutter_invocation () =
   let config = Config.parse_string valid_config |> get_ok in
   let pubspec_path = Filename.concat root "flutter/pubspec.yaml" in
   write_file pubspec_path (Host.pubspec config);
-  Host.with_artifact_profile
-    ~project_root:root
-    ~config
-    ~profile:"profile"
-    (fun () ->
-       Alcotest.(check bool)
-         "profile is visible to Native Assets"
-         true
-         (contains (read_file pubspec_path) "native_artifact_profile: profile");
-       Ok ())
+  Host.with_artifact_profile ~project_root:root ~config ~profile:"profile" (fun () ->
+    Alcotest.(check bool)
+      "profile is visible to Native Assets"
+      true
+      (contains (read_file pubspec_path) "native_artifact_profile: profile");
+    Ok ())
   |> get_ok;
   Alcotest.(check string)
     "canonical pubspec is restored"
@@ -2634,10 +2894,7 @@ let test_flutter_plans () =
     "macOS run"
     [ "run"; "-d"; "macos"; "--dart-define=environment=development" ]
     run.arguments;
-  Alcotest.(check (list (pair string string)))
-    "debug artifact profile"
-    []
-    run.environment;
+  Alcotest.(check (list (pair string string))) "debug artifact profile" [] run.environment;
   let ios_debug =
     Plan.flutter
       ~project_root:"/work/journal"
@@ -3225,6 +3482,68 @@ let test_macos_artifact_staging_contract () =
        siblings)
 ;;
 
+let test_macos_network_artifact_embeds_static_gmp () =
+  let fixture = create_native_build_fixture () in
+  let config =
+    { fixture.native_config with
+      features = [ Config.Feature.Core; Config.Feature.Network ]
+    }
+  in
+  let gmp_directory = Filename.concat fixture.native_project_root "static-gmp" in
+  let gmp_archive = Filename.concat gmp_directory "libgmp.a" in
+  write_file gmp_archive "static-gmp";
+  write_executable
+    (Filename.concat fixture.native_bin "pkg-config")
+    (command_logger "pkg-config" ^ Printf.sprintf "printf '%%s\\n' '%s'\n" gmp_directory);
+  write_executable
+    (Filename.concat fixture.native_bin "clang")
+    (command_logger "clang"
+     ^ {|output=''
+previous=''
+for argument in "$@"; do
+  if test "$previous" = -o; then output=$argument; fi
+  previous=$argument
+done
+test -n "$output"
+printf '%s' 'complete-object-with-static-gmp' > "$output"
+|}
+    );
+  write_executable
+    (Filename.concat fixture.native_bin "nm")
+    (command_logger "nm" ^ "exit 0\n");
+  let destination =
+    with_native_build_fixture fixture (fun () ->
+      Build_system.build_native
+        ~framework_root:fixture.native_framework_root
+        ~project_root:fixture.native_project_root
+        ~config
+        ~target:Plan.Macos
+        ~profile:Plan.Release
+      |> get_ok)
+  in
+  Alcotest.(check string)
+    "staged network object contains static GMP"
+    "complete-object-with-static-gmp"
+    (read_file destination);
+  let commands = read_file fixture.native_command_log |> non_empty_lines in
+  Alcotest.(check bool)
+    "GMP archive is resolved with pkg-config"
+    true
+    (List.exists
+       (fun command ->
+          contains command "pkg-config" && contains command "\t--variable=libdir\tgmp")
+       commands);
+  Alcotest.(check bool)
+    "network object is relocatably linked with static GMP"
+    true
+    (List.exists
+       (fun command ->
+          contains command "clang"
+          && contains command "\t-r\t-target\tarm64-apple-macos26.0"
+          && contains command gmp_archive)
+       commands)
+;;
+
 let dune_description source =
   let length = String.length source in
   let buffer = Buffer.create length in
@@ -3543,6 +3862,10 @@ let () =
             `Quick
             test_managed_adapter_config_validation
         ; Alcotest.test_case
+            "custom host validation"
+            `Quick
+            test_custom_host_config_validation
+        ; Alcotest.test_case
             "missing host migration"
             `Quick
             test_missing_host_requires_migration
@@ -3598,6 +3921,23 @@ let () =
             `Quick
             test_generated_managed_adapter_host
         ; Alcotest.test_case
+            "mixed-ownership pubspec"
+            `Quick
+            test_mixed_ownership_pubspec_sync
+        ; Alcotest.test_case
+            "pubspec marker validation"
+            `Quick
+            test_pubspec_marker_validation
+        ; Alcotest.test_case "CRLF pubspec" `Quick test_pubspec_sync_preserves_crlf
+        ; Alcotest.test_case
+            "custom source ownership"
+            `Quick
+            test_custom_host_sync_preserves_consumer_source
+        ; Alcotest.test_case
+            "managed edit rejection"
+            `Quick
+            test_managed_host_rejects_edited_generated_source
+        ; Alcotest.test_case
             "scoped artifact profile"
             `Quick
             test_host_scopes_artifact_profile_to_flutter_invocation
@@ -3606,6 +3946,14 @@ let () =
       , [ Alcotest.test_case "privacy manifest" `Quick test_ios_privacy_manifest ] )
     ; ( "init"
       , [ Alcotest.test_case "preserves source" `Quick test_scaffold_preserves_user_source
+        ; Alcotest.test_case
+            "adopts existing layout"
+            `Quick
+            test_scaffold_adopts_existing_layout_without_default_app
+        ; Alcotest.test_case
+            "adoption conflict"
+            `Quick
+            test_scaffold_adoption_rejects_conflicting_config
         ; Alcotest.test_case
             "application lock"
             `Quick
@@ -3643,9 +3991,9 @@ let () =
     ; ( "sync"
       , [ Alcotest.test_case "check and repair" `Quick test_host_sync_check
         ; Alcotest.test_case
-            "integration dependency"
+            "consumer dependency preservation"
             `Quick
-            test_host_sync_repairs_missing_integration_dependency
+            test_host_sync_preserves_consumer_dependency_changes
         ; Alcotest.test_case
             "native build only manages Dune aliases"
             `Quick
@@ -3757,6 +4105,10 @@ let () =
             "macOS staging contract"
             `Quick
             test_macos_artifact_staging_contract
+        ; Alcotest.test_case
+            "macOS network static GMP"
+            `Quick
+            test_macos_network_artifact_embeds_static_gmp
         ] )
     ; ( "dune-closure"
       , [ Alcotest.test_case "local app" `Quick test_dune_closure_follows_local_app

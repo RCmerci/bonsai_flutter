@@ -1,5 +1,6 @@
 (library
  (name bonsai_flutter_sqlite_worker_example)
+ (package bonsai_flutter_sqlite_worker_example)
  (wrapped false)
  (modules
   sqlite_worker_config
@@ -38,3 +39,15 @@
   (:standard -cclib -L%{env:BONSAI_FLUTTER_APPLE_SDK_ROOT=}/usr/lib))
  (modes
   (native object)))
+
+; BEGIN bonsai-flutter native aliases
+(alias
+ (name bonsai-flutter-macos)
+ (enabled_if (= %{context_name} default))
+ (deps native_embed.exe.o))
+
+(alias
+ (name bonsai-flutter-ios)
+ (enabled_if (= %{context_name} default.ios))
+ (deps native_embed.exe.o))
+; END bonsai-flutter native aliases

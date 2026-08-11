@@ -492,14 +492,34 @@ abstract final class FrameCodec {
         for (final value in matrix4) {
           writer.float64(value);
         }
-      case (NodeKind.scrollView, ScrollViewProps(:final axis, :final reverse)):
+      case (
+        NodeKind.scrollView,
+        ScrollViewProps(:final axis, :final reverse, :final primary),
+      ):
+        if (axis == ScrollAxis.horizontal && primary) {
+          _fail(
+            ProtocolErrorCode.invalidProps,
+            'Horizontal scroll view cannot be primary',
+          );
+        }
         writer
           ..uint8(axis == ScrollAxis.horizontal ? 0 : 1)
-          ..uint8(reverse ? 1 : 0);
-      case (NodeKind.listView, ListViewProps(:final axis, :final reverse)):
+          ..uint8(reverse ? 1 : 0)
+          ..uint8(primary ? 1 : 0);
+      case (
+        NodeKind.listView,
+        ListViewProps(:final axis, :final reverse, :final primary),
+      ):
+        if (axis == ScrollAxis.horizontal && primary) {
+          _fail(
+            ProtocolErrorCode.invalidProps,
+            'Horizontal list view cannot be primary',
+          );
+        }
         writer
           ..uint8(axis == ScrollAxis.horizontal ? 0 : 1)
-          ..uint8(reverse ? 1 : 0);
+          ..uint8(reverse ? 1 : 0)
+          ..uint8(primary ? 1 : 0);
       case (NodeKind.focusScope, FocusScopeProps(:final autofocus)):
         writer.uint8(autofocus ? 1 : 0);
       case (NodeKind.mouseRegion, MouseRegionProps(:final opaque)):
@@ -592,23 +612,8 @@ abstract final class FrameCodec {
           ..uint8(dismissible ? 1 : 0);
       case (NodeKind.navigator, NavigatorProps(:final restorationScopeId)):
         writer.optionalString(restorationScopeId);
-      case (
-        NodeKind.page,
-        PageProps(
-          :final pageKey,
-          :final transition,
-          :final canPop,
-          :final restorationId,
-        ),
-      ):
-        if (pageKey.isEmpty) {
-          _fail(ProtocolErrorCode.invalidProps, 'Page key must not be empty');
-        }
-        writer
-          ..string(pageKey)
-          ..uint8(transition.index)
-          ..uint8(canPop ? 1 : 0)
-          ..optionalString(restorationId);
+      case (NodeKind.page, final PageProps props):
+        _writePageProps(writer, props);
       case (
         NodeKind.safeArea,
         SafeAreaProps(
@@ -768,21 +773,36 @@ abstract final class FrameCodec {
         for (final value in matrix4) {
           writer.float64(value);
         }
-      case ScrollViewProps(:final axis, :final reverse):
+      case ScrollViewProps(:final axis, :final reverse, :final primary):
+        if (axis == ScrollAxis.horizontal && primary) {
+          _fail(
+            ProtocolErrorCode.invalidProps,
+            'Horizontal scroll view cannot be primary',
+          );
+        }
         writer
           ..uint16(NodeKindId.scrollView)
           ..uint64(
             _fieldMask(ScrollViewPropId.axis) |
-                _fieldMask(ScrollViewPropId.reverse),
+                _fieldMask(ScrollViewPropId.reverse) |
+                _fieldMask(ScrollViewPropId.primary),
           )
           ..uint8(axis == ScrollAxis.horizontal ? 0 : 1)
-          ..uint8(reverse ? 1 : 0);
-      case ListViewProps(:final axis, :final reverse):
+          ..uint8(reverse ? 1 : 0)
+          ..uint8(primary ? 1 : 0);
+      case ListViewProps(:final axis, :final reverse, :final primary):
+        if (axis == ScrollAxis.horizontal && primary) {
+          _fail(
+            ProtocolErrorCode.invalidProps,
+            'Horizontal list view cannot be primary',
+          );
+        }
         writer
           ..uint16(NodeKindId.listView)
           ..uint64(_changedFields(props))
           ..uint8(axis == ScrollAxis.horizontal ? 0 : 1)
-          ..uint8(reverse ? 1 : 0);
+          ..uint8(reverse ? 1 : 0)
+          ..uint8(primary ? 1 : 0);
       case GestureProps():
         writer
           ..uint16(NodeKindId.gesture)
@@ -930,27 +950,11 @@ abstract final class FrameCodec {
           ..uint16(NodeKindId.navigator)
           ..uint64(_fieldMask(NavigatorPropId.restorationScopeId))
           ..optionalString(restorationScopeId);
-      case PageProps(
-        :final pageKey,
-        :final transition,
-        :final canPop,
-        :final restorationId,
-      ):
-        if (pageKey.isEmpty) {
-          _fail(ProtocolErrorCode.invalidProps, 'Page key must not be empty');
-        }
+      case final PageProps props:
         writer
           ..uint16(NodeKindId.page)
-          ..uint64(
-            _fieldMask(PagePropId.pageKey) |
-                _fieldMask(PagePropId.transition) |
-                _fieldMask(PagePropId.canPop) |
-                _fieldMask(PagePropId.restorationId),
-          )
-          ..string(pageKey)
-          ..uint8(transition.index)
-          ..uint8(canPop ? 1 : 0)
-          ..optionalString(restorationId);
+          ..uint64(_changedFields(props));
+        _writePageProps(writer, props);
       case SafeAreaProps(
         :final left,
         :final top,
@@ -1078,14 +1082,8 @@ abstract final class FrameCodec {
     NodeKind.transform => TransformProps(
       List<double>.generate(16, (_) => reader.finiteFloat64()),
     ),
-    NodeKind.scrollView => ScrollViewProps(
-      axis: reader.scrollAxis(),
-      reverse: reader.boolean(),
-    ),
-    NodeKind.listView => ListViewProps(
-      axis: reader.scrollAxis(),
-      reverse: reader.boolean(),
-    ),
+    NodeKind.scrollView => _readScrollViewProps(reader),
+    NodeKind.listView => _readListViewProps(reader),
     NodeKind.gesture => const GestureProps(),
     NodeKind.focusScope => FocusScopeProps(autofocus: reader.boolean()),
     NodeKind.mouseRegion => MouseRegionProps(opaque: reader.boolean()),
@@ -1164,22 +1162,7 @@ abstract final class FrameCodec {
     NodeKind.navigator => NavigatorProps(
       restorationScopeId: reader.optionalString(),
     ),
-    NodeKind.page => () {
-      final pageKey = reader.string();
-      if (pageKey.isEmpty) {
-        _fail(ProtocolErrorCode.invalidProps, 'Page key must not be empty');
-      }
-      return PageProps(
-        pageKey: pageKey,
-        transition: _enumValue(
-          PageTransition.values,
-          reader.uint8(),
-          'page transition',
-        ),
-        canPop: reader.boolean(),
-        restorationId: reader.optionalString(),
-      );
-    }(),
+    NodeKind.page => _readPageProps(reader),
     NodeKind.safeArea => SafeAreaProps(
       left: reader.boolean(),
       top: reader.boolean(),
@@ -1543,9 +1526,13 @@ int _changedFields(UiProps props) => switch (props) {
         _fieldMask(AnimatedOpacityPropId.curve),
   TransformProps() => _fieldMask(TransformPropId.matrix4),
   ScrollViewProps() =>
-    _fieldMask(ScrollViewPropId.axis) | _fieldMask(ScrollViewPropId.reverse),
+    _fieldMask(ScrollViewPropId.axis) |
+        _fieldMask(ScrollViewPropId.reverse) |
+        _fieldMask(ScrollViewPropId.primary),
   ListViewProps() =>
-    _fieldMask(ListViewPropId.axis) | _fieldMask(ListViewPropId.reverse),
+    _fieldMask(ListViewPropId.axis) |
+        _fieldMask(ListViewPropId.reverse) |
+        _fieldMask(ListViewPropId.primary),
   FocusScopeProps() => _fieldMask(FocusScopePropId.autofocus),
   MouseRegionProps() => _fieldMask(MouseRegionPropId.opaque),
   KeyboardListenerProps() =>
@@ -1621,7 +1608,22 @@ int _changedFields(UiProps props) => switch (props) {
     _fieldMask(PagePropId.pageKey) |
         _fieldMask(PagePropId.transition) |
         _fieldMask(PagePropId.canPop) |
-        _fieldMask(PagePropId.restorationId),
+        _fieldMask(PagePropId.restorationId) |
+        _fieldMask(PagePropId.presentation) |
+        _fieldMask(PagePropId.modalBarrierDismissible) |
+        _fieldMask(PagePropId.modalBarrierColor) |
+        _fieldMask(PagePropId.modalBarrierLabel) |
+        _fieldMask(PagePropId.modalUseSafeArea) |
+        _fieldMask(PagePropId.modalRequestFocus) |
+        _fieldMask(PagePropId.modalTransitionDurationMs) |
+        _fieldMask(PagePropId.modalReverseTransitionDurationMs) |
+        _fieldMask(PagePropId.modalSizing) |
+        _fieldMask(PagePropId.modalDetents) |
+        _fieldMask(PagePropId.modalInitialDetent) |
+        _fieldMask(PagePropId.modalDismissOnDrag) |
+        _fieldMask(PagePropId.modalHandleSemanticsLabel) |
+        _fieldMask(PagePropId.modalMediumSemanticsValue) |
+        _fieldMask(PagePropId.modalLargeSemanticsValue),
   SafeAreaProps() =>
     _fieldMask(SafeAreaPropId.left) |
         _fieldMask(SafeAreaPropId.top) |
@@ -2016,6 +2018,9 @@ void _writeOptionalArgb32(_Writer writer, int? value) {
   if (value == null) {
     writer.uint8(0);
   } else {
+    if (value < 0 || value > 0xffffffff) {
+      _fail(ProtocolErrorCode.invalidProps, 'ARGB color is outside u32');
+    }
     writer
       ..uint8(1)
       ..uint32(value);
@@ -2030,6 +2035,299 @@ int? _readOptionalArgb32(_Reader reader) => switch (reader.uint8()) {
     'Invalid optional ARGB tag $value',
   ),
 };
+
+void _writePageProps(_Writer writer, PageProps props) {
+  if (props.pageKey.isEmpty) {
+    _fail(ProtocolErrorCode.invalidProps, 'Page key must not be empty');
+  }
+  final transition = switch (props.presentation) {
+    StandardPagePresentation(:final transition) => transition,
+    ModalBottomSheetPresentation() => PageTransition.none,
+  };
+  writer
+    ..string(props.pageKey)
+    ..uint8(transition.index)
+    ..uint8(props.canPop ? 1 : 0)
+    ..optionalString(props.restorationId);
+
+  switch (props.presentation) {
+    case StandardPagePresentation():
+      writer
+        ..uint8(0)
+        ..uint8(0);
+      _writeOptionalArgb32(writer, null);
+      writer
+        ..optionalString(null)
+        ..uint8(0)
+        ..uint8(0)
+        ..uint8(0)
+        ..uint32(0)
+        ..uint32(0)
+        ..uint8(0)
+        ..uint8(0)
+        ..uint8(0)
+        ..optionalString(null)
+        ..optionalString(null)
+        ..optionalString(null);
+    case ModalBottomSheetPresentation(
+      :final barrierDismissible,
+      :final barrierColorArgb,
+      :final barrierLabel,
+      :final sizing,
+      :final useSafeArea,
+      :final requestFocus,
+      :final transitionDurationMilliseconds,
+      :final reverseTransitionDurationMilliseconds,
+    ):
+      _checkPageDuration('Modal transition', transitionDurationMilliseconds);
+      _checkPageDuration(
+        'Modal reverse transition',
+        reverseTransitionDurationMilliseconds,
+      );
+      final (sizingId, detentsId, initialDetentId, dismissOnDrag, semantics) =
+          _modalSizingWireValues(sizing);
+      writer
+        ..uint8(1)
+        ..uint8(barrierDismissible ? 1 : 0);
+      _writeOptionalArgb32(writer, barrierColorArgb);
+      writer
+        ..optionalString(barrierLabel)
+        ..uint8(sizingId)
+        ..uint8(useSafeArea ? 1 : 0)
+        ..uint8(requestFocus ? 1 : 0)
+        ..uint32(transitionDurationMilliseconds)
+        ..uint32(reverseTransitionDurationMilliseconds)
+        ..uint8(detentsId)
+        ..uint8(initialDetentId)
+        ..uint8(dismissOnDrag ? 1 : 0)
+        ..optionalString(semantics?.label)
+        ..optionalString(semantics?.mediumValue)
+        ..optionalString(semantics?.largeValue);
+  }
+}
+
+(int, int, int, bool, ModalSheetHandleSemantics?) _modalSizingWireValues(
+  ModalBottomSheetSizing sizing,
+) => switch (sizing) {
+  ContentBoundedModalSheetSizing() => (0, 0, 0, false, null),
+  ScrollControlledModalSheetSizing() => (1, 0, 0, false, null),
+  DetentedModalSheetSizing(
+    :final detents,
+    :final initialDetent,
+    :final dismissOnDrag,
+    :final handleSemantics,
+  ) =>
+    () {
+      final includesInitial = switch ((detents, initialDetent)) {
+        (ModalSheetDetentSet.medium, ModalSheetDetent.medium) ||
+        (ModalSheetDetentSet.large, ModalSheetDetent.large) ||
+        (ModalSheetDetentSet.mediumAndLarge, _) => true,
+        _ => false,
+      };
+      if (!includesInitial) {
+        _fail(
+          ProtocolErrorCode.invalidProps,
+          'Modal initial detent must belong to detents',
+        );
+      }
+      if (handleSemantics.label.trim().isEmpty ||
+          handleSemantics.mediumValue.trim().isEmpty ||
+          handleSemantics.largeValue.trim().isEmpty) {
+        _fail(
+          ProtocolErrorCode.invalidProps,
+          'Modal handle semantics strings must not be empty',
+        );
+      }
+      return (
+        2,
+        detents.index,
+        initialDetent.index,
+        dismissOnDrag,
+        handleSemantics,
+      );
+    }(),
+};
+
+ScrollViewProps _readScrollViewProps(_Reader reader) {
+  final axis = reader.scrollAxis();
+  final reverse = reader.boolean();
+  final primary = reader.boolean();
+  if (axis == ScrollAxis.horizontal && primary) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Horizontal scroll view cannot be primary',
+    );
+  }
+  return ScrollViewProps(axis: axis, reverse: reverse, primary: primary);
+}
+
+ListViewProps _readListViewProps(_Reader reader) {
+  final axis = reader.scrollAxis();
+  final reverse = reader.boolean();
+  final primary = reader.boolean();
+  if (axis == ScrollAxis.horizontal && primary) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Horizontal list view cannot be primary',
+    );
+  }
+  return ListViewProps(axis: axis, reverse: reverse, primary: primary);
+}
+
+PageProps _readPageProps(_Reader reader) {
+  final pageKey = reader.string();
+  if (pageKey.isEmpty) {
+    _fail(ProtocolErrorCode.invalidProps, 'Page key must not be empty');
+  }
+  final transition = _enumValue(
+    PageTransition.values,
+    reader.uint8(),
+    'page transition',
+  );
+  final canPop = reader.boolean();
+  final restorationId = reader.optionalString();
+  final presentationKind = reader.uint8();
+  final barrierDismissible = reader.boolean();
+  final barrierColorArgb = _readOptionalArgb32(reader);
+  final barrierLabel = reader.optionalString();
+  final sizingKind = reader.uint8();
+  final useSafeArea = reader.boolean();
+  final requestFocus = reader.boolean();
+  final transitionDurationMilliseconds = reader.uint32();
+  final reverseTransitionDurationMilliseconds = reader.uint32();
+  final detents = _enumValue(
+    ModalSheetDetentSet.values,
+    reader.uint8(),
+    'modal detent set',
+  );
+  final initialDetent = _enumValue(
+    ModalSheetDetent.values,
+    reader.uint8(),
+    'modal initial detent',
+  );
+  final dismissOnDrag = reader.boolean();
+  final handleSemanticsLabel = reader.optionalString();
+  final mediumSemanticsValue = reader.optionalString();
+  final largeSemanticsValue = reader.optionalString();
+
+  final PagePresentation presentation;
+  switch (presentationKind) {
+    case 0:
+      if (barrierDismissible ||
+          barrierColorArgb != null ||
+          barrierLabel != null ||
+          sizingKind != 0 ||
+          useSafeArea ||
+          requestFocus ||
+          transitionDurationMilliseconds != 0 ||
+          reverseTransitionDurationMilliseconds != 0 ||
+          detents != ModalSheetDetentSet.medium ||
+          initialDetent != ModalSheetDetent.medium ||
+          dismissOnDrag ||
+          handleSemanticsLabel != null ||
+          mediumSemanticsValue != null ||
+          largeSemanticsValue != null) {
+        _fail(
+          ProtocolErrorCode.invalidProps,
+          'Standard page has noncanonical modal properties',
+        );
+      }
+      presentation = StandardPagePresentation(transition);
+    case 1:
+      if (transition != PageTransition.none) {
+        _fail(
+          ProtocolErrorCode.invalidProps,
+          'Modal bottom sheet cannot carry a standard transition',
+        );
+      }
+      final ModalBottomSheetSizing sizing;
+      switch (sizingKind) {
+        case 0:
+          sizing = const ContentBoundedModalSheetSizing();
+        case 1:
+          sizing = const ScrollControlledModalSheetSizing();
+        case 2:
+          final includesInitial = switch ((detents, initialDetent)) {
+            (ModalSheetDetentSet.medium, ModalSheetDetent.medium) ||
+            (ModalSheetDetentSet.large, ModalSheetDetent.large) ||
+            (ModalSheetDetentSet.mediumAndLarge, _) => true,
+            _ => false,
+          };
+          if (!includesInitial) {
+            _fail(
+              ProtocolErrorCode.invalidProps,
+              'Modal initial detent must belong to detents',
+            );
+          }
+          if (handleSemanticsLabel == null ||
+              mediumSemanticsValue == null ||
+              largeSemanticsValue == null ||
+              handleSemanticsLabel.trim().isEmpty ||
+              mediumSemanticsValue.trim().isEmpty ||
+              largeSemanticsValue.trim().isEmpty) {
+            _fail(
+              ProtocolErrorCode.invalidProps,
+              'Detented modal must include nonempty handle semantics',
+            );
+          }
+          sizing = DetentedModalSheetSizing(
+            detents: detents,
+            initialDetent: initialDetent,
+            dismissOnDrag: dismissOnDrag,
+            handleSemantics: ModalSheetHandleSemantics(
+              label: handleSemanticsLabel,
+              mediumValue: mediumSemanticsValue,
+              largeValue: largeSemanticsValue,
+            ),
+          );
+        default:
+          _fail(
+            ProtocolErrorCode.invalidProps,
+            'Invalid modal sizing $sizingKind',
+          );
+      }
+      if (sizing is! DetentedModalSheetSizing &&
+          (detents != ModalSheetDetentSet.medium ||
+              initialDetent != ModalSheetDetent.medium ||
+              dismissOnDrag ||
+              handleSemanticsLabel != null ||
+              mediumSemanticsValue != null ||
+              largeSemanticsValue != null)) {
+        _fail(
+          ProtocolErrorCode.invalidProps,
+          'Non-detented modal has noncanonical detent properties',
+        );
+      }
+      presentation = ModalBottomSheetPresentation(
+        barrierDismissible: barrierDismissible,
+        barrierColorArgb: barrierColorArgb,
+        barrierLabel: barrierLabel,
+        sizing: sizing,
+        useSafeArea: useSafeArea,
+        requestFocus: requestFocus,
+        transitionDurationMilliseconds: transitionDurationMilliseconds,
+        reverseTransitionDurationMilliseconds:
+            reverseTransitionDurationMilliseconds,
+      );
+    default:
+      _fail(
+        ProtocolErrorCode.invalidProps,
+        'Invalid page presentation $presentationKind',
+      );
+  }
+  return PageProps(
+    pageKey: pageKey,
+    presentation: presentation,
+    canPop: canPop,
+    restorationId: restorationId,
+  );
+}
+
+void _checkPageDuration(String label, int value) {
+  if (value < 0 || value > 0xffffffff) {
+    _fail(ProtocolErrorCode.invalidProps, '$label duration is outside u32');
+  }
+}
 
 void _writeAnimation(_Writer writer, AnimationIntent animation) {
   _checkUint64('animation ID', animation.id);

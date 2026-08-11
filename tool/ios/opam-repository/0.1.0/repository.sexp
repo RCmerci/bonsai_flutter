@@ -1,19 +1,19 @@
 (repository
  (format_version 1)
  (repository_version 0.1.0)
- (repository_snapshot_sha256 6ec4ded4e35e5efd86a87a90509ccb5a70c60afa7624f3879ae8c17a841424e3)
+ (repository_snapshot_sha256 79d21aeb2cd2c5482e30c27558d1051f421eab8d08971fcf8b2cfd4ca76136ce)
  (source_lock
   vendor/opam-ios/runtime-closure.lock
   48731cde1da271f7ee36aee7485f4e20dccbbb72df3d64bde78593a28af54113)
  (package_universe
   package-universe.lock
-  29b68888e60ff264a6c18b7b7af569954305bca0cadad0c38a516198c78ecc44)
+  1adb4ca7d4724c2d529e254a24ed8fe166893c4aa6d36d38bbccae628ebc608e)
  (source_archives
   source-archives.lock
-  dfd7245e14f5f471a0540dbc41d1a6233c3b3817769fa35c4d7396c8b85e30e8)
+  ef1944c9c32b8ca50c047ff35483de4b3ce3c7188b76cee10719536f26f495e4)
  (default_repository
-  https://github.com/RCmerci/opam-repository.git
-  c98b21e24c088665ccae4c3b53eadadd3b755b15)
+  https://github.com/ocaml/opam-repository.git
+  9fdd0666a192f1896963cf446f37f0c691bbd3db)
  (cross_repository
   https://github.com/ocaml-cross/opam-cross-ios.git
   8380b52b0154752c26c6e221c04fbced3320aa48)

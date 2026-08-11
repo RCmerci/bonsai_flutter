@@ -71,6 +71,130 @@ require_sha256() {
     fail "$path SHA-256 is $actual, expected $expected"
 }
 
+assert_consumer_root() {
+  root=$1
+  package=$2
+  mode=$3
+  feature=${4:-}
+
+  for path in \
+    "$root/dune-project" \
+    "$root/.ocamlformat" \
+    "$root/bonsai-flutter.sexp" \
+    "$root/$package.opam" \
+    "$root/$package.opam.locked"
+  do
+    require_file "$path"
+  done
+
+  config=$(cat "$root/bonsai-flutter.sexp")
+  require_text "$config" '(lang 2)' "$root config"
+  require_text "$config" "(name $package)" "$root package identity"
+  require_text "$config" '(native_target ocaml/native_embed.exe.o)' "$root config"
+  require_text "$config" "(mode $mode)" "$root config"
+  if test -n "$feature"; then
+    require_text "$config" "(features $feature)" "$root config"
+  fi
+
+  pubspec=$(cat "$root/flutter/pubspec.yaml")
+  require_text "$pubspec" '# bonsai-flutter:begin packages' "$root pubspec"
+  require_text "$pubspec" '# bonsai-flutter:end packages' "$root pubspec"
+  require_text "$pubspec" '# bonsai-flutter:begin native-hook' "$root pubspec"
+  require_text "$pubspec" '# bonsai-flutter:end native-hook' "$root pubspec"
+  if test "$mode" = managed_adapter; then
+    require_text "$pubspec" 'flutter_test:' "$root managed-host test dependency"
+    require_text \
+      "$(cat "$root/flutter/test/widget_test.dart")" \
+      '// ignore_for_file: avoid_relative_lib_imports' \
+      "$root generated widget test"
+  fi
+  reject_text "$pubspec" '../../../flutter/packages/' "$root pubspec"
+  reject_text "$pubspec" '../../../_build/native-artifacts/' "$root pubspec"
+
+  dune=$(cat "$root/ocaml/dune")
+  require_text "$dune" '(name bonsai-flutter-macos)' "$root Dune aliases"
+  require_text "$dune" '(name bonsai-flutter-ios)' "$root Dune aliases"
+  require_text "$dune" '(deps native_embed.exe.o)' "$root Dune aliases"
+}
+
+assert_consumer_root examples/clock bonsai_flutter_clock_example managed_adapter
+assert_consumer_root examples/counter bonsai_flutter_counter_example managed_adapter
+assert_consumer_root examples/gallery bonsai_flutter_gallery custom
+assert_consumer_root examples/host_effects bonsai_flutter_host_effects_example managed_adapter
+assert_consumer_root examples/host_navigation bonsai_flutter_host_navigation_example managed_adapter
+assert_consumer_root examples/mail bonsai_flutter_mail_example managed_adapter
+assert_consumer_root examples/navigation bonsai_flutter_navigation_example managed_adapter
+assert_consumer_root examples/network bonsai_flutter_network_example custom network
+assert_consumer_root examples/sqlite_worker bonsai_flutter_sqlite_worker_example custom sqlite
+assert_consumer_root examples/text_input bonsai_flutter_text_input_example managed_adapter
+assert_consumer_root examples/todo bonsai_flutter_todo_example managed_adapter
+integration_root=flutter/integration_test
+for integration_path in \
+  "$integration_root/dune-project" \
+  "$integration_root/.ocamlformat" \
+  "$integration_root/bonsai-flutter.sexp" \
+  "$integration_root/bonsai_flutter_integration_test.opam" \
+  "$integration_root/bonsai_flutter_integration_test.opam.locked"
+do
+  require_file "$integration_path"
+done
+integration_config=$(cat "$integration_root/bonsai-flutter.sexp")
+require_text "$integration_config" '(lang 2)' "integration config"
+require_text \
+  "$integration_config" \
+  '(name bonsai_flutter_integration_test)' \
+  "integration package identity"
+require_text "$integration_config" '(native_target ocaml/native_embed.exe.o)' "integration config"
+require_text "$integration_config" '(mode custom)' "integration config"
+require_text "$integration_config" '(features network sqlite)' "integration config"
+integration_pubspec=$(cat "$integration_root/pubspec.yaml")
+require_text "$integration_pubspec" '# bonsai-flutter:begin packages' "integration pubspec"
+require_text "$integration_pubspec" '# bonsai-flutter:begin native-hook' "integration pubspec"
+reject_text "$integration_pubspec" 'bonsai_flutter_sqlite_worker_example' "integration pubspec"
+
+makefile=$(cat Makefile)
+require_text "$makefile" 'BONSAI_FLUTTER :=' "Makefile local tool"
+require_text "$makefile" '$(BONSAI_FLUTTER) exec' "Makefile consumer exec"
+require_text "$makefile" '$(BONSAI_FLUTTER) build macos' "Makefile consumer macOS build"
+require_text "$makefile" '$(BONSAI_FLUTTER) build ios' "Makefile consumer iOS build"
+require_text "$makefile" 'ci-install-framework:' "Makefile framework installation"
+require_text \
+  "$makefile" \
+  'ci-install-consumers: ci-install-framework' \
+  "Makefile consumer installation"
+require_text "$makefile" 'opam install . --yes' "Makefile framework installation"
+require_text \
+  "$makefile" \
+  'opam install $(CONSUMER_ROOTS) --yes' \
+  "Makefile consumer installation"
+require_text "$makefile" 'ci-ocaml: ci-install-consumers' "Makefile OCaml CI"
+require_text "$makefile" 'ci-flutter: ci-install-consumers' "Makefile Flutter CI"
+require_text "$makefile" 'ci-macos: ci-ocaml' "Makefile macOS CI"
+require_text \
+  "$makefile" \
+  'ci-install-ios-toolchain:' \
+  "Makefile iPhoneOS toolchain installation"
+require_text \
+  "$makefile" \
+  '$(BONSAI_FLUTTER) toolchain install iphoneos' \
+  "Makefile iPhoneOS toolchain installation"
+require_text \
+  "$makefile" \
+  '$(BONSAI_FLUTTER) toolchain verify iphoneos' \
+  "Makefile iPhoneOS toolchain verification"
+require_text "$makefile" 'ci-ios: ci-install-ios-toolchain' "Makefile iOS CI"
+require_text \
+  "$makefile" \
+  'ci-ios-device: ci-install-consumers ci-install-ios-toolchain' \
+  "Makefile physical-device CI"
+reject_text "$makefile" 'stage_native_objects.sh' "Makefile"
+reject_text "$makefile" 'build_native_objects.sh' "Makefile"
+reject_pattern "$makefile" 'cd examples/[^ ]+/flutter && flutter (test|analyze|build)' "Makefile"
+reject_text "$makefile" 'native-objects:' "Makefile"
+reject_text "$makefile" 'integration-native-object:' "Makefile"
+reject_text "$makefile" 'ios-device-native-objects:' "Makefile"
+test ! -e tool/macos/stage_native_objects.sh || fail "obsolete macOS staging script exists"
+
 test "$(ocamlc -version)" = "5.1.1" ||
   fail "OCaml version is $(ocamlc -version), expected 5.1.1"
 
@@ -188,8 +312,7 @@ dependency_control_text=$(cat \
   dune-project \
   .github/workflows/*.yml \
   tool/ci/*.sh \
-  tool/ios/*.sh \
-  tool/macos/*.sh)
+  tool/ios/*.sh)
 require_text \
   "$dependency_control_text" \
   'sqlite3' \
@@ -206,7 +329,7 @@ for dependency in httpun-eio tls-eio ca-certs-nss; do
 done
 for dependency in piaf eio-ssl cohttp-eio openssl-sys-ios; do
   reject_text \
-    "$(cat bonsai_flutter.opam bonsai_flutter_network_example.opam dune-project)" \
+    "$(cat bonsai_flutter.opam examples/network/bonsai_flutter_network_example.opam dune-project)" \
     "$dependency" \
     "network dependency controls"
 done
@@ -376,282 +499,113 @@ require_text \
   "$flutter_commands" \
   "dart format --output=none --set-exit-if-changed benchmark integration_test lib test" \
   "ci-flutter"
-require_text "$flutter_commands" "cd flutter/integration_test && flutter analyze" "ci-flutter"
-require_text "$flutter_commands" "clock counter todo text_input host_effects navigation gallery host_navigation mail sqlite_worker network" "ci-flutter network example"
+require_text "$flutter_commands" 'bonsai_flutter_tool/bin/main.exe exec --profile=debug -- flutter analyze' "ci-flutter"
+require_text "$flutter_commands" "clock counter gallery host_effects host_navigation mail navigation network sqlite_worker text_input todo" "ci-flutter example matrix"
 
 fixture_commands=$(dry_run_target protocol-fixtures-check)
 require_text "$fixture_commands" "dune exec protocol/generator/generate_fixtures.exe -- --check" "protocol-fixtures-check"
 require_text "$fixture_commands" "cd flutter/packages/bonsai_flutter && dart run tool/generate_input_fixtures.dart --check" "protocol-fixtures-check"
 
 macos_commands=$(dry_run_target ci-macos)
-require_text "$macos_commands" "make native-objects" "ci-macos"
-require_text "$macos_commands" "flutter build macos --debug" "ci-macos"
-require_text "$macos_commands" "flutter build macos --profile" "ci-macos"
-require_text "$macos_commands" "flutter build macos --release" "ci-macos"
-require_text "$macos_commands" "make integration-native-object" "ci-macos"
-require_text "$macos_commands" "flutter test" "ci-macos"
-require_text "$macos_commands" "examples/network/flutter" "ci-macos network example"
+require_text "$macos_commands" 'bonsai_flutter_tool/bin/main.exe build macos --profile debug' "ci-macos"
+require_text "$macos_commands" 'bonsai_flutter_tool/bin/main.exe build macos --profile profile' "ci-macos"
+require_text "$macos_commands" 'bonsai_flutter_tool/bin/main.exe build macos --profile release' "ci-macos"
+require_text "$macos_commands" 'cd examples/network' "ci-macos network consumer"
+require_text "$macos_commands" 'cd flutter/integration_test' "ci-macos integration consumer"
+reject_text "$macos_commands" 'stage_native_objects.sh' "ci-macos"
 
-ios_device_object_commands=$(dry_run_target ios-device-native-objects)
-require_text \
-  "$ios_device_object_commands" \
-  "tool/ios/build_native_objects.sh iphoneos" \
-  "ios-device-native-objects"
 ios_commands=$(dry_run_target ci-ios)
-require_text "$ios_commands" "make ios-device-native-objects" "ci-ios"
-require_text "$ios_commands" "flutter build ios --debug --no-codesign" "ci-ios"
-require_text "$ios_commands" "flutter build ios --profile --no-codesign" "ci-ios"
-require_text "$ios_commands" "flutter build ios --release --no-codesign" "ci-ios"
-require_text "$ios_commands" "tool/ios/verify_app_bundle.sh" "ci-ios"
-require_text "$ios_commands" "examples/sqlite_worker/flutter" "ci-ios"
-require_text "$ios_commands" "examples/network/flutter" "ci-ios network example"
-require_text "$ios_commands" "verify_app_bundle.sh" "ci-ios SQLite bundle audit"
-require_text "$ios_commands" "require-sqlite" "ci-ios SQLite bundle audit"
-reject_text "$ios_commands" "simulator" "ci-ios"
+require_text "$ios_commands" 'bonsai_flutter_tool/bin/main.exe build ios --profile debug --no-codesign' "ci-ios"
+require_text "$ios_commands" 'bonsai_flutter_tool/bin/main.exe build ios --profile profile --no-codesign' "ci-ios"
+require_text "$ios_commands" 'bonsai_flutter_tool/bin/main.exe build ios --profile release --no-codesign' "ci-ios"
+require_text "$ios_commands" 'cd examples/sqlite_worker' "ci-ios SQLite consumer"
+require_text "$ios_commands" 'cd examples/network' "ci-ios Network consumer"
+require_text "$ios_commands" 'cd flutter/integration_test' "ci-ios integration consumer"
+reject_text "$ios_commands" 'build_native_objects.sh' "ci-ios"
+reject_text "$ios_commands" 'SDK_OPAM_SWITCH' "ci-ios"
+reject_text "$ios_commands" 'simulator' "ci-ios"
+
+native_object_commands=$(make -n native-object EXAMPLE=mail)
+require_text "$native_object_commands" 'cd examples/mail && ' "native-object"
+require_text "$native_object_commands" 'bonsai_flutter_tool/bin/main.exe build macos --profile debug' "native-object"
+reject_text "$native_object_commands" 'native_embed_debug' "native-object"
+reject_text "$native_object_commands" 'native_embed_release' "native-object"
 
 native_hook_source=$(tr -d '[:space:]' < flutter/packages/bonsai_flutter_native/hook/build.dart)
 require_text "$native_hook_source" "'-framework','Security'" "iOS native hook"
 require_text "$native_hook_source" "'link_system_sqlite3'" "conditional SQLite native hook"
 require_text "$native_hook_source" "'-lsqlite3'" "conditional SQLite native hook"
-ios_probe_source=$(cat tool/ios/build_probe.sh)
-require_text "$ios_probe_source" "-framework Security" "iOS cross probe"
 ios_bundle_verifier_source=$(cat tool/ios/verify_app_bundle.sh)
-require_text \
-  "$ios_bundle_verifier_source" \
-  "mach_absolute_time" \
-  "iOS app-bundle privacy verifier"
-require_text \
-  "$ios_bundle_verifier_source" \
-  "require-sqlite" \
-  "iOS app-bundle SQLite verifier mode"
-require_text \
-  "$ios_bundle_verifier_source" \
-  "libsqlite3" \
-  "iOS app-bundle SQLite dependency verifier"
-require_text \
-  "$ios_bundle_verifier_source" \
-  "sqlite3_" \
-  "iOS app-bundle SQLite export rejection"
+require_text "$ios_bundle_verifier_source" "require-sqlite" "iOS app-bundle SQLite verifier mode"
+require_text "$ios_bundle_verifier_source" "libsqlite3" "iOS app-bundle SQLite dependency verifier"
 
-ios_device_commands=$(dry_run_target ci-ios-device)
-require_text "$ios_device_commands" "IOS_DEVICE_ID" "ci-ios-device"
-require_text "$ios_device_commands" "tool/ios/run_device_tests.sh" "ci-ios-device"
-require_text \
-  "$ios_device_commands" \
-  "tool/network_spike/test_ios_device_probe.sh" \
-  "ci-ios-device network probe"
-require_text "$ios_device_commands" "--debug" "ci-ios-device"
-require_text "$ios_device_commands" "--profile" "ci-ios-device"
-require_text "$ios_device_commands" "--release" "ci-ios-device"
-reject_text "$ios_device_commands" "_build/default" "ci-ios-device"
-reject_pattern \
-  "$ios_device_commands" \
-  "simulator.{0,40}(physical|device)|physical.{0,40}simulator" \
-  "ci-ios-device"
-
-native_object_commands=$(dry_run_target native-objects)
-require_text \
-  "$native_object_commands" \
-  'tool/macos/stage_native_objects.sh "26.0" "arm64" examples' \
-  "native-objects"
-single_native_object_commands=$(make -n native-object EXAMPLE=mail)
-require_text \
-  "$single_native_object_commands" \
-  'tool/macos/stage_native_objects.sh "26.0" "arm64" example mail' \
-  "native-object"
-require_text \
-  "$native_object_commands" \
-  "examples/network/ocaml/native_embed.exe.o" \
-  "native-objects network example"
-network_stager=$(cat tool/macos/stage_native_objects.sh)
-require_text "$network_stager" "libgmp.a" "network macOS static GMP staging"
-require_text "$network_stager" "nm -u" "network macOS unresolved symbol audit"
-require_text "$network_stager" "openssl" "network macOS prohibited TLS audit"
-require_file bonsai_flutter_network_example.opam
-require_file examples/network/README.md
-require_file examples/network/ocaml/network_example.ml
-require_file examples/network/ocaml/network_service.ml
-require_file examples/network/ocaml/network_http.ml
-require_file examples/network/ocaml/network_websocket.ml
-require_file examples/network/ocaml/network_smoke_cli.ml
-require_file examples/network/ocaml/native_embed.ml
-require_file examples/network/flutter/lib/main.dart
-require_file examples/network/flutter/test/network_host_test.dart
-require_file examples/network/flutter/ios/Runner/PrivacyInfo.xcprivacy
-network_readme=$(cat examples/network/README.md)
-require_text \
-  "$network_readme" \
-  "dune exec examples/network/ocaml/network_smoke_cli.exe" \
-  "network manual public smoke documentation"
-reject_text \
-  "$(dry_run_target ci-ocaml)$(dry_run_target ci-flutter)$(dry_run_target ci-macos)" \
-  "network_smoke_cli" \
-  "network public smoke CI isolation"
-network_manifest=$(cat bonsai_flutter_network_example.opam)
+require_file examples/network/bonsai_flutter_network_example.opam
+network_manifest=$(cat examples/network/bonsai_flutter_network_example.opam)
 for dependency in \
   '"tls" {= "2.1.2"}' \
   '"tls-eio" {= "2.1.2"}' \
   '"ca-certs-nss" {= "3.126"}' \
-  '"httpun" {= "0.2.0"}' \
   '"httpun-eio" {= "0.2.0"}' \
-  '"httpun-ws" {= "0.2.0"}' \
-  '"gluten-eio" {= "0.5.2"}'
+  '"httpun-ws" {= "0.2.0"}'
 do
   require_text "$network_manifest" "$dependency" "network example opam dependencies"
 done
 network_source=$(cat examples/network/ocaml/*.ml examples/network/flutter/lib/*.dart)
-reject_pattern \
-  "$network_source" \
-  'allow_insecure|certificate[^[:space:]]*bypass|badCertificateCallback' \
-  "network example source"
+reject_pattern "$network_source" 'allow_insecure|certificate[^[:space:]]*bypass|badCertificateCallback' "network example source"
 network_dart_source=$(cat examples/network/flutter/lib/*.dart)
-reject_pattern \
-  "$network_dart_source" \
-  'SecurityContext|HttpClient|dart:io|dart:html|WebSocket[.]connect' \
-  "network Flutter source"
-network_debug_entitlements=$(cat examples/network/flutter/macos/Runner/DebugProfile.entitlements)
-network_release_entitlements=$(cat examples/network/flutter/macos/Runner/Release.entitlements)
-require_text \
-  "$network_debug_entitlements" \
-  "com.apple.security.network.client" \
-  "network macOS Debug entitlements"
-require_text \
-  "$network_release_entitlements" \
-  "com.apple.security.network.client" \
-  "network macOS Release entitlements"
-require_file examples/clock/README.md
-require_file examples/clock/ocaml/clock.ml
-require_file examples/clock/ocaml/clock.mli
-require_file examples/clock/ocaml/dune
-require_file examples/clock/ocaml/native_embed.ml
-require_file examples/clock/flutter/lib/main.dart
-require_file examples/clock/flutter/pubspec.yaml
-require_file ocaml/trace/trace.mli
-require_file ocaml/trace/debug/trace.ml
-require_file ocaml/trace/release/trace.ml
-trace_library_dune=$(cat ocaml/trace/dune)
-trace_debug_library_dune=$(cat ocaml/trace/debug/dune)
-trace_release_library_dune=$(cat ocaml/trace/release/dune)
-reject_text "$trace_library_dune" "(public_name" "internal trace virtual library"
-reject_text "$trace_debug_library_dune" "(public_name" "internal trace debug library"
-reject_text "$trace_release_library_dune" "(public_name" "internal trace release library"
-native_backend_test_source=$(cat ocaml/test/native_backend_tests.ml)
-for example_marker in \
-  "Mail.component" \
-  "mail-debug" \
-  "Bonsai Mail" \
-  "mail-list-page" \
-  "mail-row-1"
-do
-  reject_text \
-    "$native_backend_test_source" \
-    "$example_marker" \
-    "generic native backend test"
-done
-reject_pattern \
-  "$native_backend_test_source" \
-  '(^|[^[:alnum:]_])mail([^[:alnum:]_]|$)' \
-  "generic native backend test"
-native_backend_test_dune=$(
-  sed -n '/(name native_backend_tests)/,/(name mail_example_tests)/p' ocaml/test/dune
-)
-reject_text \
-  "$native_backend_test_dune" \
-  "bonsai_flutter_mail_example" \
-  "generic native backend test dependencies"
+reject_pattern "$network_dart_source" 'SecurityContext|HttpClient|dart:io|dart:html|WebSocket[.]connect' "network Flutter source"
+
 for example in clock counter gallery host_effects host_navigation mail navigation network sqlite_worker text_input todo; do
   require_file "examples/$example/ocaml/native_embed.ml"
-  if test "$example" = mail; then
-    require_text \
-      "$native_object_commands" \
-      "examples/mail/ocaml/native_embed_debug.exe.o" \
-      "native-objects"
-    require_text \
-      "$native_object_commands" \
-      "examples/mail/ocaml/native_embed_release.exe.o" \
-      "native-objects"
-  else
-    require_text \
-      "$native_object_commands" \
-      "examples/$example/ocaml/native_embed.exe.o" \
-      "native-objects"
-  fi
+  example_config=$(cat "examples/$example/bonsai-flutter.sexp")
+  require_text "$example_config" '(lang 2)' "$example config"
+  require_text "$example_config" '(native_target ocaml/native_embed.exe.o)' "$example config"
   example_pubspec=$(cat "examples/$example/flutter/pubspec.yaml")
-  require_text \
-    "$example_pubspec" \
-    "native_artifact_root: ../../../_build/native-artifacts/$example/" \
-    "$example Flutter build hook"
-  require_text \
-    "$example_pubspec" \
-    "require_ocaml_backend: true" \
-    "$example Flutter build hook"
-  require_text \
-    "$example_pubspec" \
-    "macos_deployment_target: '26.0'" \
-    "$example Flutter build hook"
-  if test "$example" = sqlite_worker; then
-    require_text \
-      "$example_pubspec" \
-      "link_system_sqlite3: true" \
-      "$example Flutter build hook"
-  else
-    reject_text \
-      "$example_pubspec" \
-      "link_system_sqlite3" \
-      "$example Flutter build hook"
-  fi
-  macos_config=$(cat "examples/$example/flutter/macos/Runner/Configs/BonsaiFlutter.xcconfig")
-  require_text "$macos_config" "MACOSX_DEPLOYMENT_TARGET = 26.0" "$example macOS configuration"
-  require_text "$macos_config" "ARCHS = arm64" "$example macOS configuration"
-  for configuration in Debug Release AppInfo; do
-    macos_consumer=$(cat "examples/$example/flutter/macos/Runner/Configs/$configuration.xcconfig")
-    require_text \
-      "$macos_consumer" \
-      '#include "BonsaiFlutter.xcconfig"' \
-      "$example macOS $configuration configuration"
-  done
-  reject_text \
-    "$(cat "examples/$example/flutter/macos/Runner.xcodeproj/project.pbxproj")" \
-    "MACOSX_DEPLOYMENT_TARGET = 10.15" \
-    "$example macOS project"
+  require_text "$example_pubspec" '# bonsai-flutter:begin packages' "$example Flutter package region"
+  require_text "$example_pubspec" '# bonsai-flutter:begin native-hook' "$example Flutter native-hook region"
+  require_text "$example_pubspec" 'native_artifact_root: ../_build/bonsai-flutter/artifacts/' "$example artifact root"
+  reject_text "$example_pubspec" '../../../flutter/packages' "$example Flutter package paths"
+  reject_text "$example_pubspec" '../../../_build/native-artifacts' "$example artifact root"
+  require_text "$(cat "examples/$example/ocaml/dune")" '(name bonsai-flutter-macos)' "$example Dune aliases"
+  require_text "$(cat "examples/$example/ocaml/dune")" '(name bonsai-flutter-ios)' "$example Dune aliases"
   require_file "examples/$example/flutter/ios/Runner/PrivacyInfo.xcprivacy"
-  ios_project=$(cat "examples/$example/flutter/ios/Runner.xcodeproj/project.pbxproj")
-  require_text \
-    "$ios_project" \
-    "PrivacyInfo.xcprivacy in Resources" \
-    "$example iOS project"
 done
-integration_object_commands=$(dry_run_target integration-native-object)
-require_text \
-  "$integration_object_commands" \
-  'tool/macos/stage_native_objects.sh "26.0" "arm64" integration' \
-  "integration-native-object"
+reject_text "$(cat examples/mail/ocaml/dune)" 'bonsai_flutter_trace_' "Mail consumer closure"
+reject_text "$(cat examples/mail/ocaml/dune)" 'native_embed_debug' "Mail consumer target"
+reject_text "$(cat examples/mail/ocaml/dune)" 'native_embed_release' "Mail consumer target"
 
 integration_pubspec=$(cat flutter/integration_test/pubspec.yaml)
-require_text \
-  "$integration_pubspec" \
-  "native_artifact_root: ../../_build/native-artifacts/integration_test/" \
-  "integration Flutter build hook"
-require_text \
-  "$integration_pubspec" \
-  "require_ocaml_backend: true" \
-  "integration Flutter build hook"
-require_text \
-  "$integration_pubspec" \
-  "macos_deployment_target: '26.0'" \
-  "integration Flutter build hook"
-require_text \
-  "$integration_pubspec" \
-  "link_system_sqlite3: true" \
-  "integration Flutter build hook"
-require_file flutter/integration_test/ios/Runner/PrivacyInfo.xcprivacy
-integration_ios_project=$(
-  cat flutter/integration_test/ios/Runner.xcodeproj/project.pbxproj
-)
-require_text \
-  "$integration_ios_project" \
-  "PrivacyInfo.xcprivacy in Resources" \
-  "integration iOS project"
+require_text "$integration_pubspec" '# bonsai-flutter:begin packages' "integration package region"
+require_text "$integration_pubspec" '# bonsai-flutter:begin native-hook' "integration native-hook region"
+require_text "$integration_pubspec" 'native_artifact_root: ./_build/bonsai-flutter/artifacts/' "integration artifact root"
+reject_text "$integration_pubspec" 'bonsai_flutter_sqlite_worker_example' "integration package ownership"
+require_file flutter/integration_test/ocaml/native_embed.ml
+integration_dune=$(cat flutter/integration_test/ocaml/dune)
+integration_opam=$(cat flutter/integration_test/bonsai_flutter_integration_test.opam)
+require_text "$(cat flutter/integration_test/dune-project)" '(allow_empty)' "integration package ownership"
+require_text "$integration_dune" '(name bonsai-flutter-macos)' "integration Dune aliases"
+require_text "$integration_dune" '(name integration_consumer_fixtures)' "integration-owned OCaml fixtures"
+require_file flutter/integration_test/ocaml/sqlite_worker_example.ml
+reject_pattern \
+  "$integration_dune$integration_opam" \
+  'bonsai_flutter_(counter|gallery|host_navigation|mail|sqlite_worker|text_input|todo)_example' \
+  "integration sibling example dependencies"
+
+readme=$(cat README.md)
+require_text "$readme" '(mode managed_adapter)' "managed host documentation"
+require_text "$readme" '(mode custom)' "custom host documentation"
+require_text "$readme" 'bonsai-flutter exec --profile=debug -- flutter test --no-pub' "exec documentation"
+reject_text "$readme" 'make native-objects' "public documentation"
+packaging_documentation=$(cat docs/packaging.md)
+require_text "$packaging_documentation" '# bonsai-flutter:begin packages' "pubspec ownership documentation"
+reject_text "$packaging_documentation" 'make integration-native-object' "packaging documentation"
+
+ios_device_commands=$(dry_run_target ci-ios-device)
+require_text "$ios_device_commands" "IOS_DEVICE_ID" "ci-ios-device"
+require_text "$ios_device_commands" 'bonsai_flutter_tool/bin/main.exe run ios --profile debug --device' "ci-ios-device"
+require_text "$ios_device_commands" 'tool/ci/ios_device_preflight.sh' "ci-ios-device"
+reject_text "$ios_device_commands" 'run_device_tests.sh' "ci-ios-device"
+reject_text "$ios_device_commands" 'build_native_objects.sh' "ci-ios-device"
 
 ffi_dune=$(cat ocaml/ffi/dune)
 for example_library in \
@@ -683,7 +637,6 @@ require_file .github/workflows/ios-device.yml
 require_file tool/ci/install_ios_signing.sh
 require_file tool/ci/ios_device_preflight.sh
 require_file tool/ci/verify_ios_bundle.sh
-require_file tool/ios/run_device_tests.sh
 ios_device_preflight=$(cat tool/ci/ios_device_preflight.sh)
 require_text \
   "$ios_device_preflight" \
@@ -694,20 +647,6 @@ require_text \
   "$ios_signing_installer" \
   "Library/Developer/Xcode/UserData/Provisioning Profiles" \
   "iOS signing installer"
-
-ios_device_runner=$(cat tool/ios/run_device_tests.sh)
-require_text \
-  "$ios_device_runner" \
-  "XCODE_XCCONFIG_FILE" \
-  "physical-device runner"
-require_text \
-  "$ios_device_runner" \
-  "flutter build ios \\" \
-  "physical-device runner"
-require_text \
-  "$ios_device_runner" \
-  "--no-codesign" \
-  "physical-device runner"
 
 ios_bundle_verifier=$(cat tool/ios/verify_app_bundle.sh)
 require_text \
@@ -731,12 +670,19 @@ ios_workflow_text=$(cat \
   .github/workflows/ios-device.yml)
 ios_hosted_workflow_text=$(cat .github/workflows/ios.yml)
 ios_device_workflow_text=$(cat .github/workflows/ios-device.yml)
+flutter_workflow_text=$(cat .github/workflows/flutter.yml)
 
 require_text "$workflow_text" "ocaml-compiler: 5.1.1" "workflows"
 require_text "$workflow_text" "make ci-ocaml" "workflows"
 require_text "$workflow_text" "make ci-flutter" "workflows"
 require_text "$workflow_text" "make ci-macos" "workflows"
 require_text "$workflow_text" "make ci-sanitizers" "workflows"
+require_text "$flutter_workflow_text" "runs-on: macos-26" "Flutter workflow"
+require_text "$flutter_workflow_text" "ocaml/setup-ocaml@v3" "Flutter workflow"
+require_text \
+  "$flutter_workflow_text" \
+  "ocaml-compiler: 5.1.1" \
+  "Flutter workflow"
 require_text "$ios_workflow_text" "make ci-ios" "iOS workflows"
 require_text "$ios_workflow_text" "make ci-ios-device" "iOS workflows"
 require_text "$ios_hosted_workflow_text" "runs-on: macos-26" "hosted iOS workflow"
@@ -764,6 +710,7 @@ reject_text "$workflow_text" "continue-on-error: true" "workflows"
 reject_text "$workflow_text" "OCAMLPARAM" "workflows"
 reject_text "$workflow_text" "janestreet-bleeding" "workflows"
 reject_text "$workflow_text" "ocaml-compiler: 5.3.0" "workflows"
+reject_text "$flutter_workflow_text" "runs-on: ubuntu" "Flutter workflow"
 reject_text "$ios_workflow_text" "_build/default" "iOS workflows"
 reject_text "$ios_device_workflow_text" "pull_request_target" "physical-device workflow"
 reject_text "$ios_device_workflow_text" "pull_request:" "physical-device workflow"

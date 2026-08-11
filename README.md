@@ -89,21 +89,20 @@ body slot or receive an explicit finite extent. See
 The Flutter shell initializes the native runtime and hosts
 `BonsaiFlutterRoot`; it has no count variable or increment reducer.
 
-Build and run the macOS 26.0+ Apple Silicon arm64 example:
+Build and run the macOS 26.0+ Apple Silicon arm64 example through its consumer
+workspace:
 
 ```sh
-make native-object EXAMPLE=counter
-cd examples/counter/flutter
-flutter pub get
-flutter run -d macos
+cd examples/counter
+../../_build/default/bonsai_flutter_tool/bin/main.exe run macos --profile debug
 ```
 
-Each directory under `examples/` owns its OCaml component, native entrypoint,
-complete-object target, Flutter shell, and build-hook configuration.
-`make native-object EXAMPLE=counter` builds the complete object and stages it
-under `_build/native-artifacts/counter/`, where the package build hook links it
-into the application. No dylib is copied manually. Run `make native-objects` to
-build and stage every standalone example object.
+Each directory under `examples/` is an independent consumer workspace. It owns
+its Dune project, locked opam package, OCaml component, native entrypoint,
+Flutter shell, and `bonsai-flutter.sexp`. The tool builds and stages the
+profile-specific complete object below that consumer's `_build/` directory and
+the Native Assets hook links it into the application. No application artifact
+is staged at the repository root.
 
 The [`Clock`](examples/clock/README.md) example demonstrates exact,
 approximate, and manually sampled logical time, one-shot timers, all four
@@ -210,6 +209,20 @@ a migration error. See the renderer package README for a complete adapter
 example. The adapter may also provide a bounded opaque-byte application bridge
 for asynchronous requests and ordered unsolicited events. See
 [`docs/application-platform.md`](docs/application-platform.md).
+
+Applications that own non-mechanical Dart startup use a custom host instead:
+
+```lisp
+(host
+ (mode custom)
+ (main lib/main.dart))
+```
+
+In custom mode, `sync-host` validates but never rewrites the entrypoint or Dart
+tests. In both modes, the application owns pubspec content outside the
+`bonsai-flutter:begin`/`bonsai-flutter:end` package and native-hook regions.
+Local framework package paths are synchronized into `.bonsai-flutter`, and
+`exec` runs `flutter pub get` when those dependency inputs change.
 
 ## Testing
 

@@ -193,6 +193,174 @@ let test_animation_props_round_trip () =
      | Ok decoded -> expect (decoded = frame) "animation props changed during round trip")
 ;;
 
+let test_page_presentations_round_trip_and_incremental_updates () =
+  let standard =
+    Wire_frame.Page_props
+      { page_key = ID.Navigation.Page_key.of_string "settings"
+      ; presentation = Standard_page Fade
+      ; can_pop = true
+      ; restoration_id = Some (ID.Navigation.Restoration_id.of_string "settings-page")
+      }
+  in
+  let modal ~can_pop ~barrier_dismissible ~request_focus ~transition_duration_ms =
+    Wire_frame.Page_props
+      { page_key = ID.Navigation.Page_key.of_string "editor"
+      ; presentation =
+          Modal_bottom_sheet
+            { barrier_dismissible
+            ; barrier_color_argb = Some (Int32.of_string "0x7f102030")
+            ; barrier_label = Some "Close editor"
+            ; sizing =
+                Detented_sizing
+                  { detents = Medium_and_large
+                  ; initial_detent = Medium_detent
+                  ; dismiss_on_drag = true
+                  ; handle_semantics_label = "Adjust sheet height"
+                  ; medium_semantics_value = "Half height"
+                  ; large_semantics_value = "Full height"
+                  }
+            ; use_safe_area = true
+            ; request_focus
+            ; transition_duration_ms
+            ; reverse_transition_duration_ms = 175
+            }
+      ; can_pop
+      ; restoration_id = Some (ID.Navigation.Restoration_id.of_string "editor-page")
+      }
+  in
+  let modal_before =
+    modal
+      ~can_pop:false
+      ~barrier_dismissible:false
+      ~request_focus:false
+      ~transition_duration_ms:0
+  in
+  let modal_after =
+    modal
+      ~can_pop:true
+      ~barrier_dismissible:true
+      ~request_focus:true
+      ~transition_duration_ms:325
+  in
+  let frame =
+    Wire_frame.
+      { runtime_epoch = epoch 73L
+      ; base_revision = revision 4L
+      ; target_revision = revision 5L
+      ; kind = Incremental_frame
+      ; operations =
+          [ Update_props { node_id = node 30L; props = standard }
+          ; Update_props { node_id = node 31L; props = modal_before }
+          ; Update_props { node_id = node 31L; props = modal_after }
+          ]
+      }
+  in
+  match Binary_codec.encode frame with
+  | Error error -> fail "page presentation encode failed: %s" error.message
+  | Ok encoded ->
+    (match Binary_codec.decode encoded with
+     | Error error -> fail "page presentation decode failed: %s" error.message
+     | Ok decoded ->
+       (match decoded.operations with
+        | [ Update_props { props = Page_props standard; _ }
+          ; Update_props { props = Page_props before; _ }
+          ; Update_props { props = Page_props after; _ }
+          ] ->
+          expect
+            (standard.presentation = Standard_page Fade)
+            "standard presentation lost its fade transition";
+          expect
+            ((not before.can_pop) && after.can_pop)
+            "incremental can_pop did not change";
+          (match before.presentation, after.presentation with
+           | Modal_bottom_sheet before, Modal_bottom_sheet after ->
+             expect
+               ((not before.barrier_dismissible) && after.barrier_dismissible)
+               "incremental barrier policy did not change";
+             expect
+               ((not before.request_focus) && after.request_focus)
+               "incremental focus policy did not change";
+             expect
+               (before.transition_duration_ms = 0
+                && after.transition_duration_ms = 325
+                && after.reverse_transition_duration_ms = 175)
+               "incremental modal durations did not change";
+             expect
+               (after.barrier_color_argb = Some (Int32.of_string "0x7f102030"))
+               "modal barrier color changed during round trip";
+             expect
+               (after.barrier_label = Some "Close editor")
+               "modal barrier label changed during round trip";
+             (match after.sizing with
+              | Detented_sizing detents ->
+                expect
+                  (detents.detents = Medium_and_large
+                   && detents.initial_detent = Medium_detent
+                   && detents.dismiss_on_drag
+                   && String.equal detents.handle_semantics_label "Adjust sheet height"
+                   && String.equal detents.medium_semantics_value "Half height"
+                   && String.equal detents.large_semantics_value "Full height")
+                  "modal detent contract changed during round trip"
+              | _ -> fail "modal sizing changed during round trip")
+           | _ -> fail "modal presentation changed kind during round trip")
+        | _ -> fail "page presentation operations changed during round trip"))
+;;
+
+let test_modal_bottom_sheet_rejects_unknown_wire_enums () =
+  let frame =
+    Wire_frame.
+      { runtime_epoch = epoch 73L
+      ; base_revision = revision 4L
+      ; target_revision = revision 5L
+      ; kind = Incremental_frame
+      ; operations =
+          [ Update_props
+              { node_id = node 30L
+              ; props =
+                  Page_props
+                    { page_key = ID.Navigation.Page_key.of_string "modal"
+                    ; presentation =
+                        Modal_bottom_sheet
+                          { barrier_dismissible = true
+                          ; barrier_color_argb = Some (Int32.of_string "0x7f102030")
+                          ; barrier_label = None
+                          ; sizing =
+                              Detented_sizing
+                                { detents = Medium_and_large
+                                ; initial_detent = Medium_detent
+                                ; dismiss_on_drag = true
+                                ; handle_semantics_label = "Adjust sheet height"
+                                ; medium_semantics_value = "Half height"
+                                ; large_semantics_value = "Full height"
+                                }
+                          ; use_safe_area = false
+                          ; request_focus = true
+                          ; transition_duration_ms = 250
+                          ; reverse_transition_duration_ms = 200
+                          }
+                    ; can_pop = true
+                    ; restoration_id = None
+                    }
+              }
+          ]
+      }
+  in
+  let encoded =
+    match Binary_codec.encode frame with
+    | Ok bytes -> bytes
+    | Error error -> fail "modal enum fixture encode failed: %s" error.message
+  in
+  List.iter
+    (fun offset ->
+       let invalid = Bytes.copy encoded in
+       Bytes.set invalid offset '\xff';
+       match Binary_codec.decode invalid with
+       | Error { code = Invalid_props; _ } -> ()
+       | Error error -> fail "unexpected modal enum error: %s" error.message
+       | Ok _ -> fail "unknown modal enum at offset %d unexpectedly decoded" offset)
+    [ 88; 96; 107; 108 ]
+;;
+
 let test_legacy_opacity_layout () =
   let frame =
     Wire_frame.
@@ -247,7 +415,8 @@ let test_layout_material_and_semantics_props_round_trip () =
           ; Create_node
               { node_id = node 3L
               ; kind = Scroll_view
-              ; props = Scroll_view_props { axis = Vertical; reverse = false }
+              ; props =
+                  Scroll_view_props { axis = Vertical; reverse = false; primary = true }
               ; event_bindings =
                   [ { event_tag = Generated_protocol.Event_tag.scroll_notification
                     ; handler_id = handler 80L
@@ -1141,6 +1310,8 @@ let () =
   test_styled_text_props_round_trip ();
   test_legacy_text_props_layout ();
   test_animation_props_round_trip ();
+  test_page_presentations_round_trip_and_incremental_updates ();
+  test_modal_bottom_sheet_rejects_unknown_wire_enums ();
   test_legacy_opacity_layout ();
   test_layout_material_and_semantics_props_round_trip ();
   test_text_input_props_round_trip ();

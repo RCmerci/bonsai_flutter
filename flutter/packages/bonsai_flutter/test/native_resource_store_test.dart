@@ -57,6 +57,102 @@ void main() {
     expect(resources.disposedResourceCount, 2);
   });
 
+  testWidgets(
+    'borrowed scroll controller serves host effects without transferring ownership',
+    (tester) async {
+      final store = NodeStore()..apply(_scrollFrame(revision: 1));
+      final resources = RendererResourceStore()..synchronize(store);
+      final borrowed = ScrollController();
+      resources.bindBorrowedScrollController(7, borrowed);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            height: 100,
+            child: ListView(
+              controller: borrowed,
+              children: const [SizedBox(height: 1000)],
+            ),
+          ),
+        ),
+      );
+      final request = resources.scrollTo(7, alignment: 0.5, animated: false);
+      await tester.pump();
+      await request;
+
+      expect(
+        borrowed.offset,
+        closeTo(borrowed.position.maxScrollExtent * 0.5, 0.001),
+      );
+      expect(resources.liveResourceCount, 1);
+      expect(resources.createdResourceCount, 0);
+
+      resources.unbindBorrowedScrollController(7, borrowed);
+      resources.dispose();
+      expect(resources.disposedResourceCount, 0);
+      expect(() => borrowed.addListener(() {}), returnsNormally);
+      borrowed.dispose();
+    },
+  );
+
+  test('rejects competing borrowed controllers for one scroll node', () {
+    final store = NodeStore()..apply(_scrollFrame(revision: 1));
+    final resources = RendererResourceStore()..synchronize(store);
+    final first = ScrollController();
+    final second = ScrollController();
+    addTearDown(first.dispose);
+    addTearDown(second.dispose);
+    addTearDown(resources.dispose);
+
+    resources.bindBorrowedScrollController(7, first);
+
+    expect(
+      () => resources.bindBorrowedScrollController(7, second),
+      throwsStateError,
+    );
+    expect(() => resources.acquireScrollController(7), throwsStateError);
+  });
+
+  test('reconciles one scroll node between owned and borrowed modes', () {
+    final store = NodeStore()..apply(_scrollFrame(revision: 1));
+    final resources = RendererResourceStore()..synchronize(store);
+    addTearDown(resources.dispose);
+    final firstOwned = resources.acquireScrollController(7);
+    final borrowed = ScrollController();
+    addTearDown(borrowed.dispose);
+
+    store.apply(_scrollPrimaryUpdate(baseRevision: 1, primary: true));
+    resources.synchronize(store);
+    resources.bindBorrowedScrollController(7, borrowed);
+    expect(resources.disposedResourceCount, 1);
+
+    store.apply(_scrollPrimaryUpdate(baseRevision: 2, primary: false));
+    resources.synchronize(store);
+    final secondOwned = resources.acquireScrollController(7);
+
+    expect(secondOwned, isNot(same(firstOwned)));
+    expect(secondOwned, isNot(same(borrowed)));
+    expect(resources.createdResourceCount, 2);
+    expect(() => borrowed.addListener(() {}), returnsNormally);
+  });
+
+  testWidgets('detached borrowed scroll controller fails host scrolling', (
+    tester,
+  ) async {
+    final store = NodeStore()..apply(_scrollFrame(revision: 1));
+    final resources = RendererResourceStore()..synchronize(store);
+    final borrowed = ScrollController();
+    addTearDown(resources.dispose);
+    addTearDown(borrowed.dispose);
+    resources.bindBorrowedScrollController(7, borrowed);
+    resources.unbindBorrowedScrollController(7, borrowed);
+
+    final request = resources.scrollTo(7, alignment: 0.5, animated: false);
+    final expectation = expectLater(request, throwsStateError);
+    await tester.pump();
+    await expectation;
+  });
+
   test(
     'native resource is retained, replaced, and disposed with node lifecycle',
     () {
@@ -137,7 +233,11 @@ Frame _scrollFrame({required int revision}) => Frame(
     CreateNode(
       nodeId: 7,
       kind: NodeKind.scrollView,
-      props: ScrollViewProps(axis: ScrollAxis.vertical, reverse: false),
+      props: ScrollViewProps(
+        axis: ScrollAxis.vertical,
+        reverse: false,
+        primary: false,
+      ),
       eventBindings: [],
     ),
     CreateNode(
@@ -148,6 +248,26 @@ Frame _scrollFrame({required int revision}) => Frame(
     ),
     SetChildren(nodeId: 7, children: [8]),
     SetRoot(7),
+  ],
+);
+
+Frame _scrollPrimaryUpdate({
+  required int baseRevision,
+  required bool primary,
+}) => Frame(
+  runtimeEpoch: 2,
+  baseRevision: baseRevision,
+  targetRevision: baseRevision + 1,
+  kind: FrameKind.incremental,
+  operations: [
+    UpdateProps(
+      nodeId: 7,
+      props: ScrollViewProps(
+        axis: ScrollAxis.vertical,
+        reverse: false,
+        primary: primary,
+      ),
+    ),
   ],
 );
 

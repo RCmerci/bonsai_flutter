@@ -72,14 +72,10 @@ let init name features macos_minimum ios_minimum adopt =
   else
     let* configuration_text =
       if adopt
-      then
-        let* config = Config.parse_file configuration_path in
-        Ok
-          (Scaffold.configuration_text
-             ~name:config.name
-             ~features:config.features
-             ~macos_minimum_version:config.macos.minimum_version
-             ~ios_minimum_version:config.ios.minimum_version)
+      then (
+        match Scaffold.read_file configuration_path with
+        | Some contents -> Ok contents
+        | None -> Error "--adopt requires an existing bonsai-flutter.sexp")
       else
         let* name =
           match name with
@@ -97,7 +93,13 @@ let init name features macos_minimum ios_minimum adopt =
     let* () = write_file_if_missing configuration_path configuration_text in
     let* config = Config.parse_file configuration_path in
     let* () =
-      Scaffold.initialize_workspace ~project_root ~config_text:configuration_text ~config
+      if adopt
+      then Scaffold.adopt_workspace ~project_root ~config_text:configuration_text ~config
+      else
+        Scaffold.initialize_workspace
+          ~project_root
+          ~config_text:configuration_text
+          ~config
     in
     let* framework_root = Assets.find_framework_root () in
     let* () = Assets.synchronize_flutter_packages ~framework_root ~project_root in

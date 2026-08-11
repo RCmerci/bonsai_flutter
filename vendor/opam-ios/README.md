@@ -1,8 +1,8 @@
 # iOS runtime closure
 
-This directory contains the checked-in reference application closure. The SDK
-generates the same lock format per application; applications do not share a
-fixed package union.
+This directory contains the checked-in reference application closure and the
+installed SDK support closure. Applications resolve their own reachable
+closure in the same lock format; they do not inherit every package in the SDK.
 
 `runtime-closure.lock` is generated from
 `tool/ios/fixtures/application-closure`. Its pinned opam metadata fixes source
@@ -20,6 +20,12 @@ uunf
 uucp
 astring
 ```
+
+`supported-closure.lock` is generated from the union of the repository's core,
+network, and SQLite consumer closures. It defines the packages and target
+components installed into the immutable public SDK. Application closure
+validation rejects pinned packages outside this support boundary before Dune
+builds the consumer target.
 
 The lock metadata records the row counts and digest derived from its package
 rows. The current reference has 121 packages: 69 target packages, 51 host-only

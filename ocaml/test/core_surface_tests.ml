@@ -96,7 +96,7 @@ let test_navigation_constructors () =
   let page =
     Ui.Widget.page
       ~page_key:(ID.Navigation.Page_key.of_string "settings")
-      ~transition:Ui.Navigation.Fade
+      ~presentation:(Ui.Navigation.Standard Ui.Navigation.Fade)
       ~can_pop:true
       ~restoration_id:(ID.Navigation.Restoration_id.of_string "settings-page")
       (Ui.Widget.text "Settings")
@@ -110,6 +110,225 @@ let test_navigation_constructors () =
   check
     (String.equal (Ui.Widget.For_testing.kind_name children.(0)) "Page")
     "navigator child is not a Page";
+  (match (Ui.Widget.Private.view children.(0)).props with
+   | Ui.Widget.Private.Page_props
+       { presentation = Ui.Navigation.Standard Ui.Navigation.Fade; _ } -> ()
+   | _ -> failwith "standard page presentation or transition was not preserved");
+  let barrier_color = Ui.Style.Color.argb ~alpha:128 ~red:10 ~green:20 ~blue:30 in
+  let handle_semantics =
+    Ui.Navigation.Modal_bottom_sheet.Handle_semantics.create
+      ~label:"Adjust sheet height"
+      ~medium_value:"Half height"
+      ~large_value:"Full height"
+  in
+  let detents =
+    Ui.Navigation.Modal_bottom_sheet.Detents.create
+      ~initial:Ui.Navigation.Modal_bottom_sheet.Detent.Medium
+      ~semantics:handle_semantics
+      [ Ui.Navigation.Modal_bottom_sheet.Detent.Medium
+      ; Ui.Navigation.Modal_bottom_sheet.Detent.Large
+      ]
+  in
+  let modal =
+    Ui.Navigation.Modal_bottom_sheet.create
+      ~barrier_dismissible:false
+      ~barrier_color
+      ~barrier_label:"Close editor"
+      ~sizing:(Ui.Navigation.Modal_bottom_sheet.Sizing.Detented detents)
+      ~use_safe_area:true
+      ~request_focus:false
+      ~transition_duration_ms:310
+      ~reverse_transition_duration_ms:190
+      ()
+  in
+  let modal_page =
+    Ui.Widget.page
+      ~page_key:(ID.Navigation.Page_key.of_string "editor")
+      ~presentation:(Ui.Navigation.Modal_bottom_sheet modal)
+      ~can_pop:false
+      ~restoration_id:(ID.Navigation.Restoration_id.of_string "editor-page")
+      (Ui.Widget.text "Editor")
+  in
+  (match (Ui.Widget.Private.view modal_page).props with
+   | Ui.Widget.Private.Page_props
+       { page_key
+       ; presentation = Ui.Navigation.Modal_bottom_sheet modal
+       ; can_pop
+       ; restoration_id
+       } ->
+     let modal = Ui.Navigation.Modal_bottom_sheet.Private.view modal in
+     check
+       (ID.Navigation.Page_key.equal page_key (ID.Navigation.Page_key.of_string "editor"))
+       "modal page key was not preserved";
+     check (not can_pop) "modal can_pop was not preserved";
+     check
+       (Option.equal
+          ID.Navigation.Restoration_id.equal
+          restoration_id
+          (Some (ID.Navigation.Restoration_id.of_string "editor-page")))
+       "modal restoration ID was not preserved";
+     check (not modal.barrier_dismissible) "modal barrier policy was not preserved";
+     check
+       (Option.equal
+          Int32.equal
+          (Option.map Ui.Style.Color.Private.to_argb32 modal.barrier_color)
+          (Some (Int32.of_string "0x800a141e")))
+       "modal barrier color was not preserved";
+     check
+       (modal.barrier_label = Some "Close editor")
+       "modal barrier label was not preserved";
+     (match modal.sizing with
+      | Ui.Navigation.Modal_bottom_sheet.Sizing.Detented detents ->
+        let detents = Ui.Navigation.Modal_bottom_sheet.Detents.Private.view detents in
+        check
+          (detents.detents
+           = [ Ui.Navigation.Modal_bottom_sheet.Detent.Medium
+             ; Ui.Navigation.Modal_bottom_sheet.Detent.Large
+             ])
+          "modal detents were not canonicalized";
+        check
+          (detents.initial = Ui.Navigation.Modal_bottom_sheet.Detent.Medium)
+          "modal initial detent was not preserved";
+        check detents.dismiss_on_drag "modal drag dismissal should default on";
+        let semantics =
+          Ui.Navigation.Modal_bottom_sheet.Handle_semantics.Private.view detents.semantics
+        in
+        check
+          (String.equal semantics.label "Adjust sheet height"
+           && String.equal semantics.medium_value "Half height"
+           && String.equal semantics.large_value "Full height")
+          "modal handle semantics were not preserved"
+      | _ -> failwith "modal detented sizing was not preserved");
+     check modal.use_safe_area "modal safe-area policy was not preserved";
+     check (not modal.request_focus) "modal focus policy was not preserved";
+     check
+       (modal.transition_duration_ms = 310 && modal.reverse_transition_duration_ms = 190)
+       "modal durations were not preserved"
+   | _ -> failwith "modal page presentation was not emitted");
+  let default_modal =
+    Ui.Navigation.Modal_bottom_sheet.create ()
+    |> Ui.Navigation.Modal_bottom_sheet.Private.view
+  in
+  check default_modal.barrier_dismissible "modal barrier should default dismissible";
+  check
+    (Option.is_none default_modal.barrier_color)
+    "modal barrier color should use theme";
+  check
+    (Option.is_none default_modal.barrier_label)
+    "modal barrier label should be localized";
+  check
+    (default_modal.sizing = Ui.Navigation.Modal_bottom_sheet.Sizing.Content_bounded)
+    "modal should use the bounded default height policy";
+  let scroll_controlled_modal =
+    Ui.Navigation.Modal_bottom_sheet.create
+      ~sizing:Ui.Navigation.Modal_bottom_sheet.Sizing.Scroll_controlled
+      ()
+    |> Ui.Navigation.Modal_bottom_sheet.Private.view
+  in
+  check
+    (scroll_controlled_modal.sizing
+     = Ui.Navigation.Modal_bottom_sheet.Sizing.Scroll_controlled)
+    "modal scroll-controlled sizing was not preserved";
+  let detents_view detents =
+    Ui.Navigation.Modal_bottom_sheet.Detents.Private.view detents
+  in
+  let medium_only =
+    Ui.Navigation.Modal_bottom_sheet.Detents.create
+      ~semantics:handle_semantics
+      [ Ui.Navigation.Modal_bottom_sheet.Detent.Medium ]
+    |> detents_view
+  in
+  check
+    (medium_only.detents = [ Ui.Navigation.Modal_bottom_sheet.Detent.Medium ]
+     && medium_only.initial = Ui.Navigation.Modal_bottom_sheet.Detent.Medium)
+    "medium-only detents did not default to Medium";
+  let large_only =
+    Ui.Navigation.Modal_bottom_sheet.Detents.create
+      ~dismiss_on_drag:false
+      ~semantics:handle_semantics
+      [ Ui.Navigation.Modal_bottom_sheet.Detent.Large ]
+    |> detents_view
+  in
+  check
+    (large_only.detents = [ Ui.Navigation.Modal_bottom_sheet.Detent.Large ]
+     && large_only.initial = Ui.Navigation.Modal_bottom_sheet.Detent.Large
+     && not large_only.dismiss_on_drag)
+    "large-only detents did not preserve defaults and dismissal policy";
+  let reversed =
+    Ui.Navigation.Modal_bottom_sheet.Detents.create
+      ~semantics:handle_semantics
+      [ Ui.Navigation.Modal_bottom_sheet.Detent.Large
+      ; Ui.Navigation.Modal_bottom_sheet.Detent.Medium
+      ]
+    |> detents_view
+  in
+  check
+    (reversed.detents
+     = [ Ui.Navigation.Modal_bottom_sheet.Detent.Medium
+       ; Ui.Navigation.Modal_bottom_sheet.Detent.Large
+       ])
+    "modal detents were not canonicalized smallest-to-largest";
+  check (not default_modal.use_safe_area) "modal safe area should default off";
+  check default_modal.request_focus "modal should request route focus by default";
+  check
+    (default_modal.transition_duration_ms = 250
+     && default_modal.reverse_transition_duration_ms = 200)
+    "modal should use documented Material durations";
+  List.iter
+    (fun duration_ms ->
+       match
+         Ui.Navigation.Modal_bottom_sheet.create ~transition_duration_ms:duration_ms ()
+       with
+       | exception Invalid_argument _ -> ()
+       | _ -> failwith "modal accepted an invalid transition duration")
+    [ -1; 0x1_0000_0000 ];
+  let expect_invalid_detents f message =
+    match f () with
+    | exception Invalid_argument _ -> ()
+    | _ -> failwith message
+  in
+  expect_invalid_detents
+    (fun () ->
+       Ui.Navigation.Modal_bottom_sheet.Detents.create ~semantics:handle_semantics [])
+    "modal accepted an empty detent set";
+  expect_invalid_detents
+    (fun () ->
+       Ui.Navigation.Modal_bottom_sheet.Detents.create
+         ~semantics:handle_semantics
+         [ Ui.Navigation.Modal_bottom_sheet.Detent.Medium
+         ; Ui.Navigation.Modal_bottom_sheet.Detent.Medium
+         ])
+    "modal accepted duplicate detents";
+  expect_invalid_detents
+    (fun () ->
+       Ui.Navigation.Modal_bottom_sheet.Detents.create
+         ~initial:Ui.Navigation.Modal_bottom_sheet.Detent.Large
+         ~semantics:handle_semantics
+         [ Ui.Navigation.Modal_bottom_sheet.Detent.Medium ])
+    "modal accepted an initial detent outside its set";
+  List.iter
+    (fun (label, medium_value, large_value) ->
+       expect_invalid_detents
+         (fun () ->
+            Ui.Navigation.Modal_bottom_sheet.Handle_semantics.create
+              ~label
+              ~medium_value
+              ~large_value)
+         "modal accepted empty handle semantics")
+    [ "", "Half height", "Full height"
+    ; "Adjust sheet height", "", "Full height"
+    ; "Adjust sheet height", "Half height", ""
+    ];
+  List.iter
+    (fun duration_ms ->
+       match
+         Ui.Navigation.Modal_bottom_sheet.create
+           ~reverse_transition_duration_ms:duration_ms
+           ()
+       with
+       | exception Invalid_argument _ -> ()
+       | _ -> failwith "modal accepted an invalid reverse transition duration")
+    [ -1; 0x1_0000_0000 ];
   let overlay =
     Ui.Widget.overlay ~alignment:Ui.Navigation.Center [ Ui.Widget.text "Overlay content" ]
   in

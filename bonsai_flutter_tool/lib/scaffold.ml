@@ -304,7 +304,7 @@ let configuration_text ~name ~features ~macos_minimum_version ~ios_minimum_versi
     | features -> " (features " ^ String.concat " " features ^ ")"
   in
   Printf.sprintf
-    {|(lang 1)
+    {|(lang 2)
 
 (app
  (name %s)
@@ -445,11 +445,14 @@ let initialize ~project_root ~config =
       (Filename.concat app_directory "native_embed.ml")
       (native_embed config.name);
     write_if_missing (Filename.concat app_directory "dune") app_dune;
-    write_if_missing
-      (Filename.concat
-         (Filename.concat project_root config.Config.flutter_root)
-         config.host.adapter)
-      application_host_adapter;
+    (match config.Config.host with
+     | Config.Managed_adapter adapter ->
+       write_if_missing
+         (Filename.concat
+            (Filename.concat project_root config.Config.flutter_root)
+            adapter.Config.adapter)
+         application_host_adapter
+     | Config.Custom _ -> ());
     let* () = write_dune_native_aliases ~project_root ~config in
     List.iter
       (fun (relative_path, contents) ->
@@ -460,22 +463,58 @@ let initialize ~project_root ~config =
   | Sys_error message | Unix.Unix_error (_, _, message) -> Error message
 ;;
 
-let initialize_workspace ~project_root ~config_text ~config =
-  try
-    write_if_missing (Filename.concat project_root "bonsai-flutter.sexp") config_text;
-    write_if_missing
-      (Filename.concat project_root ".ocamlformat")
-      "version=0.29.0\nprofile=janestreet\n";
-    write_if_missing
-      (Filename.concat project_root "dune-project")
-      (dune_project config.Config.name);
+let ensure_configuration ~project_root ~config_text =
+  let path = Filename.concat project_root "bonsai-flutter.sexp" in
+  match read_file path with
+  | None ->
+    write_if_missing path config_text;
+    Ok ()
+  | Some existing when String.equal existing config_text -> Ok ()
+  | Some _ -> Error (Printf.sprintf "bonsai-flutter.sexp conflicts with %s" path)
+;;
+
+let initialize_metadata ~project_root ~config_text ~config =
+  let* () = ensure_configuration ~project_root ~config_text in
+  write_if_missing
+    (Filename.concat project_root ".ocamlformat")
+    "version=0.29.0\nprofile=janestreet\n";
+  write_if_missing
+    (Filename.concat project_root "dune-project")
+    (dune_project config.Config.name);
+  let existing_manifests =
+    Sys.readdir project_root
+    |> Array.to_list
+    |> List.filter (fun name -> String.ends_with ~suffix:".opam" name)
+  in
+  if existing_manifests = []
+  then (
     write_if_missing
       (Filename.concat project_root (config.name ^ ".opam"))
       (opam_manifest config.name);
     write_if_missing
       (Filename.concat project_root (config.name ^ ".opam.locked"))
-      (opam_locked_manifest config.name);
+      (opam_locked_manifest config.name));
+  Ok ()
+;;
+
+let initialize_workspace ~project_root ~config_text ~config =
+  try
+    let* () = initialize_metadata ~project_root ~config_text ~config in
     initialize ~project_root ~config
+  with
+  | Sys_error message | Unix.Unix_error (_, _, message) -> Error message
+;;
+
+let adopt_workspace ~project_root ~config_text ~config =
+  try
+    let dune_path = dune_alias_path ~project_root ~config in
+    if not (Sys.file_exists dune_path)
+    then
+      Error
+        (Printf.sprintf "Cannot adopt: native target Dune file is missing: %s" dune_path)
+    else
+      let* () = initialize_metadata ~project_root ~config_text ~config in
+      write_dune_native_aliases ~project_root ~config
   with
   | Sys_error message | Unix.Unix_error (_, _, message) -> Error message
 ;;

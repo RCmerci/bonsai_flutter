@@ -2,7 +2,7 @@
 
 abstract final class ProtocolVersion {
   static const int protocolMajor = 1;
-  static const int protocolMinor = 16;
+  static const int protocolMinor = 18;
 }
 
 abstract final class ProtocolLimits {
@@ -506,10 +506,12 @@ abstract final class TransformPropId {
 abstract final class ScrollViewPropId {
   static const int axis = 1;
   static const int reverse = 2;
+  static const int primary = 3;
 
   static String? debugName(int id) => switch (id) {
     1 => 'axis',
     2 => 'reverse',
+    3 => 'primary',
     _ => null,
   };
 }
@@ -517,10 +519,12 @@ abstract final class ScrollViewPropId {
 abstract final class ListViewPropId {
   static const int axis = 1;
   static const int reverse = 2;
+  static const int primary = 3;
 
   static String? debugName(int id) => switch (id) {
     1 => 'axis',
     2 => 'reverse',
+    3 => 'primary',
     _ => null,
   };
 }
@@ -800,12 +804,42 @@ abstract final class PagePropId {
   static const int transition = 2;
   static const int canPop = 3;
   static const int restorationId = 4;
+  static const int presentation = 5;
+  static const int modalBarrierDismissible = 6;
+  static const int modalBarrierColor = 7;
+  static const int modalBarrierLabel = 8;
+  static const int modalUseSafeArea = 10;
+  static const int modalRequestFocus = 11;
+  static const int modalTransitionDurationMs = 12;
+  static const int modalReverseTransitionDurationMs = 13;
+  static const int modalSizing = 14;
+  static const int modalDetents = 15;
+  static const int modalInitialDetent = 16;
+  static const int modalDismissOnDrag = 17;
+  static const int modalHandleSemanticsLabel = 18;
+  static const int modalMediumSemanticsValue = 19;
+  static const int modalLargeSemanticsValue = 20;
 
   static String? debugName(int id) => switch (id) {
     1 => 'page_key',
     2 => 'transition',
     3 => 'can_pop',
     4 => 'restoration_id',
+    5 => 'presentation',
+    6 => 'modal_barrier_dismissible',
+    7 => 'modal_barrier_color',
+    8 => 'modal_barrier_label',
+    10 => 'modal_use_safe_area',
+    11 => 'modal_request_focus',
+    12 => 'modal_transition_duration_ms',
+    13 => 'modal_reverse_transition_duration_ms',
+    14 => 'modal_sizing',
+    15 => 'modal_detents',
+    16 => 'modal_initial_detent',
+    17 => 'modal_dismiss_on_drag',
+    18 => 'modal_handle_semantics_label',
+    19 => 'modal_medium_semantics_value',
+    20 => 'modal_large_semantics_value',
     _ => null,
   };
 }
