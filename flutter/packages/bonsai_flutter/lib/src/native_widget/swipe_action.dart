@@ -195,9 +195,9 @@ final class _SwipeActionHostState extends State<_SwipeActionHost>
   static const _dismissDuration = Duration(milliseconds: 220);
   static const _reboundDuration = Duration(milliseconds: 190);
   static const _flingVelocity = 800.0;
-  static const _pillInset = 4.0;
-  static const _pillMinWidth = 8.0;
-  static const _pillMaxWidth = 144.0;
+  static const _actionContentExtent = 96.0;
+  static const _foregroundEdgeRadius = 16.0;
+  static const _pendingActionScale = 0.72;
 
   late final AnimationController _controller;
   Animation<double>? _offsetAnimation;
@@ -245,6 +245,25 @@ final class _SwipeActionHostState extends State<_SwipeActionHost>
   double get _physicalOffset => _isRtl ? -_logicalOffset : _logicalOffset;
 
   double get _commitDistance => (_rowWidth * 0.28).clamp(72.0, 112.0);
+
+  double get _actionScale =>
+      _logicalOffset.abs() < _commitDistance ? _pendingActionScale : 1;
+
+  BorderRadius _foregroundBorderRadius(double physicalOffset) {
+    if (physicalOffset > 0) {
+      return const BorderRadius.only(
+        topLeft: Radius.circular(_foregroundEdgeRadius),
+        bottomLeft: Radius.circular(_foregroundEdgeRadius),
+      );
+    }
+    if (physicalOffset < 0) {
+      return const BorderRadius.only(
+        topRight: Radius.circular(_foregroundEdgeRadius),
+        bottomRight: Radius.circular(_foregroundEdgeRadius),
+      );
+    }
+    return BorderRadius.zero;
+  }
 
   SwipeActionDirection? get _activeDirection {
     if (_logicalOffset > 0) return SwipeActionDirection.startToEnd;
@@ -415,6 +434,7 @@ final class _SwipeActionHostState extends State<_SwipeActionHost>
           onHorizontalDragUpdate: _commitInProgress ? null : _onDragUpdate,
           onHorizontalDragEnd: _commitInProgress ? null : _onDragEnd,
           child: ClipRRect(
+            key: const ValueKey<String>('bonsai-swipe-action-clip'),
             borderRadius: BorderRadius.circular(widget.props.clipBorderRadius),
             clipBehavior: widget.props.clipBorderRadius == 0
                 ? Clip.hardEdge
@@ -422,12 +442,23 @@ final class _SwipeActionHostState extends State<_SwipeActionHost>
             child: Stack(
               clipBehavior: Clip.hardEdge,
               children: [
-                if (direction != null) _feedback(direction),
+                if (direction != null) _actionSurface(direction),
                 Transform.translate(
                   offset: Offset(physicalOffset, 0),
-                  child: KeyedSubtree(
-                    key: const ValueKey<String>('bonsai-swipe-action-content'),
-                    child: widget.content,
+                  child: ClipRRect(
+                    key: const ValueKey<String>(
+                      'bonsai-swipe-action-foreground',
+                    ),
+                    borderRadius: _foregroundBorderRadius(physicalOffset),
+                    clipBehavior: direction == null
+                        ? Clip.none
+                        : Clip.antiAlias,
+                    child: KeyedSubtree(
+                      key: const ValueKey<String>(
+                        'bonsai-swipe-action-content',
+                      ),
+                      child: widget.content,
+                    ),
                   ),
                 ),
               ],
@@ -438,34 +469,42 @@ final class _SwipeActionHostState extends State<_SwipeActionHost>
     },
   );
 
-  Widget _feedback(SwipeActionDirection direction) {
-    final physicalStart = direction == SwipeActionDirection.startToEnd
+  Widget _actionSurface(SwipeActionDirection direction) {
+    final isLeftAligned = direction == SwipeActionDirection.startToEnd
         ? !_isRtl
         : _isRtl;
-    final width = _logicalOffset.abs().clamp(_pillMinWidth, _pillMaxWidth);
-    final background = direction == SwipeActionDirection.startToEnd
+    final backgroundColor = direction == SwipeActionDirection.startToEnd
         ? widget.props.startBackground
         : widget.props.endBackground;
-    final icon = direction == SwipeActionDirection.startToEnd
+    final actionIcon = direction == SwipeActionDirection.startToEnd
         ? widget.startIcon
         : widget.endIcon;
-    final borderRadius = direction == SwipeActionDirection.startToEnd
+    final actionBorderRadius = direction == SwipeActionDirection.startToEnd
         ? widget.props.startBorderRadius
         : widget.props.endBorderRadius;
-    return Positioned(
-      key: const ValueKey<String>('bonsai-swipe-action-pill'),
-      left: physicalStart ? 0 : null,
-      right: physicalStart ? null : 0,
-      top: _pillInset,
-      bottom: _pillInset,
-      width: width,
+    return Positioned.fill(
       child: DecoratedBox(
+        key: const ValueKey<String>('bonsai-swipe-action-surface'),
         decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(borderRadius),
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(actionBorderRadius),
         ),
-        child: Center(
-          child: ExcludeSemantics(child: IgnorePointer(child: icon)),
+        child: Align(
+          alignment: isLeftAligned
+              ? Alignment.centerLeft
+              : Alignment.centerRight,
+          child: SizedBox(
+            width: _actionContentExtent,
+            child: Center(
+              child: Transform.scale(
+                key: const ValueKey<String>('bonsai-swipe-action-icon'),
+                scale: _actionScale,
+                child: ExcludeSemantics(
+                  child: IgnorePointer(child: actionIcon),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );

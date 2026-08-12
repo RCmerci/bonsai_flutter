@@ -88,7 +88,7 @@ let native_swipe handle id direction =
     handle
     (Test.Query.test_id (Printf.sprintf "mail-swipe-%d" id))
     ~kind_id:(ID.Native_widget.Kind_id.of_int 2)
-    ~version:1
+    ~version:2
     ~event_id:(ID.Native_widget.Event_id.of_int 1)
     ~payload:(Bytes.make 1 (Char.chr direction))
 ;;
@@ -405,22 +405,22 @@ let test_swipe_event_filtering_and_nested_action_isolation () =
       (Bytes.of_string "\000");
     send
       (ID.Native_widget.Kind_id.of_int 2)
-      2
+      99
       (ID.Native_widget.Event_id.of_int 1)
       (Bytes.of_string "\000");
     send
       (ID.Native_widget.Kind_id.of_int 2)
-      1
+      2
       (ID.Native_widget.Event_id.of_int 2)
       (Bytes.of_string "\000");
     send
       (ID.Native_widget.Kind_id.of_int 2)
-      1
+      2
       (ID.Native_widget.Event_id.of_int 1)
       Bytes.empty;
     send
       (ID.Native_widget.Kind_id.of_int 2)
-      1
+      2
       (ID.Native_widget.Event_id.of_int 1)
       (Bytes.of_string "\002");
     require_present

@@ -101,7 +101,7 @@ void main() {
     final nativePayload =
         swipeBatch.events.single.payload as NativeEventPayload;
     expect(nativePayload.kindId, 2);
-    expect(nativePayload.version, 1);
+    expect(nativePayload.version, 2);
     expect(nativePayload.eventId, 1);
     expect(nativePayload.payload, [0]);
 

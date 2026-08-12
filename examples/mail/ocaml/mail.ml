@@ -932,6 +932,7 @@ let with_swipe_host ~swipe_action message content =
     Ui.Native_widget.Swipe_action.action
       ~label:"Archive"
       ~background:archive_surface
+      ~border_radius:0.
       ~disposition:Dismiss
       ~icon:archive_icon
       ()
@@ -940,6 +941,7 @@ let with_swipe_host ~swipe_action message content =
     Ui.Native_widget.Swipe_action.action
       ~label:end_label
       ~background:primary
+      ~border_radius:0.
       ~disposition:Rebound
       ~icon:end_icon
       ()

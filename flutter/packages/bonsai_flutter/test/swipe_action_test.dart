@@ -8,8 +8,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _hostKey = ValueKey<String>('bonsai-swipe-action-host');
+const _hostClipKey = ValueKey<String>('bonsai-swipe-action-clip');
 const _contentKey = ValueKey<String>('bonsai-swipe-action-content');
-const _pillKey = ValueKey<String>('bonsai-swipe-action-pill');
+const _surfaceKey = ValueKey<String>('bonsai-swipe-action-surface');
+const _foregroundKey = ValueKey<String>('bonsai-swipe-action-foreground');
+const _actionIconKey = ValueKey<String>('bonsai-swipe-action-icon');
 
 void main() {
   testWidgets('content tracks both horizontal directions and reversals', (
@@ -33,7 +36,7 @@ void main() {
     expect(_contentOffset(tester), closeTo(0, 1));
   });
 
-  testWidgets('feedback grows from the active edge and stays clipped', (
+  testWidgets('action surface fills the row and stays fixed beneath content', (
     tester,
   ) async {
     await _pumpSwipeFixture(tester);
@@ -44,23 +47,81 @@ void main() {
 
     await gesture.moveBy(const Offset(20, 0));
     await tester.pump();
-    final small = tester.getRect(find.byKey(_pillKey));
+    final initialSurface = tester.getRect(find.byKey(_surfaceKey));
+    final initialIconCenter = tester.getCenter(find.text('Archive icon'));
     await gesture.moveBy(const Offset(80, 0));
     await tester.pump();
-    final large = tester.getRect(find.byKey(_pillKey));
+    final crossedSurface = tester.getRect(find.byKey(_surfaceKey));
+    final crossedIconCenter = tester.getCenter(find.text('Archive icon'));
 
-    expect(small.left, closeTo(host.left, 1));
-    expect(large.left, closeTo(host.left, 1));
-    expect(large.width, greaterThan(small.width));
-    expect(large.width, lessThanOrEqualTo(144));
-    expect(large.top, greaterThanOrEqualTo(host.top + 4));
-    expect(large.bottom, lessThanOrEqualTo(host.bottom - 4));
+    expect(initialSurface, host);
+    expect(crossedSurface, host);
+    expect(crossedIconCenter, initialIconCenter);
 
     await gesture.moveBy(const Offset(-200, 0));
     await tester.pump();
-    final reversed = tester.getRect(find.byKey(_pillKey));
-    expect(reversed.right, closeTo(host.right, 1));
-    expect(reversed.left, greaterThanOrEqualTo(host.left));
+    final reversed = tester.getRect(find.byKey(_surfaceKey));
+    expect(reversed, host);
+    await gesture.up();
+  });
+
+  testWidgets('foreground rounds only the edge exposed by the action', (
+    tester,
+  ) async {
+    await _pumpSwipeFixture(tester);
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('Message')),
+    );
+
+    await gesture.moveBy(const Offset(64, 0));
+    await tester.pump();
+    expect(
+      _foregroundBorderRadius(tester),
+      const BorderRadius.only(
+        topLeft: Radius.circular(16),
+        bottomLeft: Radius.circular(16),
+      ),
+    );
+
+    await gesture.moveBy(const Offset(-128, 0));
+    await tester.pump();
+    expect(
+      _foregroundBorderRadius(tester),
+      const BorderRadius.only(
+        topRight: Radius.circular(16),
+        bottomRight: Radius.circular(16),
+      ),
+    );
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(_foregroundBorderRadius(tester), BorderRadius.zero);
+  });
+
+  testWidgets('action icon stays reduced until the threshold is crossed', (
+    tester,
+  ) async {
+    await _pumpSwipeFixture(tester);
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('Message')),
+    );
+
+    await gesture.moveBy(const Offset(60, 0));
+    await tester.pump();
+    expect(_actionIconScale(tester), closeTo(0.72, 0.01));
+
+    await gesture.moveBy(const Offset(60, 0));
+    await tester.pump();
+    expect(_actionIconScale(tester), closeTo(1, 0.01));
+
+    await gesture.moveBy(const Offset(-180, 0));
+    await tester.pump();
+    expect(_actionIconScale(tester), closeTo(0.72, 0.01));
+
+    await gesture.moveBy(const Offset(-60, 0));
+    await tester.pump();
+    expect(_actionIconScale(tester), closeTo(1, 0.01));
+
     await gesture.up();
   });
 
@@ -73,12 +134,7 @@ void main() {
       endBorderRadius: 24,
       clipBorderRadius: 18,
     );
-    final hostClip = tester.widget<ClipRRect>(
-      find.descendant(
-        of: find.byKey(_hostKey),
-        matching: find.byType(ClipRRect),
-      ),
-    );
+    final hostClip = tester.widget<ClipRRect>(find.byKey(_hostClipKey));
     expect(hostClip.borderRadius, BorderRadius.circular(18));
 
     final gesture = await tester.startGesture(
@@ -86,11 +142,11 @@ void main() {
     );
     await gesture.moveBy(const Offset(80, 0));
     await tester.pump();
-    expect(_feedbackBorderRadius(tester), BorderRadius.circular(12));
+    expect(_actionBorderRadius(tester), BorderRadius.circular(12));
 
     await gesture.moveBy(const Offset(-160, 0));
     await tester.pump();
-    expect(_feedbackBorderRadius(tester), BorderRadius.circular(24));
+    expect(_actionBorderRadius(tester), BorderRadius.circular(24));
     await gesture.up();
   });
 
@@ -231,7 +287,7 @@ void main() {
     await tester.pump();
 
     expect(_contentOffset(tester), closeTo(0, 1));
-    expect(find.byKey(_pillKey), findsNothing);
+    expect(find.byKey(_surfaceKey), findsNothing);
     await gesture.up();
     expect(fixture.events, isEmpty);
     expect(_customActionLabels(tester), contains('Archive'));
@@ -357,19 +413,20 @@ Set<String> _customActionLabels(WidgetTester tester) {
   };
 }
 
-BorderRadiusGeometry? _feedbackBorderRadius(WidgetTester tester) {
+BorderRadiusGeometry? _actionBorderRadius(WidgetTester tester) {
   final decoration =
-      tester
-              .widget<DecoratedBox>(
-                find.descendant(
-                  of: find.byKey(_pillKey),
-                  matching: find.byType(DecoratedBox),
-                ),
-              )
-              .decoration
+      tester.widget<DecoratedBox>(find.byKey(_surfaceKey)).decoration
           as BoxDecoration;
   return decoration.borderRadius;
 }
+
+BorderRadius _foregroundBorderRadius(WidgetTester tester) {
+  return tester.widget<ClipRRect>(find.byKey(_foregroundKey)).borderRadius
+      as BorderRadius;
+}
+
+double _actionIconScale(WidgetTester tester) =>
+    tester.widget<Transform>(find.byKey(_actionIconKey)).transform.storage[0];
 
 Set<String> _semanticsLabels(SemanticsNode root) {
   final labels = <String>{};

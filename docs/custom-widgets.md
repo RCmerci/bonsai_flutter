@@ -189,9 +189,10 @@ receives three children in this order:
 At least one direction must be enabled. Each enabled action supplies an
 accessibility label, ARGB background, non-negative finite border radius,
 `Dismiss` or `Rebound` disposition, and an icon child. The action border radius
-defaults to `999` for the existing capsule feedback. The host also accepts a
-non-negative finite `clip_border_radius`, which defaults to `0` and clips the
-content, feedback, and translation animation together.
+defaults to `999` for capsule actions; use `0` when the action surface must
+cover square row corners without gaps. The host also accepts a non-negative
+finite `clip_border_radius`, which defaults to `0` and clips the content, action
+surface, and translation animation together.
 
 The fixed payload header stores enabled flags, both dispositions, a reserved
 byte, two colors, both action border radii, the host clip border radius, and two
@@ -200,14 +201,20 @@ unknown flags or dispositions, nonzero reserved data, invalid radii, invalid
 UTF-8, empty enabled labels, incorrect exact lengths, and incorrect child
 counts.
 
-Flutter owns all pointer deltas, gesture-arena arbitration, clipping, feedback
-geometry, threshold haptics, and settle frames. No drag delta crosses FFI.
+Flutter owns all pointer deltas, gesture-arena arbitration, clipping, action
+geometry, threshold haptics, and settle frames. No drag delta crosses FFI. The
+active action surface fills the host and remains fixed beneath the translated
+foreground, without an inset between the two layers. Its icon stays centered
+in a fixed 96-pixel edge zone. The translated foreground rounds only the
+physical edge exposed by the active action. Action content paints at 72 percent
+scale below the commit threshold and at full scale after crossing it, in sync
+with the one-shot threshold haptic.
 After a dismiss or rebound reaches its commit point, Flutter emits native event
 `1` with a one-byte logical direction (`0` start-to-end, `1` end-to-start).
 Dropping the node disposes its controller and suppresses late emission.
 
 The host exposes the same actions through custom Semantics actions. Decorative
-feedback icons are excluded from independent semantics and hit testing.
+action icons are excluded from independent semantics and hit testing.
 `create_with_handler` attaches a driver-managed raw handler for Bonsai effects;
 `direction_of_payload` performs the same kind, version, event, length, and
 direction validation before application state is updated.

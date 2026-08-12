@@ -179,9 +179,9 @@ commit, root and `canPop` guards, transition-in-progress guards, RTL, reduced
 motion, and single typed RoutePop emission.
 
 Swipe-action tests cover exact binary validation, built-in registration,
-horizontal tracking and direction reversal, clipped pill growth, distance and
-velocity thresholds, one-shot haptics, dismiss and rebound timing, vertical
-ListView arbitration, cancellation of row and nested-button taps, custom
+horizontal tracking and reversal, fixed full-row action surfaces, exposed-edge
+rounding, threshold icon scaling, distance and velocity commits, one-shot
+haptics, settle timing, vertical ListView arbitration, tap cancellation, custom
 Semantics actions, disabled directions, keyed updates, node drop, RTL, and
 reduced motion. Widget tests avoid wall-clock performance assertions.
 

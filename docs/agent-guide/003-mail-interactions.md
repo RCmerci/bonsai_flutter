@@ -40,7 +40,7 @@ The requested work therefore needs one route-rendering improvement, one keyed-ro
 2. Preserve the existing OCaml `Navigation.Slide` API and avoid a main protocol version bump.
 3. Make every direct inbox list child one stable keyed swipe host whose shape does not change with read state.
 4. Add a reusable built-in `Native_widget.Swipe_action` extension with kind ID `2`.
-5. Keep continuous drag, gesture arbitration, pill geometry, haptics, and settle animation entirely in Flutter.
+5. Keep continuous drag, gesture arbitration, action geometry, haptics, and settle animation entirely in Flutter.
 6. Emit one typed start-to-end or end-to-start commit event to OCaml after the local animation reaches its commit point.
 7. Use start-to-end for Archive and end-to-start for Mark read or Mark unread in the first implementation.
 8. Treat a persistent multi-button action drawer as a separate optional mode because current Gmail uses one configured action per direction.
@@ -52,8 +52,8 @@ The requested work therefore needs one route-rendering improvement, one keyed-ro
 | Finding | Classification | Planning consequence |
 | --- | --- | --- |
 | Gmail lets the user choose one action for each swipe direction from Archive, Trash, Mark read or unread, Move, Snooze, and None. | Official behavior | Model one commit action per direction for Gmail parity. |
-| Current Gmail feedback grows from an edge strip into a rounded pill with a centered action icon. | Observed production behavior | Recreate the spatial idea with original Bonsai Mail colors and icons. |
-| The row approximately follows the finger while the pill grows behind it. | Observed production behavior | Keep per-frame translation local to Flutter and approximately one-to-one. |
+| Current Gmail reveals a stationary action surface beneath the moving row. | Observed production behavior | Keep the action surface and icon fixed while the foreground controls how much is visible. |
+| The row approximately follows the finger while revealing the action behind it. | Observed production behavior | Keep per-frame translation local to Flutter and approximately one-to-one. |
 | Gmail does not publish its detail-route curve, duration, swipe threshold, or fling velocity. | Research limitation | Label all numeric motion values as implementation hypotheses and validate them on a device. |
 | Flutter's Cupertino page transition supplies non-linear entrance motion, underlying-page parallax, edge shadow, directionality, and an interactive leading-edge pop. | Official Flutter behavior | Prefer the maintained framework route instead of copying Flutter's private gesture controller. |
 | Flutter's Cupertino route uses a 20 logical-pixel leading-edge detector and linear tracking during an active pop gesture. | Official Flutter behavior | Use the framework defaults and lock observable behavior with tests. |
@@ -64,7 +64,7 @@ The phrase "more actionable options" can describe two different interaction mode
 
 | Model | Release behavior | Visible controls | Reference |
 | --- | --- | --- | --- |
-| Gmail parity | Crossing the threshold commits the configured action. | One pill and icon for the active direction. | Current Gmail |
+| Gmail parity | Crossing the threshold commits the configured action. | One action surface and icon for the active direction. | Current Gmail |
 | Multi-action drawer | Releasing at a detent leaves the row open for a later button tap. | Two or more persistent buttons. | Apple Mail and platform swipe-actions APIs |
 
 The recommended first implementation is Gmail parity because it is simpler, faster to operate, and matches the named reference.
@@ -97,7 +97,7 @@ Refactor shared codecs, fixtures, and animation helpers only after the complete 
 | OCaml native contract | `ocaml/test/native_widget_tests.ml` | Props encoding, validation, direction-event decoding, handler filtering, and child-count assumptions |
 | Flutter navigation | `flutter/packages/bonsai_flutter/test/navigation_host_test.dart` | Front-loaded entrance, exact landing, parallax, interactive edge tracking, cancel, commit, guards, RTL, and reduced motion |
 | Flutter native registry | `flutter/packages/bonsai_flutter/test/native_widget_test.dart` | Built-in registration, version and capability rejection, malformed props, and host disposal |
-| Flutter swipe behavior | `flutter/packages/bonsai_flutter/test/swipe_action_test.dart` | Both directions, threshold, fling, pill geometry, gesture arena, single emission, semantics, lifecycle, RTL, and reduced motion |
+| Flutter swipe behavior | `flutter/packages/bonsai_flutter/test/swipe_action_test.dart` | Both directions, threshold, fling, fixed action geometry, gesture arena, single emission, semantics, lifecycle, RTL, and reduced motion |
 | Real OCaml to Flutter round trip | `flutter/integration_test/test/mail_ffi_test.dart` | Swipe commit through FFI, incremental row removal, detail push, edge pop, and preserved read state |
 | Existing regressions | Existing OCaml, Flutter, protocol, and integration suites | No change to None, Fade, text input, virtual list, renderer lifecycle, or host navigation behavior |
 
@@ -137,7 +137,9 @@ RTL must mirror the physical edge and movement while preserving leading-edge sem
 
 Horizontal content translation must track the finger until release.
 
-The active feedback must grow from the correct directional edge and never paint outside the row bounds.
+The active action surface must fill the row and remain fixed beneath the translated foreground without an inset or uncovered gap.
+
+The action icon must stay at a fixed center while changing from reduced to full scale at the commit threshold.
 
 A drag below both distance and velocity thresholds must close without emitting an event.
 
@@ -149,7 +151,7 @@ A predominantly vertical gesture must remain owned by the inbox `ListView` and l
 
 Winning a horizontal drag must cancel the row tap and any star-button tap candidate.
 
-Closed feedback children must not be hit-testable or independently focusable.
+Closed action children must not be hit-testable or independently focusable.
 
 The host must expose Archive and Mark read or unread as custom semantic actions even when no swipe is performed.
 
@@ -197,7 +199,7 @@ The mail route handler ignores a route-pop event whose page key does not match t
 
 The first version has no persistent open row state.
 
-Dragging reveals one directional pill and releasing either cancels or commits that direction.
+Dragging reveals one directional action surface and releasing either cancels or commits that direction.
 
 | Logical direction | LTR physical gesture | Action | Visual role | Commit disposition |
 | --- | --- | --- | --- | --- |
@@ -220,10 +222,9 @@ Delete remains in the detail toolbar because a destructive full swipe should not
 | --- | --- | --- |
 | Horizontal intent slop | 10 logical pixels | Avoid accidental activation during taps. |
 | Direction dominance | `abs(dx) > 1.35 * abs(dy)` | Let vertical inbox scrolling win ambiguous gestures. |
-| Pill vertical inset | 4 logical pixels per edge | Preserve row separation. |
-| Pill minimum width | 8 logical pixels | Begin as a visible edge strip. |
-| Pill circle width | 52 logical pixels | Create a stable icon stage. |
-| Pill maximum width | 144 logical pixels | Keep feedback local instead of filling the row. |
+| Action surface coverage | Full row | Prevent gaps between the fixed action and translated foreground. |
+| Action content extent | 96 logical pixels from the active edge | Keep the icon center fixed while the foreground reveals it. |
+| Foreground exposed-edge radius | 16 logical pixels | Make the moving row visibly cover the action layer. |
 | Icon size | 24 logical pixels | Match the existing compact toolbar scale. |
 | Commit distance | `clamp(rowWidth * 0.28, 72, 112)` | Start below Flutter Dismissible's heavier default. |
 | Commit fling velocity | 800 logical pixels per second | Permit an intentional short fling. |
@@ -247,7 +248,7 @@ The star remains a separately labeled button with its existing selected state.
 
 The Back button remains available for switch control, keyboard navigation, pointer input, and users who do not discover edge gestures.
 
-The feedback pill is decorative and is excluded from independent semantics and hit testing.
+The action icon is decorative and is excluded from independent semantics and hit testing.
 
 All logical directions use start and end rather than hard-coded left and right.
 
@@ -293,7 +294,7 @@ Flutter NodeStore and Navigator.pages
               |      owns push frames and edge-pop progress
               |
               +--> SwipeActionHost
-                     owns drag frames, gesture arena, pill paint,
+                     owns drag frames, gesture arena, action paint,
                      haptic, and post-release settle
                               |
                               | one NativeEvent on commit
@@ -337,7 +338,7 @@ The native host receives three children in this fixed order:
 2. Start-direction icon.
 3. End-direction icon.
 
-The host paints the pill itself from typed color props and positions the icon child inside it.
+The host paints the fixed action surface from typed color props and positions the icon child inside a fixed edge zone.
 
 The mail example uses `mail-swipe-<id>` for the host and keeps the existing `mail-row-<id>` and `mail-star-<id>` identifiers on the content controls.
 
@@ -345,7 +346,7 @@ The two decorative icon children use `mail-swipe-archive-<id>` and the state-dep
 
 ### Native widget contract
 
-The built-in extension uses kind ID `2`, schema version `1`, and the `Stateful`, `Resource`, and `Semantics` capability bits.
+The built-in extension uses kind ID `2`, schema version `2`, and the `Stateful`, `Resource`, and `Semantics` capability bits.
 
 The core `NativeWidgetProps` envelope already carries kind, version, capabilities, payload, children, and a typed native-event binding.
 
@@ -368,14 +369,17 @@ module Swipe_action : sig
   val action
     :  label:string
     -> background:Style.Color.t
+    -> ?border_radius:float
     -> disposition:disposition
     -> icon:Widget.t
+    -> unit
     -> action
 
   val create
     :  ?key:Key.t
     -> ?start_action:action
     -> ?end_action:action
+    -> ?clip_border_radius:float
     -> content:Widget.t
     -> on_commit:(direction -> unit)
     -> unit
@@ -385,9 +389,8 @@ end
 
 `create` requires at least one action and substitutes `Widget.empty` for an omitted directional icon so the native child count remains fixed.
 
-Default motion values remain inside the reusable primitive for version `1`.
-
-A future schema version can expose tuning values only after more than one consumer needs them.
+Motion values remain private renderer constants. Schema version `2` exposes
+only action and host clipping radii needed by consumers.
 
 The proposed Dart model is:
 
@@ -404,6 +407,9 @@ final class SwipeActionProps {
     required this.endLabel,
     required this.startBackground,
     required this.endBackground,
+    required this.startBorderRadius,
+    required this.endBorderRadius,
+    required this.clipBorderRadius,
     required this.startDisposition,
     required this.endDisposition,
   });
@@ -414,12 +420,15 @@ final class SwipeActionProps {
   final String endLabel;
   final Color startBackground;
   final Color endBackground;
+  final double startBorderRadius;
+  final double endBorderRadius;
+  final double clipBorderRadius;
   final SwipeActionDisposition startDisposition;
   final SwipeActionDisposition endDisposition;
 }
 ```
 
-### Version 1 payload
+### Version 2 payload
 
 | Offset | Field | Encoding |
 | --- | --- | --- |
@@ -429,13 +438,16 @@ final class SwipeActionProps {
 | 3 | Reserved | `u8`, must be zero |
 | 4 | Start background | ARGB `u32`, little-endian |
 | 8 | End background | ARGB `u32`, little-endian |
-| 12 | Start label byte length | `u32`, little-endian |
-| 16 | End label byte length | `u32`, little-endian |
-| 20 | Labels | Consecutive UTF-8 start and end labels |
+| 12 | Start action border radius | finite non-negative `f64`, little-endian |
+| 20 | End action border radius | finite non-negative `f64`, little-endian |
+| 28 | Host clip border radius | finite non-negative `f64`, little-endian |
+| 36 | Start label byte length | `u32`, little-endian |
+| 40 | End label byte length | `u32`, little-endian |
+| 44 | Labels | Consecutive UTF-8 start and end labels |
 
 The decoder rejects an incorrect exact length, unknown flags, unknown disposition, nonzero reserved data, invalid UTF-8, an empty enabled label, or any child count other than three.
 
-The only version `1` event uses event ID `1` and a one-byte payload.
+The only version `2` event uses event ID `1` and a one-byte payload.
 
 Event byte `0` means start-to-end and event byte `1` means end-to-start.
 
@@ -471,10 +483,10 @@ The host stores drag offset, active direction, threshold-haptic state, commit st
 
 | Case | Required behavior |
 | --- | --- |
-| Mostly vertical row drag | Inbox scroll wins and no pill appears. |
+| Mostly vertical row drag | Inbox scroll wins and no action surface appears. |
 | Slight pointer movement followed by release | Tap is allowed only if the horizontal recognizer never wins. |
 | Drag begins on the star | A horizontal win cancels star activation, while a normal tap still toggles the star. |
-| Direction reverses before release | Offset and active pill follow the current sign, and only the final committed direction emits. |
+| Direction reverses before release | Offset and active action follow the current sign, and only the final committed direction emits. |
 | Direction is omitted | Drag in that direction remains at zero and no semantic action is exposed. |
 | Row is dropped during settle | Controller is disposed and no late event is emitted. |
 | OCaml frame updates a rebound row | Host identity survives and the settled offset remains zero. |
@@ -537,11 +549,11 @@ Files:
 Steps:
 
 1. Add OCaml examples for both directions, both dispositions, Unicode labels, and invalid values.
-2. Assert the exact version `1` byte layout and round-trip event decoding.
+2. Assert the exact version `2` byte layout and round-trip event decoding.
 3. Assert that wrong kind, version, event ID, length, or direction is ignored.
 4. Build raw Flutter frames using native kind ID `2` so the current registry produces an unsupported-widget RED result.
 5. Add Dart decoder tests for every malformed payload condition.
-6. Add widget tests for horizontal tracking, pill growth, threshold cancellation, distance commit, fling commit, and single emission.
+6. Add widget tests for horizontal tracking, fixed action geometry, threshold cancellation, distance commit, fling commit, and single emission.
 7. Add gesture-arena tests with a vertical `ListView`, a row tap, and a nested star button.
 8. Add semantics tests for custom actions and hidden decorative children.
 9. Add keyed update, drop, reset, shutdown, RTL, and reduced-motion tests.
@@ -635,7 +647,7 @@ Steps:
 3. Register the extension beside `Virtual_list` in `WidgetRegistry.standard()`.
 4. Validate version, capabilities, exact payload length, reserved bits, UTF-8 labels, and exactly three children before building the host.
 5. Implement `_SwipeActionHost` as a `StatefulWidget` whose `State` uses `SingleTickerProviderStateMixin` and disposes its own `AnimationController`.
-6. Render a clipped Stack containing the active pill, decorative icon child, and translated content.
+6. Render a clipped Stack containing the fixed action surface, decorative icon child, and translated content.
 7. Use Flutter's horizontal gesture recognizer so the standard gesture arena arbitrates against the vertical list, row tap, and star tap.
 8. Implement distance, velocity, direction reversal, one-shot haptic, dismiss, rebound, reduced-motion, and one-shot emission behavior.
 9. Add parent custom semantics actions that invoke the same commit methods.
@@ -708,7 +720,7 @@ Steps:
 | File | Planned responsibility |
 | --- | --- |
 | `flutter/packages/bonsai_flutter/lib/src/renderer/widget_registry.dart` | Map Slide pages to the maintained Cupertino page transition and register the built-in swipe host. |
-| `flutter/packages/bonsai_flutter/lib/src/native_widget/swipe_action.dart` | Decode props and own drag, animation, pill, haptic, semantics, and event emission. |
+| `flutter/packages/bonsai_flutter/lib/src/native_widget/swipe_action.dart` | Decode props and own drag, animation, action surface, haptic, semantics, and event emission. |
 | `flutter/packages/bonsai_flutter/lib/src/native_widget/native_widget_registry.dart` | Expose or centralize the built-in kind ID if needed without changing registry semantics. |
 | `flutter/packages/bonsai_flutter/lib/bonsai_flutter.dart` | Export the reusable Dart contract used by tests and custom registries. |
 | `ocaml/ui/native_widget.ml` | Encode typed swipe props and decode typed direction commits. |
@@ -886,7 +898,7 @@ support iPhone Simulator.
 - Preserve `Navigation.Slide` and its wire value.
 - Use a page-based Cupertino route for Slide instead of copying private Flutter gesture code.
 - Keep the direct inbox child shape stable and keyed by message ID.
-- Allocate native kind ID `2` and schema version `1` for `Swipe_action`.
+- Allocate native kind ID `2` and schema version `2` for `Swipe_action`.
 - Keep drag updates and settle frames inside Flutter.
 - Emit one typed logical-direction event only at commit.
 - Map start-to-end to Archive and end-to-start to Mark read or unread.
