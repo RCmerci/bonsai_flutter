@@ -33,6 +33,9 @@ final class SwipeActionProps {
     required this.endLabel,
     required this.startBackground,
     required this.endBackground,
+    required this.startBorderRadius,
+    required this.endBorderRadius,
+    required this.clipBorderRadius,
     required this.startDisposition,
     required this.endDisposition,
   });
@@ -43,6 +46,9 @@ final class SwipeActionProps {
   final String endLabel;
   final Color startBackground;
   final Color endBackground;
+  final double startBorderRadius;
+  final double endBorderRadius;
+  final double clipBorderRadius;
   final SwipeActionDisposition startDisposition;
   final SwipeActionDisposition endDisposition;
 
@@ -55,9 +61,9 @@ final class SwipeActionProps {
   }
 
   static SwipeActionProps decode(Uint8List payload) {
-    if (payload.length < 20) {
+    if (payload.length < 44) {
       throw const FormatException(
-        'Swipe action props must contain a 20-byte header',
+        'Swipe action props must contain a 44-byte header',
       );
     }
     final data = ByteData.sublistView(payload);
@@ -72,9 +78,15 @@ final class SwipeActionProps {
     if (data.getUint8(3) != 0) {
       throw const FormatException('Swipe action reserved byte must be zero');
     }
-    final startLength = data.getUint32(12, Endian.little);
-    final endLength = data.getUint32(16, Endian.little);
-    final exactLength = 20 + startLength + endLength;
+    final startBorderRadius = data.getFloat64(12, Endian.little);
+    final endBorderRadius = data.getFloat64(20, Endian.little);
+    final clipBorderRadius = data.getFloat64(28, Endian.little);
+    _validateBorderRadius('start action', startBorderRadius);
+    _validateBorderRadius('end action', endBorderRadius);
+    _validateBorderRadius('host clip', clipBorderRadius);
+    final startLength = data.getUint32(36, Endian.little);
+    final endLength = data.getUint32(40, Endian.little);
+    final exactLength = 44 + startLength + endLength;
     if (payload.length != exactLength) {
       throw FormatException(
         'Swipe action props must be exactly $exactLength bytes',
@@ -83,11 +95,11 @@ final class SwipeActionProps {
     final startEnabled = flags & 1 != 0;
     final endEnabled = flags & 2 != 0;
     final startLabel = utf8.decode(
-      payload.sublist(20, 20 + startLength),
+      payload.sublist(44, 44 + startLength),
       allowMalformed: false,
     );
     final endLabel = utf8.decode(
-      payload.sublist(20 + startLength),
+      payload.sublist(44 + startLength),
       allowMalformed: false,
     );
     if (startEnabled && startLabel.isEmpty) {
@@ -110,8 +122,19 @@ final class SwipeActionProps {
       endLabel: endLabel,
       startBackground: Color(data.getUint32(4, Endian.little)),
       endBackground: Color(data.getUint32(8, Endian.little)),
+      startBorderRadius: startBorderRadius,
+      endBorderRadius: endBorderRadius,
+      clipBorderRadius: clipBorderRadius,
       startDisposition: startDisposition,
       endDisposition: endDisposition,
+    );
+  }
+}
+
+void _validateBorderRadius(String label, double value) {
+  if (!value.isFinite || value < 0) {
+    throw FormatException(
+      'Swipe action $label border radius must be finite and non-negative',
     );
   }
 }
@@ -126,8 +149,8 @@ void registerSwipeAction(NativeWidgetRegistry registry) {
   registry.register<SwipeActionProps>(
     NativeWidgetRegistration(
       kindId: NativeWidgetKind.swipeAction,
-      minVersion: 1,
-      maxVersion: 1,
+      minVersion: 2,
+      maxVersion: 2,
       capabilityBits:
           NativeCapability.stateful |
           NativeCapability.resource |
@@ -391,7 +414,11 @@ final class _SwipeActionHostState extends State<_SwipeActionHost>
           onHorizontalDragStart: _commitInProgress ? null : _onDragStart,
           onHorizontalDragUpdate: _commitInProgress ? null : _onDragUpdate,
           onHorizontalDragEnd: _commitInProgress ? null : _onDragEnd,
-          child: ClipRect(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(widget.props.clipBorderRadius),
+            clipBehavior: widget.props.clipBorderRadius == 0
+                ? Clip.hardEdge
+                : Clip.antiAlias,
             child: Stack(
               clipBehavior: Clip.hardEdge,
               children: [
@@ -422,6 +449,9 @@ final class _SwipeActionHostState extends State<_SwipeActionHost>
     final icon = direction == SwipeActionDirection.startToEnd
         ? widget.startIcon
         : widget.endIcon;
+    final borderRadius = direction == SwipeActionDirection.startToEnd
+        ? widget.props.startBorderRadius
+        : widget.props.endBorderRadius;
     return Positioned(
       key: const ValueKey<String>('bonsai-swipe-action-pill'),
       left: physicalStart ? 0 : null,
@@ -432,7 +462,7 @@ final class _SwipeActionHostState extends State<_SwipeActionHost>
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(borderRadius),
         ),
         child: Center(
           child: ExcludeSemantics(child: IgnorePointer(child: icon)),

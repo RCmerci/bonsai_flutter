@@ -934,6 +934,7 @@ let with_swipe_host ~swipe_action message content =
       ~background:archive_surface
       ~disposition:Dismiss
       ~icon:archive_icon
+      ()
   in
   let end_action =
     Ui.Native_widget.Swipe_action.action
@@ -941,6 +942,7 @@ let with_swipe_host ~swipe_action message content =
       ~background:primary
       ~disposition:Rebound
       ~icon:end_icon
+      ()
   in
   Ui.Native_widget.Swipe_action.create_with_handler
     ~key:(Ui.Key.int message.id)

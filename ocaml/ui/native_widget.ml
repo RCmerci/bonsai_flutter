@@ -824,8 +824,9 @@ end
 
 module Swipe_action = struct
   let kind_id = ID.Native_widget.Kind_id.of_int 2
-  let version = 1
+  let version = 2
   let commit_event_id = ID.Native_widget.Event_id.of_int 1
+  let default_action_border_radius = 999.
 
   type direction =
     | Start_to_end
@@ -838,20 +839,39 @@ module Swipe_action = struct
   type action =
     { label : string
     ; background : Style.Color.t
+    ; border_radius : float
     ; disposition : disposition
     ; icon : Widget.t
     }
 
-  let action ~label ~background ~disposition ~icon =
+  let validate_border_radius label value =
+    if (not (Float.is_finite value)) || Float.compare value 0. < 0
+    then
+      invalid_arg
+        (Printf.sprintf
+           "Native_widget.Swipe_action: %s must be finite and non-negative"
+           label)
+  ;;
+
+  let action
+        ~label
+        ~background
+        ?(border_radius = default_action_border_radius)
+        ~disposition
+        ~icon
+        ()
+    =
     if String.length label = 0
     then invalid_arg "Native_widget.Swipe_action: action label must not be empty";
     ignore (Text_editing.Utf16.length label);
-    { label; background; disposition; icon }
+    validate_border_radius "action border_radius" border_radius;
+    { label; background; border_radius; disposition; icon }
   ;;
 
   type props =
     { start_action : action option
     ; end_action : action option
+    ; clip_border_radius : float
     }
 
   let disposition_byte = function
@@ -859,7 +879,7 @@ module Swipe_action = struct
     | Rebound -> 1
   ;;
 
-  let encode_props { start_action; end_action } =
+  let encode_props { start_action; end_action; clip_border_radius } =
     let label = function
       | None -> ""
       | Some action -> action.label
@@ -868,7 +888,7 @@ module Swipe_action = struct
     let end_label = label end_action in
     let start_length = String.length start_label in
     let end_length = String.length end_label in
-    let payload = Bytes.make (20 + start_length + end_length) '\000' in
+    let payload = Bytes.make (44 + start_length + end_length) '\000' in
     let enabled option flag = if Option.is_some option then flag else 0 in
     Bytes.set payload 0 (Char.chr (enabled start_action 1 lor enabled end_action 2));
     Bytes.set
@@ -893,10 +913,17 @@ module Swipe_action = struct
     in
     Bytes.set_int32_le payload 4 (background start_action);
     Bytes.set_int32_le payload 8 (background end_action);
-    Little_endian.set_u32 payload 12 start_length;
-    Little_endian.set_u32 payload 16 end_length;
-    Bytes.blit_string start_label 0 payload 20 start_length;
-    Bytes.blit_string end_label 0 payload (20 + start_length) end_length;
+    let border_radius = function
+      | None -> default_action_border_radius
+      | Some action -> action.border_radius
+    in
+    Little_endian.set_f64 payload 12 (border_radius start_action);
+    Little_endian.set_f64 payload 20 (border_radius end_action);
+    Little_endian.set_f64 payload 28 clip_border_radius;
+    Little_endian.set_u32 payload 36 start_length;
+    Little_endian.set_u32 payload 40 end_length;
+    Bytes.blit_string start_label 0 payload 44 start_length;
+    Bytes.blit_string end_label 0 payload (44 + start_length) end_length;
     payload
   ;;
 
@@ -942,23 +969,41 @@ module Swipe_action = struct
     | _ -> None
   ;;
 
-  let create ?key ?start_action ?end_action ~content ~on_commit () =
+  let create
+        ?key
+        ?start_action
+        ?end_action
+        ?(clip_border_radius = 0.)
+        ~content
+        ~on_commit
+        ()
+    =
     validate_actions start_action end_action;
+    validate_border_radius "clip_border_radius" clip_border_radius;
     widget
       extension
       ?key
-      ~props:{ start_action; end_action }
+      ~props:{ start_action; end_action; clip_border_radius }
       ~on_event:on_commit
       ~children:(children start_action end_action content)
       ()
   ;;
 
-  let create_with_handler ?key ?start_action ?end_action ~content ~on_commit () =
+  let create_with_handler
+        ?key
+        ?start_action
+        ?end_action
+        ?(clip_border_radius = 0.)
+        ~content
+        ~on_commit
+        ()
+    =
     validate_actions start_action end_action;
+    validate_border_radius "clip_border_radius" clip_border_radius;
     widget_with_handler
       extension
       ?key
-      ~props:{ start_action; end_action }
+      ~props:{ start_action; end_action; clip_border_radius }
       ~on_event:on_commit
       ~children:(children start_action end_action content)
       ()

@@ -64,6 +64,36 @@ void main() {
     await gesture.up();
   });
 
+  testWidgets('action and host border radii are independently configurable', (
+    tester,
+  ) async {
+    await _pumpSwipeFixture(
+      tester,
+      startBorderRadius: 12,
+      endBorderRadius: 24,
+      clipBorderRadius: 18,
+    );
+    final hostClip = tester.widget<ClipRRect>(
+      find.descendant(
+        of: find.byKey(_hostKey),
+        matching: find.byType(ClipRRect),
+      ),
+    );
+    expect(hostClip.borderRadius, BorderRadius.circular(18));
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('Message')),
+    );
+    await gesture.moveBy(const Offset(80, 0));
+    await tester.pump();
+    expect(_feedbackBorderRadius(tester), BorderRadius.circular(12));
+
+    await gesture.moveBy(const Offset(-160, 0));
+    await tester.pump();
+    expect(_feedbackBorderRadius(tester), BorderRadius.circular(24));
+    await gesture.up();
+  });
+
   testWidgets('sub-threshold release closes without a native event', (
     tester,
   ) async {
@@ -327,6 +357,20 @@ Set<String> _customActionLabels(WidgetTester tester) {
   };
 }
 
+BorderRadiusGeometry? _feedbackBorderRadius(WidgetTester tester) {
+  final decoration =
+      tester
+              .widget<DecoratedBox>(
+                find.descendant(
+                  of: find.byKey(_pillKey),
+                  matching: find.byType(DecoratedBox),
+                ),
+              )
+              .decoration
+          as BoxDecoration;
+  return decoration.borderRadius;
+}
+
 Set<String> _semanticsLabels(SemanticsNode root) {
   final labels = <String>{};
   bool visit(SemanticsNode node) {
@@ -368,6 +412,9 @@ Future<_SwipeFixture> _pumpSwipeFixture(
   bool inScrollableList = false,
   bool disableAnimations = false,
   TextDirection textDirection = TextDirection.ltr,
+  double startBorderRadius = 999,
+  double endBorderRadius = 999,
+  double clipBorderRadius = 0,
 }) async {
   tester.view.physicalSize = const Size(360, 640);
   tester.view.devicePixelRatio = 1;
@@ -379,6 +426,9 @@ Future<_SwipeFixture> _pumpSwipeFixture(
         startEnabled: startEnabled,
         endEnabled: endEnabled,
         inScrollableList: inScrollableList,
+        startBorderRadius: startBorderRadius,
+        endBorderRadius: endBorderRadius,
+        clipBorderRadius: clipBorderRadius,
       ),
     );
   final events = <RendererEvent>[];
@@ -411,23 +461,29 @@ NativeWidgetProps _nativeProps({
   bool endEnabled = true,
   String startLabel = 'Archive',
   String endLabel = 'Mark read',
+  double startBorderRadius = 999,
+  double endBorderRadius = 999,
+  double clipBorderRadius = 0,
 }) {
   final start = utf8.encode(startLabel);
   final end = utf8.encode(endLabel);
-  final data = ByteData(20 + start.length + end.length)
+  final data = ByteData(44 + start.length + end.length)
     ..setUint8(0, (startEnabled ? 1 : 0) | (endEnabled ? 2 : 0))
     ..setUint8(1, 0)
     ..setUint8(2, 1)
     ..setUint32(4, 0xff507d58, Endian.little)
     ..setUint32(8, 0xff435f8a, Endian.little)
-    ..setUint32(12, start.length, Endian.little)
-    ..setUint32(16, end.length, Endian.little);
+    ..setFloat64(12, startBorderRadius, Endian.little)
+    ..setFloat64(20, endBorderRadius, Endian.little)
+    ..setFloat64(28, clipBorderRadius, Endian.little)
+    ..setUint32(36, start.length, Endian.little)
+    ..setUint32(40, end.length, Endian.little);
   final payload = data.buffer.asUint8List();
-  payload.setRange(20, 20 + start.length, start);
-  payload.setRange(20 + start.length, payload.length, end);
+  payload.setRange(44, 44 + start.length, start);
+  payload.setRange(44 + start.length, payload.length, end);
   return NativeWidgetProps(
     kindId: 2,
-    version: 1,
+    version: 2,
     capabilityBits:
         NativeCapability.stateful |
         NativeCapability.resource |
@@ -440,6 +496,9 @@ Frame _swipeFrame({
   required bool startEnabled,
   required bool endEnabled,
   required bool inScrollableList,
+  double startBorderRadius = 999,
+  double endBorderRadius = 999,
+  double clipBorderRadius = 0,
 }) {
   final operations = <FrameOperation>[
     CreateNode(
@@ -449,6 +508,9 @@ Frame _swipeFrame({
         startEnabled: startEnabled,
         endEnabled: endEnabled,
         endLabel: endEnabled ? 'Mark read' : '',
+        startBorderRadius: startBorderRadius,
+        endBorderRadius: endBorderRadius,
+        clipBorderRadius: clipBorderRadius,
       ),
       eventBindings: const [
         EventBinding(eventTag: EventTagId.nativeEvent, handlerId: 900),

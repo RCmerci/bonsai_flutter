@@ -165,19 +165,31 @@ void main() {
     await expectRejected(
       NativeWidgetProps(
         kindId: 2,
-        version: 2,
+        version: 1,
         capabilityBits:
             NativeCapability.stateful |
             NativeCapability.resource |
             NativeCapability.semantics,
         payload: _validSwipePayload(),
       ),
-      'Unsupported version 2',
+      'Unsupported version 1',
     );
     await expectRejected(
       NativeWidgetProps(
         kindId: 2,
-        version: 1,
+        version: 3,
+        capabilityBits:
+            NativeCapability.stateful |
+            NativeCapability.resource |
+            NativeCapability.semantics,
+        payload: _validSwipePayload(),
+      ),
+      'Unsupported version 3',
+    );
+    await expectRejected(
+      NativeWidgetProps(
+        kindId: 2,
+        version: 2,
         capabilityBits: 1 << 20,
         payload: _validSwipePayload(),
       ),
@@ -189,14 +201,29 @@ void main() {
     tester,
   ) async {
     final malformed = <Uint8List>[
-      Uint8List(19),
+      Uint8List(43),
       _mutate(_validSwipePayload(), 0, 0x80),
       _mutate(_validSwipePayload(), 1, 2),
       _mutate(_validSwipePayload(), 2, 2),
       _mutate(_validSwipePayload(), 3, 1),
-      _mutate(_validSwipePayload(), 12, 0xff),
+      _mutate(_validSwipePayload(), 36, 0xff),
       _payloadWithLabels([0xff], utf8.encode('Mark read')),
       _payloadWithLabels([], utf8.encode('Mark read')),
+      _payloadWithLabels(
+        utf8.encode('Archive'),
+        utf8.encode('Mark read'),
+        startBorderRadius: -1,
+      ),
+      _payloadWithLabels(
+        utf8.encode('Archive'),
+        utf8.encode('Mark read'),
+        endBorderRadius: double.nan,
+      ),
+      _payloadWithLabels(
+        utf8.encode('Archive'),
+        utf8.encode('Mark read'),
+        clipBorderRadius: double.infinity,
+      ),
     ];
 
     for (final payload in malformed) {
@@ -285,18 +312,27 @@ Frame _nativeFrame({int capabilityBits = 0, Uint8List? payload}) => Frame(
 Uint8List _validSwipePayload() =>
     _payloadWithLabels(utf8.encode('Archive'), utf8.encode('Mark read'));
 
-Uint8List _payloadWithLabels(List<int> start, List<int> end) {
-  final data = ByteData(20 + start.length + end.length)
+Uint8List _payloadWithLabels(
+  List<int> start,
+  List<int> end, {
+  double startBorderRadius = 999,
+  double endBorderRadius = 999,
+  double clipBorderRadius = 0,
+}) {
+  final data = ByteData(44 + start.length + end.length)
     ..setUint8(0, 3)
     ..setUint8(1, 0)
     ..setUint8(2, 1)
     ..setUint32(4, 0xff507d58, Endian.little)
     ..setUint32(8, 0xff435f8a, Endian.little)
-    ..setUint32(12, start.length, Endian.little)
-    ..setUint32(16, end.length, Endian.little);
+    ..setFloat64(12, startBorderRadius, Endian.little)
+    ..setFloat64(20, endBorderRadius, Endian.little)
+    ..setFloat64(28, clipBorderRadius, Endian.little)
+    ..setUint32(36, start.length, Endian.little)
+    ..setUint32(40, end.length, Endian.little);
   final payload = data.buffer.asUint8List();
-  payload.setRange(20, 20 + start.length, start);
-  payload.setRange(20 + start.length, payload.length, end);
+  payload.setRange(44, 44 + start.length, start);
+  payload.setRange(44 + start.length, payload.length, end);
   return payload;
 }
 
@@ -307,7 +343,7 @@ Frame _swipeNativeFrame(Uint8List payload, {int childCount = 3}) =>
     _swipeNativeFrameFromProps(
       NativeWidgetProps(
         kindId: 2,
-        version: 1,
+        version: 2,
         capabilityBits:
             NativeCapability.stateful |
             NativeCapability.resource |

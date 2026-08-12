@@ -179,7 +179,7 @@ descriptive child semantics and independent nested-button semantics.
 ## Built-in swipe action
 
 `Native_widget.Swipe_action` is built-in extension kind `2`, schema version
-`1`. It uses the Stateful, Resource, and Semantics capabilities and always
+`2`. It uses the Stateful, Resource, and Semantics capabilities and always
 receives three children in this order:
 
 1. row content;
@@ -187,14 +187,20 @@ receives three children in this order:
 3. end-direction icon.
 
 At least one direction must be enabled. Each enabled action supplies an
-accessibility label, ARGB background, `Dismiss` or `Rebound` disposition, and
-an icon child. The fixed payload header stores enabled flags, both
-dispositions, a reserved byte, two colors, and two UTF-8 byte lengths; the
-labels follow the 20-byte header. Both decoders reject unknown flags or
-dispositions, nonzero reserved data, invalid UTF-8, empty enabled labels,
-incorrect exact lengths, and incorrect child counts.
+accessibility label, ARGB background, non-negative finite border radius,
+`Dismiss` or `Rebound` disposition, and an icon child. The action border radius
+defaults to `999` for the existing capsule feedback. The host also accepts a
+non-negative finite `clip_border_radius`, which defaults to `0` and clips the
+content, feedback, and translation animation together.
 
-Flutter owns all pointer deltas, gesture-arena arbitration, clipping, pill
+The fixed payload header stores enabled flags, both dispositions, a reserved
+byte, two colors, both action border radii, the host clip border radius, and two
+UTF-8 byte lengths; the labels follow the 44-byte header. Both decoders reject
+unknown flags or dispositions, nonzero reserved data, invalid radii, invalid
+UTF-8, empty enabled labels, incorrect exact lengths, and incorrect child
+counts.
+
+Flutter owns all pointer deltas, gesture-arena arbitration, clipping, feedback
 geometry, threshold haptics, and settle frames. No drag delta crosses FFI.
 After a dismiss or rebound reaches its commit point, Flutter emits native event
 `1` with a one-byte logical direction (`0` start-to-end, `1` end-to-start).

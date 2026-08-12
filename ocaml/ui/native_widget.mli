@@ -211,17 +211,25 @@ module Swipe_action : sig
 
   type action
 
+  (** Creates one directional action. [border_radius] controls the revealed
+      feedback surface and defaults to a capsule radius of [999.]. *)
   val action
     :  label:string
     -> background:Style.Color.t
+    -> ?border_radius:float
     -> disposition:disposition
     -> icon:Widget.t
+    -> unit
     -> action
 
+  (** Wraps [content] in a bidirectional swipe host. [clip_border_radius]
+      clips the content, feedback, and translation animation together and
+      defaults to [0.]. *)
   val create
     :  ?key:Key.t
     -> ?start_action:action
     -> ?end_action:action
+    -> ?clip_border_radius:float
     -> content:Widget.t
     -> on_commit:(direction -> unit)
     -> unit
@@ -233,6 +241,7 @@ module Swipe_action : sig
     :  ?key:Key.t
     -> ?start_action:action
     -> ?end_action:action
+    -> ?clip_border_radius:float
     -> content:Widget.t
     -> on_commit:Event.Handler.t
     -> unit

@@ -431,13 +431,16 @@ let test_sparse_extent_handler_path_and_payload_filtering () =
 let swipe_action
       ?(label = "Archive")
       ?(background = Ui.Style.Color.argb ~alpha:255 ~red:80 ~green:125 ~blue:88)
+      ?border_radius
       disposition
   =
   Ui.Native_widget.Swipe_action.action
     ~label
     ~background
+    ?border_radius
     ~disposition
     ~icon:(Ui.Widget.text label)
+    ()
 ;;
 
 let test_swipe_action_props_contract () =
@@ -450,7 +453,9 @@ let test_swipe_action_props_contract () =
         (swipe_action
            ~label:"Mark unread ✓"
            ~background:(Ui.Style.Color.argb ~alpha:255 ~red:67 ~green:95 ~blue:138)
+           ~border_radius:12.
            Rebound)
+      ~clip_border_radius:18.
       ~content:(Ui.Widget.text "Message")
       ~on_commit:(fun direction -> received := Some direction)
       ()
@@ -462,7 +467,7 @@ let test_swipe_action_props_contract () =
      check
        (ID.Native_widget.Kind_id.equal kind_id (native_kind_id 2))
        "swipe action kind ID";
-     check (version = 1) "swipe action schema version";
+     check (version = 2) "swipe action schema version";
      check (Int64.equal capabilities 7L) "swipe action capabilities";
      check (Char.code (Bytes.get payload 0) = 3) "swipe action enabled flags";
      check (Char.code (Bytes.get payload 1) = 0) "dismiss disposition encoding";
@@ -474,19 +479,28 @@ let test_swipe_action_props_contract () =
      check
        (Int32.equal (Bytes.get_int32_le payload 8) 0xff435f8al)
        "end background encoding";
-     let start_length = Int32.to_int (Bytes.get_int32_le payload 12) in
-     let end_length = Int32.to_int (Bytes.get_int32_le payload 16) in
+     check
+       (Float.equal (Int64.float_of_bits (Bytes.get_int64_le payload 12)) 999.)
+       "default start action border radius encoding";
+     check
+       (Float.equal (Int64.float_of_bits (Bytes.get_int64_le payload 20)) 12.)
+       "custom end action border radius encoding";
+     check
+       (Float.equal (Int64.float_of_bits (Bytes.get_int64_le payload 28)) 18.)
+       "host clip border radius encoding";
+     let start_length = Int32.to_int (Bytes.get_int32_le payload 36) in
+     let end_length = Int32.to_int (Bytes.get_int32_le payload 40) in
      check (start_length = String.length "Archive") "start label byte length";
      check (end_length = String.length "Mark unread ✓") "UTF-8 label byte length";
      check
-       (Bytes.length payload = 20 + start_length + end_length)
+       (Bytes.length payload = 44 + start_length + end_length)
        "swipe action exact payload length";
      check
-       (String.equal (Bytes.sub_string payload 20 start_length) "Archive")
+       (String.equal (Bytes.sub_string payload 44 start_length) "Archive")
        "start label payload";
      check
        (String.equal
-          (Bytes.sub_string payload (20 + start_length) end_length)
+          (Bytes.sub_string payload (44 + start_length) end_length)
           "Mark unread ✓")
        "end label payload"
    | _ -> failwith "swipe action native props");
@@ -495,7 +509,7 @@ let test_swipe_action_props_contract () =
     binding.handler
     (Native_event
        { kind_id = native_kind_id 2
-       ; version = 1
+       ; version = 2
        ; event_id = native_event_id 1
        ; payload = Bytes.of_string "\000"
        });
@@ -506,7 +520,7 @@ let test_swipe_action_props_contract () =
     binding.handler
     (Native_event
        { kind_id = native_kind_id 2
-       ; version = 1
+       ; version = 2
        ; event_id = native_event_id 1
        ; payload = Bytes.of_string "\001"
        });
@@ -526,7 +540,13 @@ let test_swipe_action_omitted_direction_and_validation () =
   let view = Ui.Widget.Private.view widget in
   (match view.props with
    | Native_widget_props { payload; _ } ->
-     check (Char.code (Bytes.get payload 0) = 1) "omitted end direction flag"
+     check (Char.code (Bytes.get payload 0) = 1) "omitted end direction flag";
+     check
+       (Float.equal (Int64.float_of_bits (Bytes.get_int64_le payload 20)) 999.)
+       "omitted action keeps the encoded default border radius";
+     check
+       (Float.equal (Int64.float_of_bits (Bytes.get_int64_le payload 28)) 0.)
+       "host clip border radius defaults to square"
    | _ -> failwith "swipe action native props");
   check
     (Ui.Widget.Private.Kind.equal
@@ -543,7 +563,23 @@ let test_swipe_action_omitted_direction_and_validation () =
     "swipe action accepted no actions";
   expect_invalid_argument
     (fun () -> ignore (swipe_action ~label:"" Dismiss))
-    "swipe action accepted an empty enabled label"
+    "swipe action accepted an empty enabled label";
+  List.iter
+    (fun border_radius ->
+       expect_invalid_argument
+         (fun () -> ignore (swipe_action ~border_radius Dismiss))
+         "swipe action accepted an invalid action border radius";
+       expect_invalid_argument
+         (fun () ->
+            ignore
+              (Ui.Native_widget.Swipe_action.create
+                 ~start_action:(swipe_action Dismiss)
+                 ~clip_border_radius:border_radius
+                 ~content:(Ui.Widget.empty ())
+                 ~on_commit:(fun _ -> ())
+                 ()))
+         "swipe action accepted an invalid host clip border radius")
+    [ -1.; Float.nan; Float.infinity ]
 ;;
 
 let test_swipe_action_event_filtering () =
@@ -562,12 +598,12 @@ let test_swipe_action_event_filtering () =
       (Native_event { kind_id; version; event_id; payload })
   in
   invoke (native_kind_id 99) 1 (native_event_id 1) (Bytes.of_string "\000");
-  invoke (native_kind_id 2) 2 (native_event_id 1) (Bytes.of_string "\000");
-  invoke (native_kind_id 2) 1 (native_event_id 2) (Bytes.of_string "\000");
-  invoke (native_kind_id 2) 1 (native_event_id 1) Bytes.empty;
-  invoke (native_kind_id 2) 1 (native_event_id 1) (Bytes.of_string "\002");
-  check (!received = []) "malformed swipe native event was not ignored";
   invoke (native_kind_id 2) 1 (native_event_id 1) (Bytes.of_string "\000");
+  invoke (native_kind_id 2) 2 (native_event_id 2) (Bytes.of_string "\000");
+  invoke (native_kind_id 2) 2 (native_event_id 1) Bytes.empty;
+  invoke (native_kind_id 2) 2 (native_event_id 1) (Bytes.of_string "\002");
+  check (!received = []) "malformed swipe native event was not ignored";
+  invoke (native_kind_id 2) 2 (native_event_id 1) (Bytes.of_string "\000");
   check
     (!received = [ Ui.Native_widget.Swipe_action.Start_to_end ])
     "valid swipe event was filtered"
