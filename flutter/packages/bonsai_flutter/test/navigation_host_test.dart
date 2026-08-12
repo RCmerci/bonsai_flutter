@@ -1,7 +1,9 @@
-import 'dart:ui' show PointerDeviceKind, SemanticsAction;
+import 'dart:ui' show ImageByteFormat, PointerDeviceKind, SemanticsAction;
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
+import 'package:bonsai_flutter/src/navigation/modal_bottom_sheet_route.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show OffsetLayer;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -581,6 +583,232 @@ void main() {
       expect(fixture.events, isEmpty);
     });
 
+    testWidgets(
+      'automatic input focus waits for the modal entrance to complete',
+      (tester) async {
+        final semantics = tester.ensureSemantics();
+        final fixture = await _pumpModalFixture(tester, startWithModal: false);
+
+        fixture.pushModal();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump();
+
+        final editable = tester.widget<EditableText>(find.byType(EditableText));
+        final route =
+            ModalRoute.of(tester.element(find.text('Modal editor')))!
+                as ModalBottomSheetRoute<void>;
+        expect(route.animation!.value, inExclusiveRange(0, 1));
+        expect(editable.focusNode.hasFocus, isFalse);
+        expect(
+          tester.getSemantics(find.text('Modal editor')),
+          matchesSemantics(label: 'Modal editor'),
+        );
+        expect(
+          FocusScope.of(tester.element(find.text('Modal editor'))).hasFocus,
+          isTrue,
+        );
+
+        await tester.pumpAndSettle();
+
+        expect(route.animation!.status, AnimationStatus.completed);
+        expect(editable.focusNode.hasFocus, isTrue);
+        semantics.dispose();
+      },
+    );
+
+    testWidgets('requestFocus false never activates automatic input focus', (
+      tester,
+    ) async {
+      final fixture = await _pumpModalFixture(
+        tester,
+        requestFocus: false,
+        startWithModal: false,
+      );
+
+      fixture.pushModal();
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<EditableText>(find.byType(EditableText))
+            .focusNode
+            .hasFocus,
+        isFalse,
+      );
+      expect(tester.testTextInput.isVisible, isFalse);
+    });
+
+    testWidgets(
+      'same-key requestFocus update activates settled input without remounting',
+      (tester) async {
+        final fixture = await _pumpModalFixture(
+          tester,
+          requestFocus: false,
+          startWithModal: false,
+        );
+        fixture.pushModal();
+        await tester.pumpAndSettle();
+        final editableFinder = find.byType(EditableText);
+        final editableElement = tester.element(editableFinder);
+        final editable = tester.widget<EditableText>(editableFinder);
+        expect(editable.focusNode.hasFocus, isFalse);
+
+        fixture.updateModal(requestFocus: true);
+        await tester.pump();
+        await tester.pump();
+
+        expect(tester.element(editableFinder), same(editableElement));
+        expect(editable.focusNode.hasFocus, isTrue);
+      },
+    );
+
+    for (final (name, transitionDuration, disableAnimations) in [
+      ('zero duration', 0, false),
+      ('reduced motion', 250, true),
+    ]) {
+      testWidgets(
+        '$name activates automatic focus without an artificial wait',
+        (tester) async {
+          final fixture = await _pumpModalFixture(
+            tester,
+            transitionDurationMilliseconds: transitionDuration,
+            disableAnimations: disableAnimations,
+            startWithModal: false,
+          );
+
+          fixture.pushModal();
+          await tester.pump();
+          await tester.pump();
+
+          final route =
+              ModalRoute.of(tester.element(find.text('Modal editor')))!
+                  as ModalBottomSheetRoute<void>;
+          expect(route.transitionDuration, Duration.zero);
+          expect(
+            tester
+                .widget<EditableText>(find.byType(EditableText))
+                .focusNode
+                .hasFocus,
+            isTrue,
+          );
+        },
+      );
+    }
+
+    testWidgets('an existing keyboard inset bypasses the automatic delay', (
+      tester,
+    ) async {
+      final fixture = await _pumpModalFixture(
+        tester,
+        viewInsets: const EdgeInsets.only(bottom: 80),
+        startWithModal: false,
+      );
+
+      fixture.pushModal();
+      await tester.pump();
+      await tester.pump();
+
+      final route =
+          ModalRoute.of(tester.element(find.text('Modal editor')))!
+              as ModalBottomSheetRoute<void>;
+      final editableFinder = find.byType(EditableText);
+      expect(route.animation!.value, lessThan(1));
+      expect(
+        tester.widget<EditableText>(editableFinder).focusNode.hasFocus,
+        isTrue,
+      );
+      expect(
+        MediaQuery.of(tester.element(editableFinder)).viewInsets.bottom,
+        0,
+      );
+    });
+
+    testWidgets('a pointer tap focuses immediately during modal entrance', (
+      tester,
+    ) async {
+      final fixture = await _pumpModalFixture(tester, startWithModal: false);
+      fixture.pushModal();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      final editableFinder = find.byType(EditableText);
+      expect(
+        tester.widget<EditableText>(editableFinder).focusNode.hasFocus,
+        isFalse,
+      );
+
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+
+      final route =
+          ModalRoute.of(tester.element(find.text('Modal editor')))!
+              as ModalBottomSheetRoute<void>;
+      expect(route.animation!.value, lessThan(1));
+      expect(
+        tester.widget<EditableText>(editableFinder).focusNode.hasFocus,
+        isTrue,
+      );
+    });
+
+    testWidgets('removing a modal cancels pending automatic focus', (
+      tester,
+    ) async {
+      final fixture = await _pumpModalFixture(tester, startWithModal: false);
+      fixture.pushModal();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(
+        tester
+            .widget<EditableText>(find.byType(EditableText))
+            .focusNode
+            .hasFocus,
+        isFalse,
+      );
+
+      fixture.removeModal();
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byType(EditableText), findsNothing);
+      expect(tester.testTextInput.isVisible, isFalse);
+    });
+
+    testWidgets('a covered modal cannot activate automatic focus late', (
+      tester,
+    ) async {
+      final fixture = await _pumpModalFixture(
+        tester,
+        startWithModal: false,
+        secondModal: true,
+      );
+      fixture.pushModal();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      fixture.pushSecondModal(withAutofocusInput: true);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      var editors = tester
+          .widgetList<EditableText>(
+            find.byType(EditableText, skipOffstage: false),
+          )
+          .toList(growable: false);
+      expect(editors, hasLength(2));
+      expect(editors.first.focusNode.hasFocus, isFalse);
+      expect(editors.last.focusNode.hasFocus, isFalse);
+
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pumpAndSettle();
+
+      editors = tester
+          .widgetList<EditableText>(
+            find.byType(EditableText, skipOffstage: false),
+          )
+          .toList(growable: false);
+      expect(editors.first.focusNode.hasFocus, isFalse);
+      expect(editors.last.focusNode.hasFocus, isTrue);
+    });
+
     testWidgets('route owns focus and excludes lower route semantics', (
       tester,
     ) async {
@@ -617,6 +845,164 @@ void main() {
       );
       expect(tester.getBottomRight(editableFinder).dy, lessThanOrEqualTo(220));
     });
+
+    testWidgets(
+      'scroll-controlled compose keeps a fixed large shell while its content '
+      'viewport follows the keyboard',
+      (tester) async {
+        const size = Size(400, 600);
+        const topSafeArea = 20.0;
+        final contentViewportKey = GlobalKey();
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        Future<void> pumpWithInset(double bottomInset) async {
+          await tester.pumpWidget(
+            MaterialApp(
+              home: MediaQuery(
+                data: MediaQueryData(
+                  size: size,
+                  padding: const EdgeInsets.only(top: topSafeArea),
+                  viewPadding: const EdgeInsets.only(top: topSafeArea),
+                  viewInsets: EdgeInsets.only(bottom: bottomInset),
+                ),
+                child: Navigator(
+                  pages: [
+                    const MaterialPage<void>(
+                      key: ValueKey('fixed-shell-lower'),
+                      canPop: false,
+                      child: SizedBox.expand(),
+                    ),
+                    BonsaiModalBottomSheetPage(
+                      key: const ValueKey('fixed-shell-compose'),
+                      canPop: true,
+                      presentation: const ModalBottomSheetPresentation(
+                        barrierDismissible: true,
+                        barrierColorArgb: 0x8a000000,
+                        barrierLabel: 'Close fixed compose',
+                        sizing: ScrollControlledModalSheetSizing(),
+                        useSafeArea: true,
+                        requestFocus: false,
+                        transitionDurationMilliseconds: 0,
+                        reverseTransitionDurationMilliseconds: 0,
+                      ),
+                      child: SizedBox.expand(
+                        key: contentViewportKey,
+                        child: const Text('Fixed compose editor'),
+                      ),
+                    ),
+                  ],
+                  onDidRemovePage: (_) {},
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+        }
+
+        await pumpWithInset(0);
+        final initialSurface = tester.getRect(
+          _roundedModalSheetSurfaceFinder(),
+        );
+        final initialViewport = tester.getRect(find.byKey(contentViewportKey));
+        final contentViewportElement = tester.element(
+          find.byKey(contentViewportKey),
+        );
+        expect(initialSurface, const Rect.fromLTWH(0, 20, 400, 580));
+        expect(initialViewport, initialSurface);
+
+        final shellRects = <Rect>[initialSurface];
+        final contentBottoms = <double>[initialViewport.bottom];
+        for (final inset in [40.0, 80.0, 120.0, 0.0]) {
+          await pumpWithInset(inset);
+          shellRects.add(tester.getRect(_roundedModalSheetSurfaceFinder()));
+          contentBottoms.add(
+            tester.getRect(find.byKey(contentViewportKey)).bottom,
+          );
+          expect(
+            tester.element(find.byKey(contentViewportKey)),
+            same(contentViewportElement),
+          );
+          expect(
+            MediaQuery.viewInsetsOf(
+              tester.element(find.byKey(contentViewportKey)),
+            ).bottom,
+            0,
+          );
+        }
+
+        expect(shellRects, everyElement(initialSurface));
+        expect(
+          contentBottoms,
+          orderedEquals([600.0, 560.0, 520.0, 480.0, 600.0]),
+        );
+      },
+    );
+
+    for (final brightness in Brightness.values) {
+      for (final (name, sizing) in [
+        ('content-bounded', const ContentBoundedModalSheetSizing()),
+        ('scroll-controlled', const ScrollControlledModalSheetSizing()),
+      ]) {
+        testWidgets(
+          '$name sheet paints its $brightness surface behind the keyboard',
+          (tester) async {
+            await _pumpModalFixture(
+              tester,
+              brightness: brightness,
+              sizing: sizing,
+              size: const Size(400, 600),
+              viewInsets: const EdgeInsets.only(bottom: 80),
+            );
+
+            final expectedColor = Theme.of(
+              tester.element(find.text('Modal editor')),
+            ).colorScheme.surface;
+            expect(await _readPixelColor(tester, 4, 560), expectedColor);
+            expect(await _readPixelColor(tester, 396, 560), expectedColor);
+          },
+        );
+      }
+    }
+
+    for (final (name, sizing) in [
+      ('content-bounded', const ContentBoundedModalSheetSizing()),
+      ('scroll-controlled', const ScrollControlledModalSheetSizing()),
+    ]) {
+      testWidgets('$name sheet follows sampled keyboard insets monotonically', (
+        tester,
+      ) async {
+        final fixture = await _pumpModalFixture(
+          tester,
+          sizing: sizing,
+          size: const Size(400, 600),
+        );
+        final editableFinder = find.byType(EditableText);
+        final editableElement = tester.element(editableFinder);
+        final sheetRects = <Rect>[];
+
+        for (final inset in [0.0, 40.0, 80.0, 120.0]) {
+          await fixture.setViewInsets(EdgeInsets.only(bottom: inset));
+          sheetRects.add(tester.getRect(_roundedModalSheetSurfaceFinder()));
+          expect(tester.element(editableFinder), same(editableElement));
+          expect(
+            MediaQuery.of(tester.element(editableFinder)).viewInsets.bottom,
+            0,
+          );
+        }
+
+        if (sizing is ScrollControlledModalSheetSizing) {
+          expect(sheetRects, everyElement(const Rect.fromLTWH(0, 0, 400, 600)));
+        } else {
+          expect(
+            sheetRects.map((rect) => rect.bottom),
+            orderedEquals([600.0, 560.0, 520.0, 480.0]),
+          );
+        }
+      });
+    }
 
     for (final direction in TextDirection.values) {
       for (final brightness in Brightness.values) {
@@ -1078,6 +1464,45 @@ void main() {
         0,
       );
     });
+
+    for (final initialDetent in ModalSheetDetent.values) {
+      testWidgets(
+        '${initialDetent.name} detent follows sampled keyboard insets monotonically',
+        (tester) async {
+          final fixture = await _pumpDetentedFixture(
+            tester,
+            initialDetent: initialDetent,
+            size: const Size(400, 600),
+          );
+          final editableFinder = find.byType(EditableText);
+          final editableElement = tester.element(editableFinder);
+          final sheetBottoms = <double>[];
+          final sheetHeights = <double>[];
+
+          for (final inset in [0.0, 40.0, 80.0, 120.0]) {
+            await fixture.setViewInsets(EdgeInsets.only(bottom: inset));
+            final rect = tester.getRect(find.byType(BottomSheet).last);
+            sheetBottoms.add(rect.bottom);
+            sheetHeights.add(rect.height);
+            expect(tester.element(editableFinder), same(editableElement));
+            expect(
+              MediaQuery.of(tester.element(editableFinder)).viewInsets.bottom,
+              0,
+            );
+          }
+
+          expect(sheetBottoms, orderedEquals([600.0, 560.0, 520.0, 480.0]));
+          expect(
+            sheetHeights,
+            orderedEquals(
+              initialDetent == ModalSheetDetent.medium
+                  ? [300.0, 280.0, 260.0, 240.0]
+                  : [600.0, 560.0, 520.0, 480.0],
+            ),
+          );
+        },
+      );
+    }
 
     testWidgets('compact large-text detented layout stays in the viewport', (
       tester,
@@ -1587,6 +2012,7 @@ final class _ModalFixture {
     required this.store,
     required this.events,
     required this.pumpApp,
+    required this.setViewInsets,
     required this.props,
   });
 
@@ -1594,6 +2020,7 @@ final class _ModalFixture {
   final NodeStore store;
   final List<RendererEvent> events;
   final Future<void> Function(bool reducedMotion) pumpApp;
+  final Future<void> Function(EdgeInsets viewInsets) setViewInsets;
   PageProps props;
   int _revision = 1;
 
@@ -1660,7 +2087,7 @@ final class _ModalFixture {
     );
   }
 
-  void pushSecondModal() {
+  void pushSecondModal({bool withAutofocusInput = false}) {
     store.apply(
       Frame(
         runtimeEpoch: 74,
@@ -1698,9 +2125,42 @@ final class _ModalFixture {
             props: TextProps('Top picker'),
             eventBindings: [],
           ),
+          if (withAutofocusInput) ...[
+            const CreateNode(
+              nodeId: 23,
+              kind: NodeKind.column,
+              props: LinearProps(),
+              eventBindings: [],
+            ),
+            const CreateNode(
+              nodeId: 24,
+              kind: NodeKind.textInput,
+              props: TextInputProps(
+                sessionId: 75,
+                documentRevision: 1,
+                value: TextEditingStateValue(
+                  text: '',
+                  selection: TextRangeValue(startUtf16: 0, endUtf16: 0),
+                  composing: null,
+                ),
+                enabled: true,
+                readOnly: false,
+                obscureText: false,
+                keyboardType: TextKeyboardType.text,
+                inputAction: TextInputActionKind.done,
+                acceptedLocalRevision: 0,
+                updateMode: TextUpdateMode.forceReplace,
+                autofocus: true,
+              ),
+              eventBindings: [],
+            ),
+          ],
           const SetChildren(nodeId: 1, children: [2, 5, 20]),
           const SetChildren(nodeId: 20, children: [21]),
-          const SetChildren(nodeId: 21, children: [22]),
+          SetChildren(nodeId: 21, children: [withAutofocusInput ? 23 : 22]),
+          if (withAutofocusInput) ...[
+            const SetChildren(nodeId: 23, children: [22, 24]),
+          ],
         ],
       ),
     );
@@ -1860,8 +2320,11 @@ Future<_ModalFixture> _pumpModalFixture(
       ),
     );
   final events = <RendererEvent>[];
+  var currentReducedMotion = disableAnimations;
+  var currentViewInsets = viewInsets;
 
   Future<void> pumpApp(bool reducedMotion) async {
+    currentReducedMotion = reducedMotion;
     await tester.pumpWidget(
       MaterialApp(
         theme: ThemeData(brightness: brightness),
@@ -1872,7 +2335,7 @@ Future<_ModalFixture> _pumpModalFixture(
               size: size,
               padding: padding,
               viewPadding: padding,
-              viewInsets: viewInsets,
+              viewInsets: currentViewInsets,
               textScaler: textScaler,
               disableAnimations: reducedMotion,
               accessibleNavigation: reducedMotion,
@@ -1889,12 +2352,18 @@ Future<_ModalFixture> _pumpModalFixture(
     await tester.pumpAndSettle();
   }
 
+  Future<void> setViewInsets(EdgeInsets nextViewInsets) async {
+    currentViewInsets = nextViewInsets;
+    await pumpApp(currentReducedMotion);
+  }
+
   await pumpApp(disableAnimations);
   return _ModalFixture(
     tester: tester,
     store: store,
     events: events,
     pumpApp: pumpApp,
+    setViewInsets: setViewInsets,
     props: modalProps,
   );
 }
@@ -2111,6 +2580,16 @@ void _expectRoundedModalSheetSurface(
   expect(matchingSurfaces, hasLength(1));
 }
 
+Finder _roundedModalSheetSurfaceFinder() => find.byWidgetPredicate((widget) {
+  if (widget is! Material || widget.clipBehavior != Clip.antiAlias) {
+    return false;
+  }
+  final shape = widget.shape;
+  return shape is RoundedRectangleBorder &&
+      shape.borderRadius ==
+          const BorderRadius.vertical(top: Radius.circular(24));
+});
+
 double _sheetHeight(WidgetTester tester) =>
     tester.getRect(find.byType(BottomSheet).last).height;
 
@@ -2130,12 +2609,14 @@ final class _DetentedFixture {
     required this.store,
     required this.events,
     required this.resources,
+    required this.setViewInsets,
     required this.props,
   });
 
   final NodeStore store;
   final List<RendererEvent> events;
   final RendererResourceStore resources;
+  final Future<void> Function(EdgeInsets viewInsets) setViewInsets;
   PageProps props;
   int _revision = 1;
 
@@ -2259,38 +2740,49 @@ Future<_DetentedFixture> _pumpDetentedFixture(
   final resources = RendererResourceStore();
   addTearDown(resources.dispose);
   final events = <RendererEvent>[];
+  var currentViewInsets = viewInsets;
 
-  await tester.pumpWidget(
-    MaterialApp(
-      restorationScopeId: 'detented-app',
-      theme: ThemeData(brightness: brightness),
-      home: Directionality(
-        textDirection: textDirection,
-        child: MediaQuery(
-          data: MediaQueryData(
-            size: size,
-            viewInsets: viewInsets,
-            padding: padding,
-            viewPadding: padding,
-            textScaler: textScaler,
-            disableAnimations: disableAnimations,
-            accessibleNavigation: disableAnimations,
-          ),
-          child: BonsaiFlutterView(
-            store: store,
-            registry: WidgetRegistry.standard(),
-            resourceStore: resources,
-            onEvent: events.add,
+  Future<void> pumpApp() async {
+    await tester.pumpWidget(
+      MaterialApp(
+        restorationScopeId: 'detented-app',
+        theme: ThemeData(brightness: brightness),
+        home: Directionality(
+          textDirection: textDirection,
+          child: MediaQuery(
+            data: MediaQueryData(
+              size: size,
+              viewInsets: currentViewInsets,
+              padding: padding,
+              viewPadding: padding,
+              textScaler: textScaler,
+              disableAnimations: disableAnimations,
+              accessibleNavigation: disableAnimations,
+            ),
+            child: BonsaiFlutterView(
+              store: store,
+              registry: WidgetRegistry.standard(),
+              resourceStore: resources,
+              onEvent: events.add,
+            ),
           ),
         ),
       ),
-    ),
-  );
-  await tester.pumpAndSettle();
+    );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> setViewInsets(EdgeInsets nextViewInsets) async {
+    currentViewInsets = nextViewInsets;
+    await pumpApp();
+  }
+
+  await pumpApp();
   return _DetentedFixture(
     store: store,
     events: events,
     resources: resources,
+    setViewInsets: setViewInsets,
     props: props,
   );
 }
@@ -2514,3 +3006,22 @@ Frame _modalOnlySnapshot() => Frame(
     const SetRoot(1),
   ],
 );
+
+Future<Color> _readPixelColor(WidgetTester tester, int x, int y) async {
+  final renderView = tester.binding.renderViews.single;
+  final layer = renderView.debugLayer! as OffsetLayer;
+  final capture = await tester.binding.runAsync(() async {
+    final image = await layer.toImage(renderView.paintBounds);
+    final width = image.width;
+    final bytes = await image.toByteData(format: ImageByteFormat.rawRgba);
+    image.dispose();
+    return (width: width, bytes: bytes!);
+  });
+  final offset = (y * capture!.width + x) * 4;
+  return Color.fromARGB(
+    capture.bytes.getUint8(offset + 3),
+    capture.bytes.getUint8(offset),
+    capture.bytes.getUint8(offset + 1),
+    capture.bytes.getUint8(offset + 2),
+  );
+}

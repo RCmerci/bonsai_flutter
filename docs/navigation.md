@@ -69,19 +69,37 @@ The configuration defaults are:
 | `barrier_dismissible` | `true` | A barrier tap may request a pop, subject to live `can_pop`. |
 | `barrier_color` | `None` | Uses Material `Colors.black54`; a transparent color still blocks input. |
 | `barrier_label` | `None` | Uses the localized Material scrim label. |
-| `sizing` | `Sizing.Content_bounded` | Selects content-bounded, scroll-controlled, or detented route sizing. |
+| `sizing` | `Sizing.Content_bounded` | Selects content-bounded, fixed-large scroll-controlled, or detented route sizing. |
 | `use_safe_area` | `false` | When enabled, avoids top, left, and right system padding; the route still extends to the bottom edge. |
-| `request_focus` | `true` | The route acquires its own focus scope; an autofocus child may then receive focus normally. |
+| `request_focus` | `true` | The route acquires its own focus scope. Automatic text-input focus waits for a nonzero entrance to complete. |
 | `transition_duration_ms` | `250` | Nonnegative `u32` entrance duration. |
 | `reverse_transition_duration_ms` | `200` | Nonnegative `u32` exit duration. |
 
-The route is the single keyboard-inset and outer-surface owner. It applies
-`MediaQuery.viewInsets.bottom` once outside the child and removes that bottom
-view inset from the child's `MediaQuery`. Consumers must not apply the keyboard
-inset again. Every sizing mode receives the theme surface color, 24 logical
+The route is the single keyboard-inset and outer-surface owner. A
+scroll-controlled sheet uses a fixed large shell inside the configured safe
+area. Its surface extends to the bottom of the viewport and stays geometrically
+stable while the platform keyboard covers it. The engine-provided
+`MediaQuery.viewInsets.bottom` reduces only the content viewport inside that
+surface. Content-bounded and detented sheets continue to apply the inset
+outside their surfaces so their smaller presentations remain visible above the
+keyboard.
+
+Every sizing mode removes the consumed bottom view inset from the child's
+`MediaQuery`, and consumers must not apply it again. The route follows the
+engine-provided inset directly; it does not add an `AnimatedPadding` or another
+keyboard timeline. Every surface receives the theme surface color, 24 logical
 pixel top corners, and anti-aliased clipping from Flutter. OCaml consumers own
 product padding, scrolling, and content layout, but do not configure the outer
 sheet shape or clipping.
+
+For a nonzero entrance, an autofocus `Text_input` remains mounted with its
+controller and element identity unchanged, but its automatic focus request is
+released only after the route animation completes. Pointer focus and an
+explicit host `requestFocus` remain immediate. Automatic focus is also
+immediate when the route duration is zero, reduced motion is active, or a
+keyboard inset already exists. If another modal covers the sheet before its
+pending automatic focus is released, that pending request is cancelled so the
+covered route cannot activate the keyboard later.
 
 The modal route delegates its animation to the route immediately below it to
 create a receding depth treatment. The lower route scales to 92 percent, moves

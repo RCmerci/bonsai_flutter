@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../navigation/modal_sheet_keyboard_coordinator.dart';
 import '../protocol/event_batch.dart';
 import '../protocol/frame.dart';
 import '../protocol/generated_protocol.dart';
@@ -31,6 +32,7 @@ final class _TextInputHostState extends State<TextInputHost> {
   late TextInputResourceHandle _resource;
   late TextEditingValue _lastValidValue;
   bool _applyingRemote = false;
+  bool? _automaticFocusReady;
 
   @override
   void initState() {
@@ -54,6 +56,23 @@ final class _TextInputHostState extends State<TextInputHost> {
         _applyingRemote = false;
       }
     }
+    if (!oldWidget.props.autofocus &&
+        widget.props.autofocus &&
+        _automaticFocusReady == true) {
+      _scheduleAutomaticFocus();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final automaticFocusReady = ModalSheetAutomaticFocusScope.isReady(context);
+    if (_automaticFocusReady == false &&
+        automaticFocusReady &&
+        widget.props.autofocus) {
+      _scheduleAutomaticFocus();
+    }
+    _automaticFocusReady = automaticFocusReady;
   }
 
   @override
@@ -116,6 +135,19 @@ final class _TextInputHostState extends State<TextInputHost> {
     );
   }
 
+  void _scheduleAutomaticFocus() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !widget.props.autofocus ||
+          _automaticFocusReady != true ||
+          _resource.disposed ||
+          _resource.focusNode.hasFocus) {
+        return;
+      }
+      FocusScope.of(context).autofocus(_resource.focusNode);
+    }, debugLabel: 'TextInputHost.automaticFocus');
+  }
+
   void _emit(int eventTag, EventPayload payload) {
     final onEvent = widget.onEvent;
     if (onEvent == null) return;
@@ -140,7 +172,9 @@ final class _TextInputHostState extends State<TextInputHost> {
     obscureText: widget.props.obscureText,
     keyboardType: _keyboardType(widget.props.keyboardType),
     textInputAction: _inputAction(widget.props.inputAction),
-    autofocus: widget.props.autofocus,
+    autofocus:
+        widget.props.autofocus &&
+        ModalSheetAutomaticFocusScope.isReady(context),
     maxLines: widget.props.keyboardType == TextKeyboardType.multiline
         ? null
         : 1,

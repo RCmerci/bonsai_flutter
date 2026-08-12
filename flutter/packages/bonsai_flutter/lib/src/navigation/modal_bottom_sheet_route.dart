@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../protocol/frame.dart';
 import 'detented_modal_sheet_host.dart';
 import 'modal_sheet_background_transition.dart';
+import 'modal_sheet_keyboard_coordinator.dart';
 
 const _modalSheetBorderRadius = BorderRadius.vertical(top: Radius.circular(24));
 
@@ -66,6 +67,7 @@ final class BonsaiModalBottomSheetRoute extends ModalBottomSheetRoute<void> {
        );
 
   final String _defaultBarrierLabel;
+  final ValueNotifier<bool> _routeIsCurrent = ValueNotifier(false);
 
   @override
   DelegatedTransitionBuilder? get delegatedTransition =>
@@ -99,8 +101,9 @@ final class BonsaiModalBottomSheetRoute extends ModalBottomSheetRoute<void> {
 
   @override
   WidgetBuilder get builder => (context) {
-    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     final sizing = _presentation.sizing;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final usesFixedLargeShell = sizing is ScrollControlledModalSheetSizing;
     Widget child = _page.child;
     if (sizing is DetentedModalSheetSizing) {
       bool canDismiss() => sizing.dismissOnDrag && _page.canPop;
@@ -123,16 +126,56 @@ final class BonsaiModalBottomSheetRoute extends ModalBottomSheetRoute<void> {
         ),
       );
     }
+    if (usesFixedLargeShell) {
+      child = ModalSheetFixedKeyboardViewport(child: child);
+    }
     child = _buildModalSheetSurface(context, child);
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottomInset),
-      child: MediaQuery.removeViewInsets(
-        context: context,
-        removeBottom: true,
+    if (usesFixedLargeShell) {
+      child = SizedBox.expand(child: child);
+    } else {
+      child = ModalSheetKeyboardInsetHost(
+        backgroundColor: surfaceColor,
         child: child,
-      ),
+      );
+    }
+    return ModalSheetAutomaticFocusCoordinator(
+      routeAnimation: animation!,
+      routeIsCurrent: _routeIsCurrent,
+      requestFocus: requestFocus,
+      activateImmediately: transitionDuration == Duration.zero,
+      child: child,
     );
   };
+
+  @override
+  TickerFuture didPush() {
+    _routeIsCurrent.value = true;
+    return super.didPush();
+  }
+
+  @override
+  void didChangeNext(Route<dynamic>? nextRoute) {
+    super.didChangeNext(nextRoute);
+    _routeIsCurrent.value = nextRoute == null;
+  }
+
+  @override
+  void didPopNext(Route<dynamic> nextRoute) {
+    super.didPopNext(nextRoute);
+    _routeIsCurrent.value = true;
+  }
+
+  @override
+  bool didPop(void result) {
+    _routeIsCurrent.value = false;
+    return super.didPop(result);
+  }
+
+  @override
+  void dispose() {
+    _routeIsCurrent.dispose();
+    super.dispose();
+  }
 
   @override
   bool get barrierDismissible => _presentation.barrierDismissible;

@@ -1,4 +1,5 @@
 import 'package:bonsai_flutter/bonsai_flutter.dart';
+import 'package:bonsai_flutter/src/navigation/modal_sheet_keyboard_coordinator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -700,12 +701,86 @@ void main() {
       ]),
     );
   });
+
+  testWidgets('autofocus remains immediate without an activation scope', (
+    tester,
+  ) async {
+    await _pumpAutofocusInput(tester);
+
+    expect(
+      tester.widget<EditableText>(find.byType(EditableText)).focusNode.hasFocus,
+      isTrue,
+    );
+  });
+
+  testWidgets('a closed activation scope delays only automatic focus', (
+    tester,
+  ) async {
+    await _pumpAutofocusInput(tester, automaticFocusReady: false);
+    final editable = tester.widget<EditableText>(find.byType(EditableText));
+
+    expect(editable.focusNode.hasFocus, isFalse);
+
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+
+    expect(editable.focusNode.hasFocus, isTrue);
+  });
+
+  testWidgets('opening the activation scope focuses without remounting input', (
+    tester,
+  ) async {
+    final ready = ValueNotifier(false);
+    addTearDown(ready.dispose);
+    final store = NodeStore()..apply(textInputSnapshot(autofocus: true));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ValueListenableBuilder<bool>(
+            valueListenable: ready,
+            builder: (context, value, child) =>
+                ModalSheetAutomaticFocusScope(ready: value, child: child!),
+            child: BonsaiFlutterView(store: store),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final editableFinder = find.byType(EditableText);
+    final editableElement = tester.element(editableFinder);
+    final editable = tester.widget<EditableText>(editableFinder);
+    expect(editable.focusNode.hasFocus, isFalse);
+
+    ready.value = true;
+    await tester.pump();
+    await tester.pump();
+
+    expect(tester.element(editableFinder), same(editableElement));
+    expect(editable.focusNode.hasFocus, isTrue);
+  });
+}
+
+Future<void> _pumpAutofocusInput(
+  WidgetTester tester, {
+  bool? automaticFocusReady,
+}) async {
+  final store = NodeStore()..apply(textInputSnapshot(autofocus: true));
+  Widget child = BonsaiFlutterView(store: store);
+  if (automaticFocusReady != null) {
+    child = ModalSheetAutomaticFocusScope(
+      ready: automaticFocusReady,
+      child: child,
+    );
+  }
+  await tester.pumpWidget(MaterialApp(home: Scaffold(body: child)));
+  await tester.pump();
 }
 
 Frame textInputSnapshot({
   int? maxUtf8Bytes,
   String text = '拼',
   int selectionOffset = 1,
+  bool autofocus = false,
 }) => Frame(
   runtimeEpoch: 91,
   baseRevision: 0,
@@ -719,6 +794,7 @@ Frame textInputSnapshot({
         maxUtf8Bytes: maxUtf8Bytes,
         text: text,
         selectionOffset: selectionOffset,
+        autofocus: autofocus,
       ),
       eventBindings: const [
         EventBinding(eventTag: EventTagId.textEdit, handlerId: 101),
@@ -751,6 +827,7 @@ TextInputProps textInputProps({
   String text = '拼',
   int selectionOffset = 1,
   int? maxUtf8Bytes,
+  bool autofocus = false,
 }) => TextInputProps(
   sessionId: sessionId,
   documentRevision: documentRevision,
@@ -769,6 +846,6 @@ TextInputProps textInputProps({
   obscureText: false,
   keyboardType: TextKeyboardType.text,
   inputAction: TextInputActionKind.done,
-  autofocus: false,
+  autofocus: autofocus,
   maxUtf8Bytes: maxUtf8Bytes,
 );
