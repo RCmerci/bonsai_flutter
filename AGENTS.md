@@ -1,3 +1,4 @@
 - Do not modify any ocaml files under `spec/` during development unless explicitly asked to modify the `.mli` files under `spec/`.
 - Do not modify any dune file during development unless explicitly asked.
 - If development is blocked because the `.mli` definitions under `spec/` are unclear or unreasonable, stop development immediately and report the specific spec issue, suggested changes, and rationale.
+- After committing and pushing code changes, update the iOS SDK repository from that pushed commit, then commit and push the generated iOS SDK update separately.

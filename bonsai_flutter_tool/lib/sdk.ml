@@ -5,10 +5,10 @@ let ( let* ) result f =
 ;;
 
 let supported_bonsai_flutter_version = "0.1.0~dev"
-let supported_bonsai_flutter_source_revision = "b570881ba27e8e376dc231ef014506d37ce8e662"
+let supported_bonsai_flutter_source_revision = "a51276a09eb1cdf9c87f07ac4c7558ed7c6b2d69"
 
 let supported_bonsai_flutter_source_sha256 =
-  "253c523dc0fb2d9ea931e82f3b9174613ff6519e3718ad650f550ae02593d4dc"
+  "8ab6845bdda0b53c450a14c7c1382c652e5af0093c38ddad8e867db4c6a36f91"
 ;;
 
 let supported_abi_version = "2"

@@ -603,9 +603,9 @@ let valid_sdk_manifest =
  (format_version 1)
  (bonsai_flutter_version 0.1.0~dev)
  (bonsai_flutter_source
-  b570881ba27e8e376dc231ef014506d37ce8e662
+  a51276a09eb1cdf9c87f07ac4c7558ed7c6b2d69
   sha256
-  253c523dc0fb2d9ea931e82f3b9174613ff6519e3718ad650f550ae02593d4dc)
+  8ab6845bdda0b53c450a14c7c1382c652e5af0093c38ddad8e867db4c6a36f91)
  (abi_version 2)
  (ocaml_version 5.1.1)
  (dune_version_range 3.17 4.0)
@@ -693,10 +693,10 @@ let test_sdk_rejects_framework_source_drift () =
   let stale_manifest =
     valid_sdk_manifest
     |> replace_once
-         ~pattern:"b570881ba27e8e376dc231ef014506d37ce8e662"
+         ~pattern:"a51276a09eb1cdf9c87f07ac4c7558ed7c6b2d69"
          ~replacement:"ea5e96b4dd38795a901720c80e1ffc9eb684b86c"
     |> replace_once
-         ~pattern:"253c523dc0fb2d9ea931e82f3b9174613ff6519e3718ad650f550ae02593d4dc"
+         ~pattern:"8ab6845bdda0b53c450a14c7c1382c652e5af0093c38ddad8e867db4c6a36f91"
          ~replacement:"c20edc77779c24c411854a19d234887615a6ba0a352784d35a970fb0a7d148a5"
     |> parse_sdk_manifest
   in
@@ -716,9 +716,9 @@ let test_sdk_rejects_unadvertised_framework_source_identity () =
     |> replace_once
          ~pattern:
            " (bonsai_flutter_source\n\
-           \  b570881ba27e8e376dc231ef014506d37ce8e662\n\
+           \  a51276a09eb1cdf9c87f07ac4c7558ed7c6b2d69\n\
            \  sha256\n\
-           \  253c523dc0fb2d9ea931e82f3b9174613ff6519e3718ad650f550ae02593d4dc)\n"
+           \  8ab6845bdda0b53c450a14c7c1382c652e5af0093c38ddad8e867db4c6a36f91)\n"
          ~replacement:""
     |> replace_once ~pattern:"(abi_version 2)" ~replacement:"(abi_version 1)"
     |> parse_sdk_manifest
@@ -965,7 +965,7 @@ let repository_lock ~digest ~source_digest ~package_digest ~archive_digest =
  (default_repository https://github.com/RCmerci/opam-repository.git c98b21e24c088665ccae4c3b53eadadd3b755b15)
  (cross_repository https://github.com/ocaml-cross/opam-cross-ios.git 8380b52b0154752c26c6e221c04fbced3320aa48)
  (compiler ocaml-base-compiler 5.1.1)
- (sdk_package bonsai_flutter_ios_sdk 0.1.0~dev.2))
+ (sdk_package bonsai_flutter_ios_sdk 0.1.0~dev.3))
 |}
     digest
     source_digest
@@ -1004,7 +1004,7 @@ let write_repository_fixture root =
   write_file
     (Filename.concat
        root
-       "packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.2/opam")
+       "packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.3/opam")
     {|opam-version: "2.0"
 synopsis: "Bonsai Flutter iPhoneOS SDK"
 maintainer: "bonsai_flutter contributors"
@@ -1030,7 +1030,7 @@ let test_ios_opam_repository_release_contract () =
   let meta =
     Filename.concat
       repository
-      "packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.2/opam"
+      "packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.3/opam"
   in
   let cross_compiler_opam =
     Filename.concat repository "packages/ocaml-ios64/ocaml-ios64.5.1.1/opam"
@@ -1046,7 +1046,7 @@ let test_ios_opam_repository_release_contract () =
   let sdk_files =
     Filename.concat
       repository
-      "packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.2/files"
+      "packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.3/files"
   in
   let sdk_manifest = Filename.concat sdk_files "manifest.sexp" in
   let installed_package_lock = Filename.concat sdk_files "package-lock.sexp" in
@@ -1072,9 +1072,9 @@ let test_ios_opam_repository_release_contract () =
     (contains ios_configuration "${ARCH}" || contains ios_configuration "${SUBARCH}");
   Alcotest.(check bool) "package universe lock" true (Sys.file_exists package_lock);
   Alcotest.(check bool) "source archive lock" true (Sys.file_exists source_archive_lock);
-  let expected_framework_revision = "b570881ba27e8e376dc231ef014506d37ce8e662" in
+  let expected_framework_revision = "a51276a09eb1cdf9c87f07ac4c7558ed7c6b2d69" in
   let expected_framework_sha256 =
-    "253c523dc0fb2d9ea931e82f3b9174613ff6519e3718ad650f550ae02593d4dc"
+    "8ab6845bdda0b53c450a14c7c1382c652e5af0093c38ddad8e867db4c6a36f91"
   in
   let framework_url_contents = read_file framework_url in
   Alcotest.(check bool)
@@ -1159,10 +1159,10 @@ let test_ios_opam_repository_release_contract () =
     (contains meta_contents "extra-source \"bonsai_flutter.tar.gz\""
      && contains
           meta_contents
-          "https://github.com/RCmerci/bonsai_flutter/archive/b570881ba27e8e376dc231ef014506d37ce8e662.tar.gz"
+          "https://github.com/RCmerci/bonsai_flutter/archive/a51276a09eb1cdf9c87f07ac4c7558ed7c6b2d69.tar.gz"
      && contains
           meta_contents
-          "sha256=253c523dc0fb2d9ea931e82f3b9174613ff6519e3718ad650f550ae02593d4dc");
+          "sha256=8ab6845bdda0b53c450a14c7c1382c652e5af0093c38ddad8e867db4c6a36f91");
   Alcotest.(check bool)
     "meta fetches checksummed runtime sources before the sandboxed build"
     true
@@ -1218,7 +1218,7 @@ let test_ios_opam_repository_release_contract () =
     true
     (contains
        sdk_builder_contents
-       "framework_source_sha256='253c523dc0fb2d9ea931e82f3b9174613ff6519e3718ad650f550ae02593d4dc'");
+       "framework_source_sha256='8ab6845bdda0b53c450a14c7c1382c652e5af0093c38ddad8e867db4c6a36f91'");
   Alcotest.(check bool)
     "runtime builder consumes opam-fetched archives"
     true
@@ -1502,7 +1502,7 @@ let test_toolchain_install_uses_locked_repository_and_exact_sdk () =
   *" switch list --short "*)
     test -z "${SWITCH_EXISTS:-}" || printf '%s\n' 'bonsai-flutter-ios' ;;
   *" switch create bonsai-flutter-ios "*) exit 0 ;;
-  *" install --switch=bonsai-flutter-ios --yes bonsai_flutter_ios_sdk.0.1.0~dev.2 "*)
+  *" install --switch=bonsai-flutter-ios --yes bonsai_flutter_ios_sdk.0.1.0~dev.3 "*)
     exit "${INSTALL_EXIT:-0}" ;;
   *) exit 64 ;;
 esac
@@ -1539,7 +1539,7 @@ esac
   Alcotest.(check bool)
     "exact SDK meta-package install"
     true
-    (contains (List.nth commands 2) "bonsai_flutter_ios_sdk.0.1.0~dev.2");
+    (contains (List.nth commands 2) "bonsai_flutter_ios_sdk.0.1.0~dev.3");
   Alcotest.(check bool)
     "non-interactive depext handling"
     true

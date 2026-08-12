@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Updated the immutable iPhoneOS SDK source binding to include configurable
+  Swipe Action and host clip border radii, and published the refreshed SDK
+  meta-package as `0.1.0~dev.3` without changing the native ABI or build recipe.
 - Bound the immutable iPhoneOS SDK manifest to the exact Bonsai Flutter source
   revision and archive checksum, advanced its protocol ABI and build recipe to
   revision 2, published the SDK recipe as `0.1.0~dev.2`, and added one
