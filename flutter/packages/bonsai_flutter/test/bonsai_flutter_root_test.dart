@@ -10,6 +10,14 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'support/pump_bonsai.dart';
 
+const duplicateKeyDiagnostic =
+    'duplicate key "journal-row-focus:duplicate" in candidate children\n\n'
+    'Widget tree path:\n'
+    '  Native_widget[key="journal-list"]\n\n'
+    'Duplicate siblings:\n'
+    '  child[1]: Focus_scope[key="journal-row-focus:duplicate"]\n'
+    '  child[2]: Focus_scope[key="journal-row-focus:duplicate"]';
+
 void main() {
   testWidgets('root owns runtime startup, event flushing, and presentation', (
     tester,
@@ -237,6 +245,52 @@ void main() {
       expect(runtime.pressBatchCount, 2);
       expect(runtime.presentedRevisions.last, 2);
       expect(runtime.presentedRevisions, containsAllInOrder([1, 2]));
+    },
+  );
+
+  testWidgets(
+    'fatal Duplicate_key surface preserves the widget-tree diagnostic',
+    (tester) async {
+      final runtime = _OrderedRuntimeSession();
+      Object? surfacedError;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: BonsaiFlutterRoot(
+            config: Uint8List(0),
+            runtimeStarter: (_) async => runtime,
+            errorBuilder: (context, error) {
+              surfacedError = error;
+              return Text(error.toString());
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+      runtime.emitFatal(
+        const RuntimeDiagnostic(
+          code: RuntimeErrorCode.duplicateKey,
+          message: duplicateKeyDiagnostic,
+        ),
+      );
+      await tester.pump();
+
+      expect(surfacedError, isA<BonsaiRuntimeException>());
+      final exception = surfacedError! as BonsaiRuntimeException;
+      expect(exception.status, RuntimeStatus.fatalError);
+      expect(exception.code, RuntimeErrorCode.duplicateKey);
+      expect(exception.message, duplicateKeyDiagnostic);
+      expect(find.textContaining('Widget tree path:'), findsOneWidget);
+      expect(
+        find.textContaining('Native_widget[key="journal-list"]'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('child[1]: Focus_scope'), findsOneWidget);
+      expect(find.textContaining('child[2]: Focus_scope'), findsOneWidget);
+      expect(
+        find.textContaining('OCaml pump returned no presentation token'),
+        findsNothing,
+      );
     },
   );
 
@@ -1225,6 +1279,10 @@ final class _OrderedRuntimeSession implements RuntimeSession {
         recoverableDiagnostic: null,
       ),
     );
+  }
+
+  void emitFatal(RuntimeDiagnostic diagnostic) {
+    _updates.add(RuntimeFatalDiagnostic(diagnostic));
   }
 
   @override

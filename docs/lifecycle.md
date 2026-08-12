@@ -92,6 +92,20 @@ no-diff pump and a recoverable dropped-input pump. Renderer revision advances
 only when bytes are emitted. No second pump is accepted before the exact
 outstanding token is resolved.
 
+A duplicate sibling key fails reconciliation before presentation reservation.
+`Duplicate_key` is an application/widget-tree invariant violation and makes the
+current runtime session terminal. The rejected candidate is never presented;
+the fatal pump returns presentation ID zero, renderer revision zero, and no
+frame bytes. Its diagnostic carries the deterministic OCaml root-to-parent
+widget path plus both duplicate child occurrences. This metadata is not part
+of a successful frame.
+
+Fatal pump responses carry no presentation token. Every non-fatal pump
+response, including recoverable dropped-input work and successful no-diff
+work, must carry a valid positive token. The native bridge and Dart worker both
+enforce this invariant without replacing a correctly classified fatal OCaml
+diagnostic.
+
 ## Presentation success
 
 The token is `(presentation_id, renderer_revision)`. The Flutter root applies

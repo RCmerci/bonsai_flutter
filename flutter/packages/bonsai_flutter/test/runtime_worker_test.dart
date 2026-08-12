@@ -8,6 +8,14 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_runtime_native.dart';
 
+const duplicateKeyDiagnostic =
+    'duplicate key "journal-row-focus:duplicate" in candidate children\n\n'
+    'Widget tree path:\n'
+    '  Native_widget[key="journal-list"]\n\n'
+    'Duplicate siblings:\n'
+    '  child[1]: Focus_scope[key="journal-row-focus:duplicate"]\n'
+    '  child[2]: Focus_scope[key="journal-row-focus:duplicate"]';
+
 final class WorkerHarness {
   WorkerHarness({
     required Iterable<int> clockReadings,
@@ -322,7 +330,7 @@ void main() {
   });
 
   test(
-    'fatal native status emits one terminal update and disposes once',
+    'fatal Duplicate_key preserves its diagnostic and disposes once',
     () async {
       final harness = WorkerHarness(
         clockReadings: [10],
@@ -331,8 +339,8 @@ void main() {
             presentationId: 0,
             revision: 0,
             status: NativeStatus.fatalError,
-            errorCode: NativeRuntimeErrorCode.ocamlException,
-            errorMessage: 'boom',
+            errorCode: NativeRuntimeErrorCode.duplicateKey,
+            errorMessage: duplicateKeyDiagnostic,
           ),
         ],
       );
@@ -342,8 +350,45 @@ void main() {
       await harness.send(const VsyncGranted(1));
       await harness.send(const VsyncGranted(1));
 
-      expect(harness.updates.whereType<RuntimeFatalDiagnostic>(), hasLength(1));
+      final fatal = harness.updates.whereType<RuntimeFatalDiagnostic>().single;
+      expect(fatal.diagnostic.code, RuntimeErrorCode.duplicateKey);
+      expect(fatal.diagnostic.message, duplicateKeyDiagnostic);
+      expect(
+        fatal.diagnostic.message,
+        isNot(contains('Native pump returned no presentation token')),
+      );
       expect(harness.native.disposeCount, 1);
+      expect(harness.worker.state, RuntimeWorkerState.terminal);
+    },
+  );
+
+  test(
+    'non-fatal pump without a token is rejected at the Dart boundary',
+    () async {
+      final harness = WorkerHarness(
+        clockReadings: [10],
+        pumpOutputs: [
+          cycle(
+            presentationId: 0,
+            revision: 0,
+            status: NativeStatus.recoverableError,
+            errorCode: NativeRuntimeErrorCode.staleEvent,
+            errorMessage: 'recoverable response without a token',
+          ),
+        ],
+      );
+
+      await harness.send(
+        const VisibilityChanged(generation: 1, eligible: true),
+      );
+      await harness.send(const VsyncGranted(1));
+
+      final fatal = harness.updates.whereType<RuntimeFatalDiagnostic>().single;
+      expect(fatal.diagnostic.code, RuntimeErrorCode.invalidPresentation);
+      expect(
+        fatal.diagnostic.message,
+        'Native pump returned no presentation token',
+      );
       expect(harness.worker.state, RuntimeWorkerState.terminal);
     },
   );

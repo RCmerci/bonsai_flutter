@@ -203,6 +203,11 @@ let driver_error_metadata error =
   let status, error_code =
     match error with
     | Driver.Event_error
+        (Bonsai_flutter_runtime.Event_dispatcher.Handler_error
+           (Bonsai_flutter_runtime.Runtime_error.Duplicate_key _))
+    | Runtime_error (Bonsai_flutter_runtime.Runtime_error.Duplicate_key _) ->
+      Fatal_error, 3
+    | Driver.Event_error
         (Bonsai_flutter_runtime.Event_dispatcher.Handler_error runtime_error)
     | Runtime_error runtime_error ->
       let error_code =

@@ -22,6 +22,7 @@ struct bf_runtime {
   bf_allocation *allocations;
   size_t allocation_count;
   char last_error[256];
+  char *last_error_detail;
   bf_error_code last_error_code;
 #if defined(BF_WITH_OCAML)
   uint64_t backend_handle;
@@ -31,26 +32,41 @@ struct bf_runtime {
 static void bf_store_error(bf_runtime *runtime,
                            bf_error_code error_code,
                            const char *message) {
+  size_t length;
+  int preserve_detail = 0;
+
   if (runtime == NULL) {
     return;
   }
-#if defined(NDEBUG)
-  (void)message;
-  (void)snprintf(runtime->last_error,
-                 sizeof(runtime->last_error),
-                 "bonsai_flutter runtime error %d",
-                 (int)error_code);
-#else
-  size_t length;
+  free(runtime->last_error_detail);
+  runtime->last_error_detail = NULL;
+  preserve_detail = error_code == BF_ERROR_DUPLICATE_KEY;
   if (message == NULL) {
     message = "bonsai_flutter runtime error";
   }
-  length = strlen(message);
-  if (length >= sizeof(runtime->last_error)) {
-    length = sizeof(runtime->last_error) - 1;
+  if (preserve_detail) {
+    length = strlen(message);
+    runtime->last_error_detail = (char *)malloc(length + 1);
+    if (runtime->last_error_detail != NULL) {
+      memcpy(runtime->last_error_detail, message, length + 1);
+    }
   }
-  memcpy(runtime->last_error, message, length);
-  runtime->last_error[length] = '\0';
+#if defined(NDEBUG)
+  if (runtime->last_error_detail == NULL) {
+    (void)snprintf(runtime->last_error,
+                   sizeof(runtime->last_error),
+                   "bonsai_flutter runtime error %d",
+                   (int)error_code);
+  }
+#else
+  if (runtime->last_error_detail == NULL) {
+    length = strlen(message);
+    if (length >= sizeof(runtime->last_error)) {
+      length = sizeof(runtime->last_error) - 1;
+    }
+    memcpy(runtime->last_error, message, length);
+    runtime->last_error[length] = '\0';
+  }
 #endif
   runtime->last_error_code = error_code;
 }
@@ -106,7 +122,8 @@ static uint8_t *bf_allocate_output(bf_runtime *runtime, size_t length) {
 static bf_status bf_apply_ocaml_response(bf_runtime *runtime,
                                          bf_output_buffer *output,
                                          bf_status returned_status,
-                                         bf_ocaml_response *response) {
+                                         bf_ocaml_response *response,
+                                         int requires_presentation_id) {
   uint8_t *data = NULL;
 
   if (returned_status != response->status) {
@@ -129,6 +146,14 @@ static bf_status bf_apply_ocaml_response(bf_runtime *runtime,
     bf_output_reset(output, returned_status, response->error_code);
     bf_ocaml_bridge_response_release(response);
     return returned_status;
+  }
+  if (requires_presentation_id && response->presentation_id == 0) {
+    bf_ocaml_bridge_response_release(response);
+    return bf_set_error(runtime,
+                        output,
+                        BF_STATUS_FATAL_ERROR,
+                        BF_ERROR_OCAML_EXCEPTION,
+                        "OCaml pump returned no presentation token");
   }
   if (response->length != 0 && response->data == NULL) {
     bf_ocaml_bridge_response_release(response);
@@ -240,7 +265,7 @@ bf_status bf_runtime_pump(bf_runtime *runtime,
                              input,
                              input_length,
                              &response);
-    return bf_apply_ocaml_response(runtime, output, status, &response);
+    return bf_apply_ocaml_response(runtime, output, status, &response, 1);
   }
 #else
   (void)input;
@@ -283,7 +308,7 @@ bf_status bf_runtime_presentation_succeeded(bf_runtime *runtime,
                                                revision,
                                                monotonic_now_ns,
                                                &response);
-    return bf_apply_ocaml_response(runtime, output, status, &response);
+    return bf_apply_ocaml_response(runtime, output, status, &response, 0);
   }
 #else
   (void)presentation_id;
@@ -322,7 +347,7 @@ bf_status bf_runtime_presentation_rejected(bf_runtime *runtime,
         revision,
         rejection_reason,
         &response);
-    return bf_apply_ocaml_response(runtime, output, status, &response);
+    return bf_apply_ocaml_response(runtime, output, status, &response, 0);
   }
 #else
   (void)presentation_id;
@@ -340,11 +365,14 @@ bf_status bf_runtime_get_last_error(bf_runtime *runtime,
                                     bf_output_buffer *output) {
   size_t length;
   uint8_t *data;
+  const char *message;
 
   if (runtime == NULL || output == NULL) {
     return BF_STATUS_FATAL_ERROR;
   }
-  length = strlen(runtime->last_error);
+  message = runtime->last_error_detail == NULL ? runtime->last_error
+                                               : runtime->last_error_detail;
+  length = strlen(message);
   data = bf_allocate_output(runtime, length);
   if (length != 0 && data == NULL) {
     return bf_set_error(runtime,
@@ -354,7 +382,7 @@ bf_status bf_runtime_get_last_error(bf_runtime *runtime,
                         "Failed to allocate the error buffer");
   }
   if (length != 0) {
-    memcpy(data, runtime->last_error, length);
+    memcpy(data, message, length);
   }
   bf_output_reset(output, BF_STATUS_OK, runtime->last_error_code);
   output->data = data;
@@ -402,6 +430,7 @@ void bf_runtime_destroy(bf_runtime *runtime) {
     free(allocation);
     allocation = next;
   }
+  free(runtime->last_error_detail);
   memset(runtime, 0, sizeof(bf_runtime));
   free(runtime);
 }

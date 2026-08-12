@@ -41,50 +41,61 @@ let allocate_handler_id t =
 ;;
 
 let validate_unique_keys root =
-  let rec validate widget =
+  let rec validate reversed_parent_path widget =
     let view = Widget.Private.view widget in
+    let reversed_parent_path =
+      { Runtime_error.kind = view.kind; key = view.key } :: reversed_parent_path
+    in
     match Array.length view.children with
     | 0 -> Ok ()
-    | 1 -> validate view.children.(0).widget
-    | _ -> validate_children view
-  and validate_children view =
+    | 1 -> validate reversed_parent_path view.children.(0).widget
+    | _ -> validate_children reversed_parent_path view
+  and validate_children reversed_parent_path view =
     let keys = ref None in
-    let observe_key key =
+    let observe_key index child_view key =
       match !keys with
       | None ->
         let table = Key_table.create (Array.length view.children) in
-        Key_table.add table key ();
+        Key_table.add table key (index, child_view.Widget.Private.kind);
         keys := Some table;
         Ok ()
-      | Some table when Key_table.mem table key ->
-        Error
-          (Runtime_error.Duplicate_key
-             { parent_kind = Widget.Private.Kind.to_string view.kind; key })
       | Some table ->
-        Key_table.add table key ();
-        Ok ()
+        (match Key_table.find_opt table key with
+         | Some (first_index, first_kind) ->
+           Error
+             (Runtime_error.Duplicate_key
+                { key
+                ; side = Runtime_error.Candidate
+                ; parent_path = List.rev reversed_parent_path
+                ; first = { child_index = first_index; kind = first_kind }
+                ; second = { child_index = index; kind = child_view.kind }
+                })
+         | None ->
+           Key_table.add table key (index, child_view.kind);
+           Ok ())
     in
     let rec check_children index =
       if index = Array.length view.children
       then Ok ()
       else (
         let child = view.children.(index) in
-        match (Widget.Private.view child.widget).key with
+        let child_view = Widget.Private.view child.widget in
+        match child_view.key with
         | None ->
-          (match validate child.widget with
+          (match validate reversed_parent_path child.widget with
            | Error _ as error -> error
            | Ok () -> check_children (index + 1))
         | Some key ->
-          (match observe_key key with
+          (match observe_key index child_view key with
            | Error _ as error -> error
            | Ok () ->
-             (match validate child.widget with
+             (match validate reversed_parent_path child.widget with
               | Error _ as error -> error
               | Ok () -> check_children (index + 1))))
     in
     check_children 0
   in
-  validate root
+  validate [] root
 ;;
 
 let binding_equal

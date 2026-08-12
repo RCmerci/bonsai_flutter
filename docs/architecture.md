@@ -232,6 +232,15 @@ are emitted. At most one token is unresolved, and a frame is based on the last
 revision successfully presented by Flutter. Rejection burns any candidate
 revision and forces a full snapshot; it never causes partial mutation.
 
+Duplicate sibling keys are terminal widget-tree invariant violations rather
+than recoverable input errors. OCaml reports `Duplicate_key` with a structured,
+deterministic root-to-parent widget path and both duplicate child occurrences.
+The failed candidate is never presented: its fatal boundary result has token
+zero, revision zero, and no bytes, while every non-fatal pump result has a
+positive token. The path exists only as reconciliation error context and does
+not affect identity, allocation, patches, fingerprints, or successful wire
+frames.
+
 ## Foreground scheduling
 
 Flutter owns a recursive `SchedulerBinding.scheduleFrameCallback` loop.

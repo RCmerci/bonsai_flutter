@@ -97,6 +97,16 @@ let check_int64 ~expected ~actual label =
   then fail "%s: expected %Ld, got %Ld" label expected actual
 ;;
 
+let check_kind ~expected ~actual label =
+  if not (Widget.Private.Kind.equal expected actual)
+  then
+    fail
+      "%s: expected %s, got %s"
+      label
+      (Widget.Private.Kind.to_string expected)
+      (Widget.Private.Kind.to_string actual)
+;;
+
 let ok = function
   | Ok value -> value
   | Error error -> fail "unexpected error: %s" (Runtime_error.to_string error)
@@ -455,8 +465,40 @@ let test_duplicate_keys_fail_without_consuming_ids () =
        ~base_handler_frame:None
        invalid
    with
-   | Error (Runtime_error.Duplicate_key { key; _ }) ->
-     check (Key.equal key duplicate) "duplicate error reported the wrong key"
+   | Error (Runtime_error.Duplicate_key { key; side; parent_path; first; second }) ->
+     check (Key.equal key duplicate) "duplicate error reported the wrong key";
+     check (side = Runtime_error.Candidate) "duplicate error reported the wrong side";
+     (match parent_path with
+      | [ { Runtime_error.kind; key = None } ] ->
+        check_kind
+          ~expected:Widget.Private.Kind.Column
+          ~actual:kind
+          "root duplicate parent kind"
+      | _ -> fail "root duplicate error reported the wrong parent path");
+     check_int ~expected:0 ~actual:first.child_index "first duplicate child index";
+     check_kind
+       ~expected:Widget.Private.Kind.Text
+       ~actual:first.kind
+       "first duplicate child kind";
+     check_int ~expected:1 ~actual:second.child_index "second duplicate child index";
+     check_kind
+       ~expected:Widget.Private.Kind.Text
+       ~actual:second.kind
+       "second duplicate child kind";
+     let formatted =
+       Runtime_error.to_string
+         (Runtime_error.Duplicate_key { key; side; parent_path; first; second })
+     in
+     check
+       (String.equal
+          formatted
+          "duplicate key \"duplicate\" in candidate children\n\n\
+           Widget tree path:\n\
+          \  Column\n\n\
+           Duplicate siblings:\n\
+          \  child[0]: Text[key=\"duplicate\"]\n\
+          \  child[1]: Text[key=\"duplicate\"]")
+       "root duplicate error formatting was not deterministic"
    | Error error -> fail "wrong duplicate-key error: %s" (Runtime_error.to_string error)
    | Ok _ -> fail "duplicate keys reconciled successfully");
   let valid =
@@ -475,10 +517,17 @@ let test_duplicate_keys_fail_without_consuming_ids () =
 
 let test_nested_duplicate_keys_fail () =
   let reconciler = Reconciler.create ~runtime_epoch:48L in
+  let root_key = Key.string "root" in
+  let parent_key = Key.string "nested-parent" in
   let key = Key.int 7 in
   let invalid =
     Widget.column
-      [ Widget.column [ Widget.empty ~key (); Widget.text ~key "same nested parent" ] ]
+      ~key:root_key
+      [ Widget.center
+          (Widget.row
+             ~key:parent_key
+             [ Widget.empty ~key (); Widget.text ~key "same nested parent" ])
+      ]
   in
   match
     Reconciler.reconcile
@@ -489,9 +538,91 @@ let test_nested_duplicate_keys_fail () =
       ~base_handler_frame:None
       invalid
   with
-  | Error (Runtime_error.Duplicate_key _) -> ()
+  | Error
+      (Runtime_error.Duplicate_key { key = actual_key; side; parent_path; first; second })
+    ->
+    check (Key.equal actual_key key) "nested duplicate reported the wrong key";
+    check (side = Runtime_error.Candidate) "nested duplicate reported the wrong side";
+    (match parent_path with
+     | [ { Runtime_error.kind = root_kind; key = Some actual_root_key }
+       ; { kind = center_kind; key = None }
+       ; { kind = parent_kind; key = Some actual_parent_key }
+       ] ->
+       check_kind
+         ~expected:Widget.Private.Kind.Column
+         ~actual:root_kind
+         "nested root kind";
+       check (Key.equal actual_root_key root_key) "nested root key was not preserved";
+       check_kind
+         ~expected:Widget.Private.Kind.Center
+         ~actual:center_kind
+         "nested unkeyed ancestor kind";
+       check_kind
+         ~expected:Widget.Private.Kind.Row
+         ~actual:parent_kind
+         "nested parent kind";
+       check
+         (Key.equal actual_parent_key parent_key)
+         "nested parent key was not preserved"
+     | _ -> fail "nested duplicate error reported the wrong root-to-parent path");
+    check_int ~expected:0 ~actual:first.child_index "nested first duplicate child index";
+    check_kind
+      ~expected:Widget.Private.Kind.Empty
+      ~actual:first.kind
+      "nested first duplicate child kind";
+    check_int ~expected:1 ~actual:second.child_index "nested second duplicate child index";
+    check_kind
+      ~expected:Widget.Private.Kind.Text
+      ~actual:second.kind
+      "nested second duplicate child kind";
+    check
+      (String.equal
+         (Runtime_error.to_string
+            (Runtime_error.Duplicate_key
+               { key = actual_key; side; parent_path; first; second }))
+         "duplicate key 7 in candidate children\n\n\
+          Widget tree path:\n\
+         \  Column[key=\"root\"]\n\
+         \  > Center\n\
+         \  > Row[key=\"nested-parent\"]\n\n\
+          Duplicate siblings:\n\
+         \  child[0]: Empty[key=7]\n\
+         \  child[1]: Text[key=7]")
+      "nested duplicate error formatting was not deterministic"
   | Error error -> fail "wrong nested duplicate error: %s" (Runtime_error.to_string error)
   | Ok _ -> fail "nested duplicate keys reconciled successfully"
+;;
+
+let test_existing_duplicate_key_formatting () =
+  (* Mounted trees are abstract and can only be produced by successful
+     reconciliation, which validates candidate keys before allocating nodes.
+     An existing-side duplicate therefore cannot be constructed through the
+     public reconciler API. This formatter test covers the structured side
+     without adding an impossible production path solely for testing. *)
+  let key = Key.string "existing-duplicate" in
+  let error =
+    Runtime_error.Duplicate_key
+      { key
+      ; side = Runtime_error.Existing
+      ; parent_path =
+          [ { Runtime_error.kind = Widget.Private.Kind.Row
+            ; key = Some (Key.string "mounted-parent")
+            }
+          ]
+      ; first = { child_index = 2; kind = Widget.Private.Kind.Text }
+      ; second = { child_index = 5; kind = Widget.Private.Kind.Empty }
+      }
+  in
+  check
+    (String.equal
+       (Runtime_error.to_string error)
+       "duplicate key \"existing-duplicate\" in existing children\n\n\
+        Widget tree path:\n\
+       \  Row[key=\"mounted-parent\"]\n\n\
+        Duplicate siblings:\n\
+       \  child[2]: Text[key=\"existing-duplicate\"]\n\
+       \  child[5]: Empty[key=\"existing-duplicate\"]")
+    "existing duplicate side formatting was not deterministic"
 ;;
 
 let test_mixed_siblings_detect_duplicates () =
@@ -514,8 +645,16 @@ let test_mixed_siblings_detect_duplicates () =
       ~base_handler_frame:None
       widget
   with
-  | Error (Runtime_error.Duplicate_key { parent_kind; key = actual_key }) ->
-    check (String.equal parent_kind "Column") "duplicate reported the wrong parent kind";
+  | Error
+      (Runtime_error.Duplicate_key
+         { parent_path; key = actual_key; side = Runtime_error.Candidate; _ }) ->
+    (match List.rev parent_path with
+     | { Runtime_error.kind; _ } :: _ ->
+       check_kind
+         ~expected:Widget.Private.Kind.Column
+         ~actual:kind
+         "mixed duplicate parent kind"
+     | [] -> fail "mixed duplicate omitted its parent path");
     check (Key.equal actual_key key) "duplicate reported the wrong key"
   | Error error -> fail "wrong mixed-sibling error: %s" (Runtime_error.to_string error)
   | Ok _ -> fail "mixed keyed siblings accepted a duplicate"
@@ -602,7 +741,10 @@ let test_optimized_key_validation_matches_reference () =
           widget
       with
       | Ok _ -> None
-      | Error (Runtime_error.Duplicate_key { parent_kind; key }) -> Some (parent_kind, key)
+      | Error (Runtime_error.Duplicate_key { parent_path; key; _ }) ->
+        (match List.rev parent_path with
+         | { Runtime_error.kind; _ } :: _ -> Some (Widget.Private.Kind.to_string kind, key)
+         | [] -> fail "duplicate error omitted its parent path")
       | Error error -> fail "reference case returned %s" (Runtime_error.to_string error)
     in
     match expected, actual with
@@ -1578,6 +1720,7 @@ let tests =
   ; ( "duplicate keys fail without consuming IDs"
     , test_duplicate_keys_fail_without_consuming_ids )
   ; "nested duplicate keys fail", test_nested_duplicate_keys_fail
+  ; "existing duplicate key formatting", test_existing_duplicate_key_formatting
   ; "mixed siblings detect duplicates", test_mixed_siblings_detect_duplicates
   ; ( "single-child ancestor still validates nested duplicates"
     , test_single_child_ancestor_still_validates_nested_duplicates )

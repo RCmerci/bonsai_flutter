@@ -1,9 +1,26 @@
 (** Structured errors that may safely cross the runtime boundary. *)
 
+type tree_side =
+  | Existing
+  | Candidate
+
+type path_segment =
+  { kind : Bonsai_flutter_ui.Widget.Private.Kind.t
+  ; key : Bonsai_flutter_ui.Key.t option
+  }
+
+type duplicate_occurrence =
+  { child_index : int
+  ; kind : Bonsai_flutter_ui.Widget.Private.Kind.t
+  }
+
 type t =
   | Duplicate_key of
-      { parent_kind : string
-      ; key : Bonsai_flutter_ui.Key.t
+      { key : Bonsai_flutter_ui.Key.t
+      ; side : tree_side
+      ; parent_path : path_segment list
+      ; first : duplicate_occurrence
+      ; second : duplicate_occurrence
       }
   | Invalid_patch of string
   | Revision_mismatch of

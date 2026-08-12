@@ -17,7 +17,15 @@ uint64_t bf_mock_last_destroyed_handle(void);
 int main(void) {
   const uint8_t config[] = "counter";
   const uint8_t recoverable_input[] = {0xee};
+  const uint8_t recoverable_without_token_input[] = {0xcc};
+  const uint8_t fatal_duplicate_input[] = {0xdd};
   const uint8_t no_diff_input[] = {0};
+  const char duplicate_diagnostic[] =
+      "duplicate key \"journal-row-focus:duplicate\" in candidate children\n\n"
+      "Widget tree path:\n  Native_widget[key=\"journal-list\"]\n\n"
+      "Duplicate siblings:\n"
+      "  child[1]: Focus_scope[key=\"journal-row-focus:duplicate\"]\n"
+      "  child[2]: Focus_scope[key=\"journal-row-focus:duplicate\"]";
   bf_output_buffer output;
   bf_runtime *runtime =
       bf_runtime_create(config, sizeof(config) - 1);
@@ -96,6 +104,48 @@ int main(void) {
   assert(output.revision == 2);
   assert(output.length == 0);
   assert(output.data == NULL);
+
+  assert(bf_runtime_pump(runtime,
+                         41,
+                         fatal_duplicate_input,
+                         sizeof(fatal_duplicate_input),
+                         &output) == BF_STATUS_FATAL_ERROR);
+  assert(output.status == BF_STATUS_FATAL_ERROR);
+  assert(output.error_code == BF_ERROR_DUPLICATE_KEY);
+  assert(output.presentation_id == 0);
+  assert(output.revision == 0);
+  assert(output.length == 0);
+  assert(output.data == NULL);
+  assert(bf_runtime_get_last_error(runtime, &output) == BF_STATUS_OK);
+  assert(output.error_code == BF_ERROR_DUPLICATE_KEY);
+  assert(output.length == strlen(duplicate_diagnostic));
+  assert(memcmp(output.data, duplicate_diagnostic, output.length) == 0);
+  bf_buffer_free(runtime, output.data);
+
+  assert(bf_runtime_pump(runtime,
+                         42,
+                         recoverable_without_token_input,
+                         sizeof(recoverable_without_token_input),
+                         &output) == BF_STATUS_FATAL_ERROR);
+  assert(output.status == BF_STATUS_FATAL_ERROR);
+  assert(output.error_code == BF_ERROR_OCAML_EXCEPTION);
+  assert(output.presentation_id == 0);
+  assert(output.revision == 0);
+  assert(output.length == 0);
+  assert(output.data == NULL);
+  assert(bf_runtime_get_last_error(runtime, &output) == BF_STATUS_OK);
+#if defined(BF_TEST_RELEASE_RUNTIME)
+  assert(output.length == strlen("bonsai_flutter runtime error 9"));
+  assert(memcmp(output.data,
+                "bonsai_flutter runtime error 9",
+                output.length) == 0);
+#else
+  assert(output.length == strlen("OCaml pump returned no presentation token"));
+  assert(memcmp(output.data,
+                "OCaml pump returned no presentation token",
+                output.length) == 0);
+#endif
+  bf_buffer_free(runtime, output.data);
 
   assert(bf_runtime_pump(runtime, -1, NULL, 0, &output) ==
          BF_STATUS_RECOVERABLE_ERROR);

@@ -68,14 +68,23 @@ typedef struct bf_output_buffer {
 } bf_output_buffer;
 ```
 
-Every successful logical pump returns a positive presentation ID, even when
-`data == NULL` and `length == 0`. The presentation ID identifies the
-lifecycle transaction; the renderer revision identifies wire state and
-changes only when frame bytes are emitted. Success or rejection must echo the
-exact unresolved pair.
+Every non-fatal logical pump returns a positive presentation ID, even when
+`data == NULL` and `length == 0`. The presentation ID identifies the lifecycle
+transaction; the renderer revision identifies wire state and changes only
+when frame bytes are emitted. Success or rejection must echo the exact
+unresolved pair.
 
 A recoverable input error may still return a valid token and optional recovery
-bytes. Fatal status terminates the ordered runtime session.
+bytes. Fatal status terminates the ordered runtime session and returns
+presentation ID zero, renderer revision zero, and no frame bytes.
+
+`Duplicate_key` retains error code `3` and is fatal. The callback bridge skips
+the positive-token check for fatal results, preserves the complete centrally
+formatted OCaml diagnostic, and therefore does not replace it with `OCaml pump
+returned no presentation token`. Both the callback bridge and the native
+facade reject any non-fatal pump response with token zero. Complete
+`Duplicate_key` diagnostics are retained across the native error buffer even
+in release builds.
 
 ## Buffer ownership
 
@@ -146,6 +155,11 @@ positive `int64` handle; the process-wide OCaml table maps it to a `Driver.t`.
 The ABI never throws across C. Unknown entrypoints or handles, invalid clocks,
 malformed event batches, presentation mismatches, driver failures, and OCaml
 exceptions become stable status and error-code data.
+
+Duplicate-key diagnostics contain reconciliation-side data, the ordered
+root-to-parent widget path, optional path keys, and both duplicate child indexes
+and kinds. That path is OCaml-only error metadata and is never serialized into
+a successful renderer frame; Dart does not reconstruct it.
 
 The complete-object symbol audit requires every ABI v2 operation and rejects
 the removed v1 runtime-driving symbols. The generated Dart binding check

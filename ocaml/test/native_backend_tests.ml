@@ -97,6 +97,21 @@ let trace_fixture _handlers _graph =
 
 let broken_component _handlers _graph = failwith "intentional startup failure"
 
+let duplicate_key_component _handlers _graph =
+  let duplicate = Ui.Key.string "journal-row-focus:duplicate" in
+  Bonsai.Cont.return
+    (Ui.Widget.column
+       ~key:(Ui.Key.string "runtime-root")
+       [ Ui.Widget.center
+           (Ui.Widget.row
+              ~key:(Ui.Key.string "runtime-parent")
+              [ Ui.Widget.text "before"
+              ; Ui.Widget.text ~key:duplicate "first"
+              ; Ui.Widget.empty ~key:duplicate ()
+              ])
+       ])
+;;
+
 let () =
   Entrypoint.For_testing.clear ();
   Entrypoint.register
@@ -105,6 +120,9 @@ let () =
   Entrypoint.register
     ~name:(ID.Application.Entrypoint_name.of_string "broken")
     (App.create broken_component);
+  Entrypoint.register
+    ~name:(ID.Application.Entrypoint_name.of_string "duplicate-key")
+    (App.create duplicate_key_component);
   let created = Native_backend.create (Bytes.of_string "counter") in
   require (created.status = Native_backend.Ok) "registered entrypoint did not create";
   require
@@ -277,6 +295,12 @@ let () =
       let idle = Native_backend.pump runtime.handle 1L Bytes.empty in
       require (idle.status = Native_backend.Ok) "traced idle pump failed";
       require (Bytes.length idle.bytes = 0) "traced idle pump emitted a frame";
+      require
+        (ID.Runtime.Presentation_id.compare
+           idle.presentation_id
+           ID.Runtime.Presentation_id.zero
+         > 0)
+        "successful no-diff pump returned no presentation token";
       let idle_presented =
         Native_backend.presentation_succeeded
           runtime.handle
@@ -349,6 +373,97 @@ let () =
   require
     (Native_backend.For_testing.runtime_count () = 0)
     "traced runtime destroy retained native backend handles";
+  let recoverable_runtime = Native_backend.create (Bytes.of_string "counter") in
+  require
+    (recoverable_runtime.status = Native_backend.Ok)
+    "recoverable classification runtime did not create";
+  let recoverable_initial =
+    Native_backend.pump recoverable_runtime.handle 0L Bytes.empty
+  in
+  require
+    (recoverable_initial.status = Native_backend.Ok)
+    "recoverable classification initial pump failed";
+  let recoverable_presented =
+    Native_backend.presentation_succeeded
+      recoverable_runtime.handle
+      recoverable_initial.presentation_id
+      recoverable_initial.revision
+      0L
+  in
+  require
+    (recoverable_presented.status = Native_backend.Ok)
+    "recoverable classification initial presentation failed";
+  let recoverable =
+    Native_backend.pump recoverable_runtime.handle 1L (Bytes.of_string "\255")
+  in
+  require
+    (recoverable.status = Native_backend.Recoverable_error)
+    "malformed input no longer retained its recoverable classification";
+  require
+    (ID.Ffi.Error_code.equal recoverable.error_code (ID.Ffi.Error_code.of_int 1))
+    "malformed input changed its existing error code";
+  require
+    (ID.Runtime.Presentation_id.compare
+       recoverable.presentation_id
+       ID.Runtime.Presentation_id.zero
+     > 0)
+    "recoverable dropped-input pump returned no presentation token";
+  Native_backend.destroy recoverable_runtime.handle;
+  let duplicate_runtime = Native_backend.create (Bytes.of_string "duplicate-key") in
+  require
+    (duplicate_runtime.status = Native_backend.Ok)
+    "duplicate-key runtime did not create";
+  let duplicate = Native_backend.pump duplicate_runtime.handle 0L Bytes.empty in
+  require
+    (duplicate.status = Native_backend.Fatal_error)
+    "Duplicate_key pump was not classified as fatal";
+  require
+    (ID.Ffi.Error_code.equal duplicate.error_code (ID.Ffi.Error_code.of_int 3))
+    "Duplicate_key changed its existing error code";
+  require
+    (ID.Runtime.Presentation_id.equal
+       duplicate.presentation_id
+       ID.Runtime.Presentation_id.zero)
+    "fatal Duplicate_key pump returned a presentation token";
+  require
+    (ID.Runtime.Renderer_revision.equal
+       duplicate.revision
+       ID.Runtime.Renderer_revision.zero)
+    "fatal Duplicate_key pump returned a renderer revision";
+  require (Bytes.length duplicate.bytes = 0) "fatal Duplicate_key pump returned bytes";
+  require_substring
+    duplicate.error
+    "journal-row-focus:duplicate"
+    "fatal Duplicate_key diagnostic omitted the duplicate key";
+  require_substring
+    duplicate.error
+    "in candidate children"
+    "fatal Duplicate_key diagnostic omitted the candidate side";
+  require_substring
+    duplicate.error
+    "Column[key=\"runtime-root\"]"
+    "fatal Duplicate_key diagnostic omitted the root path";
+  require_substring
+    duplicate.error
+    "> Center"
+    "fatal Duplicate_key diagnostic omitted the unkeyed ancestor";
+  require_substring
+    duplicate.error
+    "> Row[key=\"runtime-parent\"]"
+    "fatal Duplicate_key diagnostic omitted the duplicate parent";
+  require_substring
+    duplicate.error
+    "child[1]: Text"
+    "fatal Duplicate_key diagnostic omitted the first occurrence";
+  require_substring
+    duplicate.error
+    "child[2]: Empty"
+    "fatal Duplicate_key diagnostic omitted the second occurrence";
+  require_no_substring
+    duplicate.error
+    "OCaml pump returned no presentation token"
+    "fatal Duplicate_key diagnostic was replaced by the token invariant error";
+  Native_backend.destroy duplicate_runtime.handle;
   Native_backend.For_testing.final_shutdown ();
   Native_backend.For_testing.final_shutdown ();
   require

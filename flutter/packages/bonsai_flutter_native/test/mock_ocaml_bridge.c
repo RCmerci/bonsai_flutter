@@ -77,6 +77,25 @@ static bf_status respond(bf_ocaml_response *response,
   return BF_STATUS_OK;
 }
 
+static bf_status diagnostic_response(bf_ocaml_response *response,
+                                     bf_status status,
+                                     bf_error_code error_code,
+                                     const char *message) {
+  size_t length = strlen(message) + 1;
+  response->data = NULL;
+  response->length = 0;
+  response->presentation_id = 0;
+  response->revision = 0;
+  response->error = (char *)malloc(length);
+  if (response->error == NULL) {
+    return BF_STATUS_FATAL_ERROR;
+  }
+  memcpy(response->error, message, length);
+  response->status = status;
+  response->error_code = error_code;
+  return status;
+}
+
 bf_status bf_ocaml_bridge_pump(uint64_t handle,
                                int64_t monotonic_now_ns,
                                const uint8_t *input,
@@ -87,6 +106,23 @@ bf_status bf_ocaml_bridge_pump(uint64_t handle,
   }
   pump_count += 1;
   last_monotonic_now_ns = monotonic_now_ns;
+  if (input_length == 1 && input != NULL && input[0] == 0xdd) {
+    return diagnostic_response(
+        response,
+        BF_STATUS_FATAL_ERROR,
+        BF_ERROR_DUPLICATE_KEY,
+        "duplicate key \"journal-row-focus:duplicate\" in candidate children\n\n"
+        "Widget tree path:\n  Native_widget[key=\"journal-list\"]\n\n"
+        "Duplicate siblings:\n"
+        "  child[1]: Focus_scope[key=\"journal-row-focus:duplicate\"]\n"
+        "  child[2]: Focus_scope[key=\"journal-row-focus:duplicate\"]");
+  }
+  if (input_length == 1 && input != NULL && input[0] == 0xcc) {
+    return diagnostic_response(response,
+                               BF_STATUS_RECOVERABLE_ERROR,
+                               BF_ERROR_STALE_EVENT,
+                               "recoverable response without a token");
+  }
   if (input_length == 1 && input != NULL && input[0] == 0xee) {
     bf_status status = respond(response, "recoverable", 8, 2);
     if (status != BF_STATUS_OK) {
