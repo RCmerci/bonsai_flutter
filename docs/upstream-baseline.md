@@ -43,8 +43,8 @@ Incremental, or Incr_dom source trees.
 ## Compiler and API selection
 
 OCaml 5.1.1 is exact in `.ocaml-version`, `dune-project`, both opam manifests,
-the GitHub Actions workflows, and the iOS toolchain lock. No
-`OCAMLPARAM=keywords=4.14` compatibility mode is required.
+and the iOS toolchain lock. No `OCAMLPARAM=keywords=4.14` compatibility mode is
+required.
 
 Bonsai v0.17 exposes the continuation API through `Bonsai.Cont`:
 

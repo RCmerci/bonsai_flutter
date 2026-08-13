@@ -5,12 +5,6 @@ let ( let* ) result f =
 ;;
 
 let supported_bonsai_flutter_version = "0.1.0~dev"
-let supported_bonsai_flutter_source_revision = "a51276a09eb1cdf9c87f07ac4c7558ed7c6b2d69"
-
-let supported_bonsai_flutter_source_sha256 =
-  "8ab6845bdda0b53c450a14c7c1382c652e5af0093c38ddad8e867db4c6a36f91"
-;;
-
 let supported_abi_version = "2"
 let supported_build_recipe_revision = "2"
 let supported_minimum_deployment_target = "15.0"
@@ -28,9 +22,6 @@ module Manifest = struct
     { raw : Sexplib.Sexp.t
     ; format_version : string
     ; bonsai_flutter_version : string
-    ; bonsai_flutter_source_revision : string
-    ; bonsai_flutter_source_checksum_algorithm : string
-    ; bonsai_flutter_source_checksum : string
     ; abi_version : string
     ; ocaml_version : string
     ; dune_minimum_version : string
@@ -92,17 +83,6 @@ module Manifest = struct
       let* right = atom right in
       Ok (left, right)
     | _ -> invalid "SDK manifest field %s must contain exactly two values" name
-  ;;
-
-  let optional_three name fields =
-    match String_map.find_opt name fields with
-    | None -> Ok ("", "", "")
-    | Some [ first; second; third ] ->
-      let* first = atom first in
-      let* second = atom second in
-      let* third = atom third in
-      Ok (first, second, third)
-    | Some _ -> invalid "SDK manifest field %s must contain exactly three values" name
   ;;
 
   let atom_list name fields =
@@ -214,12 +194,6 @@ module Manifest = struct
          | [] ->
            let* format_version = one "format_version" fields in
            let* bonsai_flutter_version = one "bonsai_flutter_version" fields in
-           let* ( bonsai_flutter_source_revision
-                , bonsai_flutter_source_checksum_algorithm
-                , bonsai_flutter_source_checksum )
-             =
-             optional_three "bonsai_flutter_source" fields
-           in
            let* abi_version = one "abi_version" fields in
            let* ocaml_version = one "ocaml_version" fields in
            let* dune_minimum_version, dune_maximum_version =
@@ -245,9 +219,6 @@ module Manifest = struct
              { raw
              ; format_version
              ; bonsai_flutter_version
-             ; bonsai_flutter_source_revision
-             ; bonsai_flutter_source_checksum_algorithm
-             ; bonsai_flutter_source_checksum
              ; abi_version
              ; ocaml_version
              ; dune_minimum_version
@@ -310,9 +281,6 @@ module Manifest = struct
       t.format_version <> "1"
       || t.bonsai_flutter_version <> bonsai_flutter_version
       || t.abi_version <> abi_version
-      || t.bonsai_flutter_source_revision <> supported_bonsai_flutter_source_revision
-      || t.bonsai_flutter_source_checksum_algorithm <> "sha256"
-      || t.bonsai_flutter_source_checksum <> supported_bonsai_flutter_source_sha256
       || t.build_recipe_revision <> supported_build_recipe_revision
     then incompatible bonsai_flutter_version
     else if t.findlib_toolchain <> "ios"

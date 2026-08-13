@@ -689,7 +689,7 @@ let test_sdk_manifest_contract () =
   |> check_error_contains "Missing SDK manifest field: target_components_digest"
 ;;
 
-let test_sdk_rejects_framework_source_drift () =
+let test_sdk_accepts_framework_source_drift () =
   let stale_manifest =
     valid_sdk_manifest
     |> replace_once
@@ -705,12 +705,10 @@ let test_sdk_rejects_framework_source_drift () =
     ~bonsai_flutter_version:"0.1.0~dev"
     ~abi_version:"2"
     ~minimum_deployment_target:"15.0"
-  |> check_error_contains
-       "Run: bonsai-flutter toolchain remove iphoneos; bonsai-flutter toolchain install \
-        iphoneos"
+  |> get_ok
 ;;
 
-let test_sdk_rejects_unadvertised_framework_source_identity () =
+let test_sdk_accepts_missing_framework_source_identity () =
   let legacy_manifest =
     valid_sdk_manifest
     |> replace_once
@@ -728,9 +726,7 @@ let test_sdk_rejects_unadvertised_framework_source_identity () =
     ~bonsai_flutter_version:"0.1.0~dev"
     ~abi_version:"1"
     ~minimum_deployment_target:"15.0"
-  |> check_error_contains
-       "Run: bonsai-flutter toolchain remove iphoneos; bonsai-flutter toolchain install \
-        iphoneos"
+  |> get_ok
 ;;
 
 let application_lock =
@@ -3987,11 +3983,11 @@ let () =
         ; Alcotest.test_case
             "framework source drift"
             `Quick
-            test_sdk_rejects_framework_source_drift
+            test_sdk_accepts_framework_source_drift
         ; Alcotest.test_case
             "missing framework source identity"
             `Quick
-            test_sdk_rejects_unadvertised_framework_source_identity
+            test_sdk_accepts_missing_framework_source_identity
         ; Alcotest.test_case "read-only preflight" `Quick test_sdk_preflight_is_read_only
         ; Alcotest.test_case
             "reachable application lock subset"

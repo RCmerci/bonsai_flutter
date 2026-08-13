@@ -89,10 +89,6 @@ The command is deliberately all-or-nothing. It:
    Team ID, App ID, public exports, and target metadata;
 8. installs and cold-launches the exported application.
 
-The CI workflow uses a protected environment, one repository-scoped runner,
-and global concurrency so two jobs cannot share the phone. It is not triggered
-by `pull_request` or `pull_request_target`.
-
 ## Failure diagnosis
 
 - An absent or ambiguous target means `IOS_DEVICE_ID` does not resolve to

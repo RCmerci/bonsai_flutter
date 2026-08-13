@@ -318,7 +318,6 @@ dependency_control_text=$(cat \
   bonsai_flutter.opam \
   bonsai_flutter_test.opam \
   dune-project \
-  .github/workflows/*.yml \
   tool/ci/*.sh \
   tool/ios/*.sh)
 require_text \
@@ -637,11 +636,6 @@ require_text "$sanitizer_commands" "ASAN_OPTIONS=detect_leaks=1" "ci-sanitizers"
 require_text "$sanitizer_commands" "binary_codec_test.dart" "ci-sanitizers"
 require_text "$sanitizer_commands" "native_resource_store_test.dart" "ci-sanitizers"
 
-require_file .github/workflows/ocaml.yml
-require_file .github/workflows/flutter.yml
-require_file .github/workflows/macos.yml
-require_file .github/workflows/ios.yml
-require_file .github/workflows/ios-device.yml
 require_file tool/ci/install_ios_signing.sh
 require_file tool/ci/ios_device_preflight.sh
 require_file tool/ci/verify_ios_bundle.sh
@@ -667,66 +661,5 @@ require_text \
   "$ios_bundle_verifier" \
   "NSPrivacyAccessedAPICategorySystemBootTime" \
   "iOS bundle verifier"
-
-workflow_text=$(cat \
-  .github/workflows/ocaml.yml \
-  .github/workflows/flutter.yml \
-  .github/workflows/macos.yml \
-  .github/workflows/ios.yml \
-  .github/workflows/ios-device.yml)
-
-ios_workflow_text=$(cat \
-  .github/workflows/ios.yml \
-  .github/workflows/ios-device.yml)
-ios_hosted_workflow_text=$(cat .github/workflows/ios.yml)
-ios_device_workflow_text=$(cat .github/workflows/ios-device.yml)
-flutter_workflow_text=$(cat .github/workflows/flutter.yml)
-
-require_text "$workflow_text" "ocaml-compiler: 5.1.1" "workflows"
-require_text "$workflow_text" "make ci-ocaml" "workflows"
-require_text "$workflow_text" "make ci-flutter" "workflows"
-require_text "$workflow_text" "make ci-macos" "workflows"
-require_text "$workflow_text" "make ci-sanitizers" "workflows"
-require_text "$flutter_workflow_text" "runs-on: macos-26" "Flutter workflow"
-require_text "$flutter_workflow_text" "ocaml/setup-ocaml@v3" "Flutter workflow"
-require_text \
-  "$flutter_workflow_text" \
-  "ocaml-compiler: 5.1.1" \
-  "Flutter workflow"
-require_text "$ios_workflow_text" "make ci-ios" "iOS workflows"
-require_text "$ios_workflow_text" "make ci-ios-device" "iOS workflows"
-require_text "$ios_hosted_workflow_text" "runs-on: macos-26" "hosted iOS workflow"
-require_text \
-  "$ios_device_workflow_text" \
-  "runs-on: [self-hosted, macOS, arm64, ios-device]" \
-  "physical-device workflow"
-require_text \
-  "$ios_device_workflow_text" \
-  "environment: ios-device" \
-  "physical-device workflow"
-require_text \
-  "$ios_device_workflow_text" \
-  "group: ios-device-hardware" \
-  "physical-device workflow"
-require_text \
-  "$ios_device_workflow_text" \
-  "tool/ci/install_ios_signing.sh cleanup" \
-  "physical-device workflow"
-require_text \
-  "$ios_device_workflow_text" \
-  "if: always()" \
-  "physical-device workflow"
-reject_text "$workflow_text" "continue-on-error: true" "workflows"
-reject_text "$workflow_text" "OCAMLPARAM" "workflows"
-reject_text "$workflow_text" "janestreet-bleeding" "workflows"
-reject_text "$workflow_text" "ocaml-compiler: 5.3.0" "workflows"
-reject_text "$flutter_workflow_text" "runs-on: ubuntu" "Flutter workflow"
-reject_text "$ios_workflow_text" "_build/default" "iOS workflows"
-reject_text "$ios_device_workflow_text" "pull_request_target" "physical-device workflow"
-reject_text "$ios_device_workflow_text" "pull_request:" "physical-device workflow"
-reject_pattern \
-  "$ios_workflow_text" \
-  "simulator.{0,40}(physical|device)|physical.{0,40}simulator" \
-  "iOS workflows"
 
 printf '%s\n' "CI contract tests passed"

@@ -20,29 +20,9 @@ The supported desktop test boundary is macOS 26.0 or newer on Apple Silicon
 arm64. Intel Mac and universal macOS builds are unsupported. The mobile
 boundary remains physical-device iPhoneOS 15.0 or newer on arm64.
 
-## Continuous integration
+## Local verification
 
-The repository has five required GitHub Actions workflows:
-
-- `ocaml.yml` installs the local framework and all standalone consumer
-  packages, then runs the complete OCaml 5.1.1 build, test, formatting,
-  generated protocol and OCaml-frame fixture checks, release benchmark
-  compilation, and opam metadata gates on Linux.
-- `flutter.yml` installs the same local OCaml packages, then runs renderer,
-  native package, generated FFI binding, example, aggregate integration,
-  Dart-event fixture, malformed-input, and native sanitizer gates on macOS
-  arm64. The macOS host is required because every example command builds its
-  real native artifact through `bonsai-flutter exec`.
-- `macos.yml` links the real OCaml object, builds the Counter application in
-  Debug, Profile, and Release modes, and runs the cross-language integration
-  suite on macOS arm64.
-- `ios.yml` reproduces the pinned cross toolchain and builds and audits
-  unsigned iPhoneOS applications on a hosted macOS runner.
-- `ios-device.yml` is a serialized, protected-environment lane for one
-  explicitly configured physical iPhone on a dedicated self-hosted arm64 Mac.
-  It never runs pull-request code.
-
-Run the same boundaries locally from the repository root:
+Run the supported verification boundaries locally from the repository root:
 
 ```sh
 make ci-contract
