@@ -12,8 +12,8 @@ homepage: "https://github.com/RCmerci/bonsai_flutter"
 bug-reports: "https://github.com/RCmerci/bonsai_flutter/issues"
 dev-repo: "git+https://github.com/RCmerci/bonsai_flutter.git"
 extra-source "bonsai_flutter.tar.gz" {
-  src: "https://github.com/RCmerci/bonsai_flutter/archive/59ea996f8f55834fbe23ad5192748e16cf19c0bf.tar.gz"
-  checksum: ["sha256=b2e3475853fc40a5ce807ce5e6310ca297c8a79e090c8ea5294bccd277717c49"]
+  src: "https://github.com/RCmerci/bonsai_flutter/archive/2dd8cf3421d54172e37e513f87cd0247afb896a9.tar.gz"
+  checksum: ["sha256=3a6504746d7a7817f631226ac7dd1f1a7acb7cc193cf3d1dd2a308a6d4e490d4"]
 }
 extra-source "runtime-gmp-sys-ios-a3c2b80201b89e68616f4ad30bc66aee4927c3ce50e33929ca819d5c43538898.archive" {
   src: "https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz"
@@ -424,11 +424,11 @@ extra-source "runtime-zarith-5db9dcbd939153942a08581fabd846d0f3f2b8c67fe68b85512
   checksum: ["sha256=5db9dcbd939153942a08581fabd846d0f3f2b8c67fe68b855127e0472d4d1859"]
 }
 extra-files: [
-  ["build-installed-sdk.sh" "sha256=d507ce1b4f8e1797116f945264673765a7a9c18f3b9b4f3c2d1587ffa59b2227"]
+  ["build-installed-sdk.sh" "sha256=041759409e74025043e8f2263cfb01d152bf341d99f0607e42a5dc37c1b79003"]
   ["build-runtime-closure.sh" "sha256=658a2834d34376e6cb399b0e09ad9ccadc5a163f34135a1480e478c681a4f65b"]
   ["build-runtime-package.sh" "sha256=f167f27e1f662045bbb4abbb24bb0cb3f781380d3d7d8179f53995d28f71f25f"]
-  ["manifest.sexp" "sha256=faa636fc0ed92543ab6423624cce894071c4c788658f38420caf2974736e03cf"]
-  ["package-lock.sexp" "sha256=808eec6de489c8cbc075c2615bec0761e67db5d94b1c24e75e874d148e3b7d5c"]
+  ["manifest.sexp" "sha256=674d34ee83acba979b371274603c1aaad58d17c9bc25c20e88f5dbeacd197e0a"]
+  ["package-lock.sexp" "sha256=fb21887ef1f68b43bdb4be0d724d31670cc4b9489afee0754db7244ba7e82c1c"]
   ["patches/base-host-generator.patch" "sha256=d66da45798d7fd09df4d5e1a2789428f2343670f212ddf36dabf1ffa2e9d5ada"]
   ["patches/eio-posix-darwin-protocol-zero.patch" "sha256=b6a158f56db6bc1c1e19ad2412625f2d7941a5004274e3a45fe58f6c89e5b963"]
   ["patches/eio-posix-darwin-socktype-hints.patch" "sha256=8b5eb1ecc716afeac54f6ebc0792f14df5107dbdac5ebb81da3ea0a31e187e17"]
