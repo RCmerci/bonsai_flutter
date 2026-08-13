@@ -74,7 +74,7 @@ void main() {
     );
 
     await gesture.moveBy(const Offset(64, 0));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(
       _foregroundBorderRadius(tester),
       const BorderRadius.only(
@@ -84,7 +84,7 @@ void main() {
     );
 
     await gesture.moveBy(const Offset(-128, 0));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(
       _foregroundBorderRadius(tester),
       const BorderRadius.only(
@@ -96,6 +96,48 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
     expect(_foregroundBorderRadius(tester), BorderRadius.zero);
+  });
+
+  testWidgets('foreground edge radius transitions in and out smoothly', (
+    tester,
+  ) async {
+    await _pumpSwipeFixture(tester);
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('Message')),
+    );
+
+    await gesture.moveBy(const Offset(32, 0));
+    await tester.pump();
+    expect(_foregroundBorderRadius(tester), BorderRadius.zero);
+
+    await tester.pump(const Duration(milliseconds: 60));
+    final rounding = _foregroundBorderRadius(tester);
+    expect(rounding.topLeft.x, inExclusiveRange(0, 16));
+    expect(rounding.bottomLeft.x, rounding.topLeft.x);
+    expect(rounding.topRight, Radius.zero);
+    expect(rounding.bottomRight, Radius.zero);
+
+    await tester.pumpAndSettle();
+    expect(
+      _foregroundBorderRadius(tester),
+      const BorderRadius.only(
+        topLeft: Radius.circular(16),
+        bottomLeft: Radius.circular(16),
+      ),
+    );
+
+    await gesture.moveBy(const Offset(-32, 0));
+    await tester.pump();
+    expect(_foregroundBorderRadius(tester).topLeft.x, 16);
+
+    await tester.pump(const Duration(milliseconds: 60));
+    final straightening = _foregroundBorderRadius(tester);
+    expect(straightening.topLeft.x, inExclusiveRange(0, 16));
+    expect(straightening.bottomLeft.x, straightening.topLeft.x);
+
+    await tester.pumpAndSettle();
+    expect(_foregroundBorderRadius(tester), BorderRadius.zero);
+    await gesture.up();
   });
 
   testWidgets('action icon stays reduced until the threshold is crossed', (
@@ -203,7 +245,7 @@ void main() {
     expect(_nativeDirections(end.events), [1]);
   });
 
-  testWidgets('threshold haptic fires at most once per gesture', (
+  testWidgets('threshold haptic fires on every renewed crossing', (
     tester,
   ) async {
     var haptics = 0;
@@ -225,13 +267,35 @@ void main() {
     final gesture = await tester.startGesture(
       tester.getCenter(find.text('Message')),
     );
-    await gesture.moveBy(const Offset(100, 0));
+    await gesture.moveBy(const Offset(120, 0));
     await tester.pump();
-    await gesture.moveBy(const Offset(-30, 0));
+    expect(haptics, 1);
+
+    await gesture.moveBy(const Offset(20, 0));
+    await tester.pump();
+    expect(haptics, 1);
+
+    await gesture.moveBy(const Offset(-60, 0));
+    await tester.pump();
+    expect(haptics, 1);
+
     await gesture.moveBy(const Offset(40, 0));
     await tester.pump();
+    expect(haptics, 2);
 
-    expect(haptics, 1);
+    await gesture.moveBy(const Offset(-200, 0));
+    await tester.pump();
+    expect(haptics, 2);
+
+    await gesture.moveBy(const Offset(-40, 0));
+    await tester.pump();
+    expect(haptics, 3);
+
+    await gesture.moveBy(const Offset(40, 0));
+    await gesture.moveBy(const Offset(-40, 0));
+    await tester.pump();
+
+    expect(haptics, 4);
     await gesture.up();
   });
 

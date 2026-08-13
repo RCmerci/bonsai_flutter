@@ -194,6 +194,7 @@ final class _SwipeActionHostState extends State<_SwipeActionHost>
   static const _cancelDuration = Duration(milliseconds: 200);
   static const _dismissDuration = Duration(milliseconds: 220);
   static const _reboundDuration = Duration(milliseconds: 190);
+  static const _foregroundRadiusDuration = Duration(milliseconds: 120);
   static const _flingVelocity = 800.0;
   static const _actionContentExtent = 96.0;
   static const _foregroundEdgeRadius = 16.0;
@@ -203,7 +204,7 @@ final class _SwipeActionHostState extends State<_SwipeActionHost>
   Animation<double>? _offsetAnimation;
   double _logicalOffset = 0;
   double _rowWidth = 0;
-  bool _thresholdHapticFired = false;
+  bool _isBeyondCommitThreshold = false;
   bool _commitInProgress = false;
   bool _disposed = false;
   int _animationGeneration = 0;
@@ -243,6 +244,9 @@ final class _SwipeActionHostState extends State<_SwipeActionHost>
 
   bool get _isRtl => Directionality.of(context) == TextDirection.rtl;
   double get _physicalOffset => _isRtl ? -_logicalOffset : _logicalOffset;
+  bool get _reduceMotion =>
+      MediaQuery.disableAnimationsOf(context) ||
+      MediaQuery.maybeOf(context)?.accessibleNavigation == true;
 
   double get _commitDistance => (_rowWidth * 0.28).clamp(72.0, 112.0);
 
@@ -293,7 +297,7 @@ final class _SwipeActionHostState extends State<_SwipeActionHost>
     _completionGeneration = null;
     _controller.stop();
     _offsetAnimation = null;
-    _thresholdHapticFired = false;
+    _isBeyondCommitThreshold = false;
     final dragDownX = _dragDownX;
     if (dragDownX != null) {
       final physicalDelta = details.globalPosition.dx - dragDownX;
@@ -317,10 +321,11 @@ final class _SwipeActionHostState extends State<_SwipeActionHost>
 
   void _setDragOffset(double offset) {
     setState(() => _logicalOffset = offset);
-    if (!_thresholdHapticFired && offset.abs() >= _commitDistance) {
-      _thresholdHapticFired = true;
+    final isBeyondCommitThreshold = offset.abs() >= _commitDistance;
+    if (!_isBeyondCommitThreshold && isBeyondCommitThreshold) {
       HapticFeedback.lightImpact();
     }
+    _isBeyondCommitThreshold = isBeyondCommitThreshold;
   }
 
   void _onDragEnd(DragEndDetails details) {
@@ -381,10 +386,7 @@ final class _SwipeActionHostState extends State<_SwipeActionHost>
     final generation = ++_animationGeneration;
     _animationCompletion = null;
     _completionGeneration = null;
-    final reduceMotion =
-        MediaQuery.disableAnimationsOf(context) ||
-        MediaQuery.maybeOf(context)?.accessibleNavigation == true;
-    if (reduceMotion || duration == Duration.zero) {
+    if (_reduceMotion || duration == Duration.zero) {
       setState(() => _logicalOffset = target);
       if (!_disposed && generation == _animationGeneration) onComplete?.call();
       return;
@@ -445,14 +447,28 @@ final class _SwipeActionHostState extends State<_SwipeActionHost>
                 if (direction != null) _actionSurface(direction),
                 Transform.translate(
                   offset: Offset(physicalOffset, 0),
-                  child: ClipRRect(
-                    key: const ValueKey<String>(
-                      'bonsai-swipe-action-foreground',
+                  child: TweenAnimationBuilder<BorderRadius?>(
+                    tween: BorderRadiusTween(
+                      end: _foregroundBorderRadius(physicalOffset),
                     ),
-                    borderRadius: _foregroundBorderRadius(physicalOffset),
-                    clipBehavior: direction == null
-                        ? Clip.none
-                        : Clip.antiAlias,
+                    duration: _reduceMotion
+                        ? Duration.zero
+                        : _foregroundRadiusDuration,
+                    curve: Curves.easeOutCubic,
+                    builder: (context, borderRadius, child) {
+                      final effectiveBorderRadius =
+                          borderRadius ?? BorderRadius.zero;
+                      return ClipRRect(
+                        key: const ValueKey<String>(
+                          'bonsai-swipe-action-foreground',
+                        ),
+                        borderRadius: effectiveBorderRadius,
+                        clipBehavior: effectiveBorderRadius == BorderRadius.zero
+                            ? Clip.none
+                            : Clip.antiAlias,
+                        child: child,
+                      );
+                    },
                     child: KeyedSubtree(
                       key: const ValueKey<String>(
                         'bonsai-swipe-action-content',
