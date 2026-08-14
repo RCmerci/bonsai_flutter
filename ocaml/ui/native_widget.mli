@@ -294,3 +294,90 @@ module Navigation_shell : sig
     val encode_drawer_state : drawer_state -> bytes
   end
 end
+
+module Message_composer : sig
+  type button_position =
+    | Leading
+    | Trailing
+
+  type button_visibility =
+    | Always
+    | When_empty
+    | When_non_empty
+
+  type button_style =
+    | Plain
+    | Filled
+
+  type button
+
+  type event =
+    | Text_changed of string
+    | Button_pressed of
+        { button_id : int
+        ; text : string
+        }
+
+  val kind_id : Bonsai_flutter_spec.Id.Native_widget.kind_id
+  val text_changed_event_id : Bonsai_flutter_spec.Id.Native_widget.event_id
+  val button_pressed_event_id : Bonsai_flutter_spec.Id.Native_widget.event_id
+
+  (** Defines a composer button whose visual content is any OCaml [Widget.t].
+      The native host owns the tap target and reports [id] with the current
+      editor text. Button IDs must be positive and unique within a composer. *)
+  val button
+    :  id:int
+    -> tooltip:string
+    -> ?position:button_position
+    -> ?visibility:button_visibility
+    -> ?style:button_style
+    -> ?enabled:bool
+    -> child:Widget.t
+    -> unit
+    -> button
+
+  val create
+    :  ?key:Key.t
+    -> ?enabled:bool
+    -> ?autofocus:bool
+    -> ?max_lines:int
+    -> ?hint_text:string
+    -> buttons:button list
+    -> on_event:(event -> unit)
+    -> unit
+    -> Widget.t
+
+  val create_with_handler
+    :  ?key:Key.t
+    -> ?enabled:bool
+    -> ?autofocus:bool
+    -> ?max_lines:int
+    -> ?hint_text:string
+    -> buttons:button list
+    -> on_event:Event.Handler.t
+    -> unit
+    -> Widget.t
+
+  val event_of_payload : Event.Payload.t -> event option
+
+  module For_testing : sig
+    type button_props =
+      { id : int
+      ; tooltip : string
+      ; position : button_position
+      ; visibility : button_visibility
+      ; style : button_style
+      ; enabled : bool
+      }
+
+    type props =
+      { enabled : bool
+      ; autofocus : bool
+      ; max_lines : int
+      ; hint_text : string
+      ; buttons : button_props list
+      }
+
+    val decode_props_exn : bytes -> props
+  end
+end

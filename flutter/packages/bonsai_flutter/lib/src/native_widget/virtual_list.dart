@@ -13,6 +13,7 @@ abstract final class NativeWidgetKind {
   static const int navigationShell = 3;
   static const int sparseExtentList = 4;
   static const int morphingSurface = 5;
+  static const int messageComposer = 6;
 }
 
 abstract final class VirtualListEvent {

@@ -697,6 +697,175 @@ let test_navigation_shell_contract_and_events () =
     "navigation shell accepted an invalid selected index"
 ;;
 
+let message_composer_button
+      ?(position = Ui.Native_widget.Message_composer.Trailing)
+      ?(visibility = Ui.Native_widget.Message_composer.Always)
+      ?(style = Ui.Native_widget.Message_composer.Plain)
+      ?(enabled = true)
+      ~id
+      ~tooltip
+      label
+  =
+  Ui.Native_widget.Message_composer.button
+    ~id
+    ~tooltip
+    ~position
+    ~visibility
+    ~style
+    ~enabled
+    ~child:(Ui.Widget.text label)
+    ()
+;;
+
+let test_message_composer_contract_and_custom_buttons () =
+  let events = ref [] in
+  let buttons =
+    [ message_composer_button
+        ~id:10
+        ~tooltip:"Add attachment"
+        ~position:Leading
+        "attachment"
+    ; message_composer_button
+        ~id:20
+        ~tooltip:"Start voice input"
+        ~visibility:When_empty
+        ~style:Filled
+        "voice"
+    ; message_composer_button
+        ~id:21
+        ~tooltip:"Send message"
+        ~visibility:When_non_empty
+        ~style:Filled
+        "send"
+    ]
+  in
+  let widget =
+    Ui.Native_widget.Message_composer.create
+      ~key:(Ui.Key.string "composer")
+      ~autofocus:true
+      ~max_lines:7
+      ~hint_text:"Ask anything \226\156\168"
+      ~buttons
+      ~on_event:(fun event -> events := event :: !events)
+      ()
+  in
+  let view = Ui.Widget.Private.view widget in
+  check (Array.length view.children = 3) "message composer custom button child count";
+  Array.iteri
+    (fun index expected ->
+       let child = Ui.Widget.Private.view view.children.(index).widget in
+       match child.props with
+       | Ui.Widget.Private.Text_props { value; _ } ->
+         check (String.equal value expected) "message composer custom button order"
+       | _ -> failwith "message composer button child")
+    [| "attachment"; "voice"; "send" |];
+  (match view.props with
+   | Native_widget_props { kind_id; version; capabilities; payload } ->
+     check (kind_id = native_kind_id 6) "message composer kind ID";
+     check (version = 1) "message composer schema version";
+     check (Int64.equal capabilities 5L) "message composer capabilities";
+     let props = Ui.Native_widget.Message_composer.For_testing.decode_props_exn payload in
+     check props.enabled "message composer enabled default";
+     check props.autofocus "message composer autofocus";
+     check (props.max_lines = 7) "message composer max lines";
+     check
+       (String.equal props.hint_text "Ask anything \226\156\168")
+       "message composer UTF-8 hint";
+     check (List.length props.buttons = 3) "message composer button metadata count";
+     let attachment = List.nth props.buttons 0 in
+     check (attachment.id = 10) "message composer button ID";
+     check (attachment.position = Leading) "message composer leading button";
+     let voice = List.nth props.buttons 1 in
+     check (voice.visibility = When_empty) "message composer empty visibility";
+     check (voice.style = Filled) "message composer filled style";
+     let send = List.nth props.buttons 2 in
+     check (send.visibility = When_non_empty) "message composer non-empty visibility"
+   | _ -> failwith "message composer native props");
+  let binding = view.event_bindings.(0) in
+  Ui.Event.Handler.Private.invoke
+    binding.handler
+    (Native_event
+       { kind_id = native_kind_id 6
+       ; version = 1
+       ; event_id = native_event_id 1
+       ; payload = Bytes.of_string "hello \240\159\145\139"
+       });
+  Ui.Event.Handler.Private.invoke
+    binding.handler
+    (Native_event
+       { kind_id = native_kind_id 6
+       ; version = 1
+       ; event_id = native_event_id 2
+       ; payload =
+           (let payload = Bytes.make 12 '\000' in
+            Bytes.set_int32_le payload 0 21l;
+            Bytes.blit_string "  send  " 0 payload 4 8;
+            payload)
+       });
+  check
+    (!events
+     = [ Ui.Native_widget.Message_composer.Button_pressed
+           { button_id = 21; text = "  send  " }
+       ; Text_changed "hello \240\159\145\139"
+       ])
+    "message composer typed events"
+;;
+
+let test_message_composer_validation_and_event_filtering () =
+  let button = message_composer_button ~id:1 ~tooltip:"One" "one" in
+  List.iter
+    (fun max_lines ->
+       expect_invalid_argument
+         (fun () ->
+            ignore
+              (Ui.Native_widget.Message_composer.create
+                 ~max_lines
+                 ~buttons:[]
+                 ~on_event:(fun _ -> ())
+                 ()))
+         "message composer accepted invalid max_lines")
+    [ 0; -1; 0x1_0000 ];
+  List.iter
+    (fun id ->
+       expect_invalid_argument
+         (fun () -> ignore (message_composer_button ~id ~tooltip:"Invalid" "x"))
+         "message composer accepted invalid button ID")
+    [ 0; -1; 0x1_0000_0000 ];
+  expect_invalid_argument
+    (fun () -> ignore (message_composer_button ~id:2 ~tooltip:"" "empty"))
+    "message composer accepted empty tooltip";
+  expect_invalid_argument
+    (fun () ->
+       ignore
+         (Ui.Native_widget.Message_composer.create
+            ~buttons:[ button; button ]
+            ~on_event:(fun _ -> ())
+            ()))
+    "message composer accepted duplicate button IDs";
+  let received = ref [] in
+  let widget =
+    Ui.Native_widget.Message_composer.create
+      ~buttons:[ button ]
+      ~on_event:(fun event -> received := event :: !received)
+      ()
+  in
+  let binding = (Ui.Widget.Private.view widget).event_bindings.(0) in
+  let invoke kind_id version event_id payload =
+    Ui.Event.Handler.Private.invoke
+      binding.handler
+      (Native_event { kind_id; version; event_id; payload })
+  in
+  invoke (native_kind_id 99) 1 (native_event_id 1) (Bytes.of_string "ignored");
+  invoke (native_kind_id 6) 2 (native_event_id 1) (Bytes.of_string "ignored");
+  invoke (native_kind_id 6) 1 (native_event_id 9) Bytes.empty;
+  invoke (native_kind_id 6) 1 (native_event_id 2) (Bytes.make 3 '\000');
+  check (!received = []) "message composer malformed event was accepted";
+  invoke (native_kind_id 6) 1 (native_event_id 1) (Bytes.of_string "accepted");
+  check
+    (!received = [ Ui.Native_widget.Message_composer.Text_changed "accepted" ])
+    "message composer valid event was filtered"
+;;
+
 let () =
   test_typed_native_widget ();
   test_virtual_list_window ();
@@ -709,5 +878,7 @@ let () =
   test_swipe_action_props_contract ();
   test_swipe_action_omitted_direction_and_validation ();
   test_swipe_action_event_filtering ();
-  test_navigation_shell_contract_and_events ()
+  test_navigation_shell_contract_and_events ();
+  test_message_composer_contract_and_custom_buttons ();
+  test_message_composer_validation_and_event_filtering ()
 ;;

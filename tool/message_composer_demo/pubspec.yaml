@@ -1,0 +1,27 @@
+name: message_composer_demo
+description: Temporary interactive demo for the adaptive MessageComposer.
+publish_to: none
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=3.44.0"
+
+hooks:
+  user_defines:
+    bonsai_flutter_native:
+      macos_deployment_target: '26.0'
+      ios_deployment_target: '15.0'
+
+dependencies:
+  bonsai_flutter:
+    path: ../../flutter/packages/bonsai_flutter
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

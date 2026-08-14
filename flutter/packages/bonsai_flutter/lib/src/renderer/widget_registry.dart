@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../native_widget/native_widget_registry.dart';
 import '../native_widget/morphing_surface.dart';
+import '../native_widget/message_composer.dart';
 import '../native_widget/navigation_shell.dart';
 import '../native_widget/sparse_extent_list.dart';
 import '../native_widget/swipe_action.dart';
@@ -59,6 +60,7 @@ final class WidgetRegistry {
       registerMorphingSurface(extensions);
       registerSwipeAction(extensions);
       registerNavigationShell(extensions);
+      registerMessageComposer(extensions);
     }
     return WidgetRegistry({
       NodeKind.empty: _buildEmpty,

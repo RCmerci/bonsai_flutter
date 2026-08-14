@@ -93,6 +93,15 @@ let widget extension ?key ~props ~on_event ?children () =
 ;;
 
 module Little_endian = struct
+  let set_u16 bytes offset value =
+    Bytes.set bytes offset (Char.chr (value land 0xff));
+    Bytes.set bytes (offset + 1) (Char.chr ((value lsr 8) land 0xff))
+  ;;
+
+  let get_u16 bytes offset =
+    Char.code (Bytes.get bytes offset) lor (Char.code (Bytes.get bytes (offset + 1)) lsl 8)
+  ;;
+
   let set_u64 bytes offset value = Bytes.set_int64_le bytes offset value
   let get_u64 bytes offset = Bytes.get_int64_le bytes offset
   let set_u32 bytes offset value = Bytes.set_int32_le bytes offset (Int32.of_int value)
@@ -1203,6 +1212,379 @@ module Navigation_shell = struct
     let encode_drawer_state = function
       | Closed -> Bytes.of_string "\000"
       | Open -> Bytes.of_string "\001"
+    ;;
+  end
+end
+
+module Message_composer = struct
+  let kind_id = ID.Native_widget.Kind_id.of_int 6
+  let version = 1
+  let text_changed_event_id = ID.Native_widget.Event_id.of_int 1
+  let button_pressed_event_id = ID.Native_widget.Event_id.of_int 2
+
+  type button_position =
+    | Leading
+    | Trailing
+
+  type button_visibility =
+    | Always
+    | When_empty
+    | When_non_empty
+
+  type button_style =
+    | Plain
+    | Filled
+
+  type button_props =
+    { id : int
+    ; tooltip : string
+    ; position : button_position
+    ; visibility : button_visibility
+    ; style : button_style
+    ; enabled : bool
+    }
+
+  type button =
+    { props : button_props
+    ; child : Widget.t
+    }
+
+  type event =
+    | Text_changed of string
+    | Button_pressed of
+        { button_id : int
+        ; text : string
+        }
+
+  type props =
+    { enabled : bool
+    ; autofocus : bool
+    ; max_lines : int
+    ; hint_text : string
+    ; buttons : button_props list
+    }
+
+  let validate_utf8 label value =
+    try ignore (Text_editing.Utf16.length value) with
+    | Invalid_argument _ ->
+      invalid_arg (Printf.sprintf "Native_widget.Message_composer: %s is not UTF-8" label)
+  ;;
+
+  let validate_button_id id =
+    if id <= 0 || Int64.compare (Int64.of_int id) 0xffff_ffffL > 0
+    then invalid_arg "Native_widget.Message_composer: button id must be in 1..4294967295"
+  ;;
+
+  let button
+        ~id
+        ~tooltip
+        ?(position = Trailing)
+        ?(visibility = Always)
+        ?(style = Plain)
+        ?(enabled = true)
+        ~child
+        ()
+    =
+    validate_button_id id;
+    if String.length tooltip = 0
+    then invalid_arg "Native_widget.Message_composer: button tooltip must not be empty";
+    validate_utf8 "button tooltip" tooltip;
+    { props = { id; tooltip; position; visibility; style; enabled }; child }
+  ;;
+
+  let validate_props props =
+    if props.max_lines <= 0 || props.max_lines > 0xffff
+    then invalid_arg "Native_widget.Message_composer: max_lines must be in 1..65535";
+    if List.length props.buttons > 0xffff
+    then
+      invalid_arg
+        "Native_widget.Message_composer: buttons must contain at most 65535 entries";
+    validate_utf8 "hint_text" props.hint_text;
+    let ids = Hashtbl.create (List.length props.buttons) in
+    List.iter
+      (fun button ->
+         validate_button_id button.id;
+         if Hashtbl.mem ids button.id
+         then invalid_arg "Native_widget.Message_composer: button ids must be unique";
+         Hashtbl.add ids button.id ())
+      props.buttons
+  ;;
+
+  let position_byte = function
+    | Leading -> 0
+    | Trailing -> 1
+  ;;
+
+  let visibility_byte = function
+    | Always -> 0
+    | When_empty -> 1
+    | When_non_empty -> 2
+  ;;
+
+  let style_byte = function
+    | Plain -> 0
+    | Filled -> 1
+  ;;
+
+  let encode_props props =
+    validate_props props;
+    let hint_length = String.length props.hint_text in
+    let length =
+      12
+      + hint_length
+      + List.fold_left
+          (fun total button -> 12 + String.length button.tooltip + total)
+          0
+          props.buttons
+    in
+    let payload = Bytes.make length '\000' in
+    Bytes.set
+      payload
+      0
+      (Char.chr ((if props.enabled then 1 else 0) lor if props.autofocus then 2 else 0));
+    Little_endian.set_u16 payload 2 props.max_lines;
+    Little_endian.set_u16 payload 4 (List.length props.buttons);
+    Little_endian.set_u32 payload 8 hint_length;
+    Bytes.blit_string props.hint_text 0 payload 12 hint_length;
+    ignore
+      (List.fold_left
+         (fun offset button ->
+            let tooltip_length = String.length button.tooltip in
+            Little_endian.set_u32 payload offset button.id;
+            Bytes.set payload (offset + 4) (Char.chr (position_byte button.position));
+            Bytes.set payload (offset + 5) (Char.chr (visibility_byte button.visibility));
+            Bytes.set payload (offset + 6) (Char.chr (style_byte button.style));
+            Bytes.set payload (offset + 7) (Char.chr (if button.enabled then 1 else 0));
+            Little_endian.set_u32 payload (offset + 8) tooltip_length;
+            Bytes.blit_string button.tooltip 0 payload (offset + 12) tooltip_length;
+            offset + 12 + tooltip_length)
+         (12 + hint_length)
+         props.buttons);
+    payload
+  ;;
+
+  let decode_enum value cases error =
+    match List.assoc_opt value cases with
+    | Some value -> Ok value
+    | None -> Error error
+  ;;
+
+  let decode_utf8 label value =
+    try
+      ignore (Text_editing.Utf16.length value);
+      Ok value
+    with
+    | Invalid_argument _ -> Error (label ^ " must be valid UTF-8")
+  ;;
+
+  let decode_props payload =
+    let ( let* ) = Result.bind in
+    if Bytes.length payload < 12
+    then Error "message composer props must contain a 12-byte header"
+    else if Bytes.get payload 6 <> '\000' || Bytes.get payload 7 <> '\000'
+    then Error "message composer reserved bytes must be zero"
+    else (
+      let flags = Char.code (Bytes.get payload 0) in
+      let max_lines = Little_endian.get_u16 payload 2 in
+      let button_count = Little_endian.get_u16 payload 4 in
+      let hint_length = Little_endian.get_u32_unsigned payload 8 in
+      if Bytes.get payload 1 <> '\000'
+      then Error "message composer reserved bytes must be zero"
+      else if flags land lnot 3 <> 0
+      then Error "message composer flags contain unknown bits"
+      else if max_lines = 0
+      then Error "message composer max_lines must be positive"
+      else if Int64.compare hint_length (Int64.of_int (Bytes.length payload - 12)) > 0
+      then Error "message composer hint exceeds payload"
+      else (
+        let hint_length = Int64.to_int hint_length in
+        let hint_text = Bytes.sub_string payload 12 hint_length in
+        let* hint_text = decode_utf8 "message composer hint" hint_text in
+        let rec decode_buttons remaining offset ids decoded =
+          if remaining = 0
+          then
+            if offset = Bytes.length payload
+            then Ok (List.rev decoded)
+            else Error "message composer props contain extra bytes"
+          else if offset + 12 > Bytes.length payload
+          then Error "message composer button header exceeds payload"
+          else (
+            let id = Little_endian.get_u32_unsigned payload offset in
+            let tooltip_length = Little_endian.get_u32_unsigned payload (offset + 8) in
+            let tooltip_offset = offset + 12 in
+            if Int64.equal id 0L || List.mem id ids
+            then Error "message composer button ids must be positive and unique"
+            else if
+              Int64.compare
+                tooltip_length
+                (Int64.of_int (Bytes.length payload - tooltip_offset))
+              > 0
+            then Error "message composer button tooltip exceeds payload"
+            else
+              let* position =
+                decode_enum
+                  (Char.code (Bytes.get payload (offset + 4)))
+                  [ 0, Leading; 1, Trailing ]
+                  "invalid message composer button position"
+              in
+              let* visibility =
+                decode_enum
+                  (Char.code (Bytes.get payload (offset + 5)))
+                  [ 0, Always; 1, When_empty; 2, When_non_empty ]
+                  "invalid message composer button visibility"
+              in
+              let* style =
+                decode_enum
+                  (Char.code (Bytes.get payload (offset + 6)))
+                  [ 0, Plain; 1, Filled ]
+                  "invalid message composer button style"
+              in
+              let button_flags = Char.code (Bytes.get payload (offset + 7)) in
+              if button_flags land lnot 1 <> 0
+              then Error "message composer button flags contain unknown bits"
+              else (
+                let tooltip_length = Int64.to_int tooltip_length in
+                let tooltip = Bytes.sub_string payload tooltip_offset tooltip_length in
+                let* tooltip = decode_utf8 "message composer button tooltip" tooltip in
+                if String.length tooltip = 0
+                then Error "message composer button tooltip must not be empty"
+                else
+                  decode_buttons
+                    (remaining - 1)
+                    (tooltip_offset + tooltip_length)
+                    (id :: ids)
+                    ({ id = Int64.to_int id
+                     ; tooltip
+                     ; position
+                     ; visibility
+                     ; style
+                     ; enabled = button_flags land 1 <> 0
+                     }
+                     :: decoded)))
+        in
+        let* buttons = decode_buttons button_count (12 + hint_length) [] [] in
+        Ok
+          { enabled = flags land 1 <> 0
+          ; autofocus = flags land 2 <> 0
+          ; max_lines
+          ; hint_text
+          ; buttons
+          }))
+  ;;
+
+  let decode_event ~event_id payload =
+    if event_id = text_changed_event_id
+    then
+      Result.map
+        (fun text -> Text_changed text)
+        (decode_utf8 "text" (Bytes.to_string payload))
+    else if event_id = button_pressed_event_id
+    then
+      if Bytes.length payload < 4
+      then Error "message composer button event must contain a 4-byte button id"
+      else (
+        let button_id = Little_endian.get_u32_unsigned payload 0 in
+        if Int64.equal button_id 0L
+        then Error "message composer button event id must be positive"
+        else
+          Result.map
+            (fun text -> Button_pressed { button_id = Int64.to_int button_id; text })
+            (decode_utf8
+               "button event text"
+               (Bytes.sub_string payload 4 (Bytes.length payload - 4))))
+    else Error "unknown message composer event"
+  ;;
+
+  let extension =
+    Extension.create
+      ~kind_id
+      ~version
+      ~capabilities:[ Capability.Stateful; Semantics ]
+      ~encode_props
+      ~decode_event
+      ()
+  ;;
+
+  let make_props enabled autofocus max_lines hint_text buttons =
+    let props =
+      { enabled
+      ; autofocus
+      ; max_lines
+      ; hint_text
+      ; buttons = List.map (fun button -> button.props) buttons
+      }
+    in
+    validate_props props;
+    props
+  ;;
+
+  let create
+        ?key
+        ?(enabled = true)
+        ?(autofocus = false)
+        ?(max_lines = 5)
+        ?(hint_text = "Ask anything")
+        ~buttons
+        ~on_event
+        ()
+    =
+    widget
+      extension
+      ?key
+      ~props:(make_props enabled autofocus max_lines hint_text buttons)
+      ~on_event
+      ~children:(List.map (fun button -> button.child) buttons)
+      ()
+  ;;
+
+  let create_with_handler
+        ?key
+        ?(enabled = true)
+        ?(autofocus = false)
+        ?(max_lines = 5)
+        ?(hint_text = "Ask anything")
+        ~buttons
+        ~on_event
+        ()
+    =
+    widget_with_handler
+      extension
+      ?key
+      ~props:(make_props enabled autofocus max_lines hint_text buttons)
+      ~on_event
+      ~children:(List.map (fun button -> button.child) buttons)
+      ()
+  ;;
+
+  let event_of_payload = function
+    | Event.Payload.Native_event event
+      when event.kind_id = kind_id && event.version = version ->
+      Result.to_option (decode_event ~event_id:event.event_id event.payload)
+    | _ -> None
+  ;;
+
+  module For_testing = struct
+    type nonrec button_props = button_props =
+      { id : int
+      ; tooltip : string
+      ; position : button_position
+      ; visibility : button_visibility
+      ; style : button_style
+      ; enabled : bool
+      }
+
+    type nonrec props = props =
+      { enabled : bool
+      ; autofocus : bool
+      ; max_lines : int
+      ; hint_text : string
+      ; buttons : button_props list
+      }
+
+    let decode_props_exn payload =
+      match decode_props payload with
+      | Ok props -> props
+      | Error message -> invalid_arg message
     ;;
   end
 end
