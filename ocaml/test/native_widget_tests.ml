@@ -56,10 +56,10 @@ let test_typed_native_widget () =
       ~on_event:(fun event -> received := Some event)
       ()
   in
-  let view = Ui.Widget.Private.view widget in
-  check (Ui.Widget.Private.Kind.equal view.kind Native_widget) "native widget kind";
-  (match view.props with
-   | Native_widget_props { kind_id; version; capabilities; payload } ->
+  let Av view = Ui.Widget.Private.view widget in
+  check (Ui.Widget.Private.kind_tag_equal (Ui.Widget.Private.node_kind_tag view.node) Ui.Widget.Private.K_native_widget) "native widget kind";
+  (match view.node with
+   | Native_widget { kind_id; version; capabilities; payload } ->
      check (ID.Native_widget.Kind_id.equal kind_id (native_kind_id 42)) "native kind ID";
      check (version = 3) "native version";
      check (Int64.equal capabilities 1L) "native capabilities";
@@ -97,10 +97,10 @@ let test_virtual_list_window () =
       ()
     |> widget_of_vertical_viewport
   in
-  let view = Ui.Widget.Private.view widget in
+  let Av view = Ui.Widget.Private.view widget in
   check (Array.length view.children = 20) "only the supplied window is mounted";
-  (match view.props with
-   | Native_widget_props { kind_id; payload; _ } ->
+  (match view.node with
+   | Native_widget { kind_id; payload; _ } ->
      check (kind_id = Ui.Native_widget.Virtual_list.kind_id) "virtual list extension ID";
      let props = Ui.Native_widget.Virtual_list.For_testing.decode_props_exn payload in
      check (props.total_count = 50_000) "virtual total count";
@@ -143,7 +143,7 @@ let test_virtual_list_handler_path_and_payload_filtering () =
       ()
     |> widget_of_vertical_viewport
   in
-  let binding = (Ui.Widget.Private.view widget).event_bindings.(0) in
+  let binding = (let Av v = Ui.Widget.Private.view widget in v.event_bindings).(0) in
   let invoke kind_id version event_id payload =
     Ui.Event.Handler.Private.invoke
       binding.handler
@@ -192,10 +192,10 @@ let test_sparse_extent_list_contract () =
       ()
     |> widget_of_vertical_viewport
   in
-  let view = Ui.Widget.Private.view widget in
+  let Av view = Ui.Widget.Private.view widget in
   check (Array.length view.children = 6) "sparse list mounted outside its supplied window";
-  (match view.props with
-   | Native_widget_props { kind_id; version; capabilities; payload } ->
+  (match view.node with
+   | Native_widget { kind_id; version; capabilities; payload } ->
      check (kind_id = native_kind_id 4) "sparse list kind ID";
      check (version = 1) "sparse list schema version";
      check (Int64.equal capabilities 23L) "sparse list capabilities";
@@ -253,8 +253,9 @@ let test_sparse_extent_list_transition_contract () =
       ()
     |> widget_of_vertical_viewport
   in
-  match (Ui.Widget.Private.view widget).props with
-  | Native_widget_props { kind_id; version; payload; _ } ->
+  let Av v = Ui.Widget.Private.view widget in
+   match v.node with
+  | Native_widget { kind_id; version; payload; _ } ->
     check (kind_id = native_kind_id 4) "animated sparse list kind ID";
     check (version = 2) "animated sparse list schema version";
     check (Bytes.length payload = 64) "animated sparse list exact payload length";
@@ -280,10 +281,10 @@ let test_morphing_surface_contract () =
       ~expanded_content:(Ui.Widget.text "Expanded")
       ()
   in
-  let view = Ui.Widget.Private.view widget in
+  let Av view = Ui.Widget.Private.view widget in
   check (Array.length view.children = 2) "morphing surface child slots";
-  match view.props with
-  | Native_widget_props { kind_id; version; capabilities; payload } ->
+  match view.node with
+  | Native_widget { kind_id; version; capabilities; payload } ->
     check (kind_id = native_kind_id 5) "morphing surface kind ID";
     check (version = 1) "morphing surface version";
     check (Int64.equal capabilities 4L) "morphing surface capabilities";
@@ -361,8 +362,9 @@ let test_sparse_extent_list_validation () =
     |> widget_of_vertical_viewport
   in
   let payload =
-    match (Ui.Widget.Private.view valid).props with
-    | Native_widget_props { payload; _ } -> payload
+    let Av v = Ui.Widget.Private.view valid in
+    match v.node with
+    | Native_widget { payload; _ } -> payload
     | _ -> failwith "sparse list native props"
   in
   let reject payload message =
@@ -404,7 +406,7 @@ let test_sparse_extent_handler_path_and_payload_filtering () =
       ()
     |> widget_of_vertical_viewport
   in
-  let binding = (Ui.Widget.Private.view widget).event_bindings.(0) in
+  let binding = (let Av v = Ui.Widget.Private.view widget in v.event_bindings).(0) in
   let invoke kind_id version event_id payload =
     Ui.Event.Handler.Private.invoke
       binding.handler
@@ -460,10 +462,10 @@ let test_swipe_action_props_contract () =
       ~on_commit:(fun direction -> received := Some direction)
       ()
   in
-  let view = Ui.Widget.Private.view widget in
+  let Av view = Ui.Widget.Private.view widget in
   check (Array.length view.children = 3) "swipe action must always have three children";
-  (match view.props with
-   | Native_widget_props { kind_id; version; capabilities; payload } ->
+  (match view.node with
+   | Native_widget { kind_id; version; capabilities; payload } ->
      check
        (ID.Native_widget.Kind_id.equal kind_id (native_kind_id 2))
        "swipe action kind ID";
@@ -537,9 +539,9 @@ let test_swipe_action_omitted_direction_and_validation () =
       ~on_commit:(fun _ -> ())
       ()
   in
-  let view = Ui.Widget.Private.view widget in
-  (match view.props with
-   | Native_widget_props { payload; _ } ->
+  let Av view = Ui.Widget.Private.view widget in
+  (match view.node with
+   | Native_widget { payload; _ } ->
      check (Char.code (Bytes.get payload 0) = 1) "omitted end direction flag";
      check
        (Float.equal (Int64.float_of_bits (Bytes.get_int64_le payload 20)) 999.)
@@ -549,9 +551,9 @@ let test_swipe_action_omitted_direction_and_validation () =
        "host clip border radius defaults to square"
    | _ -> failwith "swipe action native props");
   check
-    (Ui.Widget.Private.Kind.equal
-       (Ui.Widget.Private.view view.children.(2).widget).kind
-       Empty)
+    (Ui.Widget.Private.kind_tag_equal
+       (let Av v = Ui.Widget.Private.view view.children.(2).widget in Ui.Widget.Private.node_kind_tag v.node)
+       K_empty)
     "omitted end action must use an empty icon child";
   expect_invalid_argument
     (fun () ->
@@ -591,7 +593,7 @@ let test_swipe_action_event_filtering () =
       ~on_commit:(fun direction -> received := direction :: !received)
       ()
   in
-  let binding = (Ui.Widget.Private.view widget).event_bindings.(0) in
+  let binding = (let Av v = Ui.Widget.Private.view widget in v.event_bindings).(0) in
   let invoke kind_id version event_id payload =
     Ui.Event.Handler.Private.invoke
       binding.handler
@@ -626,10 +628,10 @@ let test_navigation_shell_contract_and_events () =
       ~on_drawer_state_changed:(fun state -> received := Some state)
       ()
   in
-  let view = Ui.Widget.Private.view widget in
+  let Av view = Ui.Widget.Private.view widget in
   check (Array.length view.children = 4) "navigation shell child shape";
-  (match view.props with
-   | Native_widget_props { kind_id; version; capabilities; payload } ->
+  (match view.node with
+   | Native_widget { kind_id; version; capabilities; payload } ->
      check
        (ID.Native_widget.Kind_id.equal kind_id (native_kind_id 3))
        "navigation shell kind ID";
@@ -749,18 +751,18 @@ let test_message_composer_contract_and_custom_buttons () =
       ~on_event:(fun event -> events := event :: !events)
       ()
   in
-  let view = Ui.Widget.Private.view widget in
+  let Av view = Ui.Widget.Private.view widget in
   check (Array.length view.children = 3) "message composer custom button child count";
   Array.iteri
     (fun index expected ->
-       let child = Ui.Widget.Private.view view.children.(index).widget in
-       match child.props with
-       | Ui.Widget.Private.Text_props { value; _ } ->
+       let Av child = Ui.Widget.Private.view view.children.(index).widget in
+       match child.node with
+       | Ui.Widget.Private.Text { value; _ } ->
          check (String.equal value expected) "message composer custom button order"
        | _ -> failwith "message composer button child")
     [| "attachment"; "voice"; "send" |];
-  (match view.props with
-   | Native_widget_props { kind_id; version; capabilities; payload } ->
+  (match view.node with
+   | Native_widget { kind_id; version; capabilities; payload } ->
      check (kind_id = native_kind_id 6) "message composer kind ID";
      check (version = 1) "message composer schema version";
      check (Int64.equal capabilities 5L) "message composer capabilities";
@@ -849,7 +851,7 @@ let test_message_composer_validation_and_event_filtering () =
       ~on_event:(fun event -> received := event :: !received)
       ()
   in
-  let binding = (Ui.Widget.Private.view widget).event_bindings.(0) in
+  let binding = (let Av v = Ui.Widget.Private.view widget in v.event_bindings).(0) in
   let invoke kind_id version event_id payload =
     Ui.Event.Handler.Private.invoke
       binding.handler

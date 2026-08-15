@@ -14,8 +14,8 @@ module Snapshot : sig
     { node_id : Node_id.t
     ; key : Bonsai_flutter_ui.Key.t option
     ; test_id : Bonsai_flutter_ui.Test_id.t option
-    ; kind : Bonsai_flutter_ui.Widget.Private.Kind.t
-    ; props : Bonsai_flutter_ui.Widget.Private.props
+    ; node_tag : Bonsai_flutter_ui.Widget.Private.kind_tag
+    ; widget : Bonsai_flutter_ui.Widget.t
     ; event_bindings : Mounted_binding.t array
     ; children : Node_id.t array
     ; parent_data : Bonsai_flutter_ui.Widget.Private.child_parent_data
@@ -47,8 +47,7 @@ module Private : sig
     { node_id : Node_id.t
     ; key : Bonsai_flutter_ui.Key.t option
     ; test_id : Bonsai_flutter_ui.Test_id.t option
-    ; kind : Bonsai_flutter_ui.Widget.Private.Kind.t
-    ; props : Bonsai_flutter_ui.Widget.Private.props
+    ; node_tag : Bonsai_flutter_ui.Widget.Private.kind_tag
     ; event_bindings : Mounted_binding.t array
     ; handlers : Bonsai_flutter_ui.Event.Handler.t array
     ; children : node array

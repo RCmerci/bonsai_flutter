@@ -3,8 +3,8 @@ module ID = Bonsai_flutter_spec.Id
 let quoted value = Printf.sprintf "%S" value
 
 let write_widget output widget =
-  let view = Widget.Private.view widget in
-  Buffer.add_string output (Widget.Private.Kind.to_string view.kind);
+  let Av view = Widget.Private.view widget in
+  Buffer.add_string output (Widget.Private.kind_tag_to_string (Widget.Private.node_kind_tag view.node));
   (match view.key with
    | None -> ()
    | Some key ->
@@ -15,11 +15,11 @@ let write_widget output widget =
    | Some test_id ->
      Buffer.add_string output " test_id=";
      Buffer.add_string output (Test_id.to_string test_id));
-  (match view.props with
-   | Widget.Private.Text_props { value; _ } ->
+  (match view.node with
+   | Widget.Private.Text { value; _ } ->
      Buffer.add_char output ' ';
      Buffer.add_string output (quoted value)
-   | Native_widget_props { kind_id; version; _ } ->
+   | Native_widget { kind_id; version; _ } ->
      Printf.bprintf
        output
        " native_kind=%d version=%d"
@@ -46,7 +46,7 @@ let dump_widget widget =
 let dump_tree root =
   let output = Buffer.create 256 in
   let rec write depth widget =
-    let view = Widget.Private.view widget in
+    let Av view = Widget.Private.view widget in
     if Buffer.length output > 0 then Buffer.add_char output '\n';
     Buffer.add_string output (String.make (depth * 2) ' ');
     write_widget output widget;

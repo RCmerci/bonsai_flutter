@@ -12,8 +12,8 @@ module Snapshot = struct
     { node_id : Node_id.t
     ; key : Ui.Key.t option
     ; test_id : Ui.Test_id.t option
-    ; kind : Ui.Widget.Private.Kind.t
-    ; props : Ui.Widget.Private.props
+    ; node_tag : Ui.Widget.Private.kind_tag
+    ; widget : Ui.Widget.t
     ; event_bindings : Mounted_binding.t array
     ; children : Node_id.t array
     ; parent_data : Ui.Widget.Private.child_parent_data
@@ -40,8 +40,8 @@ module Snapshot = struct
     Node_id.equal left.node_id right.node_id
     && option_key_equal left.key right.key
     && Option.equal Ui.Test_id.equal left.test_id right.test_id
-    && Ui.Widget.Private.Kind.equal left.kind right.kind
-    && Ui.Widget.Private.props_equal left.props right.props
+    && Ui.Widget.Private.kind_tag_equal left.node_tag right.node_tag
+    && Ui.Widget.Private.node_equal_widgets left.widget right.widget
     && Array.length left.event_bindings = Array.length right.event_bindings
     && Array.for_all2 binding_equal left.event_bindings right.event_bindings
     && Array.length left.children = Array.length right.children
@@ -84,8 +84,9 @@ module Snapshot = struct
 
   let find_by_text t text =
     find_matching t (fun node ->
-      match node.props with
-      | Ui.Widget.Private.Text_props { value; _ } -> String.equal value text
+      let Av view = Ui.Widget.Private.view node.widget in
+      match view.node with
+      | Ui.Widget.Private.Text { value; _ } -> String.equal value text
       | _ -> false)
   ;;
 
@@ -105,8 +106,7 @@ module Private = struct
     { node_id : Node_id.t
     ; key : Ui.Key.t option
     ; test_id : Ui.Test_id.t option
-    ; kind : Ui.Widget.Private.Kind.t
-    ; props : Ui.Widget.Private.props
+    ; node_tag : Ui.Widget.Private.kind_tag
     ; event_bindings : Mounted_binding.t array
     ; handlers : Ui.Event.Handler.t array
     ; children : node array
@@ -138,8 +138,8 @@ let snapshot t =
       { node_id = node.Private.node_id
       ; key = node.key
       ; test_id = node.test_id
-      ; kind = node.kind
-      ; props = node.props
+      ; node_tag = node.node_tag
+      ; widget = node.source_widget
       ; event_bindings = Array.copy node.event_bindings
       ; children = Array.map (fun child -> child.Private.node_id) node.children
       ; parent_data

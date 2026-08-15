@@ -42,21 +42,22 @@ let allocate_handler_id t =
 
 let validate_unique_keys root =
   let rec validate reversed_parent_path widget =
-    let view = Widget.Private.view widget in
+    let Av view = Widget.Private.view widget in
     let reversed_parent_path =
-      { Runtime_error.kind = view.kind; key = view.key } :: reversed_parent_path
+      { Runtime_error.kind = Widget.Private.node_kind_tag view.node; key = view.key } :: reversed_parent_path
     in
     match Array.length view.children with
     | 0 -> Ok ()
     | 1 -> validate reversed_parent_path view.children.(0).widget
-    | _ -> validate_children reversed_parent_path view
-  and validate_children reversed_parent_path view =
+    | _ -> validate_children reversed_parent_path widget
+  and validate_children reversed_parent_path widget =
+    let Av view = Widget.Private.view widget in
     let keys = ref None in
-    let observe_key index child_view key =
+    let observe_key index child_kind key =
       match !keys with
       | None ->
         let table = Key_table.create (Array.length view.children) in
-        Key_table.add table key (index, child_view.Widget.Private.kind);
+        Key_table.add table key (index, child_kind);
         keys := Some table;
         Ok ()
       | Some table ->
@@ -68,10 +69,10 @@ let validate_unique_keys root =
                 ; side = Runtime_error.Candidate
                 ; parent_path = List.rev reversed_parent_path
                 ; first = { child_index = first_index; kind = first_kind }
-                ; second = { child_index = index; kind = child_view.kind }
+                ; second = { child_index = index; kind = child_kind }
                 })
          | None ->
-           Key_table.add table key (index, child_view.kind);
+           Key_table.add table key (index, child_kind);
            Ok ())
     in
     let rec check_children index =
@@ -79,14 +80,15 @@ let validate_unique_keys root =
       then Ok ()
       else (
         let child = view.children.(index) in
-        let child_view = Widget.Private.view child.widget in
+        let child_kind = Widget.Private.kind_tag_of_widget child.widget in
+        let Av child_view = Widget.Private.view child.widget in
         match child_view.key with
         | None ->
           (match validate reversed_parent_path child.widget with
            | Error _ as error -> error
            | Ok () -> check_children (index + 1))
         | Some key ->
-          (match observe_key index child_view key with
+          (match observe_key index child_kind key with
            | Error _ as error -> error
            | Ok () ->
              (match validate reversed_parent_path child.widget with
@@ -207,7 +209,7 @@ let reconcile t ~base_revision ~target_revision ~old ~base_handler_frame new_wid
            mounted_bindings, handlers
          in
          let rec mount widget parent_data =
-           let view = Widget.Private.view widget in
+           let Av view = Widget.Private.view widget in
            let node_id = allocate_node_id t in
            let event_bindings, handlers = create_bindings ~node_id view.event_bindings in
            emit
@@ -215,8 +217,8 @@ let reconcile t ~base_revision ~target_revision ~old ~base_handler_frame new_wid
                 { node_id
                 ; key = view.key
                 ; test_id = view.test_id
-                ; kind = view.kind
-                ; props = view.props
+                ; node_tag = Widget.Private.kind_tag_of_widget widget
+                ; widget
                 ; event_bindings
                 ; parent_data
                 });
@@ -237,8 +239,7 @@ let reconcile t ~base_revision ~target_revision ~old ~base_handler_frame new_wid
            { Mounted_tree.Private.node_id
            ; key = view.key
            ; test_id = view.test_id
-           ; kind = view.kind
-           ; props = view.props
+           ; node_tag = Widget.Private.kind_tag_of_widget widget
            ; event_bindings
            ; handlers
            ; children
@@ -248,7 +249,7 @@ let reconcile t ~base_revision ~target_revision ~old ~base_handler_frame new_wid
                  view.children
            ; source_widget = widget
            }
-         and reconcile_bindings old_node view =
+         and reconcile_bindings old_node widget_bindings =
            let find_old tag =
              let rec loop index =
                if index = Array.length old_node.Mounted_tree.Private.event_bindings
@@ -281,12 +282,12 @@ let reconcile t ~base_revision ~target_revision ~old ~base_handler_frame new_wid
                     in
                     add_handler old_node.node_id mounted binding.handler;
                     mounted)
-               view.Widget.Private.event_bindings
+               widget_bindings
            in
            let handlers =
              Array.map
                (fun (binding : Widget.Private.event_binding) -> binding.handler)
-               view.event_bindings
+               widget_bindings
            in
            Array.iter
              (fun (old_binding : Mounted_tree.Mounted_binding.t) ->
@@ -294,7 +295,7 @@ let reconcile t ~base_revision ~target_revision ~old ~base_handler_frame new_wid
                   Array.exists
                     (fun (binding : Widget.Private.event_binding) ->
                        Ui.Event.Tag.equal old_binding.event_tag binding.tag)
-                    view.event_bindings
+                    widget_bindings
                 in
                 if not retained then remove_handler old_binding.handler_id)
              old_node.event_bindings;
@@ -304,7 +305,7 @@ let reconcile t ~base_revision ~target_revision ~old ~base_handler_frame new_wid
                (Frame_patch.Operation.Update_event_bindings
                   { node_id = old_node.node_id; event_bindings });
            event_bindings, handlers
-         and reconcile_children old_node view =
+         and reconcile_children old_node children =
            let old_children = old_node.Mounted_tree.Private.children in
            let used = Array.make (Array.length old_children) false in
            let keyed = Key_table.create (Array.length old_children) in
@@ -317,7 +318,8 @@ let reconcile t ~base_revision ~target_revision ~old ~base_handler_frame new_wid
            let children =
              Array.mapi
                (fun index (child : Widget.Private.child) ->
-                  let new_key = (Widget.Private.view child.widget).key in
+                  let Av child_view = Widget.Private.view child.widget in
+                   let new_key = child_view.key in
                   let matched_index =
                     match new_key with
                     | Some key -> Key_table.find_opt keyed key
@@ -337,7 +339,7 @@ let reconcile t ~base_revision ~target_revision ~old ~base_handler_frame new_wid
                       child.widget
                       ~new_parent_data:child.parent_data
                   | None | Some _ -> mount child.widget child.parent_data)
-               view.Widget.Private.children
+               children
            in
            Array.iteri
              (fun index child -> if not used.(index) then queue_drop child)
@@ -357,10 +359,10 @@ let reconcile t ~base_revision ~target_revision ~old ~base_handler_frame new_wid
              && Widget.Private.parent_data_equal old_parent_data new_parent_data
            then old_node
            else (
-             let view = Widget.Private.view widget in
+             let Av view = Widget.Private.view widget in
              let compatible =
                key_options_equal old_node.key view.key
-               && Widget.Private.Kind.equal old_node.kind view.kind
+               && Widget.Private.kind_tag_equal old_node.node_tag (Widget.Private.kind_tag_of_widget widget)
                && Widget.Private.parent_data_equal old_parent_data new_parent_data
              in
              if not compatible
@@ -369,18 +371,17 @@ let reconcile t ~base_revision ~target_revision ~old ~base_handler_frame new_wid
                queue_drop old_node;
                mounted)
              else (
-               if not (Widget.Private.props_equal old_node.props view.props)
+               if not (Widget.Private.node_equal_widgets old_node.source_widget widget)
                then
                  emit
-                   (Frame_patch.Operation.Update_props
-                      { node_id = old_node.node_id; props = view.props });
-               let event_bindings, handlers = reconcile_bindings old_node view in
-               let children = reconcile_children old_node view in
+                   (Frame_patch.Operation.Update_node
+                      { node_id = old_node.node_id; widget });
+               let event_bindings, handlers = reconcile_bindings old_node view.event_bindings in
+               let children = reconcile_children old_node view.children in
                { Mounted_tree.Private.node_id = old_node.node_id
                ; key = view.key
                ; test_id = view.test_id
-               ; kind = view.kind
-               ; props = view.props
+               ; node_tag = Widget.Private.kind_tag_of_widget widget
                ; event_bindings
                ; handlers
                ; children

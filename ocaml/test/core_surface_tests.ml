@@ -110,8 +110,9 @@ let test_navigation_constructors () =
   check
     (String.equal (Ui.Widget.For_testing.kind_name children.(0)) "Page")
     "navigator child is not a Page";
-  (match (Ui.Widget.Private.view children.(0)).props with
-   | Ui.Widget.Private.Page_props
+  (let Av view = Ui.Widget.Private.view children.(0) in
+    match view.node with
+   | Ui.Widget.Private.Page
        { presentation = Ui.Navigation.Standard Ui.Navigation.Fade; _ } -> ()
    | _ -> failwith "standard page presentation or transition was not preserved");
   let barrier_color = Ui.Style.Color.argb ~alpha:128 ~red:10 ~green:20 ~blue:30 in
@@ -149,8 +150,9 @@ let test_navigation_constructors () =
       ~restoration_id:(ID.Navigation.Restoration_id.of_string "editor-page")
       (Ui.Widget.text "Editor")
   in
-  (match (Ui.Widget.Private.view modal_page).props with
-   | Ui.Widget.Private.Page_props
+  (let Av view = Ui.Widget.Private.view modal_page in
+    match view.node with
+   | Ui.Widget.Private.Page
        { page_key
        ; presentation = Ui.Navigation.Modal_bottom_sheet modal
        ; can_pop
@@ -407,8 +409,9 @@ let test_styled_text_constructor_and_validation () =
       ~overflow:Ui.Style.Text_overflow.Ellipsis
       "A long subject"
   in
-  (match (Ui.Widget.Private.view text).props with
-   | Text_props
+  (let Av view = Ui.Widget.Private.view text in
+    match view.node with
+   | Text
        { value
        ; style =
            Some
@@ -466,7 +469,8 @@ let test_typed_viewport_body_encoding () =
   check
     (String.equal (Ui.Widget.For_testing.kind_name column) "Flex_column")
     "vertical body did not encode as a flex column";
-  let children = (Ui.Widget.Private.view column).children in
+  let Av column_view = Ui.Widget.Private.view column in
+  let children = column_view.children in
   check (Array.length children = 2) "vertical body lost a child";
   (match children.(0).parent_data, children.(1).parent_data with
    | Ui.Widget.Private.No_parent_data, Flex_parent_data { flex = 2; fit = Tight } -> ()
@@ -483,7 +487,8 @@ let test_typed_viewport_body_encoding () =
   check
     (String.equal (Ui.Widget.For_testing.kind_name stack) "Stack")
     "body overlay did not encode as a stack";
-  let stack_children = (Ui.Widget.Private.view stack).children in
+  let Av stack_view = Ui.Widget.Private.view stack in
+  let stack_children = stack_view.children in
   match stack_children.(0).parent_data, stack_children.(1).parent_data with
   | ( Stack_position { left = Some 0.; top = Some 0.; right = Some 0.; bottom = Some 0. }
     , Stack_position { right = Some 16.; bottom = Some 16.; _ } ) -> ()

@@ -62,8 +62,9 @@ let ordered_nodes snapshot =
         (Runtime.Node_id.to_int64 node_id)
     | Some node ->
       let children =
-        match node.props with
-        | Ui.Widget.Private.Native_widget_props { kind_id; payload; _ }
+        let Av view = Ui.Widget.Private.view node.widget in
+        match view.node with
+        | Ui.Widget.Private.Native_widget { kind_id; payload; _ }
           when kind_id = Ui.Native_widget.Morphing_surface.kind_id
                && Array.length node.children = 2 ->
           let props =
@@ -115,18 +116,19 @@ let render_tree t =
     in
     if Buffer.length output > 0 then Buffer.add_char output '\n';
     Buffer.add_string output (String.make (depth * 2) ' ');
-    Buffer.add_string output (Ui.Widget.Private.Kind.to_string node.kind);
+    Buffer.add_string output (Ui.Widget.Private.kind_tag_to_string node.node_tag);
     Option.iter
       (fun key -> Printf.bprintf output " key=%s" (unquote_debug_key key))
       node.key;
     Option.iter
       (fun test_id -> Printf.bprintf output " test_id=%s" (Ui.Test_id.to_string test_id))
       node.test_id;
-    (match node.props with
-     | Ui.Widget.Private.Text_props { value; _ } ->
+    (let Av view = Ui.Widget.Private.view node.widget in
+     match view.node with
+     | Ui.Widget.Private.Text { value; _ } ->
        Buffer.add_char output ' ';
        Buffer.add_string output (Printf.sprintf "%S" value)
-     | Native_widget_props { kind_id; version; _ } ->
+     | Native_widget { kind_id; version; _ } ->
        Printf.bprintf
          output
          " native_kind=%d version=%d"
@@ -307,8 +309,9 @@ let apply_text_edit
   =
   let node = require_node t query in
   let session_id =
-    match node.props with
-    | Ui.Widget.Private.Text_input_props { session_id; _ } -> session_id
+    let Av view = Ui.Widget.Private.view node.widget in
+    match view.node with
+    | Ui.Widget.Private.Text_input { session_id; _ } -> session_id
     | _ -> fail "text edit query did not match a Text_input node"
   in
   let selection =
@@ -333,8 +336,9 @@ let apply_text_edit
 let input_text t query text =
   let node = require_node t query in
   let document_revision, accepted_local_revision =
-    match node.props with
-    | Ui.Widget.Private.Text_input_props { document_revision; accepted_local_revision; _ }
+    let Av view = Ui.Widget.Private.view node.widget in
+    match view.node with
+    | Ui.Widget.Private.Text_input { document_revision; accepted_local_revision; _ }
       -> document_revision, accepted_local_revision
     | _ -> fail "input_text query did not match a Text_input node"
   in

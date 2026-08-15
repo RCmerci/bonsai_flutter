@@ -1,116 +1,114 @@
 module ID = Bonsai_flutter_spec.Id
 
-module Kind = struct
-  type t =
-    | Empty
-    | Text
-    | Rich_text
-    | Icon
-    | Image
-    | Row
-    | Column
-    | Flex_row
-    | Flex_column
-    | Stack
-    | Button
-    | Padding
-    | Align
-    | Center
-    | Sized_box
-    | Constrained_box
-    | Decorated_box
-    | Clip
-    | Opacity
-    | Animated_opacity
-    | Transform
-    | Scroll_view
-    | List_view
-    | Gesture
-    | Focus_scope
-    | Mouse_region
-    | Keyboard_listener
-    | Pressable
-    | Semantics
-    | Theme
-    | Material_scaffold
-    | Material_app_bar
-    | Material_elevated_button
-    | Material_text_button
-    | Material_icon_button
-    | Material_checkbox
-    | Material_switch
-    | Material_list_tile
-    | Material_divider
-    | Material_card
-    | Material_circular_progress_indicator
-    | Cupertino_button
-    | Cupertino_switch
-    | Text_input
-    | Overlay
-    | Navigator
-    | Page
-    | Safe_area
-    | Environment_boundary
-    | Material_dialog
-    | Native_widget
+type kind_tag =
+  | K_empty
+  | K_text
+  | K_rich_text
+  | K_icon
+  | K_image
+  | K_row
+  | K_column
+  | K_flex_row
+  | K_flex_column
+  | K_stack
+  | K_button
+  | K_padding
+  | K_align
+  | K_center
+  | K_sized_box
+  | K_constrained_box
+  | K_decorated_box
+  | K_clip
+  | K_opacity
+  | K_animated_opacity
+  | K_transform
+  | K_scroll_view
+  | K_list_view
+  | K_gesture
+  | K_focus_scope
+  | K_mouse_region
+  | K_keyboard_listener
+  | K_pressable
+  | K_semantics
+  | K_theme
+  | K_material_scaffold
+  | K_material_app_bar
+  | K_material_elevated_button
+  | K_material_text_button
+  | K_material_icon_button
+  | K_material_checkbox
+  | K_material_switch
+  | K_material_list_tile
+  | K_material_divider
+  | K_material_card
+  | K_material_circular_progress_indicator
+  | K_cupertino_button
+  | K_cupertino_switch
+  | K_text_input
+  | K_overlay
+  | K_navigator
+  | K_page
+  | K_safe_area
+  | K_environment_boundary
+  | K_material_dialog
+  | K_native_widget
 
-  let compare left right = Stdlib.compare left right
-  let equal left right = compare left right = 0
+let kind_tag_compare left right = Stdlib.compare left right
+let kind_tag_equal left right = kind_tag_compare left right = 0
 
-  let to_string = function
-    | Empty -> "Empty"
-    | Text -> "Text"
-    | Rich_text -> "Rich_text"
-    | Icon -> "Icon"
-    | Image -> "Image"
-    | Row -> "Row"
-    | Column -> "Column"
-    | Flex_row -> "Flex_row"
-    | Flex_column -> "Flex_column"
-    | Stack -> "Stack"
-    | Button -> "Button"
-    | Padding -> "Padding"
-    | Align -> "Align"
-    | Center -> "Center"
-    | Sized_box -> "Sized_box"
-    | Constrained_box -> "Constrained_box"
-    | Decorated_box -> "Decorated_box"
-    | Clip -> "Clip"
-    | Opacity -> "Opacity"
-    | Animated_opacity -> "Animated_opacity"
-    | Transform -> "Transform"
-    | Scroll_view -> "Scroll_view"
-    | List_view -> "List_view"
-    | Gesture -> "Gesture"
-    | Focus_scope -> "Focus_scope"
-    | Mouse_region -> "Mouse_region"
-    | Keyboard_listener -> "Keyboard_listener"
-    | Pressable -> "Pressable"
-    | Semantics -> "Semantics"
-    | Theme -> "Theme"
-    | Material_scaffold -> "Material_scaffold"
-    | Material_app_bar -> "Material_app_bar"
-    | Material_elevated_button -> "Material_elevated_button"
-    | Material_text_button -> "Material_text_button"
-    | Material_icon_button -> "Material_icon_button"
-    | Material_checkbox -> "Material_checkbox"
-    | Material_switch -> "Material_switch"
-    | Material_list_tile -> "Material_list_tile"
-    | Material_divider -> "Material_divider"
-    | Material_card -> "Material_card"
-    | Material_circular_progress_indicator -> "Material_circular_progress_indicator"
-    | Cupertino_button -> "Cupertino_button"
-    | Cupertino_switch -> "Cupertino_switch"
-    | Text_input -> "Text_input"
-    | Overlay -> "Overlay"
-    | Navigator -> "Navigator"
-    | Page -> "Page"
-    | Safe_area -> "Safe_area"
-    | Environment_boundary -> "Environment_boundary"
-    | Material_dialog -> "Material_dialog"
-    | Native_widget -> "Native_widget"
-  ;;
-end
+let kind_tag_to_string = function
+  | K_empty -> "Empty"
+  | K_text -> "Text"
+  | K_rich_text -> "Rich_text"
+  | K_icon -> "Icon"
+  | K_image -> "Image"
+  | K_row -> "Row"
+  | K_column -> "Column"
+  | K_flex_row -> "Flex_row"
+  | K_flex_column -> "Flex_column"
+  | K_stack -> "Stack"
+  | K_button -> "Button"
+  | K_padding -> "Padding"
+  | K_align -> "Align"
+  | K_center -> "Center"
+  | K_sized_box -> "Sized_box"
+  | K_constrained_box -> "Constrained_box"
+  | K_decorated_box -> "Decorated_box"
+  | K_clip -> "Clip"
+  | K_opacity -> "Opacity"
+  | K_animated_opacity -> "Animated_opacity"
+  | K_transform -> "Transform"
+  | K_scroll_view -> "Scroll_view"
+  | K_list_view -> "List_view"
+  | K_gesture -> "Gesture"
+  | K_focus_scope -> "Focus_scope"
+  | K_mouse_region -> "Mouse_region"
+  | K_keyboard_listener -> "Keyboard_listener"
+  | K_pressable -> "Pressable"
+  | K_semantics -> "Semantics"
+  | K_theme -> "Theme"
+  | K_material_scaffold -> "Material_scaffold"
+  | K_material_app_bar -> "Material_app_bar"
+  | K_material_elevated_button -> "Material_elevated_button"
+  | K_material_text_button -> "Material_text_button"
+  | K_material_icon_button -> "Material_icon_button"
+  | K_material_checkbox -> "Material_checkbox"
+  | K_material_switch -> "Material_switch"
+  | K_material_list_tile -> "Material_list_tile"
+  | K_material_divider -> "Material_divider"
+  | K_material_card -> "Material_card"
+  | K_material_circular_progress_indicator -> "Material_circular_progress_indicator"
+  | K_cupertino_button -> "Cupertino_button"
+  | K_cupertino_switch -> "Cupertino_switch"
+  | K_text_input -> "Text_input"
+  | K_overlay -> "Overlay"
+  | K_navigator -> "Navigator"
+  | K_page -> "Page"
+  | K_safe_area -> "Safe_area"
+  | K_environment_boundary -> "Environment_boundary"
+  | K_material_dialog -> "Material_dialog"
+  | K_native_widget -> "Native_widget"
+;;
 
 type flex_fit =
   | Loose
@@ -138,85 +136,103 @@ type material_button_variant =
   | Text_button
   | Icon_button
 
-type props =
-  | Empty_props
-  | Text_props of
+
+module Private_types = struct
+type 'k node =
+  | Empty : [ `Empty ] node
+  | Text :
       { value : string
       ; style : Style.Text_style.Private.view option
       ; text_align : Style.Text_align.t
       ; max_lines : int option
       ; overflow : Style.Text_overflow.t
       }
-  | Rich_text_props of { spans : string list }
-  | Icon_props of
+      -> [ `Text ] node
+  | Rich_text : { spans : string list } -> [ `Rich_text ] node
+  | Icon :
       { code_point : int
       ; font_family : string option
       ; size : float option
       ; color : int32 option
       }
-  | Image_props of
+      -> [ `Icon ] node
+  | Image :
       { uri : string
       ; fit : Style.Image_fit.t
       ; width : float option
       ; height : float option
       }
-  | Linear_props
-  | Stack_props
-  | Button_props of { enabled : bool }
-  | Pressable_props of
+      -> [ `Image ] node
+  | Row : [ `Row ] node
+  | Column : [ `Column ] node
+  | Flex_row : [ `Flex_row ] node
+  | Flex_column : [ `Flex_column ] node
+  | Stack : [ `Stack ] node
+  | Button : { enabled : bool } -> [ `Button ] node
+  | Pressable :
       { overlay_color : Style.Color.t
       ; release_delay_ms : int
       }
-  | Padding_props of
+      -> [ `Pressable ] node
+  | Padding :
       { left : float
       ; top : float
       ; right : float
       ; bottom : float
       }
-  | Align_props of { alignment : Layout.Alignment.t }
-  | Center_props of
+      -> [ `Padding ] node
+  | Align : { alignment : Layout.Alignment.t } -> [ `Align ] node
+  | Center :
       { width_factor : float option
       ; height_factor : float option
       }
-  | Sized_box_props of
+      -> [ `Center ] node
+  | Sized_box :
       { width : float option
       ; height : float option
       }
-  | Constrained_box_props of
+      -> [ `Sized_box ] node
+  | Constrained_box :
       { min_width : float
       ; max_width : float
       ; min_height : float
       ; max_height : float
       }
-  | Decorated_box_props of
+      -> [ `Constrained_box ] node
+  | Decorated_box :
       { background : int32 option
       ; border_radius : float
       }
-  | Clip_props of { behavior : Style.Clip.t }
-  | Opacity_props of { opacity : float }
-  | Animated_opacity_props of
+      -> [ `Decorated_box ] node
+  | Clip : { behavior : Style.Clip.t } -> [ `Clip ] node
+  | Opacity : { opacity : float } -> [ `Opacity ] node
+  | Animated_opacity :
       { opacity : float
       ; animation : Animation.t
       }
-  | Transform_props of { matrix4 : float array }
-  | Scroll_view_props of
+      -> [ `Animated_opacity ] node
+  | Transform : { matrix4 : float array } -> [ `Transform ] node
+  | Scroll_view :
       { axis : Layout.Axis.t
       ; reverse : bool
       ; primary : bool
       }
-  | List_view_props of
+      -> [ `Scroll_view ] node
+  | List_view :
       { axis : Layout.Axis.t
       ; reverse : bool
       ; primary : bool
       }
-  | Gesture_props
-  | Focus_scope_props of { autofocus : bool }
-  | Mouse_region_props of { opaque : bool }
-  | Keyboard_listener_props of
+      -> [ `List_view ] node
+  | Gesture : [ `Gesture ] node
+  | Focus_scope : { autofocus : bool } -> [ `Focus_scope ] node
+  | Mouse_region : { opaque : bool } -> [ `Mouse_region ] node
+  | Keyboard_listener :
       { autofocus : bool
       ; key_policy : Event.Key_policy.t
       }
-  | Semantics_props of
+      -> [ `Keyboard_listener ] node
+  | Semantics :
       { label : string option
       ; hint : string option
       ; value : string option
@@ -231,41 +247,62 @@ type props =
       ; sort_key : float option
       ; actions : Semantics.Action.t list
       }
-  | Theme_props of
+      -> [ `Semantics ] node
+  | Theme :
       { brightness : Style.Brightness.t
       ; color_seed : int32
       }
-  | Material_scaffold_props of { has_app_bar : bool }
-  | Material_app_bar_props of { center_title : bool }
-  | Material_button_props of
+      -> [ `Theme ] node
+  | Material_scaffold : { has_app_bar : bool } -> [ `Material_scaffold ] node
+  | Material_app_bar : { center_title : bool } -> [ `Material_app_bar ] node
+  | Material_elevated_button :
       { variant : material_button_variant
       ; enabled : bool
       ; autofocus : bool
       }
-  | Material_checkbox_props of
+      -> [ `Material_elevated_button ] node
+  | Material_text_button :
+      { variant : material_button_variant
+      ; enabled : bool
+      ; autofocus : bool
+      }
+      -> [ `Material_text_button ] node
+  | Material_icon_button :
+      { variant : material_button_variant
+      ; enabled : bool
+      ; autofocus : bool
+      }
+      -> [ `Material_icon_button ] node
+  | Material_checkbox :
       { value : bool
       ; enabled : bool
       }
-  | Material_switch_props of
+      -> [ `Material_checkbox ] node
+  | Material_switch :
       { value : bool
       ; enabled : bool
       }
-  | Material_list_tile_props of
+      -> [ `Material_switch ] node
+  | Material_list_tile :
       { enabled : bool
       ; selected : bool
       ; has_subtitle : bool
       ; has_leading : bool
       ; has_trailing : bool
       }
-  | Material_divider_props of { thickness : float }
-  | Material_card_props of { elevation : float }
-  | Material_progress_props of { value : float option }
-  | Cupertino_button_props of { enabled : bool }
-  | Cupertino_switch_props of
+      -> [ `Material_list_tile ] node
+  | Material_divider : { thickness : float } -> [ `Material_divider ] node
+  | Material_card : { elevation : float } -> [ `Material_card ] node
+  | Material_circular_progress_indicator :
+      { value : float option }
+      -> [ `Material_circular_progress_indicator ] node
+  | Cupertino_button : { enabled : bool } -> [ `Cupertino_button ] node
+  | Cupertino_switch :
       { value : bool
       ; enabled : bool
       }
-  | Text_input_props of
+      -> [ `Cupertino_switch ] node
+  | Text_input :
       { session_id : ID.Text_input.session_id
       ; document_revision : ID.Text_input.document_revision
       ; value : Text_editing.Value.t
@@ -279,19 +316,23 @@ type props =
       ; autofocus : bool
       ; max_utf8_bytes : int option
       }
-  | Overlay_props of
+      -> [ `Text_input ] node
+  | Overlay :
       { alignment : Navigation.overlay_alignment
       ; dismissible : bool
       }
-  | Navigator_props of
+      -> [ `Overlay ] node
+  | Navigator :
       { restoration_scope_id : ID.Navigation.restoration_scope_id option }
-  | Page_props of
+      -> [ `Navigator ] node
+  | Page :
       { page_key : ID.Navigation.page_key
       ; presentation : Navigation.page_presentation
       ; can_pop : bool
       ; restoration_id : ID.Navigation.restoration_id option
       }
-  | Safe_area_props of
+      -> [ `Page ] node
+  | Safe_area :
       { left : bool
       ; top : bool
       ; right : bool
@@ -301,202 +342,278 @@ type props =
       ; minimum_right : float
       ; minimum_bottom : float
       }
-  | Environment_boundary_props
-  | Material_dialog_props of { barrier_dismissible : bool }
-  | Native_widget_props of
+      -> [ `Safe_area ] node
+  | Environment_boundary : [ `Environment_boundary ] node
+  | Material_dialog :
+      { barrier_dismissible : bool }
+      -> [ `Material_dialog ] node
+  | Native_widget :
       { kind_id : ID.Native_widget.kind_id
       ; version : int
       ; capabilities : int64
       ; payload : bytes
       }
+      -> [ `Native_widget ] node
 
 type event_binding =
   { tag : Event.Tag.t
   ; handler : Event.Handler.t
   }
 
-type t = { view : view }
+type t = T : 'k view -> t
 
 and child =
   { widget : t
   ; parent_data : child_parent_data
   }
 
-and view =
+and 'k view =
   { key : Key.t option
   ; test_id : Test_id.t option
-  ; kind : Kind.t
-  ; props : props
+  ; node : 'k node
   ; event_bindings : event_binding array
   ; children : child array
   ; fingerprint : int64
   }
+end
 
-let props_equal left right =
-  match left, right with
-  | Empty_props, Empty_props
-  | Linear_props, Linear_props
-  | Stack_props, Stack_props
-  | Gesture_props, Gesture_props
-  | Environment_boundary_props, Environment_boundary_props -> true
-  | Text_props left, Text_props right ->
-    String.equal left.value right.value
-    && Option.equal ( = ) left.style right.style
-    && left.text_align = right.text_align
-    && Option.equal Int.equal left.max_lines right.max_lines
-    && left.overflow = right.overflow
-  | Rich_text_props left, Rich_text_props right ->
-    List.equal String.equal left.spans right.spans
-  | Icon_props left, Icon_props right ->
-    left.code_point = right.code_point
-    && Option.equal String.equal left.font_family right.font_family
-    && Option.equal Float.equal left.size right.size
-    && Option.equal Int32.equal left.color right.color
-  | Image_props left, Image_props right ->
-    String.equal left.uri right.uri
-    && left.fit = right.fit
-    && Option.equal Float.equal left.width right.width
-    && Option.equal Float.equal left.height right.height
-  | Button_props left, Button_props right -> Bool.equal left.enabled right.enabled
-  | Pressable_props left, Pressable_props right ->
+[@@@ocaml.warning "-34"]
+type t = Private_types.t
+type child = Private_types.child
+type 'k view = 'k Private_types.view
+type 'k node = 'k Private_types.node
+type event_binding = Private_types.event_binding
+[@@@ocaml.warning "+34"]
+open Private_types
+
+let node_kind_tag (type k) (n : k node) : kind_tag =
+  match n with
+  | Empty -> K_empty
+  | Text _ -> K_text
+  | Rich_text _ -> K_rich_text
+  | Icon _ -> K_icon
+  | Image _ -> K_image
+  | Row -> K_row
+  | Column -> K_column
+  | Flex_row -> K_flex_row
+  | Flex_column -> K_flex_column
+  | Stack -> K_stack
+  | Button _ -> K_button
+  | Pressable _ -> K_pressable
+  | Padding _ -> K_padding
+  | Align _ -> K_align
+  | Center _ -> K_center
+  | Sized_box _ -> K_sized_box
+  | Constrained_box _ -> K_constrained_box
+  | Decorated_box _ -> K_decorated_box
+  | Clip _ -> K_clip
+  | Opacity _ -> K_opacity
+  | Animated_opacity _ -> K_animated_opacity
+  | Transform _ -> K_transform
+  | Scroll_view _ -> K_scroll_view
+  | List_view _ -> K_list_view
+  | Gesture -> K_gesture
+  | Focus_scope _ -> K_focus_scope
+  | Mouse_region _ -> K_mouse_region
+  | Keyboard_listener _ -> K_keyboard_listener
+  | Semantics _ -> K_semantics
+  | Theme _ -> K_theme
+  | Material_scaffold _ -> K_material_scaffold
+  | Material_app_bar _ -> K_material_app_bar
+  | Material_elevated_button _ -> K_material_elevated_button
+  | Material_text_button _ -> K_material_text_button
+  | Material_icon_button _ -> K_material_icon_button
+  | Material_checkbox _ -> K_material_checkbox
+  | Material_switch _ -> K_material_switch
+  | Material_list_tile _ -> K_material_list_tile
+  | Material_divider _ -> K_material_divider
+  | Material_card _ -> K_material_card
+  | Material_circular_progress_indicator _ -> K_material_circular_progress_indicator
+  | Cupertino_button _ -> K_cupertino_button
+  | Cupertino_switch _ -> K_cupertino_switch
+  | Text_input _ -> K_text_input
+  | Overlay _ -> K_overlay
+  | Navigator _ -> K_navigator
+  | Page _ -> K_page
+  | Safe_area _ -> K_safe_area
+  | Environment_boundary -> K_environment_boundary
+  | Material_dialog _ -> K_material_dialog
+  | Native_widget _ -> K_native_widget
+;;
+
+let node_equal (type k1 k2) (a : k1 node) (b : k2 node) : bool =
+  match a, b with
+  | Empty, Empty
+  | Row, Row
+  | Column, Column
+  | Flex_row, Flex_row
+  | Flex_column, Flex_column
+  | Stack, Stack
+  | Gesture, Gesture
+  | Environment_boundary, Environment_boundary -> true
+  | Text x, Text y ->
+    String.equal x.value y.value
+    && Option.equal ( = ) x.style y.style
+    && x.text_align = y.text_align
+    && Option.equal Int.equal x.max_lines y.max_lines
+    && x.overflow = y.overflow
+  | Rich_text x, Rich_text y -> List.equal String.equal x.spans y.spans
+  | Icon x, Icon y ->
+    x.code_point = y.code_point
+    && Option.equal String.equal x.font_family y.font_family
+    && Option.equal Float.equal x.size y.size
+    && Option.equal Int32.equal x.color y.color
+  | Image x, Image y ->
+    String.equal x.uri y.uri
+    && x.fit = y.fit
+    && Option.equal Float.equal x.width y.width
+    && Option.equal Float.equal x.height y.height
+  | Button x, Button y -> Bool.equal x.enabled y.enabled
+  | Pressable x, Pressable y ->
     Int32.equal
-      (Style.Color.Private.to_argb32 left.overlay_color)
-      (Style.Color.Private.to_argb32 right.overlay_color)
-    && left.release_delay_ms = right.release_delay_ms
-  | Padding_props left, Padding_props right ->
-    Float.equal left.left right.left
-    && Float.equal left.top right.top
-    && Float.equal left.right right.right
-    && Float.equal left.bottom right.bottom
-  | Align_props left, Align_props right -> left.alignment = right.alignment
-  | Center_props left, Center_props right ->
-    Option.equal Float.equal left.width_factor right.width_factor
-    && Option.equal Float.equal left.height_factor right.height_factor
-  | Sized_box_props left, Sized_box_props right ->
-    Option.equal Float.equal left.width right.width
-    && Option.equal Float.equal left.height right.height
-  | Constrained_box_props left, Constrained_box_props right ->
-    Float.equal left.min_width right.min_width
-    && Float.equal left.max_width right.max_width
-    && Float.equal left.min_height right.min_height
-    && Float.equal left.max_height right.max_height
-  | Decorated_box_props left, Decorated_box_props right ->
-    Option.equal Int32.equal left.background right.background
-    && Float.equal left.border_radius right.border_radius
-  | Clip_props left, Clip_props right -> left.behavior = right.behavior
-  | Opacity_props left, Opacity_props right -> Float.equal left.opacity right.opacity
-  | Animated_opacity_props left, Animated_opacity_props right ->
-    Float.equal left.opacity right.opacity
-    && Animation.Private.equal left.animation right.animation
-  | Transform_props left, Transform_props right ->
-    Array.length left.matrix4 = Array.length right.matrix4
-    && Array.for_all2 Float.equal left.matrix4 right.matrix4
-  | Scroll_view_props left, Scroll_view_props right ->
-    left.axis = right.axis
-    && Bool.equal left.reverse right.reverse
-    && Bool.equal left.primary right.primary
-  | List_view_props left, List_view_props right ->
-    left.axis = right.axis
-    && Bool.equal left.reverse right.reverse
-    && Bool.equal left.primary right.primary
-  | Focus_scope_props left, Focus_scope_props right ->
-    Bool.equal left.autofocus right.autofocus
-  | Mouse_region_props left, Mouse_region_props right ->
-    Bool.equal left.opaque right.opaque
-  | Keyboard_listener_props left, Keyboard_listener_props right ->
-    Bool.equal left.autofocus right.autofocus && left.key_policy = right.key_policy
-  | Semantics_props left, Semantics_props right ->
-    Option.equal String.equal left.label right.label
-    && Option.equal String.equal left.hint right.hint
-    && Option.equal String.equal left.value right.value
-    && Semantics.Role.equal left.role right.role
-    && Option.equal Bool.equal left.enabled right.enabled
-    && Option.equal Bool.equal left.selected right.selected
-    && Option.equal Bool.equal left.checked right.checked
-    && Option.equal Bool.equal left.focusable right.focusable
-    && Bool.equal left.obscured right.obscured
-    && Bool.equal left.live_region right.live_region
-    && Option.equal Int.equal left.heading_level right.heading_level
-    && Option.equal Float.equal left.sort_key right.sort_key
-    && List.equal Semantics.Action.equal left.actions right.actions
-  | Theme_props left, Theme_props right ->
-    left.brightness = right.brightness && Int32.equal left.color_seed right.color_seed
-  | Material_scaffold_props left, Material_scaffold_props right ->
-    Bool.equal left.has_app_bar right.has_app_bar
-  | Material_app_bar_props left, Material_app_bar_props right ->
-    Bool.equal left.center_title right.center_title
-  | Material_button_props left, Material_button_props right ->
-    left.variant = right.variant
-    && Bool.equal left.enabled right.enabled
-    && Bool.equal left.autofocus right.autofocus
-  | Material_checkbox_props left, Material_checkbox_props right ->
-    Bool.equal left.value right.value && Bool.equal left.enabled right.enabled
-  | Material_switch_props left, Material_switch_props right ->
-    Bool.equal left.value right.value && Bool.equal left.enabled right.enabled
-  | Material_list_tile_props left, Material_list_tile_props right ->
-    Bool.equal left.enabled right.enabled
-    && Bool.equal left.selected right.selected
-    && Bool.equal left.has_subtitle right.has_subtitle
-    && Bool.equal left.has_leading right.has_leading
-    && Bool.equal left.has_trailing right.has_trailing
-  | Material_divider_props left, Material_divider_props right ->
-    Float.equal left.thickness right.thickness
-  | Material_card_props left, Material_card_props right ->
-    Float.equal left.elevation right.elevation
-  | Material_progress_props left, Material_progress_props right ->
-    Option.equal Float.equal left.value right.value
-  | Cupertino_button_props left, Cupertino_button_props right ->
-    Bool.equal left.enabled right.enabled
-  | Cupertino_switch_props left, Cupertino_switch_props right ->
-    Bool.equal left.value right.value && Bool.equal left.enabled right.enabled
-  | Text_input_props left, Text_input_props right ->
-    ID.Text_input.Session_id.equal left.session_id right.session_id
+      (Style.Color.Private.to_argb32 x.overlay_color)
+      (Style.Color.Private.to_argb32 y.overlay_color)
+    && x.release_delay_ms = y.release_delay_ms
+  | Padding x, Padding y ->
+    Float.equal x.left y.left
+    && Float.equal x.top y.top
+    && Float.equal x.right y.right
+    && Float.equal x.bottom y.bottom
+  | Align x, Align y -> x.alignment = y.alignment
+  | Center x, Center y ->
+    Option.equal Float.equal x.width_factor y.width_factor
+    && Option.equal Float.equal x.height_factor y.height_factor
+  | Sized_box x, Sized_box y ->
+    Option.equal Float.equal x.width y.width
+    && Option.equal Float.equal x.height y.height
+  | Constrained_box x, Constrained_box y ->
+    Float.equal x.min_width y.min_width
+    && Float.equal x.max_width y.max_width
+    && Float.equal x.min_height y.min_height
+    && Float.equal x.max_height y.max_height
+  | Decorated_box x, Decorated_box y ->
+    Option.equal Int32.equal x.background y.background
+    && Float.equal x.border_radius y.border_radius
+  | Clip x, Clip y -> x.behavior = y.behavior
+  | Opacity x, Opacity y -> Float.equal x.opacity y.opacity
+  | Animated_opacity x, Animated_opacity y ->
+    Float.equal x.opacity y.opacity
+    && Animation.Private.equal x.animation y.animation
+  | Transform x, Transform y ->
+    Array.length x.matrix4 = Array.length y.matrix4
+    && Array.for_all2 Float.equal x.matrix4 y.matrix4
+  | Scroll_view x, Scroll_view y ->
+    x.axis = y.axis
+    && Bool.equal x.reverse y.reverse
+    && Bool.equal x.primary y.primary
+  | List_view x, List_view y ->
+    x.axis = y.axis
+    && Bool.equal x.reverse y.reverse
+    && Bool.equal x.primary y.primary
+  | Focus_scope x, Focus_scope y -> Bool.equal x.autofocus y.autofocus
+  | Mouse_region x, Mouse_region y -> Bool.equal x.opaque y.opaque
+  | Keyboard_listener x, Keyboard_listener y ->
+    Bool.equal x.autofocus y.autofocus && x.key_policy = y.key_policy
+  | Semantics x, Semantics y ->
+    Option.equal String.equal x.label y.label
+    && Option.equal String.equal x.hint y.hint
+    && Option.equal String.equal x.value y.value
+    && Semantics.Role.equal x.role y.role
+    && Option.equal Bool.equal x.enabled y.enabled
+    && Option.equal Bool.equal x.selected y.selected
+    && Option.equal Bool.equal x.checked y.checked
+    && Option.equal Bool.equal x.focusable y.focusable
+    && Bool.equal x.obscured y.obscured
+    && Bool.equal x.live_region y.live_region
+    && Option.equal Int.equal x.heading_level y.heading_level
+    && Option.equal Float.equal x.sort_key y.sort_key
+    && List.equal Semantics.Action.equal x.actions y.actions
+  | Theme x, Theme y ->
+    x.brightness = y.brightness && Int32.equal x.color_seed y.color_seed
+  | Material_scaffold x, Material_scaffold y ->
+    Bool.equal x.has_app_bar y.has_app_bar
+  | Material_app_bar x, Material_app_bar y ->
+    Bool.equal x.center_title y.center_title
+  | Material_elevated_button x, Material_elevated_button y ->
+    x.variant = y.variant
+    && Bool.equal x.enabled y.enabled
+    && Bool.equal x.autofocus y.autofocus
+  | Material_text_button x, Material_text_button y ->
+    x.variant = y.variant
+    && Bool.equal x.enabled y.enabled
+    && Bool.equal x.autofocus y.autofocus
+  | Material_icon_button x, Material_icon_button y ->
+    x.variant = y.variant
+    && Bool.equal x.enabled y.enabled
+    && Bool.equal x.autofocus y.autofocus
+  | Material_checkbox x, Material_checkbox y ->
+    Bool.equal x.value y.value && Bool.equal x.enabled y.enabled
+  | Material_switch x, Material_switch y ->
+    Bool.equal x.value y.value && Bool.equal x.enabled y.enabled
+  | Material_list_tile x, Material_list_tile y ->
+    Bool.equal x.enabled y.enabled
+    && Bool.equal x.selected y.selected
+    && Bool.equal x.has_subtitle y.has_subtitle
+    && Bool.equal x.has_leading y.has_leading
+    && Bool.equal x.has_trailing y.has_trailing
+  | Material_divider x, Material_divider y ->
+    Float.equal x.thickness y.thickness
+  | Material_card x, Material_card y ->
+    Float.equal x.elevation y.elevation
+  | Material_circular_progress_indicator x, Material_circular_progress_indicator y ->
+    Option.equal Float.equal x.value y.value
+  | Cupertino_button x, Cupertino_button y ->
+    Bool.equal x.enabled y.enabled
+  | Cupertino_switch x, Cupertino_switch y ->
+    Bool.equal x.value y.value && Bool.equal x.enabled y.enabled
+  | Text_input x, Text_input y ->
+    ID.Text_input.Session_id.equal x.session_id y.session_id
     && ID.Text_input.Document_revision.equal
-         left.document_revision
-         right.document_revision
-    && Text_editing.Value.equal left.value right.value
-    && Bool.equal left.enabled right.enabled
-    && Bool.equal left.read_only right.read_only
-    && Bool.equal left.obscure_text right.obscure_text
-    && left.keyboard_type = right.keyboard_type
-    && left.input_action = right.input_action
+         x.document_revision
+         y.document_revision
+    && Text_editing.Value.equal x.value y.value
+    && Bool.equal x.enabled y.enabled
+    && Bool.equal x.read_only y.read_only
+    && Bool.equal x.obscure_text y.obscure_text
+    && x.keyboard_type = y.keyboard_type
+    && x.input_action = y.input_action
     && ID.Text_input.Local_revision.equal
-         left.accepted_local_revision
-         right.accepted_local_revision
-    && left.update_mode = right.update_mode
-    && Bool.equal left.autofocus right.autofocus
-    && Option.equal Int.equal left.max_utf8_bytes right.max_utf8_bytes
-  | Overlay_props left, Overlay_props right ->
-    left.alignment = right.alignment && Bool.equal left.dismissible right.dismissible
-  | Navigator_props left, Navigator_props right ->
+         x.accepted_local_revision
+         y.accepted_local_revision
+    && x.update_mode = y.update_mode
+    && Bool.equal x.autofocus y.autofocus
+    && Option.equal Int.equal x.max_utf8_bytes y.max_utf8_bytes
+  | Overlay x, Overlay y ->
+    x.alignment = y.alignment && Bool.equal x.dismissible y.dismissible
+  | Navigator x, Navigator y ->
     Option.equal
       ID.Navigation.Restoration_scope_id.equal
-      left.restoration_scope_id
-      right.restoration_scope_id
-  | Page_props left, Page_props right ->
-    ID.Navigation.Page_key.equal left.page_key right.page_key
-    && left.presentation = right.presentation
-    && Bool.equal left.can_pop right.can_pop
+      x.restoration_scope_id
+      y.restoration_scope_id
+  | Page x, Page y ->
+    ID.Navigation.Page_key.equal x.page_key y.page_key
+    && x.presentation = y.presentation
+    && Bool.equal x.can_pop y.can_pop
     && Option.equal
          ID.Navigation.Restoration_id.equal
-         left.restoration_id
-         right.restoration_id
-  | Safe_area_props left, Safe_area_props right ->
-    Bool.equal left.left right.left
-    && Bool.equal left.top right.top
-    && Bool.equal left.right right.right
-    && Bool.equal left.bottom right.bottom
-    && Float.equal left.minimum_left right.minimum_left
-    && Float.equal left.minimum_top right.minimum_top
-    && Float.equal left.minimum_right right.minimum_right
-    && Float.equal left.minimum_bottom right.minimum_bottom
-  | Material_dialog_props left, Material_dialog_props right ->
-    Bool.equal left.barrier_dismissible right.barrier_dismissible
-  | Native_widget_props left, Native_widget_props right ->
-    left.kind_id = right.kind_id
-    && left.version = right.version
-    && Int64.equal left.capabilities right.capabilities
-    && Bytes.equal left.payload right.payload
+         x.restoration_id
+         y.restoration_id
+  | Safe_area x, Safe_area y ->
+    Bool.equal x.left y.left
+    && Bool.equal x.top y.top
+    && Bool.equal x.right y.right
+    && Bool.equal x.bottom y.bottom
+    && Float.equal x.minimum_left y.minimum_left
+    && Float.equal x.minimum_top y.minimum_top
+    && Float.equal x.minimum_right y.minimum_right
+    && Float.equal x.minimum_bottom y.minimum_bottom
+  | Material_dialog x, Material_dialog y ->
+    Bool.equal x.barrier_dismissible y.barrier_dismissible
+  | Native_widget x, Native_widget y ->
+    x.kind_id = y.kind_id
+    && x.version = y.version
+    && Int64.equal x.capabilities y.capabilities
+    && Bytes.equal x.payload y.payload
   | _ -> false
 ;;
 
@@ -519,12 +636,12 @@ let hash_combine state value =
   Int64.(mul (logxor state (of_int (Hashtbl.hash value))) 0x100000001b3L)
 ;;
 
-let fingerprint ~key ~test_id ~kind ~props ~event_bindings ~children =
+let fingerprint (type k) ~key ~test_id ~(node : k node) ~event_bindings ~children =
   let state = ref 0xcbf29ce484222325L in
   state := hash_combine !state key;
   state := hash_combine !state test_id;
-  state := hash_combine !state kind;
-  state := hash_combine !state props;
+  state := hash_combine !state (node_kind_tag node);
+  state := hash_combine !state node;
   Array.iter
     (fun binding ->
        state := hash_combine !state binding.tag;
@@ -533,29 +650,29 @@ let fingerprint ~key ~test_id ~kind ~props ~event_bindings ~children =
   Array.iter
     (fun child ->
        state := hash_combine !state child.parent_data;
-       state := hash_combine !state child.widget.view.fingerprint)
+       let T child_view = child.widget in
+       state := hash_combine !state child_view.fingerprint)
     children;
   !state
 ;;
 
-let create ~key ~kind ~props ~event_bindings ~children =
+let create_typed (type k) ~key ~(node : k node) ~event_bindings ~children =
   let test_id = None in
-  let fingerprint = fingerprint ~key ~test_id ~kind ~props ~event_bindings ~children in
-  { view = { key; test_id; kind; props; event_bindings; children; fingerprint } }
+  let fingerprint = fingerprint ~key ~test_id ~node ~event_bindings ~children in
+  T { key; test_id; node; event_bindings; children; fingerprint }
 ;;
 
-let with_test_id test_id t =
-  let view = t.view in
+let with_test_id test_id widget =
+  let T view = widget in
   let fingerprint =
     fingerprint
       ~key:view.key
       ~test_id:(Some test_id)
-      ~kind:view.kind
-      ~props:view.props
+      ~node:view.node
       ~event_bindings:view.event_bindings
       ~children:view.children
   in
-  { view = { view with test_id = Some test_id; fingerprint } }
+  T { view with test_id = Some test_id; fingerprint }
 ;;
 
 let plain_children widgets =
@@ -565,7 +682,7 @@ let plain_children widgets =
 ;;
 
 let empty ?key () =
-  create ~key ~kind:Kind.Empty ~props:Empty_props ~event_bindings:[||] ~children:[||]
+  create_typed ~key ~node:Empty ~event_bindings:[||] ~children:[||]
 ;;
 
 let text
@@ -580,11 +697,10 @@ let text
     (fun value ->
        if value <= 0 then invalid_arg "Widget.text: max_lines must be positive")
     max_lines;
-  create
+  create_typed
     ~key
-    ~kind:Kind.Text
-    ~props:
-      (Text_props
+    ~node:
+      (Text
          { value
          ; style = Option.map Style.Text_style.Private.view style
          ; text_align
@@ -596,10 +712,9 @@ let text
 ;;
 
 let rich_text ?key spans =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Rich_text
-    ~props:(Rich_text_props { spans })
+    ~node:(Rich_text { spans })
     ~event_bindings:[||]
     ~children:[||]
 ;;
@@ -618,11 +733,10 @@ let icon ?key ?font_family ?size ?color ~code_point () =
     || code_point > 0x10ffff
     || (code_point >= 0xd800 && code_point <= 0xdfff)
   then invalid_arg "Widget.icon: code_point must be a Unicode scalar value";
-  create
+  create_typed
     ~key
-    ~kind:Kind.Icon
-    ~props:
-      (Icon_props
+    ~node:
+      (Icon
          { code_point
          ; font_family
          ; size = optional_dimension "icon.size" size
@@ -634,11 +748,10 @@ let icon ?key ?font_family ?size ?color ~code_point () =
 
 let image ?key ?(fit = Style.Image_fit.Contain) ?width ?height ~uri () =
   if String.length uri = 0 then invalid_arg "Widget.image: uri must not be empty";
-  create
+  create_typed
     ~key
-    ~kind:Kind.Image
-    ~props:
-      (Image_props
+    ~node:
+      (Image
          { uri
          ; fit
          ; width = optional_dimension "image.width" width
@@ -649,28 +762,25 @@ let image ?key ?(fit = Style.Image_fit.Contain) ?width ?height ~uri () =
 ;;
 
 let row ?key children =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Row
-    ~props:Linear_props
+    ~node:Row
     ~event_bindings:[||]
     ~children:(plain_children children)
 ;;
 
 let column ?key children =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Column
-    ~props:Linear_props
+    ~node:Column
     ~event_bindings:[||]
     ~children:(plain_children children)
 ;;
 
 let button ?key ?(enabled = true) ~on_press ~child () =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Button
-    ~props:(Button_props { enabled })
+    ~node:(Button { enabled })
     ~event_bindings:[| { tag = Event.Tag.Press; handler = on_press } |]
     ~children:(plain_children [ child ])
 ;;
@@ -689,29 +799,26 @@ let pressable
   =
   if release_delay_ms < 0 || release_delay_ms > 100
   then invalid_arg "Widget.pressable: release delay must be in 0..100ms";
-  create
+  create_typed
     ~key
-    ~kind:Kind.Pressable
-    ~props:(Pressable_props { overlay_color; release_delay_ms })
+    ~node:(Pressable { overlay_color; release_delay_ms })
     ~event_bindings:[| { tag = Event.Tag.Press; handler = on_press } |]
     ~children:(plain_children [ child ])
 ;;
 
 let padding ?key ~insets child =
   let left, top, right, bottom = Layout.Edge_insets.Private.to_sides insets in
-  create
+  create_typed
     ~key
-    ~kind:Kind.Padding
-    ~props:(Padding_props { left; top; right; bottom })
+    ~node:(Padding { left; top; right; bottom })
     ~event_bindings:[||]
     ~children:(plain_children [ child ])
 ;;
 
 let align ?key ~alignment child =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Align
-    ~props:(Align_props { alignment })
+    ~node:(Align { alignment })
     ~event_bindings:[||]
     ~children:(plain_children [ child ])
 ;;
@@ -726,11 +833,10 @@ let finite_factor label = function
 ;;
 
 let center ?key ?width_factor ?height_factor child =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Center
-    ~props:
-      (Center_props
+    ~node:
+      (Center
          { width_factor = finite_factor "width_factor" width_factor
          ; height_factor = finite_factor "height_factor" height_factor
          })
@@ -739,11 +845,10 @@ let center ?key ?width_factor ?height_factor child =
 ;;
 
 let sized_box ?key ?width ?height child =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Sized_box
-    ~props:
-      (Sized_box_props
+    ~node:
+      (Sized_box
          { width = optional_dimension "sized_box.width" width
          ; height = optional_dimension "sized_box.height" height
          })
@@ -755,29 +860,26 @@ let constrained_box ?key ~constraints child =
   let min_width, max_width, min_height, max_height =
     Layout.Box_constraints.Private.to_values constraints
   in
-  create
+  create_typed
     ~key
-    ~kind:Kind.Constrained_box
-    ~props:(Constrained_box_props { min_width; max_width; min_height; max_height })
+    ~node:(Constrained_box { min_width; max_width; min_height; max_height })
     ~event_bindings:[||]
     ~children:(plain_children [ child ])
 ;;
 
 let decorated_box ?key ~decoration child =
   let background, border_radius = Style.Decoration.Private.to_values decoration in
-  create
+  create_typed
     ~key
-    ~kind:Kind.Decorated_box
-    ~props:(Decorated_box_props { background; border_radius })
+    ~node:(Decorated_box { background; border_radius })
     ~event_bindings:[||]
     ~children:(plain_children [ child ])
 ;;
 
 let clip ?key ?(behavior = Style.Clip.Anti_alias) child =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Clip
-    ~props:(Clip_props { behavior })
+    ~node:(Clip { behavior })
     ~event_bindings:[||]
     ~children:(plain_children [ child ])
 ;;
@@ -788,10 +890,9 @@ let opacity ?key opacity child =
     || Float.compare opacity 0. < 0
     || Float.compare opacity 1. > 0
   then invalid_arg "Widget.opacity: opacity must be finite and in 0..1";
-  create
+  create_typed
     ~key
-    ~kind:Kind.Opacity
-    ~props:(Opacity_props { opacity })
+    ~node:(Opacity { opacity })
     ~event_bindings:[||]
     ~children:(plain_children [ child ])
 ;;
@@ -802,19 +903,17 @@ let animated_opacity ?key ~animation ~opacity ~on_completed child =
     || Float.compare opacity 0. < 0
     || Float.compare opacity 1. > 0
   then invalid_arg "Widget.animated_opacity: opacity must be finite and in 0..1";
-  create
+  create_typed
     ~key
-    ~kind:Kind.Animated_opacity
-    ~props:(Animated_opacity_props { opacity; animation })
+    ~node:(Animated_opacity { opacity; animation })
     ~event_bindings:[| { tag = Event.Tag.Animation_completed; handler = on_completed } |]
     ~children:(plain_children [ child ])
 ;;
 
 let transform ?key ~transform child =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Transform
-    ~props:(Transform_props { matrix4 = Style.Transform.Private.to_array transform })
+    ~node:(Transform { matrix4 = Style.Transform.Private.to_array transform })
     ~event_bindings:[||]
     ~children:(plain_children [ child ])
 ;;
@@ -828,10 +927,9 @@ let scroll_view_widget
       child
       ()
   =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Scroll_view
-    ~props:(Scroll_view_props { axis; reverse; primary })
+    ~node:(Scroll_view { axis; reverse; primary })
     ~event_bindings:[| { tag = Event.Tag.Scroll_notification; handler = on_scroll } |]
     ~children:(plain_children [ child ])
 ;;
@@ -845,10 +943,9 @@ let list_view_widget
       children
       ()
   =
-  create
+  create_typed
     ~key
-    ~kind:Kind.List_view
-    ~props:(List_view_props { axis; reverse; primary })
+    ~node:(List_view { axis; reverse; primary })
     ~event_bindings:[| { tag = Event.Tag.Scroll_notification; handler = on_scroll } |]
     ~children:(plain_children children)
 ;;
@@ -865,11 +962,10 @@ let safe_area
   let minimum_left, minimum_top, minimum_right, minimum_bottom =
     Layout.Edge_insets.Private.to_sides minimum
   in
-  create
+  create_typed
     ~key
-    ~kind:Kind.Safe_area
-    ~props:
-      (Safe_area_props
+    ~node:
+      (Safe_area
          { left
          ; top
          ; right
@@ -884,10 +980,9 @@ let safe_area
 ;;
 
 let environment_boundary ?key child =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Environment_boundary
-    ~props:Environment_boundary_props
+    ~node:Environment_boundary
     ~event_bindings:[||]
     ~children:(plain_children [ child ])
 ;;
@@ -915,28 +1010,25 @@ let gesture
   in
   if event_bindings = []
   then invalid_arg "Widget.gesture: at least one event handler is required";
-  create
+  create_typed
     ~key
-    ~kind:Kind.Gesture
-    ~props:Gesture_props
+    ~node:Gesture
     ~event_bindings:(Array.of_list event_bindings)
     ~children:(plain_children [ child ])
 ;;
 
 let focus_scope ?key ?(autofocus = false) ~on_focus_changed child =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Focus_scope
-    ~props:(Focus_scope_props { autofocus })
+    ~node:(Focus_scope { autofocus })
     ~event_bindings:[| { tag = Event.Tag.Focus_changed; handler = on_focus_changed } |]
     ~children:(plain_children [ child ])
 ;;
 
 let mouse_region ?key ?(opaque = true) ~on_enter ~on_leave child =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Mouse_region
-    ~props:(Mouse_region_props { opaque })
+    ~node:(Mouse_region { opaque })
     ~event_bindings:
       [| { tag = Event.Tag.Pointer_enter; handler = on_enter }
        ; { tag = Event.Tag.Pointer_leave; handler = on_leave }
@@ -951,10 +1043,9 @@ let keyboard_listener
       ~on_key
       child
   =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Keyboard_listener
-    ~props:(Keyboard_listener_props { autofocus; key_policy })
+    ~node:(Keyboard_listener { autofocus; key_policy })
     ~event_bindings:[| { tag = Event.Tag.Key; handler = on_key } |]
     ~children:(plain_children [ child ])
 ;;
@@ -969,11 +1060,10 @@ let semantics ?key ?on_action ~properties child =
     | _ :: _, None -> invalid_arg "Widget.semantics: declared actions require on_action"
     | _ :: _, Some handler -> [| { tag = Event.Tag.Semantics_action; handler } |]
   in
-  create
+  create_typed
     ~key
-    ~kind:Kind.Semantics
-    ~props:
-      (Semantics_props
+    ~node:
+      (Semantics
          { label = properties.label
          ; hint = properties.hint
          ; value = properties.value
@@ -994,19 +1084,17 @@ let semantics ?key ?on_action ~properties child =
 
 let theme ?key ~data child =
   let data = Theme.Private.view data in
-  create
+  create_typed
     ~key
-    ~kind:Kind.Theme
-    ~props:(Theme_props { brightness = data.brightness; color_seed = data.color_seed })
+    ~node:(Theme { brightness = data.brightness; color_seed = data.color_seed })
     ~event_bindings:[||]
     ~children:(plain_children [ child ])
 ;;
 
 let navigator ?key ?restoration_scope_id ~on_pop pages =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Navigator
-    ~props:(Navigator_props { restoration_scope_id })
+    ~node:(Navigator { restoration_scope_id })
     ~event_bindings:[| { tag = Event.Tag.Route_pop; handler = on_pop } |]
     ~children:(plain_children pages)
 ;;
@@ -1021,64 +1109,57 @@ let page
   =
   if String.length (ID.Navigation.Page_key.to_string page_key) = 0
   then invalid_arg "Widget.page: page_key must not be empty";
-  create
+  create_typed
     ~key
-    ~kind:Kind.Page
-    ~props:(Page_props { page_key; presentation; can_pop; restoration_id })
+    ~node:(Page { page_key; presentation; can_pop; restoration_id })
     ~event_bindings:[||]
     ~children:(plain_children [ child ])
 ;;
 
 let overlay ?key ?(alignment = Navigation.Center) ?(dismissible = false) children =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Overlay
-    ~props:(Overlay_props { alignment; dismissible })
+    ~node:(Overlay { alignment; dismissible })
     ~event_bindings:[||]
     ~children:(plain_children children)
 ;;
 
 let material_dialog ?key ?(barrier_dismissible = true) child =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Material_dialog
-    ~props:(Material_dialog_props { barrier_dismissible })
+    ~node:(Material_dialog { barrier_dismissible })
     ~event_bindings:[||]
     ~children:(plain_children [ child ])
 ;;
 
 let native_widget ?key ~kind_id ~version ~capabilities ~payload ~on_event ~children () =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Native_widget
-    ~props:(Native_widget_props { kind_id; version; capabilities; payload })
+    ~node:(Native_widget { kind_id; version; capabilities; payload })
     ~event_bindings:[| { tag = Event.Tag.Native_event; handler = on_event } |]
     ~children:(plain_children children)
 ;;
 
 let material_checkbox ?key ?(enabled = true) ~value ~on_changed () =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Material_checkbox
-    ~props:(Material_checkbox_props { value; enabled })
+    ~node:(Material_checkbox { value; enabled })
     ~event_bindings:[| { tag = Event.Tag.Value_changed; handler = on_changed } |]
     ~children:[||]
 ;;
 
 let material_scaffold_widget ?key ?app_bar ~body () =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Material_scaffold
-    ~props:(Material_scaffold_props { has_app_bar = Option.is_some app_bar })
+    ~node:(Material_scaffold { has_app_bar = Option.is_some app_bar })
     ~event_bindings:[||]
     ~children:(plain_children (Option.to_list app_bar @ [ body ]))
 ;;
 
 let material_app_bar ?key ?(center_title = false) ~title () =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Material_app_bar
-    ~props:(Material_app_bar_props { center_title })
+    ~node:(Material_app_bar { center_title })
     ~event_bindings:[||]
     ~children:(plain_children [ title ])
 ;;
@@ -1092,25 +1173,33 @@ let material_button
       ~child
       ()
   =
-  let kind =
-    match variant with
-    | Elevated -> Kind.Material_elevated_button
-    | Text_button -> Material_text_button
-    | Icon_button -> Material_icon_button
-  in
-  create
-    ~key
-    ~kind
-    ~props:(Material_button_props { variant; enabled; autofocus })
-    ~event_bindings:[| { tag = Event.Tag.Press; handler = on_press } |]
-    ~children:(plain_children [ child ])
+  let event_bindings = [| { tag = Event.Tag.Press; handler = on_press } |] in
+  let children = plain_children [ child ] in
+  match variant with
+  | Elevated ->
+    create_typed
+      ~key
+      ~node:(Material_elevated_button { variant; enabled; autofocus })
+      ~event_bindings
+      ~children
+  | Text_button ->
+    create_typed
+      ~key
+      ~node:(Material_text_button { variant; enabled; autofocus })
+      ~event_bindings
+      ~children
+  | Icon_button ->
+    create_typed
+      ~key
+      ~node:(Material_icon_button { variant; enabled; autofocus })
+      ~event_bindings
+      ~children
 ;;
 
 let material_switch ?key ?(enabled = true) ~value ~on_changed () =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Material_switch
-    ~props:(Material_switch_props { value; enabled })
+    ~node:(Material_switch { value; enabled })
     ~event_bindings:[| { tag = Event.Tag.Value_changed; handler = on_changed } |]
     ~children:[||]
 ;;
@@ -1127,11 +1216,10 @@ let material_list_tile
       ()
   =
   let optional value = Option.to_list value in
-  create
+  create_typed
     ~key
-    ~kind:Kind.Material_list_tile
-    ~props:
-      (Material_list_tile_props
+    ~node:
+      (Material_list_tile
          { enabled
          ; selected
          ; has_subtitle = Option.is_some subtitle
@@ -1152,20 +1240,18 @@ let finite_nonnegative label value =
 ;;
 
 let material_divider ?key ?(thickness = 1.) () =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Material_divider
-    ~props:
-      (Material_divider_props { thickness = finite_nonnegative "thickness" thickness })
+    ~node:
+      (Material_divider { thickness = finite_nonnegative "thickness" thickness })
     ~event_bindings:[||]
     ~children:[||]
 ;;
 
 let material_card ?key ?(elevation = 1.) child =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Material_card
-    ~props:(Material_card_props { elevation = finite_nonnegative "elevation" elevation })
+    ~node:(Material_card { elevation = finite_nonnegative "elevation" elevation })
     ~event_bindings:[||]
     ~children:(plain_children [ child ])
 ;;
@@ -1184,28 +1270,25 @@ let material_progress ?key ?value () =
          value)
       value
   in
-  create
+  create_typed
     ~key
-    ~kind:Kind.Material_circular_progress_indicator
-    ~props:(Material_progress_props { value })
+    ~node:(Material_circular_progress_indicator { value })
     ~event_bindings:[||]
     ~children:[||]
 ;;
 
 let cupertino_button ?key ?(enabled = true) ~on_press ~child () =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Cupertino_button
-    ~props:(Cupertino_button_props { enabled })
+    ~node:(Cupertino_button { enabled })
     ~event_bindings:[| { tag = Event.Tag.Press; handler = on_press } |]
     ~children:(plain_children [ child ])
 ;;
 
 let cupertino_switch ?key ?(enabled = true) ~value ~on_changed () =
-  create
+  create_typed
     ~key
-    ~kind:Kind.Cupertino_switch
-    ~props:(Cupertino_switch_props { value; enabled })
+    ~node:(Cupertino_switch { value; enabled })
     ~event_bindings:[| { tag = Event.Tag.Value_changed; handler = on_changed } |]
     ~children:[||]
 ;;
@@ -1248,11 +1331,10 @@ let text_input
    | Some value when value <= 0 || value > 0xffff_ffff ->
      invalid_arg "Widget.text_input: max_utf8_bytes must fit positive uint32"
    | None | Some _ -> ());
-  create
+  create_typed
     ~key
-    ~kind:Kind.Text_input
-    ~props:
-      (Text_input_props
+    ~node:
+      (Text_input
          { session_id
          ; document_revision
          ; value
@@ -1297,17 +1379,16 @@ module Flex = struct
     { widget; parent_data = Flex_parent_data { flex = positive_flex flex; fit = Tight } }
   ;;
 
-  let create_linear ?key kind children =
-    create
+  let create_linear ?key node children =
+    create_typed
       ~key
-      ~kind
-      ~props:Linear_props
+      ~node
       ~event_bindings:[||]
       ~children:(Array.of_list children)
   ;;
 
-  let row ?key children = create_linear ?key Kind.Flex_row children
-  let column ?key children = create_linear ?key Kind.Flex_column children
+  let row ?key children = create_linear ?key Flex_row children
+  let column ?key children = create_linear ?key Flex_column children
 end
 
 module Stack = struct
@@ -1320,10 +1401,9 @@ module Stack = struct
   ;;
 
   let create ?key children =
-    create
+    create_typed
       ~key
-      ~kind:Kind.Stack
-      ~props:Stack_props
+      ~node:Stack
       ~event_bindings:[||]
       ~children:(Array.of_list children)
   ;;
@@ -1515,20 +1595,91 @@ let material_scaffold ?key ?app_bar ~body () =
 ;;
 
 module For_testing = struct
-  let kind_name t = Kind.to_string t.view.kind
-  let key t = t.view.key
-  let test_id t = t.view.test_id
-  let children t = Array.map (fun child -> child.widget) t.view.children
+  let kind_name widget =
+    let T view = widget in
+    kind_tag_to_string (node_kind_tag view.node)
+  ;;
 
-  let text_content t =
-    match t.view.props with
-    | Text_props { value; _ } -> Some value
+  let key widget =
+    let T view = widget in
+    view.key
+  ;;
+
+  let test_id widget =
+    let T view = widget in
+    view.test_id
+  ;;
+
+  let children widget =
+    let T view = widget in
+    Array.map (fun child -> child.widget) view.children
+  ;;
+
+  let text_content widget =
+    let T view = widget in
+    match view.node with
+    | Text { value; _ } -> Some value
     | _ -> None
   ;;
 end
 
 module Private = struct
-  module Kind = Kind
+  type nonrec kind_tag = kind_tag =
+    | K_empty
+    | K_text
+    | K_rich_text
+    | K_icon
+    | K_image
+    | K_row
+    | K_column
+    | K_flex_row
+    | K_flex_column
+    | K_stack
+    | K_button
+    | K_padding
+    | K_align
+    | K_center
+    | K_sized_box
+    | K_constrained_box
+    | K_decorated_box
+    | K_clip
+    | K_opacity
+    | K_animated_opacity
+    | K_transform
+    | K_scroll_view
+    | K_list_view
+    | K_gesture
+    | K_focus_scope
+    | K_mouse_region
+    | K_keyboard_listener
+    | K_pressable
+    | K_semantics
+    | K_theme
+    | K_material_scaffold
+    | K_material_app_bar
+    | K_material_elevated_button
+    | K_material_text_button
+    | K_material_icon_button
+    | K_material_checkbox
+    | K_material_switch
+    | K_material_list_tile
+    | K_material_divider
+    | K_material_card
+    | K_material_circular_progress_indicator
+    | K_cupertino_button
+    | K_cupertino_switch
+    | K_text_input
+    | K_overlay
+    | K_navigator
+    | K_page
+    | K_safe_area
+    | K_environment_boundary
+    | K_material_dialog
+    | K_native_widget
+
+  let kind_tag_compare = kind_tag_compare
+  let kind_tag_equal = kind_tag_equal
+  let kind_tag_to_string = kind_tag_to_string
 
   type nonrec flex_fit = flex_fit =
     | Loose
@@ -1556,200 +1707,28 @@ module Private = struct
     | Text_button
     | Icon_button
 
-  type nonrec props = props =
-    | Empty_props
-    | Text_props of
-        { value : string
-        ; style : Style.Text_style.Private.view option
-        ; text_align : Style.Text_align.t
-        ; max_lines : int option
-        ; overflow : Style.Text_overflow.t
-        }
-    | Rich_text_props of { spans : string list }
-    | Icon_props of
-        { code_point : int
-        ; font_family : string option
-        ; size : float option
-        ; color : int32 option
-        }
-    | Image_props of
-        { uri : string
-        ; fit : Style.Image_fit.t
-        ; width : float option
-        ; height : float option
-        }
-    | Linear_props
-    | Stack_props
-    | Button_props of { enabled : bool }
-    | Pressable_props of
-        { overlay_color : Style.Color.t
-        ; release_delay_ms : int
-        }
-    | Padding_props of
-        { left : float
-        ; top : float
-        ; right : float
-        ; bottom : float
-        }
-    | Align_props of { alignment : Layout.Alignment.t }
-    | Center_props of
-        { width_factor : float option
-        ; height_factor : float option
-        }
-    | Sized_box_props of
-        { width : float option
-        ; height : float option
-        }
-    | Constrained_box_props of
-        { min_width : float
-        ; max_width : float
-        ; min_height : float
-        ; max_height : float
-        }
-    | Decorated_box_props of
-        { background : int32 option
-        ; border_radius : float
-        }
-    | Clip_props of { behavior : Style.Clip.t }
-    | Opacity_props of { opacity : float }
-    | Animated_opacity_props of
-        { opacity : float
-        ; animation : Animation.t
-        }
-    | Transform_props of { matrix4 : float array }
-    | Scroll_view_props of
-        { axis : Layout.Axis.t
-        ; reverse : bool
-        ; primary : bool
-        }
-    | List_view_props of
-        { axis : Layout.Axis.t
-        ; reverse : bool
-        ; primary : bool
-        }
-    | Gesture_props
-    | Focus_scope_props of { autofocus : bool }
-    | Mouse_region_props of { opaque : bool }
-    | Keyboard_listener_props of
-        { autofocus : bool
-        ; key_policy : Event.Key_policy.t
-        }
-    | Semantics_props of
-        { label : string option
-        ; hint : string option
-        ; value : string option
-        ; role : Semantics.Role.t
-        ; enabled : bool option
-        ; selected : bool option
-        ; checked : bool option
-        ; focusable : bool option
-        ; obscured : bool
-        ; live_region : bool
-        ; heading_level : int option
-        ; sort_key : float option
-        ; actions : Semantics.Action.t list
-        }
-    | Theme_props of
-        { brightness : Style.Brightness.t
-        ; color_seed : int32
-        }
-    | Material_scaffold_props of { has_app_bar : bool }
-    | Material_app_bar_props of { center_title : bool }
-    | Material_button_props of
-        { variant : material_button_variant
-        ; enabled : bool
-        ; autofocus : bool
-        }
-    | Material_checkbox_props of
-        { value : bool
-        ; enabled : bool
-        }
-    | Material_switch_props of
-        { value : bool
-        ; enabled : bool
-        }
-    | Material_list_tile_props of
-        { enabled : bool
-        ; selected : bool
-        ; has_subtitle : bool
-        ; has_leading : bool
-        ; has_trailing : bool
-        }
-    | Material_divider_props of { thickness : float }
-    | Material_card_props of { elevation : float }
-    | Material_progress_props of { value : float option }
-    | Cupertino_button_props of { enabled : bool }
-    | Cupertino_switch_props of
-        { value : bool
-        ; enabled : bool
-        }
-    | Text_input_props of
-        { session_id : ID.Text_input.session_id
-        ; document_revision : ID.Text_input.document_revision
-        ; value : Text_editing.Value.t
-        ; enabled : bool
-        ; read_only : bool
-        ; obscure_text : bool
-        ; keyboard_type : Text_editing.keyboard_type
-        ; input_action : Text_editing.input_action
-        ; accepted_local_revision : ID.Text_input.local_revision
-        ; update_mode : Text_editing.update_mode
-        ; autofocus : bool
-        ; max_utf8_bytes : int option
-        }
-    | Overlay_props of
-        { alignment : Navigation.overlay_alignment
-        ; dismissible : bool
-        }
-    | Navigator_props of
-        { restoration_scope_id : ID.Navigation.restoration_scope_id option }
-    | Page_props of
-        { page_key : ID.Navigation.page_key
-        ; presentation : Navigation.page_presentation
-        ; can_pop : bool
-        ; restoration_id : ID.Navigation.restoration_id option
-        }
-    | Safe_area_props of
-        { left : bool
-        ; top : bool
-        ; right : bool
-        ; bottom : bool
-        ; minimum_left : float
-        ; minimum_top : float
-        ; minimum_right : float
-        ; minimum_bottom : float
-        }
-    | Environment_boundary_props
-    | Material_dialog_props of { barrier_dismissible : bool }
-    | Native_widget_props of
-        { kind_id : ID.Native_widget.kind_id
-        ; version : int
-        ; capabilities : int64
-        ; payload : bytes
-        }
+  include Private_types
 
-  type nonrec event_binding = event_binding =
-    { tag : Event.Tag.t
-    ; handler : Event.Handler.t
-    }
+  type any_view = Av : 'k view -> any_view
 
-  type nonrec child = child =
-    { widget : t
-    ; parent_data : child_parent_data
-    }
+  let view widget =
+    let T v = widget in
+    Av v
+  ;;
 
-  type nonrec view = view =
-    { key : Key.t option
-    ; test_id : Test_id.t option
-    ; kind : Kind.t
-    ; props : props
-    ; event_bindings : event_binding array
-    ; children : child array
-    ; fingerprint : int64
-    }
+  let node_equal_widgets left right =
+    let Av left_view = view left in
+    let Av right_view = view right in
+    node_equal left_view.node right_view.node
+  ;;
 
-  let view t = t.view
-  let props_equal = props_equal
+  let kind_tag_of_widget widget =
+    let Av view = view widget in
+    node_kind_tag view.node
+  ;;
+
+  let node_kind_tag = node_kind_tag
+  let node_equal = node_equal
   let parent_data_equal = parent_data_equal
   let material_checkbox = material_checkbox
   let material_scaffold = material_scaffold

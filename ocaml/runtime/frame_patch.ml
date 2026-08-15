@@ -6,17 +6,17 @@ module Operation = struct
     { node_id : Node_id.t
     ; key : Ui.Key.t option
     ; test_id : Ui.Test_id.t option
-    ; kind : Ui.Widget.Private.Kind.t
-    ; props : Ui.Widget.Private.props
+    ; node_tag : Ui.Widget.Private.kind_tag
+    ; widget : Ui.Widget.t
     ; event_bindings : Mounted_tree.Mounted_binding.t array
     ; parent_data : Ui.Widget.Private.child_parent_data
     }
 
   type t =
     | Create_node of create_node
-    | Update_props of
+    | Update_node of
         { node_id : Node_id.t
-        ; props : Ui.Widget.Private.props
+        ; widget : Ui.Widget.t
         }
     | Update_event_bindings of
         { node_id : Node_id.t
@@ -151,17 +151,17 @@ let apply ~old t =
             { node_id = create.node_id
             ; key = create.key
             ; test_id = create.test_id
-            ; kind = create.kind
-            ; props = create.props
+            ; node_tag = create.node_tag
+            ; widget = create.widget
             ; event_bindings = Array.copy create.event_bindings
             ; children = [||]
             ; parent_data = create.parent_data
             }
           in
           Hashtbl.add nodes create.node_id node
-        | Operation.Update_props { node_id; props } ->
-          let node = find_node nodes node_id "Update_props" in
-          Hashtbl.replace nodes node_id { node with props }
+        | Operation.Update_node { node_id; widget } ->
+          let node = find_node nodes node_id "Update_node" in
+          Hashtbl.replace nodes node_id { node with widget }
         | Operation.Update_event_bindings { node_id; event_bindings } ->
           let node = find_node nodes node_id "Update_event_bindings" in
           Hashtbl.replace

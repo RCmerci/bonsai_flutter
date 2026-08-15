@@ -5,13 +5,13 @@ type tree_side =
   | Candidate
 
 type path_segment =
-  { kind : Bonsai_flutter_ui.Widget.Private.Kind.t
+  { kind : Bonsai_flutter_ui.Widget.Private.kind_tag
   ; key : Bonsai_flutter_ui.Key.t option
   }
 
 type duplicate_occurrence =
   { child_index : int
-  ; kind : Bonsai_flutter_ui.Widget.Private.Kind.t
+  ; kind : Bonsai_flutter_ui.Widget.Private.kind_tag
   }
 
 type t =

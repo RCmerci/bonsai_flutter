@@ -207,63 +207,64 @@ let wire_frame_kind = function
 ;;
 
 let wire_node_kind = function
-  | Ui.Widget.Private.Kind.Empty -> Ok Protocol.Wire_frame.Empty
-  | Text -> Ok Text
-  | Rich_text -> Ok Rich_text
-  | Icon -> Ok Icon
-  | Image -> Ok Image
-  | Row -> Ok Row
-  | Column -> Ok Column
-  | Flex_row -> Ok Row
-  | Flex_column -> Ok Column
-  | Stack -> Ok Stack
-  | Button -> Ok Button
-  | Padding -> Ok Padding
-  | Align -> Ok Align
-  | Center -> Ok Center
-  | Sized_box -> Ok Sized_box
-  | Constrained_box -> Ok Constrained_box
-  | Decorated_box -> Ok Decorated_box
-  | Clip -> Ok Clip
-  | Opacity -> Ok Opacity
-  | Animated_opacity -> Ok Animated_opacity
-  | Transform -> Ok Transform
-  | Scroll_view -> Ok Scroll_view
-  | List_view -> Ok List_view
-  | Gesture -> Ok Gesture
-  | Focus_scope -> Ok Focus_scope
-  | Mouse_region -> Ok Mouse_region
-  | Keyboard_listener -> Ok Keyboard_listener
-  | Pressable -> Ok Pressable
-  | Semantics -> Ok Semantics
-  | Theme -> Ok Theme
-  | Material_scaffold -> Ok Material_scaffold
-  | Material_app_bar -> Ok Material_app_bar
-  | Material_elevated_button -> Ok Material_elevated_button
-  | Material_text_button -> Ok Material_text_button
-  | Material_icon_button -> Ok Material_icon_button
-  | Material_checkbox -> Ok Material_checkbox
-  | Material_switch -> Ok Material_switch
-  | Material_list_tile -> Ok Material_list_tile
-  | Material_divider -> Ok Material_divider
-  | Material_card -> Ok Material_card
-  | Material_circular_progress_indicator -> Ok Material_circular_progress_indicator
-  | Cupertino_button -> Ok Cupertino_button
-  | Cupertino_switch -> Ok Cupertino_switch
-  | Text_input -> Ok Text_input
-  | Overlay -> Ok Overlay
-  | Navigator -> Ok Navigator
-  | Page -> Ok Page
-  | Safe_area -> Ok Safe_area
-  | Environment_boundary -> Ok Environment_boundary
-  | Material_dialog -> Ok Material_dialog
-  | Native_widget -> Ok Native_widget
+  | Ui.Widget.Private.K_empty -> Ok Protocol.Wire_frame.Empty
+  | K_text -> Ok Text
+  | K_rich_text -> Ok Rich_text
+  | K_icon -> Ok Icon
+  | K_image -> Ok Image
+  | K_row -> Ok Row
+  | K_column -> Ok Column
+  | K_flex_row -> Ok Row
+  | K_flex_column -> Ok Column
+  | K_stack -> Ok Stack
+  | K_button -> Ok Button
+  | K_padding -> Ok Padding
+  | K_align -> Ok Align
+  | K_center -> Ok Center
+  | K_sized_box -> Ok Sized_box
+  | K_constrained_box -> Ok Constrained_box
+  | K_decorated_box -> Ok Decorated_box
+  | K_clip -> Ok Clip
+  | K_opacity -> Ok Opacity
+  | K_animated_opacity -> Ok Animated_opacity
+  | K_transform -> Ok Transform
+  | K_scroll_view -> Ok Scroll_view
+  | K_list_view -> Ok List_view
+  | K_gesture -> Ok Gesture
+  | K_focus_scope -> Ok Focus_scope
+  | K_mouse_region -> Ok Mouse_region
+  | K_keyboard_listener -> Ok Keyboard_listener
+  | K_pressable -> Ok Pressable
+  | K_semantics -> Ok Semantics
+  | K_theme -> Ok Theme
+  | K_material_scaffold -> Ok Material_scaffold
+  | K_material_app_bar -> Ok Material_app_bar
+  | K_material_elevated_button -> Ok Material_elevated_button
+  | K_material_text_button -> Ok Material_text_button
+  | K_material_icon_button -> Ok Material_icon_button
+  | K_material_checkbox -> Ok Material_checkbox
+  | K_material_switch -> Ok Material_switch
+  | K_material_list_tile -> Ok Material_list_tile
+  | K_material_divider -> Ok Material_divider
+  | K_material_card -> Ok Material_card
+  | K_material_circular_progress_indicator -> Ok Material_circular_progress_indicator
+  | K_cupertino_button -> Ok Cupertino_button
+  | K_cupertino_switch -> Ok Cupertino_switch
+  | K_text_input -> Ok Text_input
+  | K_overlay -> Ok Overlay
+  | K_navigator -> Ok Navigator
+  | K_page -> Ok Page
+  | K_safe_area -> Ok Safe_area
+  | K_environment_boundary -> Ok Environment_boundary
+  | K_material_dialog -> Ok Material_dialog
+  | K_native_widget -> Ok Native_widget
 ;;
 
-let wire_props = function
-  | Ui.Widget.Private.Empty_props -> Ok Protocol.Wire_frame.Empty_props
-  | Stack_props -> Ok Empty_props
-  | Text_props { value; style; text_align; max_lines; overflow } ->
+let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
+  match node with
+  | Ui.Widget.Private.Empty -> Ok Protocol.Wire_frame.Empty_props
+  | Stack -> Ok Empty_props
+  | Text { value; style; text_align; max_lines; overflow } ->
     let style =
       Option.map
         (fun (style : Ui.Style.Text_style.Private.view) ->
@@ -298,10 +299,10 @@ let wire_props = function
       | Visible -> Visible
     in
     Ok (Text_props { value; style; text_align; max_lines; overflow })
-  | Rich_text_props { spans } -> Ok (Rich_text_props { spans })
-  | Icon_props { code_point; font_family; size; color } ->
+  | Rich_text { spans } -> Ok (Rich_text_props { spans })
+  | Icon { code_point; font_family; size; color } ->
     Ok (Icon_props { code_point; font_family; size; color })
-  | Image_props { uri; fit; width; height } ->
+  | Image { uri; fit; width; height } ->
     let fit =
       match fit with
       | Ui.Style.Image_fit.Fill -> Protocol.Wire_frame.Fill
@@ -313,17 +314,20 @@ let wire_props = function
       | Scale_down -> Scale_down
     in
     Ok (Image_props { uri; fit; width; height })
-  | Linear_props -> Ok Linear_props
-  | Button_props { enabled } -> Ok (Button_props { enabled })
-  | Pressable_props { overlay_color; release_delay_ms } ->
+  | Row -> Ok Linear_props
+  | Column -> Ok Linear_props
+  | Flex_row -> Ok Linear_props
+  | Flex_column -> Ok Linear_props
+  | Button { enabled } -> Ok (Button_props { enabled })
+  | Pressable { overlay_color; release_delay_ms } ->
     Ok
       (Pressable_props
          { overlay_color_argb = Ui.Style.Color.Private.to_argb32 overlay_color
          ; release_delay_ms
          })
-  | Padding_props { left; top; right; bottom } ->
+  | Padding { left; top; right; bottom } ->
     Ok (Padding_props { left; top; right; bottom })
-  | Align_props { alignment } ->
+  | Align { alignment } ->
     let alignment : Protocol.Wire_frame.alignment =
       match alignment with
       | Ui.Layout.Alignment.Top_start -> Protocol.Wire_frame.Top_start
@@ -337,14 +341,14 @@ let wire_props = function
       | Bottom_end -> Bottom_end
     in
     Ok (Align_props { alignment })
-  | Center_props { width_factor; height_factor } ->
+  | Center { width_factor; height_factor } ->
     Ok (Center_props { width_factor; height_factor })
-  | Sized_box_props { width; height } -> Ok (Sized_box_props { width; height })
-  | Constrained_box_props { min_width; max_width; min_height; max_height } ->
+  | Sized_box { width; height } -> Ok (Sized_box_props { width; height })
+  | Constrained_box { min_width; max_width; min_height; max_height } ->
     Ok (Constrained_box_props { min_width; max_width; min_height; max_height })
-  | Decorated_box_props { background; border_radius } ->
+  | Decorated_box { background; border_radius } ->
     Ok (Decorated_box_props { background; border_radius })
-  | Clip_props { behavior } ->
+  | Clip { behavior } ->
     let behavior =
       match behavior with
       | Ui.Style.Clip.Hard_edge -> Protocol.Wire_frame.Hard_edge
@@ -352,8 +356,8 @@ let wire_props = function
       | Anti_alias_with_save_layer -> Anti_alias_with_save_layer
     in
     Ok (Clip_props { behavior })
-  | Opacity_props { opacity } -> Ok (Opacity_props { opacity })
-  | Animated_opacity_props { opacity; animation } ->
+  | Opacity { opacity } -> Ok (Opacity_props { opacity })
+  | Animated_opacity { opacity; animation } ->
     let curve : Protocol.Wire_frame.animation_curve =
       match Ui.Animation.Private.curve animation with
       | Linear -> Linear
@@ -368,33 +372,32 @@ let wire_props = function
       }
     in
     Ok (Animated_opacity_props { opacity; animation })
-  | Transform_props { matrix4 } -> Ok (Transform_props { matrix4 = Array.copy matrix4 })
-  | Scroll_view_props { axis; reverse; primary } ->
+  | Transform { matrix4 } -> Ok (Transform_props { matrix4 = Array.copy matrix4 })
+  | Scroll_view { axis; reverse; primary } ->
     let axis =
       match axis with
       | Ui.Layout.Axis.Horizontal -> Protocol.Wire_frame.Horizontal
       | Vertical -> Vertical
     in
     Ok (Scroll_view_props { axis; reverse; primary })
-  | List_view_props { axis; reverse; primary } ->
+  | List_view { axis; reverse; primary } ->
     let axis =
       match axis with
       | Ui.Layout.Axis.Horizontal -> Protocol.Wire_frame.Horizontal
       | Vertical -> Vertical
     in
     Ok (List_view_props { axis; reverse; primary })
-  | Gesture_props -> Ok Gesture_props
-  | Focus_scope_props { autofocus } -> Ok (Focus_scope_props { autofocus })
-  | Mouse_region_props { opaque } -> Ok (Mouse_region_props { opaque })
-  | Keyboard_listener_props { autofocus; key_policy } ->
+  | Gesture -> Ok Gesture_props
+  | Focus_scope { autofocus } -> Ok (Focus_scope_props { autofocus })
+  | Mouse_region { opaque } -> Ok (Mouse_region_props { opaque })
+  | Keyboard_listener { autofocus; key_policy } ->
     let key_policy =
       match key_policy with
       | Ui.Event.Key_policy.Handled -> Protocol.Wire_frame.Handled
       | Ignored -> Ignored
     in
     Ok (Keyboard_listener_props { autofocus; key_policy })
-  | Semantics_props
-      { label
+  | Semantics       { label
       ; hint
       ; value
       ; role
@@ -436,18 +439,20 @@ let wire_props = function
          ; sort_key
          ; actions = Ui.Semantics.Private.actions_to_bits actions
          })
-  | Theme_props { brightness; color_seed } ->
+  | Theme { brightness; color_seed } ->
     let brightness =
       match brightness with
       | Ui.Style.Brightness.Light -> Protocol.Wire_frame.Light
       | Dark -> Dark
     in
     Ok (Theme_props { brightness; color_seed })
-  | Material_scaffold_props { has_app_bar } ->
+  | Material_scaffold { has_app_bar } ->
     Ok (Material_scaffold_props { has_app_bar })
-  | Material_app_bar_props { center_title } ->
+  | Material_app_bar { center_title } ->
     Ok (Material_app_bar_props { center_title })
-  | Material_button_props { variant; enabled; autofocus } ->
+  | Material_elevated_button { variant; enabled; autofocus }
+  | Material_text_button { variant; enabled; autofocus }
+  | Material_icon_button { variant; enabled; autofocus } ->
     let variant =
       match variant with
       | Ui.Widget.Private.Elevated -> Protocol.Wire_frame.Elevated
@@ -455,23 +460,21 @@ let wire_props = function
       | Icon_button -> Icon_button
     in
     Ok (Material_button_props { variant; enabled; autofocus })
-  | Material_checkbox_props { value; enabled } ->
+  | Material_checkbox { value; enabled } ->
     Ok (Material_checkbox_props { value; enabled })
-  | Material_switch_props { value; enabled } ->
+  | Material_switch { value; enabled } ->
     Ok (Material_switch_props { value; enabled })
-  | Material_list_tile_props
-      { enabled; selected; has_subtitle; has_leading; has_trailing } ->
+  | Material_list_tile       { enabled; selected; has_subtitle; has_leading; has_trailing } ->
     Ok
       (Material_list_tile_props
          { enabled; selected; has_subtitle; has_leading; has_trailing })
-  | Material_divider_props { thickness } -> Ok (Material_divider_props { thickness })
-  | Material_card_props { elevation } -> Ok (Material_card_props { elevation })
-  | Material_progress_props { value } -> Ok (Material_progress_props { value })
-  | Cupertino_button_props { enabled } -> Ok (Cupertino_button_props { enabled })
-  | Cupertino_switch_props { value; enabled } ->
+  | Material_divider { thickness } -> Ok (Material_divider_props { thickness })
+  | Material_card { elevation } -> Ok (Material_card_props { elevation })
+  | Material_circular_progress_indicator { value } -> Ok (Material_progress_props { value })
+  | Cupertino_button { enabled } -> Ok (Cupertino_button_props { enabled })
+  | Cupertino_switch { value; enabled } ->
     Ok (Cupertino_switch_props { value; enabled })
-  | Text_input_props
-      { session_id
+  | Text_input       { session_id
       ; document_revision
       ; value
       ; enabled
@@ -537,7 +540,7 @@ let wire_props = function
          ; autofocus
          ; max_utf8_bytes
          })
-  | Overlay_props { alignment; dismissible } ->
+  | Overlay { alignment; dismissible } ->
     let alignment =
       match alignment with
       | Ui.Navigation.Top_start -> Protocol.Wire_frame.Top_start
@@ -551,9 +554,9 @@ let wire_props = function
       | Bottom_end -> Bottom_end
     in
     Ok (Overlay_props { alignment; dismissible })
-  | Navigator_props { restoration_scope_id } ->
+  | Navigator { restoration_scope_id } ->
     Ok (Navigator_props { restoration_scope_id })
-  | Page_props { page_key; presentation; can_pop; restoration_id } ->
+  | Page { page_key; presentation; can_pop; restoration_id } ->
     let presentation =
       match presentation with
       | Ui.Navigation.Standard transition ->
@@ -612,8 +615,7 @@ let wire_props = function
           }
     in
     Ok (Page_props { page_key; presentation; can_pop; restoration_id })
-  | Safe_area_props
-      { left
+  | Safe_area       { left
       ; top
       ; right
       ; bottom
@@ -633,10 +635,10 @@ let wire_props = function
          ; minimum_right
          ; minimum_bottom
          })
-  | Environment_boundary_props -> Ok Environment_boundary_props
-  | Material_dialog_props { barrier_dismissible } ->
+  | Environment_boundary -> Ok Environment_boundary_props
+  | Material_dialog { barrier_dismissible } ->
     Ok (Material_dialog_props { barrier_dismissible })
-  | Native_widget_props { kind_id; version; capabilities; payload } ->
+  | Native_widget { kind_id; version; capabilities; payload } ->
     Ok (Native_widget_props { kind_id; version; capabilities; payload })
 ;;
 
@@ -688,8 +690,9 @@ let wire_bindings bindings =
 
 let wire_operation = function
   | Runtime.Frame_patch.Operation.Create_node
-      { node_id; kind; props; event_bindings; parent_data; _ } ->
-    (match wire_node_kind kind, wire_props props with
+      { node_id; node_tag; widget; event_bindings; parent_data; _ } ->
+    let Av view = Ui.Widget.Private.view widget in
+    (match wire_node_kind node_tag, wire_node_props view.node with
      | Ok kind, Ok props ->
        Ok
          (Protocol.Wire_frame.Create_node
@@ -700,8 +703,9 @@ let wire_operation = function
             ; parent_data = wire_parent_data parent_data
             })
      | Error error, _ | _, Error error -> Error error)
-  | Update_props { node_id; props } ->
-    (match wire_props props with
+  | Update_node { node_id; widget } ->
+    let Av view = Ui.Widget.Private.view widget in
+    (match wire_node_props view.node with
      | Ok props -> Ok (Protocol.Wire_frame.Update_props { node_id; props })
      | Error error -> Error error)
   | Update_event_bindings { node_id; event_bindings } ->
@@ -825,7 +829,7 @@ let incremental_widget_diff ~old_tree ~new_tree operations =
     (function
       | Runtime.Frame_patch.Operation.Create_node { node_id; _ } ->
         add "createNode" node_id new_tree
-      | Update_props { node_id; _ } -> add "updateProps" node_id new_tree
+      | Update_node { node_id; _ } -> add "updateNode" node_id new_tree
       | Update_event_bindings { node_id; _ } -> add "updateEventBindings" node_id new_tree
       | Set_children { node_id; _ } -> add "setChildren" node_id new_tree
       | Set_root node_id -> add "setRoot" node_id new_tree

@@ -98,13 +98,13 @@ let check_int64 ~expected ~actual label =
 ;;
 
 let check_kind ~expected ~actual label =
-  if not (Widget.Private.Kind.equal expected actual)
+  if not (Widget.Private.kind_tag_equal expected actual)
   then
     fail
       "%s: expected %s, got %s"
       label
-      (Widget.Private.Kind.to_string expected)
-      (Widget.Private.Kind.to_string actual)
+      (Widget.Private.kind_tag_to_string expected)
+      (Widget.Private.kind_tag_to_string actual)
 ;;
 
 let ok = function
@@ -155,7 +155,7 @@ let is_create = function
 ;;
 
 let is_update_props = function
-  | Frame_patch.Operation.Update_props _ -> true
+  | Frame_patch.Operation.Update_node _ -> true
   | _ -> false
 ;;
 
@@ -232,13 +232,13 @@ let test_pressable_is_a_typed_core_widget () =
       ~child:(Widget.text "Message")
       ()
   in
-  let view = Widget.Private.view widget in
+  let Av view = Widget.Private.view widget in
   check
-    (Widget.Private.Kind.equal view.kind Widget.Private.Kind.Pressable)
+    (Widget.Private.kind_tag_equal (Widget.Private.node_kind_tag view.node) Widget.Private.K_pressable)
     "pressable must be a core widget kind";
   check_int ~expected:1 ~actual:(Array.length view.children) "pressable child count";
-  (match view.props with
-   | Widget.Private.Pressable_props { overlay_color; release_delay_ms } ->
+  (match view.node with
+   | Widget.Private.Pressable { overlay_color; release_delay_ms } ->
      check
        (Int32.equal
           (Ui.Style.Color.Private.to_argb32 overlay_color)
@@ -471,18 +471,18 @@ let test_duplicate_keys_fail_without_consuming_ids () =
      (match parent_path with
       | [ { Runtime_error.kind; key = None } ] ->
         check_kind
-          ~expected:Widget.Private.Kind.Column
+          ~expected:Widget.Private.K_column
           ~actual:kind
           "root duplicate parent kind"
       | _ -> fail "root duplicate error reported the wrong parent path");
      check_int ~expected:0 ~actual:first.child_index "first duplicate child index";
      check_kind
-       ~expected:Widget.Private.Kind.Text
+       ~expected:Widget.Private.K_text
        ~actual:first.kind
        "first duplicate child kind";
      check_int ~expected:1 ~actual:second.child_index "second duplicate child index";
      check_kind
-       ~expected:Widget.Private.Kind.Text
+       ~expected:Widget.Private.K_text
        ~actual:second.kind
        "second duplicate child kind";
      let formatted =
@@ -549,16 +549,16 @@ let test_nested_duplicate_keys_fail () =
        ; { kind = parent_kind; key = Some actual_parent_key }
        ] ->
        check_kind
-         ~expected:Widget.Private.Kind.Column
+         ~expected:Widget.Private.K_column
          ~actual:root_kind
          "nested root kind";
        check (Key.equal actual_root_key root_key) "nested root key was not preserved";
        check_kind
-         ~expected:Widget.Private.Kind.Center
+         ~expected:Widget.Private.K_center
          ~actual:center_kind
          "nested unkeyed ancestor kind";
        check_kind
-         ~expected:Widget.Private.Kind.Row
+         ~expected:Widget.Private.K_row
          ~actual:parent_kind
          "nested parent kind";
        check
@@ -567,12 +567,12 @@ let test_nested_duplicate_keys_fail () =
      | _ -> fail "nested duplicate error reported the wrong root-to-parent path");
     check_int ~expected:0 ~actual:first.child_index "nested first duplicate child index";
     check_kind
-      ~expected:Widget.Private.Kind.Empty
+      ~expected:Widget.Private.K_empty
       ~actual:first.kind
       "nested first duplicate child kind";
     check_int ~expected:1 ~actual:second.child_index "nested second duplicate child index";
     check_kind
-      ~expected:Widget.Private.Kind.Text
+      ~expected:Widget.Private.K_text
       ~actual:second.kind
       "nested second duplicate child kind";
     check
@@ -605,12 +605,12 @@ let test_existing_duplicate_key_formatting () =
       { key
       ; side = Runtime_error.Existing
       ; parent_path =
-          [ { Runtime_error.kind = Widget.Private.Kind.Row
+          [ { Runtime_error.kind = Widget.Private.K_row
             ; key = Some (Key.string "mounted-parent")
             }
           ]
-      ; first = { child_index = 2; kind = Widget.Private.Kind.Text }
-      ; second = { child_index = 5; kind = Widget.Private.Kind.Empty }
+      ; first = { child_index = 2; kind = Widget.Private.K_text }
+      ; second = { child_index = 5; kind = Widget.Private.K_empty }
       }
   in
   check
@@ -651,7 +651,7 @@ let test_mixed_siblings_detect_duplicates () =
     (match List.rev parent_path with
      | { Runtime_error.kind; _ } :: _ ->
        check_kind
-         ~expected:Widget.Private.Kind.Column
+         ~expected:Widget.Private.K_column
          ~actual:kind
          "mixed duplicate parent kind"
      | [] -> fail "mixed duplicate omitted its parent path");
@@ -743,7 +743,7 @@ let test_optimized_key_validation_matches_reference () =
       | Ok _ -> None
       | Error (Runtime_error.Duplicate_key { parent_path; key; _ }) ->
         (match List.rev parent_path with
-         | { Runtime_error.kind; _ } :: _ -> Some (Widget.Private.Kind.to_string kind, key)
+         | { Runtime_error.kind; _ } :: _ -> Some (Widget.Private.kind_tag_to_string kind, key)
          | [] -> fail "duplicate error omitted its parent path")
       | Error error -> fail "reference case returned %s" (Runtime_error.to_string error)
     in
@@ -1666,9 +1666,9 @@ let test_text_input_utf8_limit_contract () =
       ()
   in
   let widget = create_widget 64 in
-  let view = Widget.Private.view widget in
-  (match view.props with
-   | Widget.Private.Text_input_props { max_utf8_bytes = Some 64; _ } -> ()
+  let Av view = Widget.Private.view widget in
+  (match view.node with
+   | Widget.Private.Text_input { max_utf8_bytes = Some 64; _ } -> ()
    | _ -> fail "text input did not retain max_utf8_bytes");
   check
     (Array.exists

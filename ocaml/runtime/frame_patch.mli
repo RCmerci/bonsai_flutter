@@ -5,17 +5,17 @@ module Operation : sig
     { node_id : Node_id.t
     ; key : Bonsai_flutter_ui.Key.t option
     ; test_id : Bonsai_flutter_ui.Test_id.t option
-    ; kind : Bonsai_flutter_ui.Widget.Private.Kind.t
-    ; props : Bonsai_flutter_ui.Widget.Private.props
+    ; node_tag : Bonsai_flutter_ui.Widget.Private.kind_tag
+    ; widget : Bonsai_flutter_ui.Widget.t
     ; event_bindings : Mounted_tree.Mounted_binding.t array
     ; parent_data : Bonsai_flutter_ui.Widget.Private.child_parent_data
     }
 
   type t =
     | Create_node of create_node
-    | Update_props of
+    | Update_node of
         { node_id : Node_id.t
-        ; props : Bonsai_flutter_ui.Widget.Private.props
+        ; widget : Bonsai_flutter_ui.Widget.t
         }
     | Update_event_bindings of
         { node_id : Node_id.t

@@ -5,13 +5,13 @@ type tree_side =
   | Candidate
 
 type path_segment =
-  { kind : Bonsai_flutter_ui.Widget.Private.Kind.t
+  { kind : Bonsai_flutter_ui.Widget.Private.kind_tag
   ; key : Bonsai_flutter_ui.Key.t option
   }
 
 type duplicate_occurrence =
   { child_index : int
-  ; kind : Bonsai_flutter_ui.Widget.Private.Kind.t
+  ; kind : Bonsai_flutter_ui.Widget.Private.kind_tag
   }
 
 type t =
@@ -51,7 +51,7 @@ let duplicate_side_to_string = function
 ;;
 
 let path_segment_to_string { kind; key } =
-  let kind = Bonsai_flutter_ui.Widget.Private.Kind.to_string kind in
+  let kind = Bonsai_flutter_ui.Widget.Private.kind_tag_to_string kind in
   match key with
   | None -> kind
   | Some key ->
@@ -62,7 +62,7 @@ let duplicate_occurrence_to_string key { child_index; kind } =
   Printf.sprintf
     "child[%d]: %s[key=%s]"
     child_index
-    (Bonsai_flutter_ui.Widget.Private.Kind.to_string kind)
+    (Bonsai_flutter_ui.Widget.Private.kind_tag_to_string kind)
     (Bonsai_flutter_ui.Key.to_debug_string key)
 ;;
 

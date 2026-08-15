@@ -18,15 +18,19 @@ let semantics_label value = Semantics_label value
 let kind value = Kind (normalized value)
 
 let kind_name node =
-  Ui.Widget.Private.Kind.to_string node.Runtime.Mounted_tree.Snapshot.kind |> normalized
+  Ui.Widget.Private.kind_tag_to_string node.Runtime.Mounted_tree.Snapshot.node_tag |> normalized
 ;;
 
 let node_role node =
-  match node.Runtime.Mounted_tree.Snapshot.kind, node.props with
-  | Ui.Widget.Private.Kind.Button, _ -> Some "button"
-  | Material_checkbox, _ -> Some "checkbox"
-  | Text_input, _ -> Some "text_field"
-  | Semantics, Semantics_props { role; _ } -> Some (Ui.Semantics.Role.to_string role)
+  match node.Runtime.Mounted_tree.Snapshot.node_tag with
+  | Ui.Widget.Private.K_button -> Some "button"
+  | K_material_checkbox -> Some "checkbox"
+  | K_text_input -> Some "text_field"
+  | K_semantics ->
+    (let Av view = Ui.Widget.Private.view node.Runtime.Mounted_tree.Snapshot.widget in
+     match view.node with
+     | Ui.Widget.Private.Semantics { role; _ } -> Some (Ui.Semantics.Role.to_string role)
+     | _ -> None)
   | _ -> None
 ;;
 
@@ -45,12 +49,14 @@ let matches query node =
      | Some candidate -> String.equal role candidate
      | None -> false)
   | Visible_text text ->
-    (match node.Runtime.Mounted_tree.Snapshot.props with
-     | Ui.Widget.Private.Text_props { value; _ } -> String.equal value text
+    (let Av view = Ui.Widget.Private.view node.Runtime.Mounted_tree.Snapshot.widget in
+     match view.node with
+     | Ui.Widget.Private.Text { value; _ } -> String.equal value text
      | _ -> false)
   | Semantics_label label ->
-    (match node.Runtime.Mounted_tree.Snapshot.props with
-     | Ui.Widget.Private.Semantics_props { label = Some value; _ } ->
+    (let Av view = Ui.Widget.Private.view node.Runtime.Mounted_tree.Snapshot.widget in
+     match view.node with
+     | Ui.Widget.Private.Semantics { label = Some value; _ } ->
        String.equal value label
      | _ -> false)
   | Kind expected -> String.equal expected (kind_name node)
