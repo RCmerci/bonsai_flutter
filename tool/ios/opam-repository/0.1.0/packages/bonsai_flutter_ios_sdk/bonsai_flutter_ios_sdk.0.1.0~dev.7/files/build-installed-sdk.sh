@@ -34,7 +34,7 @@ export TARGET_LIB=$target_lib
 
 sh "$script_directory/build-runtime-closure.sh" iphoneos
 
-framework_source_sha256='d6584f215edc195f3f711fa894f734278dbfd2397e1dad0ea36aeaca04e9cfec'
+framework_source_sha256='feea3068e183cff8e849734b4a44a0dfc7f6918460b5e30153b06ab547f4cd9b'
 framework_archive_source="$script_directory/bonsai_flutter.tar.gz"
 framework_archive="$work_root/bonsai_flutter.tar.gz"
 framework_source="$work_root/framework-source"
