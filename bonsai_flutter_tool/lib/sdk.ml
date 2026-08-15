@@ -6,7 +6,7 @@ let ( let* ) result f =
 
 let supported_bonsai_flutter_version = "0.1.0~dev"
 let supported_abi_version = "2"
-let supported_build_recipe_revision = "2"
+let supported_build_recipe_revision = "3"
 let supported_minimum_deployment_target = "15.0"
 
 module Manifest = struct
