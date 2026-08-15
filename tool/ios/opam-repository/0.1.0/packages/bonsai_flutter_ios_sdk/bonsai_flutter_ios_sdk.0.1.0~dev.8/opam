@@ -1,0 +1,34 @@
+opam-version: "2.0"
+synopsis: "Bonsai Flutter iPhoneOS framework SDK"
+description: """
+Builds and installs the Bonsai Flutter framework for iPhoneOS arm64 on top
+of the exact immutable runtime SDK package.
+"""
+maintainer: "bonsai_flutter contributors"
+authors: ["bonsai_flutter contributors"]
+license: "MIT"
+homepage: "https://github.com/RCmerci/bonsai_flutter"
+bug-reports: "https://github.com/RCmerci/bonsai_flutter/issues"
+dev-repo: "git+https://github.com/RCmerci/bonsai_flutter.git"
+extra-source "bonsai_flutter.tar.gz" {
+  src: "https://github.com/RCmerci/bonsai_flutter/archive/be557b968a21b558763d6e65f71c49b49dd5bfb4.tar.gz"
+  checksum: ["sha256=85c5a01aab3ce393faef1f8c35ccd96d3fa893e7a3eed94e31b7c0fa281adca8"]
+}
+extra-files: [
+  ["build-installed-framework.sh" "sha256=cae47d483e292e71d294966e4bfb777a819c475d6963485bf2f29e198dedc075"]
+  ["manifest.sexp" "sha256=b5399c33812e7c13c15fd49f49f474828cd6f5ef3cbf3556dd6d28a87978d9ea"]
+  ["package-lock.sexp" "sha256=0d2edd0c50c7047607f5a9301dbf8dfeb9656091234740f71d31811f0e7a3477"]
+]
+depends: [
+  "bonsai_flutter_ios_runtime_sdk" {= "0.1.0~dev.1"}
+]
+build: [
+  ["sh" "./build-installed-framework.sh" "%{switch}%" "%{prefix}%"]
+]
+install: [
+  ["cp" "-R" ".bonsai_flutter_ios_framework_sdk/stage/ios-sysroot/." "%{prefix}%/ios-sysroot/"]
+  ["mkdir" "-p" "%{share}%/bonsai_flutter_ios_sdk"]
+  ["cp" "manifest.sexp" "%{share}%/bonsai_flutter_ios_sdk/manifest.sexp"]
+  ["cp" "package-lock.sexp" "%{share}%/bonsai_flutter_ios_sdk/package-lock.sexp"]
+]
+available: os = "macos" & arch = "arm64"

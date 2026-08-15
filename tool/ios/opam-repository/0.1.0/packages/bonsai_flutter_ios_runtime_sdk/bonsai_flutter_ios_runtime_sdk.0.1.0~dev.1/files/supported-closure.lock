@@ -1,12 +1,12 @@
 # metadata.format=bonsai-flutter-ios-closure-v2
 # metadata.features=core,network,sqlite
 # metadata.roots=astring,base,bigstringaf,bonsai,bonsai.driver,ca-certs-nss,core,cstruct,datascript-ocaml-native,datascript-ocaml-native.sqlite,datascript_ocaml,digestif,domain-name,eio,eio.core,eio_posix,gluten,gluten-eio,httpun,httpun-eio,httpun-ws,incr_dom.ui_incr,incr_dom.ui_time_source,melange-edn-core,melange-edn-native,melange-transit-core,melange-transit-native,mirage-crypto-rng,mirage-crypto-rng.unix,persistent_sorted_set_ocaml,ptime,sqlite3,tls,tls-eio,uri,uucp,uunf,uutf,virtual_dom.ui_effect,x509
-# metadata.package-count=227
+# metadata.package-count=226
 # metadata.target-package-count=100
-# metadata.host-package-count=125
+# metadata.host-package-count=124
 # metadata.target-build-count=2
-# metadata.component-count=141
-# metadata.digest=64974d12919f106a3b7aa2b7922e20d6124657eca5765b651ec2c4ca2ef98644
+# metadata.component-count=143
+# metadata.digest=966515c716e2205dc6e5e315939b84b49cf0bc51fff00ea5a399135953bbaddb
 # package|version|role|capability|build-mechanism|source|sha256|findlib-components|target-dependencies
 async|v0.17.0|host-package|Host_only|opam|https://github.com/janestreet/async/archive/refs/tags/v0.17.0.tar.gz|3edbaa62a7ea910da0d5c06974da9b2b7e14a9e2648596bc7c9f09c89970b5f8|-|-
 async_durable|v0.17.0|host-package|Host_only|opam|https://github.com/janestreet/async_durable/archive/refs/tags/v0.17.0.tar.gz|649fa946f3cb7a3df8e198129981e4d8a891c6d2e645a1e6d213a2cc2a358938|-|-
@@ -21,7 +21,6 @@ async_unix|v0.17.0|host-package|Host_only|opam|https://github.com/janestreet/asy
 async_websocket|v0.17.0|host-package|Host_only|opam|https://github.com/janestreet/async_websocket/archive/refs/tags/v0.17.0.tar.gz|ddb4eb48a4440b39171a11dcf1dcd9369c4e4a0ababefb330ffe2c0d397b301a|-|-
 babel|v0.17.0|host-package|Host_only|opam|https://github.com/janestreet/babel/archive/refs/tags/v0.17.0.tar.gz|888d7c5987b0b4477283db6636630c976566d52d9db3af3f8ed39935871f9f62|-|-
 bignum|v0.17.0|host-package|Host_only|opam|https://github.com/janestreet/bignum/archive/refs/tags/v0.17.0.tar.gz|7acc936acbaaf71b2c1518e09b7651bec20d8dc72a990c871c40a74b63b1a8ed|-|-
-bonsai_flutter|0.1.0~dev|host-package|Host_only|opam|https://github.com/RCmerci/bonsai_flutter/archive/2838c77a9e4235e423e8a9a5340086aa1c119801.tar.gz|93c8dbf08897767d8a51a12e365fe9f40a3af074028715b6a70f0b11848692fd|-|-
 bos|0.3.0|host-package|Host_only|opam|https://erratique.ch/software/bos/releases/bos-0.3.0.tbz|089f369ed00967e92d89cc5fcd848c56bdab5c02737da4d483550bf56b5a79bc|-|-
 camlp-streams|5.0.1|host-package|Host_only|opam|https://github.com/ocaml/camlp-streams/archive/v5.0.1.tar.gz|ad71f62406e9bb4e7fb5d4593ede2af6c68f8b0d96f25574446e142c3eb0d9a4|-|-
 capitalization|v0.17.0|host-package|Host_only|opam|https://github.com/janestreet/capitalization/archive/refs/tags/v0.17.0.tar.gz|f71d45ec929c9fc9b08e07723c15b6663b0143c4465b5d93038f653258cd5c6f|-|-

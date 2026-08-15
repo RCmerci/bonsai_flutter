@@ -5,36 +5,27 @@ set -eu
 script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 fail() {
-  printf '%s\n' "iPhoneOS SDK build failure: $1" >&2
+  printf '%s\n' "iPhoneOS framework SDK build failure: $1" >&2
   exit 1
 }
 
-test "$#" -eq 2 || fail "usage: build-installed-sdk.sh OPAM_SWITCH OPAM_SWITCH_PREFIX"
+test "$#" -eq 2 || fail "usage: build-installed-framework.sh OPAM_SWITCH OPAM_SWITCH_PREFIX"
 SDK_OPAM_SWITCH=$1
 selected_prefix=$2
 test -n "${OPAM_SWITCH_PREFIX:-}" || fail "OPAM_SWITCH_PREFIX is missing"
 test "$selected_prefix" = "$OPAM_SWITCH_PREFIX" ||
   fail "selected opam prefix differs from OPAM_SWITCH_PREFIX"
 
-for command in awk cp curl dune find grep mkdir opam patch rg sed shasum sort tar xcrun; do
+for command in awk cp dune find mkdir opam shasum tar xcrun; do
   command -v "$command" >/dev/null 2>&1 || fail "required command is unavailable: $command"
 done
 
-work_root="$PWD/.bonsai_flutter_ios_sdk"
+work_root="$PWD/.bonsai_flutter_ios_framework_sdk"
 stage_root="$work_root/stage"
 target_lib="$stage_root/ios-sysroot/lib"
-package_work_root="$work_root/packages"
-mkdir -p "$target_lib" "$package_work_root"
+mkdir -p "$target_lib"
 
-export SDK_ASSET_ROOT=$script_directory
-export SDK_OPAM_SWITCH
-export SDK_PACKAGE_WORK_ROOT=$package_work_root
-export RUNTIME_CLOSURE_LOCK="$script_directory/supported-closure.lock"
-export TARGET_LIB=$target_lib
-
-sh "$script_directory/build-runtime-closure.sh" iphoneos
-
-framework_source_sha256='feea3068e183cff8e849734b4a44a0dfc7f6918460b5e30153b06ab547f4cd9b'
+framework_source_sha256='85c5a01aab3ce393faef1f8c35ccd96d3fa893e7a3eed94e31b7c0fa281adca8'
 framework_archive_source="$script_directory/bonsai_flutter.tar.gz"
 framework_archive="$work_root/bonsai_flutter.tar.gz"
 framework_source="$work_root/framework-source"
@@ -55,18 +46,22 @@ if test ! -d "$framework_source"; then
 fi
 
 findlib_conf="$work_root/findlib.conf"
-standard_target_lib="$OPAM_SWITCH_PREFIX/ios-sysroot/lib/ocaml"
+runtime_target_lib="$OPAM_SWITCH_PREFIX/ios-sysroot/lib"
+standard_target_lib="$runtime_target_lib/ocaml"
+test -d "$standard_target_lib" ||
+  fail "the installed iPhoneOS runtime SDK is missing its target standard library"
 {
   cat "$OPAM_SWITCH_PREFIX/lib/findlib.conf"
   awk \
-    -v target_lib="$target_lib" \
-    -v standard_target_lib="$standard_target_lib" '
+    -v runtime_target_lib="$runtime_target_lib" \
+    -v standard_target_lib="$standard_target_lib" \
+    -v framework_target_lib="$target_lib" '
       /^path\(ios\)/ {
-        printf "path(ios) = \"%s:%s\"\n", target_lib, standard_target_lib
+        printf "path(ios) = \"%s:%s:%s\"\n", framework_target_lib, runtime_target_lib, standard_target_lib
         next
       }
       /^destdir\(ios\)/ {
-        printf "destdir(ios) = \"%s\"\n", target_lib
+        printf "destdir(ios) = \"%s\"\n", framework_target_lib
         next
       }
       { print }
@@ -89,7 +84,6 @@ sdk_root=$(xcrun --sdk iphoneos --show-sdk-path)
       --profile=release \
       -x ios \
       -p bonsai_flutter
-
 )
 
 framework_install_root="$framework_build/install/default.ios"
@@ -97,4 +91,4 @@ test -d "$framework_install_root/lib/bonsai_flutter" ||
   fail "Dune did not produce the iPhoneOS framework install tree"
 cp -RL "$framework_install_root/." "$stage_root/ios-sysroot/"
 
-printf '%s\n' "iPhoneOS installed SDK build passed"
+printf '%s\n' "iPhoneOS framework SDK build passed"

@@ -1,9 +1,8 @@
 opam-version: "2.0"
-synopsis: "Locked Bonsai Flutter iPhoneOS SDK package universe"
+synopsis: "Immutable Bonsai Flutter iPhoneOS runtime SDK"
 description: """
-Installs the exact host and target package universe supported by Bonsai Flutter
-for iPhoneOS arm64. Package versions, recipes, and source checksums are immutable
-for this SDK release.
+Builds and installs the locked iPhoneOS arm64 cross-compiler runtime and
+target dependency closure independently from the Bonsai Flutter framework.
 """
 maintainer: "bonsai_flutter contributors"
 authors: ["bonsai_flutter contributors"]
@@ -11,10 +10,6 @@ license: "MIT"
 homepage: "https://github.com/RCmerci/bonsai_flutter"
 bug-reports: "https://github.com/RCmerci/bonsai_flutter/issues"
 dev-repo: "git+https://github.com/RCmerci/bonsai_flutter.git"
-extra-source "bonsai_flutter.tar.gz" {
-  src: "https://github.com/RCmerci/bonsai_flutter/archive/f13a515783edf010fe52408c6d3cc44e94ee305b.tar.gz"
-  checksum: ["sha256=feea3068e183cff8e849734b4a44a0dfc7f6918460b5e30153b06ab547f4cd9b"]
-}
 extra-source "runtime-gmp-sys-ios-a3c2b80201b89e68616f4ad30bc66aee4927c3ce50e33929ca819d5c43538898.archive" {
   src: "https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz"
   checksum: ["sha256=a3c2b80201b89e68616f4ad30bc66aee4927c3ce50e33929ca819d5c43538898"]
@@ -424,18 +419,16 @@ extra-source "runtime-zarith-5db9dcbd939153942a08581fabd846d0f3f2b8c67fe68b85512
   checksum: ["sha256=5db9dcbd939153942a08581fabd846d0f3f2b8c67fe68b855127e0472d4d1859"]
 }
 extra-files: [
-  ["build-installed-sdk.sh" "sha256=1d927a0123fa800dc458b64097535612c5f8453e1f319b9d6faa4fce149e2df8"]
   ["build-runtime-closure.sh" "sha256=658a2834d34376e6cb399b0e09ad9ccadc5a163f34135a1480e478c681a4f65b"]
   ["build-runtime-package.sh" "sha256=f167f27e1f662045bbb4abbb24bb0cb3f781380d3d7d8179f53995d28f71f25f"]
-  ["manifest.sexp" "sha256=2d170a4346d1c025ede46e6059373ff66af7aed5a1fe3e81e01d61070d0488e2"]
-  ["package-lock.sexp" "sha256=2a1d1b5b83b1742e8451f717b5bf55272d25954b5382e8beb904b9b98bda959b"]
+  ["build-runtime-sdk.sh" "sha256=da505454ee80ca4771ce1b7377388cab51a6a09e4d9f7e25abb80afe30dca387"]
   ["patches/base-host-generator.patch" "sha256=d66da45798d7fd09df4d5e1a2789428f2343670f212ddf36dabf1ffa2e9d5ada"]
   ["patches/eio-posix-darwin-protocol-zero.patch" "sha256=b6a158f56db6bc1c1e19ad2412625f2d7941a5004274e3a45fe58f6c89e5b963"]
   ["patches/eio-posix-darwin-socktype-hints.patch" "sha256=8b5eb1ecc716afeac54f6ebc0792f14df5107dbdac5ebb81da3ea0a31e187e17"]
   ["patches/jst-config-host-discover.patch" "sha256=ee279c4935234e295cb432e67d02cbab47f5655da7b335585678bef2a2eb62a9"]
   ["patches/mirage-crypto-rng-apple-entropy.patch" "sha256=da840f6ac6b44892f7e3cdbf6b931d557caa44697d21292fbadd5f1f95c60994"]
   ["pkgconfig/iphoneos/sqlite3.pc" "sha256=8b5b586f38ac603b9ac45c7193805a728934d489000dfb578b345733c41ed3ad"]
-  ["supported-closure.lock" "sha256=30406bbd1974f30966a58f9e77f5aa66f64d0e8625aec0e1cce823648b91c1a4"]
+  ["supported-closure.lock" "sha256=5199659ed658a91ec0e5417e1728249a2017cfc7b22d0e93119eb30f0a382d98"]
   ["toolchain.lock" "sha256=6516a7553c762d5b9f56eedb6a05c1f5fb5b9197cedcb7327689c744594cecba"]
   ["verify_macho.sh" "sha256=e6d2083e03ac5f883f236e35b7e9e539759e8cc36eb403dd76d5b8136f7f9076"]
 ]
@@ -470,7 +463,6 @@ depends: [
   "bigstringaf" {= "0.10.0"}
   "bin_prot" {= "v0.17.0-1"}
   "bonsai" {= "v0.17.0"}
-  "bonsai_flutter" {= "0.1.0~dev"}
   "bos" {= "0.3.0"}
   "ca-certs-nss" {= "3.126"}
   "camlp-streams" {= "5.0.1"}
@@ -685,12 +677,9 @@ depends: [
   "zarith_stubs_js" {= "v0.17.0"}
 ]
 build: [
-  ["sh" "./build-installed-sdk.sh" "%{switch}%" "%{prefix}%"]
+  ["sh" "./build-runtime-sdk.sh" "%{switch}%" "%{prefix}%"]
 ]
 install: [
-  ["cp" "-R" ".bonsai_flutter_ios_sdk/stage/ios-sysroot/." "%{prefix}%/ios-sysroot/"]
-  ["mkdir" "-p" "%{share}%/bonsai_flutter_ios_sdk"]
-  ["cp" "manifest.sexp" "%{share}%/bonsai_flutter_ios_sdk/manifest.sexp"]
-  ["cp" "package-lock.sexp" "%{share}%/bonsai_flutter_ios_sdk/package-lock.sexp"]
+  ["cp" "-R" ".bonsai_flutter_ios_runtime_sdk/stage/ios-sysroot/." "%{prefix}%/ios-sysroot/"]
 ]
 available: os = "macos" & arch = "arm64"
