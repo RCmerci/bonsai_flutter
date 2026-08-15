@@ -507,9 +507,9 @@ final class _MessageComposerState extends State<MessageComposer> {
         enabledBorder: InputBorder.none,
         focusedBorder: InputBorder.none,
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(vertical: 8),
       ),
-      style: TextStyle(color: colors.onSurface, fontSize: 17, height: 1.35),
+      style: TextStyle(color: colors.onSurface, fontSize: 15, height: 1.3),
     );
     final actions = _actions();
 
@@ -526,7 +526,7 @@ final class _MessageComposerState extends State<MessageComposer> {
         child: Material(
           color: colors.surfaceContainerHighest,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(expanded ? 28 : 32),
+            borderRadius: BorderRadius.circular(expanded ? 20 : 24),
             side: BorderSide(color: colors.outlineVariant),
           ),
           clipBehavior: Clip.antiAlias,
@@ -584,8 +584,8 @@ final class _AdaptiveComposer extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,
         padding: expanded
-            ? const EdgeInsets.fromLTRB(16, 14, 16, 60)
-            : const EdgeInsets.fromLTRB(16, 8, 8, 8),
+            ? const EdgeInsets.fromLTRB(16, 12, 16, 52)
+            : const EdgeInsets.fromLTRB(16, 6, 6, 6),
         child: Row(
           children: [
             Expanded(child: editor),
@@ -623,8 +623,8 @@ final class _ComposerAction extends StatelessWidget {
       onPressed: onPressed,
       icon: child,
       style: IconButton.styleFrom(
-        minimumSize: const Size.square(48),
-        iconSize: filled ? 25 : 27,
+        minimumSize: const Size.square(36),
+        iconSize: filled ? 20 : 22,
         foregroundColor: filled ? colors.onPrimary : colors.onSurface,
         disabledForegroundColor: colors.onSurface.withValues(alpha: 0.38),
         backgroundColor: filled ? colors.primary : Colors.transparent,
