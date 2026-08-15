@@ -90,8 +90,10 @@ the hook rejects an x86_64 request before artifact resolution.
 
 ## iPhoneOS
 
-The immutable cross SDK uses the fixed global `bonsai-flutter-ios` opam switch
-and never changes the developer's active switch:
+The layered cross SDK uses the fixed global `bonsai-flutter-ios` opam switch
+and never changes the developer's active switch. Its immutable runtime package
+owns the cross compiler and target dependency closure; its framework package
+can be replaced independently when only Bonsai Flutter changes:
 
 ```sh
 dune build bonsai_flutter_tool/bin/main.exe
@@ -99,6 +101,15 @@ _build/default/bonsai_flutter_tool/bin/main.exe toolchain install iphoneos
 cd examples/counter
 ../../_build/default/bonsai_flutter_tool/bin/main.exe build ios \
   --profile release --no-codesign
+```
+
+After updating the installed host tool, replace only the framework package with:
+
+```sh
+HOST_SWITCH=<persistent-host-switch>
+FRAMEWORK_ROOT=$(opam var --switch="$HOST_SWITCH" share)/bonsai_flutter_tool/framework
+"$FRAMEWORK_ROOT/tool/ios/update_framework_sdk.sh"
+"$(opam var --switch="$HOST_SWITCH" bin)/bonsai-flutter" toolchain verify iphoneos
 ```
 
 `tool/ios/toolchain.lock` pins OCaml 5.1.1, opam-cross-ios, target triples,
@@ -110,8 +121,8 @@ capability, and target dependency. `vendor/opam-ios/runtime-closure.lock` is
 the checked-in DataScript SQLite fixture result and verification baseline, not
 a fixed union imposed on every application.
 `vendor/opam-ios/supported-closure.lock` is the independently generated union
-installed in the immutable SDK for the repository's supported core, network,
-and SQLite feature families. Each consumer still resolves its own reachable
+installed in the immutable runtime SDK for the repository's supported core,
+network, and SQLite feature families. Each consumer still resolves its own reachable
 application closure from pinned metadata and may use only packages present in
 that supported SDK closure. Host PPX executables and
 generators remain native macOS processes. Their locked descriptions are

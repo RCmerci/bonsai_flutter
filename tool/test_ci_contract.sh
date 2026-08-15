@@ -12,6 +12,7 @@ fail() {
 
 "$repository_root/tool/test_ios_deployment_target_contract.sh"
 "$repository_root/tool/test_network_ios_contract.sh"
+"$repository_root/tool/test_ios_sdk_layering.sh"
 
 require_file() {
   test -f "$1" || fail "missing $1"
@@ -263,11 +264,11 @@ patch_files=$(
     -type f \( -name '*.patch' -o -name '*.diff' \) -print |
     LC_ALL=C sort
 )
-expected_patch_files='./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.3/files/patches/base-host-generator.patch
-./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.3/files/patches/eio-posix-darwin-protocol-zero.patch
-./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.3/files/patches/eio-posix-darwin-socktype-hints.patch
-./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.3/files/patches/jst-config-host-discover.patch
-./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.3/files/patches/mirage-crypto-rng-apple-entropy.patch
+expected_patch_files='./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_runtime_sdk/bonsai_flutter_ios_runtime_sdk.0.1.0~dev.1/files/patches/base-host-generator.patch
+./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_runtime_sdk/bonsai_flutter_ios_runtime_sdk.0.1.0~dev.1/files/patches/eio-posix-darwin-protocol-zero.patch
+./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_runtime_sdk/bonsai_flutter_ios_runtime_sdk.0.1.0~dev.1/files/patches/eio-posix-darwin-socktype-hints.patch
+./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_runtime_sdk/bonsai_flutter_ios_runtime_sdk.0.1.0~dev.1/files/patches/jst-config-host-discover.patch
+./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_runtime_sdk/bonsai_flutter_ios_runtime_sdk.0.1.0~dev.1/files/patches/mirage-crypto-rng-apple-entropy.patch
 ./tool/ios/opam-repository/0.1.0/packages/ocaml-ios64/ocaml-ios64.5.1.1/files/ocamlmklib-failsafe.patch
 ./tool/ios/opam-repository/0.1.0/packages/ocaml-ios64/ocaml-ios64.5.1.1/files/sys.patch
 ./vendor/opam-ios/ocaml-ios64.5.1.1/files/ocamlmklib-failsafe.patch

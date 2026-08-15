@@ -119,10 +119,17 @@ The host package is installed into the developer's normal application switch.
 It supplies macOS-compatible libraries and metadata used for native macOS
 builds, editor tooling, tests, and PPX execution.
 
-### `bonsai_flutter-ios-sdk` package universe
+### Layered `bonsai_flutter-ios-sdk` package universe
 
-The iPhoneOS switch contains one locked and validated package universe. It
-includes:
+The iPhoneOS switch contains one locked and validated package universe split
+across two packages:
+
+- `bonsai_flutter_ios_runtime_sdk` owns the cross compiler, host build tools,
+  target dependency closure, foreign archives, and runtime build recipes; and
+- `bonsai_flutter_ios_sdk` owns the exact Bonsai Flutter source revision,
+  target framework libraries, SDK manifest, and package lock.
+
+Together they include:
 
 - the OCaml compiler version required by Bonsai Flutter;
 - Dune and `ocamlfind` host executables;
@@ -237,10 +244,11 @@ components. The CLI never guesses package ownership from a library-name prefix.
 
 ### Fixed package universe policy
 
-The switch contains one coherent, immutable, and locked package universe. All
-applications using the switch must request versions and components contained in
-that universe. A normal build cannot extend, resolve, or partially replace the
-universe.
+The switch contains one coherent and locked package universe. The runtime layer
+is immutable. The framework layer may be replaced only when its exact runtime
+package dependency is already installed. All applications using the switch
+must request versions and components contained in that universe. A normal
+application build cannot extend, resolve, or replace either SDK layer.
 
 Every application commits `<application>.opam.locked`. Before a build, the CLI
 resolves the Dune-reachable findlib library closure for `native_target`, maps
@@ -253,8 +261,9 @@ subset with the exact versions in `.opam.locked`:
 - an unsupported foreign capability is rejected.
 
 The CLI does not install a missing package during `build`. The application must
-select compatible dependencies. Replacing the SDK universe requires explicitly
-removing and reinstalling the fixed switch.
+select compatible dependencies. Replace the framework layer with the controlled
+framework updater when the runtime package version is unchanged. Replace the
+complete switch when the runtime package version changes.
 
 ### Toolchain commands
 
@@ -281,23 +290,35 @@ Bonsai Flutter publishes a versioned iOS opam repository. Each released CLI
 locks the repository URL and exact Git commit. Every package recipe in that
 repository locks all fetched source archives with a cryptographic checksum:
 SHA-256 when published upstream, otherwise the upstream SHA-512 checksum. The
-repository provides one `bonsai_flutter_ios_sdk` meta-package whose exact-version
-dependencies define the complete supported compiler and target package
-universe. `toolchain install iphoneos` uses only that locked repository commit
-and meta-package version; it never resolves against a moving repository head.
+repository provides an immutable `bonsai_flutter_ios_runtime_sdk` package and a
+versioned `bonsai_flutter_ios_sdk` framework package with an exact dependency on
+the runtime version. `toolchain install iphoneos` uses only the locked
+repository snapshot and package versions; it never resolves against a moving
+repository head.
 
 The CLI always uses `--switch=bonsai-flutter-ios`. It never runs `opam switch
 set`, never links the switch to an application directory, and never changes the
 caller's shell environment.
 
-### Immutable lifecycle
+### Layered lifecycle
 
-The installed switch is immutable. There is no `toolchain update` command and no
-package-level mutation workflow. `toolchain install` fails if
-`bonsai-flutter-ios` already exists.
+`toolchain install` fails if `bonsai-flutter-ios` already exists. Keep the
+runtime package immutable after installation. When only the Bonsai Flutter
+source revision changes and `SDK_RUNTIME_PACKAGE_VERSION` remains identical,
+update the installed host tool and run its controlled framework updater:
 
-Changing the compiler, SDK manifest, Bonsai Flutter release, package universe,
-or build recipes requires the explicit sequence:
+```sh
+HOST_SWITCH=<persistent-host-switch>
+FRAMEWORK_ROOT=$(opam var --switch="$HOST_SWITCH" share)/bonsai_flutter_tool/framework
+"$FRAMEWORK_ROOT/tool/ios/update_framework_sdk.sh"
+"$(opam var --switch="$HOST_SWITCH" bin)/bonsai-flutter" toolchain verify iphoneos
+```
+
+The updater verifies the installed runtime version before changing the
+framework package. It never removes the switch or rebuilds the runtime closure.
+
+Changing the compiler, runtime package universe, runtime patches, or runtime
+build recipes requires the explicit full-replacement sequence:
 
 ```sh
 bonsai-flutter toolchain remove iphoneos
@@ -305,16 +326,16 @@ bonsai-flutter toolchain install iphoneos
 bonsai-flutter toolchain verify iphoneos
 ```
 
-This replacement is intentionally disruptive. Builds fail while the switch is
-absent. The CLI must never attempt to preserve compatibility with the removed
-universe or mix files from the old and new installations.
+This runtime replacement is intentionally disruptive. Builds fail while the
+switch is absent. Never mix files from different runtime package versions.
 
 The CLI rejects a manifest whose source revision, source checksum, ABI version,
 or build recipe revision differs from the framework executable, even when the
-advertised package version is unchanged. The diagnostic requires the same
-explicit remove-and-install sequence. Repository maintainers regenerate every
-derived package and digest through `make ios-sdk-repository`; direct edits to a
-single URL, checksum, manifest, or repository digest are not a release path.
+advertised package version is unchanged. Resolve a framework-only mismatch with
+the controlled updater when the runtime version matches; otherwise replace the
+complete toolchain. Repository maintainers regenerate every derived package and
+digest through `make ios-sdk-repository`; direct edits to a single URL,
+checksum, manifest, or repository digest are not a release path.
 
 ## Application Dune contract
 

@@ -7,18 +7,48 @@ framework_root=$(CDPATH= cd -- "$script_directory/../.." && pwd)
 # shellcheck source=tool/ios/sdk_repository.lock
 . "$script_directory/sdk_repository.lock"
 
-if [ "$#" -ne 5 ]; then
-  echo "usage: $0 SOLUTION_JSON OPAM_REPO_CACHE OUTPUT_REPOSITORY SDK_META_OPAM SUPPORTED_CLOSURE_LOCK" >&2
+if [ "$#" -ne 6 ]; then
+  echo "usage: $0 SOLUTION_JSON OPAM_REPO_CACHE OUTPUT_REPOSITORY FRAMEWORK_OPAM RUNTIME_OPAM SUPPORTED_CLOSURE_LOCK" >&2
   exit 64
 fi
 
 solution_json=$1
 repo_cache=$2
 output_repository=$3
-sdk_meta_opam=$4
-supported_closure_lock=$5
+framework_opam=$4
+runtime_opam=$5
+supported_closure_lock=$6
 temporary_directory=$(mktemp -d)
 trap 'rm -rf "$temporary_directory"' EXIT HUP INT TERM
+
+runtime_closure_body="$temporary_directory/runtime-closure.body"
+runtime_closure_lock="$temporary_directory/runtime-closure.lock"
+awk -F '|' '$1 !~ /^#/ && NF && $1 != "bonsai_flutter" { print }' \
+  "$supported_closure_lock" > "$runtime_closure_body"
+runtime_features=$(sed -n 's/^# metadata.features=//p' "$supported_closure_lock")
+runtime_roots=$(sed -n 's/^# metadata.roots=//p' "$supported_closure_lock")
+runtime_package_count=$(wc -l < "$runtime_closure_body" | tr -d ' ')
+runtime_target_package_count=$(grep -c '|target-package|' "$runtime_closure_body" || true)
+runtime_host_package_count=$(grep -c '|host-package|' "$runtime_closure_body" || true)
+runtime_target_build_count=$(grep -c '|target-build|' "$runtime_closure_body" || true)
+runtime_component_count=$(
+  awk -F '|' '$3 == "target-package" { count += split($8, components, ",") } END { print count + 0 }' \
+    "$runtime_closure_body"
+)
+runtime_body_digest=$(shasum -a 256 "$runtime_closure_body" | cut -d ' ' -f 1)
+{
+  printf '%s\n' '# metadata.format=bonsai-flutter-ios-closure-v2'
+  printf '%s\n' "# metadata.features=$runtime_features"
+  printf '%s\n' "# metadata.roots=$runtime_roots"
+  printf '%s\n' "# metadata.package-count=$runtime_package_count"
+  printf '%s\n' "# metadata.target-package-count=$runtime_target_package_count"
+  printf '%s\n' "# metadata.host-package-count=$runtime_host_package_count"
+  printf '%s\n' "# metadata.target-build-count=$runtime_target_build_count"
+  printf '%s\n' "# metadata.component-count=$runtime_component_count"
+  printf '%s\n' "# metadata.digest=$runtime_body_digest"
+  printf '%s\n' '# package|version|role|capability|build-mechanism|source|sha256|findlib-components|target-dependencies'
+  cat "$runtime_closure_body"
+} > "$runtime_closure_lock"
 
 packages_tsv="$temporary_directory/packages.tsv"
 jq -r '.solution[] | .install? | select(.) | [.name, .version] | @tsv' \
@@ -26,35 +56,37 @@ jq -r '.solution[] | .install? | select(.) | [.name, .version] | @tsv' \
 
 package_lock="$temporary_directory/package-universe.lock"
 source_lock="$temporary_directory/source-archives.lock"
-meta_file="$temporary_directory/opam"
-sdk_files="$temporary_directory/files"
-mkdir -p "$sdk_files"
-mkdir -p "$sdk_files/patches" "$sdk_files/pkgconfig/iphoneos"
-cp "$script_directory/build_installed_sdk.sh" "$sdk_files/build-installed-sdk.sh"
+framework_meta_file="$temporary_directory/framework.opam"
+runtime_meta_file="$temporary_directory/runtime.opam"
+framework_files="$temporary_directory/framework-files"
+runtime_files="$temporary_directory/runtime-files"
+mkdir -p "$framework_files" "$runtime_files"
+mkdir -p "$runtime_files/patches" "$runtime_files/pkgconfig/iphoneos"
 sed \
   "s/^framework_source_sha256=.*/framework_source_sha256='$BONSAI_FLUTTER_SOURCE_SHA256'/" \
-  "$script_directory/build_installed_sdk.sh" \
-  > "$sdk_files/build-installed-sdk.sh"
-cp "$script_directory/build_runtime_closure.sh" "$sdk_files/build-runtime-closure.sh"
-cp "$script_directory/build_runtime_package.sh" "$sdk_files/build-runtime-package.sh"
-cp "$script_directory/verify_macho.sh" "$sdk_files/verify_macho.sh"
-cp "$script_directory/toolchain.lock" "$sdk_files/toolchain.lock"
-cp "$supported_closure_lock" "$sdk_files/supported-closure.lock"
-cp "$framework_root/vendor/patches/ios/"*.patch "$sdk_files/patches/"
-for patch_file in "$sdk_files/patches/"*.patch; do
+  "$script_directory/build_installed_framework.sh" \
+  > "$framework_files/build-installed-framework.sh"
+cp "$script_directory/build_runtime_sdk.sh" "$runtime_files/build-runtime-sdk.sh"
+cp "$script_directory/build_runtime_closure.sh" "$runtime_files/build-runtime-closure.sh"
+cp "$script_directory/build_runtime_package.sh" "$runtime_files/build-runtime-package.sh"
+cp "$script_directory/verify_macho.sh" "$runtime_files/verify_macho.sh"
+cp "$script_directory/toolchain.lock" "$runtime_files/toolchain.lock"
+cp "$runtime_closure_lock" "$runtime_files/supported-closure.lock"
+cp "$framework_root/vendor/patches/ios/"*.patch "$runtime_files/patches/"
+for patch_file in "$runtime_files/patches/"*.patch; do
   sed 's/^ $//' "$patch_file" >"$patch_file.normalized"
   mv "$patch_file.normalized" "$patch_file"
 done
-cp "$framework_root/vendor/pkgconfig/iphoneos/sqlite3.pc" "$sdk_files/pkgconfig/iphoneos/"
-chmod +x "$sdk_files/"*.sh
+cp "$framework_root/vendor/pkgconfig/iphoneos/sqlite3.pc" "$runtime_files/pkgconfig/iphoneos/"
+chmod +x "$framework_files/"*.sh "$runtime_files/"*.sh
 
 printf '%s\n' '# package|version|repository|metadata-sha256' > "$package_lock"
 printf '%s\n' '# package|version|source|algorithm|checksum' > "$source_lock"
 
 while IFS="$(printf '\t')" read -r package version; do
-  if [ "$package" = bonsai_flutter_ios_sdk ]; then
-    continue
-  fi
+  case "$package" in
+    bonsai_flutter_ios_sdk | bonsai_flutter_ios_runtime_sdk) continue ;;
+  esac
   package_directory=
   repository_name=
   for repository in bonsai-flutter-ios ios-cross default; do
@@ -127,16 +159,16 @@ done < "$packages_tsv"
     printf '  (%s %s %s %s)\n' "$package" "$version" "$repository" "$metadata_sha"
   done < "$package_lock"
   printf '%s\n' ' ))'
-} > "$sdk_files/package-lock.sexp"
+} > "$framework_files/package-lock.sexp"
 
-package_lock_digest=$(shasum -a 256 "$sdk_files/package-lock.sexp" | cut -d ' ' -f 1)
-target_components_digest=$(shasum -a 256 "$supported_closure_lock" | cut -d ' ' -f 1)
+package_lock_digest=$(shasum -a 256 "$framework_files/package-lock.sexp" | cut -d ' ' -f 1)
+target_components_digest=$(shasum -a 256 "$runtime_closure_lock" | cut -d ' ' -f 1)
 target_packages="$temporary_directory/target-packages.tsv"
 awk -F '|' '
   $1 !~ /^#/ && ($3 == "target-build" || $3 == "target-package") {
     print $1 "\t" $2
   }
-' "$supported_closure_lock" | LC_ALL=C sort -u > "$target_packages"
+' "$runtime_closure_lock" | LC_ALL=C sort -u > "$target_packages"
 printf '%s\t%s\n' bonsai_flutter "$BONSAI_FLUTTER_VERSION" >> "$target_packages"
 printf '%s\t%s\n' ocaml-ios64 5.1.1 >> "$target_packages"
 LC_ALL=C sort -u "$target_packages" -o "$target_packages"
@@ -179,7 +211,7 @@ LC_ALL=C sort -u "$target_packages" -o "$target_packages"
         printf "  (%s %s %s (%s))\n", components[component_index], $1, $2, substr(component_list, 2)
       }
     }
-  ' "$supported_closure_lock"
+  ' "$runtime_closure_lock"
   standard_library_components='threads unix str dynlink'
   for library in $standard_library_components; do
     printf '  (%s ocaml-ios64 5.1.1 (%s))\n' "$library" "$standard_library_components"
@@ -190,7 +222,7 @@ LC_ALL=C sort -u "$target_packages" -o "$target_packages"
       "$library" "$BONSAI_FLUTTER_VERSION" "$framework_components"
   done
   printf '%s\n' ' ))'
-} > "$sdk_files/manifest.sexp"
+} > "$framework_files/manifest.sexp"
 
 framework_source_record=$(awk -F '|' '
   $1 == package && $2 == version { print; exit }
@@ -223,11 +255,10 @@ test "$framework_source_checksum" = "$BONSAI_FLUTTER_SOURCE_SHA256" || {
 {
   printf '%s\n' \
     'opam-version: "2.0"' \
-    'synopsis: "Locked Bonsai Flutter iPhoneOS SDK package universe"' \
+    'synopsis: "Bonsai Flutter iPhoneOS framework SDK"' \
     'description: """' \
-    'Installs the exact host and target package universe supported by Bonsai Flutter' \
-    'for iPhoneOS arm64. Package versions, recipes, and source checksums are immutable' \
-    'for this SDK release.' \
+    'Builds and installs the Bonsai Flutter framework for iPhoneOS arm64 on top' \
+    'of the exact immutable runtime SDK package.' \
     '"""' \
     'maintainer: "bonsai_flutter contributors"' \
     'authors: ["bonsai_flutter contributors"]' \
@@ -238,7 +269,45 @@ test "$framework_source_checksum" = "$BONSAI_FLUTTER_SOURCE_SHA256" || {
     'extra-source "bonsai_flutter.tar.gz" {' \
     "  src: \"$framework_source_url\"" \
     "  checksum: [\"sha256=$framework_source_checksum\"]" \
-    '}'
+    '}' \
+    'extra-files: ['
+  find "$framework_files" -type f -print | LC_ALL=C sort | while IFS= read -r file; do
+    relative=${file#"$framework_files"/}
+    printf '  ["%s" "sha256=%s"]\n' \
+      "$relative" \
+      "$(shasum -a 256 "$file" | cut -d ' ' -f 1)"
+  done
+  printf '%s\n' \
+    ']' \
+    'depends: [' \
+    "  \"bonsai_flutter_ios_runtime_sdk\" {= \"$SDK_RUNTIME_PACKAGE_VERSION\"}" \
+    ']' \
+    'build: [' \
+    '  ["sh" "./build-installed-framework.sh" "%{switch}%" "%{prefix}%"]' \
+    ']' \
+    'install: [' \
+    '  ["cp" "-R" ".bonsai_flutter_ios_framework_sdk/stage/ios-sysroot/." "%{prefix}%/ios-sysroot/"]' \
+    '  ["mkdir" "-p" "%{share}%/bonsai_flutter_ios_sdk"]' \
+    '  ["cp" "manifest.sexp" "%{share}%/bonsai_flutter_ios_sdk/manifest.sexp"]' \
+    '  ["cp" "package-lock.sexp" "%{share}%/bonsai_flutter_ios_sdk/package-lock.sexp"]' \
+    ']' \
+    'available: os = "macos" & arch = "arm64"'
+} > "$framework_meta_file"
+
+{
+  printf '%s\n' \
+    'opam-version: "2.0"' \
+    'synopsis: "Immutable Bonsai Flutter iPhoneOS runtime SDK"' \
+    'description: """' \
+    'Builds and installs the locked iPhoneOS arm64 cross-compiler runtime and' \
+    'target dependency closure independently from the Bonsai Flutter framework.' \
+    '"""' \
+    'maintainer: "bonsai_flutter contributors"' \
+    'authors: ["bonsai_flutter contributors"]' \
+    'license: "MIT"' \
+    'homepage: "https://github.com/RCmerci/bonsai_flutter"' \
+    'bug-reports: "https://github.com/RCmerci/bonsai_flutter/issues"' \
+    'dev-repo: "git+https://github.com/RCmerci/bonsai_flutter.git"'
   awk -F '|' '
     $1 !~ /^#/ && ($3 == "target-build" || $3 == "target-package") {
       printf "extra-source \"runtime-%s-%s.archive\" {\n", $1, $7
@@ -246,40 +315,42 @@ test "$framework_source_checksum" = "$BONSAI_FLUTTER_SOURCE_SHA256" || {
       printf "  checksum: [\"sha256=%s\"]\n", $7
       print "}"
     }
-  ' "$supported_closure_lock"
+  ' "$runtime_closure_lock"
   printf '%s\n' 'extra-files: ['
-  find "$sdk_files" -type f -print | LC_ALL=C sort | while IFS= read -r file; do
-    relative=${file#"$sdk_files"/}
+  find "$runtime_files" -type f -print | LC_ALL=C sort | while IFS= read -r file; do
+    relative=${file#"$runtime_files"/}
     printf '  ["%s" "sha256=%s"]\n' \
       "$relative" \
       "$(shasum -a 256 "$file" | cut -d ' ' -f 1)"
   done
   printf '%s\n' ']' 'depends: ['
   while IFS="$(printf '\t')" read -r package version; do
-    if [ "$package" != bonsai_flutter_ios_sdk ]; then
-      printf '  "%s" {= "%s"}\n' "$package" "$version"
-    fi
+    case "$package" in
+      bonsai_flutter | bonsai_flutter_ios_sdk | bonsai_flutter_ios_runtime_sdk) continue ;;
+    esac
+    printf '  "%s" {= "%s"}\n' "$package" "$version"
   done < "$packages_tsv"
   printf '%s\n' \
     ']' \
     'build: [' \
-    '  ["sh" "./build-installed-sdk.sh" "%{switch}%" "%{prefix}%"]' \
+    '  ["sh" "./build-runtime-sdk.sh" "%{switch}%" "%{prefix}%"]' \
     ']' \
     'install: [' \
-    '  ["cp" "-R" ".bonsai_flutter_ios_sdk/stage/ios-sysroot/." "%{prefix}%/ios-sysroot/"]' \
-    '  ["mkdir" "-p" "%{share}%/bonsai_flutter_ios_sdk"]' \
-    '  ["cp" "manifest.sexp" "%{share}%/bonsai_flutter_ios_sdk/manifest.sexp"]' \
-    '  ["cp" "package-lock.sexp" "%{share}%/bonsai_flutter_ios_sdk/package-lock.sexp"]' \
+    '  ["cp" "-R" ".bonsai_flutter_ios_runtime_sdk/stage/ios-sysroot/." "%{prefix}%/ios-sysroot/"]' \
     ']' \
     'available: os = "macos" & arch = "arm64"'
-} > "$meta_file"
+} > "$runtime_meta_file"
 
-mkdir -p "$output_repository" "$(dirname "$sdk_meta_opam")"
-actual_sdk_files="$(dirname "$sdk_meta_opam")/files"
-mkdir -p "$actual_sdk_files"
+mkdir -p \
+  "$output_repository" \
+  "$(dirname "$framework_opam")" \
+  "$(dirname "$runtime_opam")"
+actual_framework_files="$(dirname "$framework_opam")/files"
+actual_runtime_files="$(dirname "$runtime_opam")/files"
+mkdir -p "$actual_framework_files" "$actual_runtime_files"
 mv "$package_lock" "$output_repository/package-universe.lock"
 mv "$source_lock" "$output_repository/source-archives.lock"
-mv "$sdk_files/manifest.sexp" "$actual_sdk_files/manifest.sexp"
-mv "$sdk_files/package-lock.sexp" "$actual_sdk_files/package-lock.sexp"
-cp -R "$sdk_files/." "$actual_sdk_files/"
-mv "$meta_file" "$sdk_meta_opam"
+cp -R "$framework_files/." "$actual_framework_files/"
+cp -R "$runtime_files/." "$actual_runtime_files/"
+mv "$framework_meta_file" "$framework_opam"
+mv "$runtime_meta_file" "$runtime_opam"

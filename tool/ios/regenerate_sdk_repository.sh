@@ -71,10 +71,12 @@ ensure_checkout \
   "$repository_root/_build/ios/sources/opam-cross-ios"
 
 cp -R "$output_repository" "$staged_repository"
-sdk_packages="$staged_repository/packages/bonsai_flutter_ios_sdk"
-test "$sdk_packages" != / || fail "invalid SDK package path"
-rm -rf "$sdk_packages"
-mkdir -p "$sdk_packages"
+framework_packages="$staged_repository/packages/bonsai_flutter_ios_sdk"
+runtime_packages="$staged_repository/packages/bonsai_flutter_ios_runtime_sdk"
+test "$framework_packages" != / || fail "invalid framework SDK package path"
+test "$runtime_packages" != / || fail "invalid runtime SDK package path"
+rm -rf "$framework_packages" "$runtime_packages"
+mkdir -p "$framework_packages" "$runtime_packages"
 
 framework_url="$staged_repository/packages/bonsai_flutter/bonsai_flutter.$BONSAI_FLUTTER_VERSION/url"
 test -f "$framework_url" || fail "missing Bonsai Flutter package URL metadata"
@@ -113,17 +115,22 @@ printf '%b\n' \
   "ocamlfind	$OCAMLFIND_VERSION" \
   'seq	base' >> "$packages_tsv"
 printf '%s\t%s\n' bonsai_flutter_ios_sdk "$SDK_PACKAGE_VERSION" >> "$packages_tsv"
+printf '%s\t%s\n' \
+  bonsai_flutter_ios_runtime_sdk \
+  "$SDK_RUNTIME_PACKAGE_VERSION" >> "$packages_tsv"
 LC_ALL=C sort -u "$packages_tsv" -o "$packages_tsv"
 jq -Rn \
   '[inputs | split("\t") | {install: {name: .[0], version: .[1]}}] | {solution: .}' \
   < "$packages_tsv" > "$solution_json"
 
-sdk_package_directory="$sdk_packages/bonsai_flutter_ios_sdk.$SDK_PACKAGE_VERSION"
+framework_package_directory="$framework_packages/bonsai_flutter_ios_sdk.$SDK_PACKAGE_VERSION"
+runtime_package_directory="$runtime_packages/bonsai_flutter_ios_runtime_sdk.$SDK_RUNTIME_PACKAGE_VERSION"
 "$script_directory/generate_package_universe.sh" \
   "$solution_json" \
   "$repository_cache" \
   "$staged_repository" \
-  "$sdk_package_directory/opam" \
+  "$framework_package_directory/opam" \
+  "$runtime_package_directory/opam" \
   "$repository_root/vendor/opam-ios/supported-closure.lock"
 
 repository_digest() {
@@ -181,11 +188,14 @@ if test "$mode" = --check; then
   exit 0
 fi
 
-actual_sdk_packages="$output_repository/packages/bonsai_flutter_ios_sdk"
-test "$actual_sdk_packages" != / || fail "invalid output SDK package path"
-rm -rf "$actual_sdk_packages"
-mkdir -p "$actual_sdk_packages"
-cp -R "$sdk_package_directory" "$actual_sdk_packages/"
+actual_framework_packages="$output_repository/packages/bonsai_flutter_ios_sdk"
+actual_runtime_packages="$output_repository/packages/bonsai_flutter_ios_runtime_sdk"
+test "$actual_framework_packages" != / || fail "invalid output framework SDK package path"
+test "$actual_runtime_packages" != / || fail "invalid output runtime SDK package path"
+rm -rf "$actual_framework_packages" "$actual_runtime_packages"
+mkdir -p "$actual_framework_packages" "$actual_runtime_packages"
+cp -R "$framework_package_directory" "$actual_framework_packages/"
+cp -R "$runtime_package_directory" "$actual_runtime_packages/"
 cp "$framework_url" \
   "$output_repository/packages/bonsai_flutter/bonsai_flutter.$BONSAI_FLUTTER_VERSION/url"
 cp "$staged_repository/package-universe.lock" "$output_repository/package-universe.lock"

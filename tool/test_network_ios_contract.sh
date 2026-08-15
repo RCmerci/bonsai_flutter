@@ -268,11 +268,11 @@ reject_pattern \
   '(openssl|libssl|libcrypto|securetransport)' \
   "iOS runtime package builder"
 
-installed_sdk_builder=$(cat tool/ios/build_installed_sdk.sh)
+installed_sdk_builder=$(cat tool/ios/build_runtime_sdk.sh)
 require_text \
   "$installed_sdk_builder" \
-  'supported-closure.lock' \
-  "iOS installed SDK supported closure"
+  'build-runtime-closure.sh' \
+  "iOS runtime SDK closure build"
 package_universe_generator=$(cat tool/ios/generate_package_universe.sh)
 require_text \
   "$package_universe_generator" \

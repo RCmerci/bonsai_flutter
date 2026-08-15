@@ -174,17 +174,31 @@ bonsai-flutter toolchain verify iphoneos
 bonsai-flutter build ios --profile release --no-codesign
 ```
 
-The versioned SDK repository pins its commits, exact package versions, source
-checksums, target components, and `bonsai_flutter_ios_sdk` meta-package.
-Its manifest also binds the exact Bonsai Flutter source revision and archive
-checksum to the advertised framework version and protocol ABI. Regenerate the
-complete repository, including package metadata, locks, SDK files, and snapshot
-digests, with:
+The versioned SDK repository separates the immutable
+`bonsai_flutter_ios_runtime_sdk` package from the replaceable
+`bonsai_flutter_ios_sdk` framework package. The runtime package owns the cross
+compiler and target dependency closure. The framework package binds the exact
+Bonsai Flutter source revision and archive checksum to the advertised framework
+version and protocol ABI. Regenerate the repository metadata, locks, package
+definitions, and snapshot digests with:
 
 ```sh
 make ios-sdk-repository
 tool/ios/regenerate_sdk_repository.sh --check
 ```
+
+After installing the regenerated repository into the host switch, update only
+the framework layer when the runtime package version is unchanged:
+
+```sh
+HOST_SWITCH=<persistent-host-switch>
+FRAMEWORK_ROOT=$(opam var --switch="$HOST_SWITCH" share)/bonsai_flutter_tool/framework
+"$FRAMEWORK_ROOT/tool/ios/update_framework_sdk.sh"
+"$(opam var --switch="$HOST_SWITCH" bin)/bonsai-flutter" toolchain verify iphoneos
+```
+
+Replace the complete toolchain only when the cross compiler, target dependency
+closure, runtime patches, or runtime package version changes.
 
 Applications commit their generated `.opam.locked` file. Native builds validate
 only the Dune-reachable package subset, then select `@app/bonsai-flutter-macos`
