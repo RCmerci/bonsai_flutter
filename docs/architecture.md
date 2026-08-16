@@ -352,8 +352,9 @@ Native widgets are resolved by an application-supplied
 `NativeWidgetRegistry`. The registry validates schema ranges and declared
 capabilities before decoding typed properties. It renders an accessible
 diagnostic fallback for unsupported extensions and binds factory resources to
-node lifetime. `Virtual_list` is the first built-in native extension and
-mounts only its supplied item window.
+node lifetime. `Sliver.fixed_extent` and `Sliver.varied_extent` are core
+sliver kinds that mount only their supplied item window inside a
+`Scroll_view` (CustomScrollView).
 
 TextInput is a dedicated host rather than a stateless `TextField` adapter.
 Flutter retains the TextEditingController, FocusNode, live selection,

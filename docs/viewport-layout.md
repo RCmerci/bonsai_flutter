@@ -7,12 +7,13 @@ types:
 - `Viewport.Vertical.t` requires finite height;
 - `Viewport.Horizontal.t` requires finite width.
 
-Core `Scroll_view` and `List_view` constructors, `Virtual_list`, and
-`Sparse_extent_list` expose separate `vertical` and `horizontal` entry points.
-They do not return `Widget.t`, and their scroll axis is not a runtime optional
-argument. As a result, a vertical viewport cannot be passed to `Widget.column`
-or `Widget.Flex.fixed`, and a horizontal viewport cannot be passed to
-`Widget.row`.
+Core `Scroll_view` exposes separate `vertical` and `horizontal` entry
+points. It accepts a `Sliver.t list` — slivers are scroll-axis content that
+lives only inside a `Scroll_view` and cannot be placed in a column, row, or
+body. `Scroll_view` does not return `Widget.t`, and its scroll axis is not a
+runtime optional argument. As a result, a vertical viewport cannot be passed
+to `Widget.column` or `Widget.Flex.fixed`, and a horizontal viewport cannot
+be passed to `Widget.row`.
 
 ## Bounded bodies
 
@@ -22,12 +23,14 @@ ordinary non-flex widgets:
 
 ```ocaml
 let feed =
-  Ui.Native_widget.Sparse_extent_list.vertical
-    ~total_count
-    ~first_index
-    ~default_item_extent
-    ~extent_overrides
-    ~items
+  Ui.Widget.Scroll_view.vertical
+    ~on_scroll:scroll_handler
+    [ Ui.Widget.Sliver.varied_extent
+        ~total_count
+        ~first_index
+        ~default_item_extent
+        ~extent_overrides
+        ~items
     ~on_visible_range
     ()
 in

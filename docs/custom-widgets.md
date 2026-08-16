@@ -117,9 +117,9 @@ described below.
 
 ## Built-in sparse-extent list
 
-`Native_widget.Sparse_extent_list` is built-in extension kind `4`. Schema
-version `1` preserves immediate updates; schema version `2` adds explicit
-enablement, expand/collapse durations, and curves. Its Stateful, Resource,
+`Widget.Sliver.varied_extent` is core sliver kind `36`. It supports a
+default item extent with sorted logical-index overrides and an optional
+transition with expand/collapse durations and curves. Its Stateful, Resource,
 Semantics, and Virtualized capabilities match the fixed virtual list, while
 its payload carries a default item extent and sorted
 `(logical index, extent)` overrides. Both versions reuse native event `1` and
