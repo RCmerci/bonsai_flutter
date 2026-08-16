@@ -84,7 +84,7 @@ module Snapshot = struct
 
   let find_by_text t text =
     find_matching t (fun node ->
-      let Av view = Ui.Widget.Private.view node.widget in
+      let (Av view) = Ui.Widget.Private.view node.widget in
       match view.node with
       | Ui.Widget.Private.Text { value; _ } -> String.equal value text
       | _ -> false)

@@ -302,7 +302,9 @@ let write_sliver_varied_extent_payload
   =
   check_u64 "sliver total_count" (Int64.of_int total_count);
   check_u64 "sliver first_index" (Int64.of_int first_index);
-  if (not (Float.is_finite default_item_extent)) || Float.compare default_item_extent 0. <= 0
+  if
+    (not (Float.is_finite default_item_extent))
+    || Float.compare default_item_extent 0. <= 0
   then fail Invalid_props "sliver default_item_extent must be finite and positive";
   check_u32 "sliver overscan" overscan;
   Writer.u64 writer (Int64.of_int total_count);
@@ -310,19 +312,21 @@ let write_sliver_varied_extent_payload
   Writer.f64 writer default_item_extent;
   Writer.u32 writer overscan;
   write_sliver_extent_overrides writer extent_overrides;
-  (match transition with
-   | None ->
-     write_optional_bool writer None;
-     write_optional_duration_ms writer None;
-     write_optional_duration_ms writer None;
-     write_optional_sparse_extent_curve writer None;
-     write_optional_sparse_extent_curve writer None
-   | Some { enabled; expand_duration_ms; collapse_duration_ms; expand_curve; collapse_curve } ->
-     write_optional_bool writer (Some enabled);
-     write_optional_duration_ms writer (Some expand_duration_ms);
-     write_optional_duration_ms writer (Some collapse_duration_ms);
-     write_optional_sparse_extent_curve writer (Some expand_curve);
-     write_optional_sparse_extent_curve writer (Some collapse_curve))
+  match transition with
+  | None ->
+    write_optional_bool writer None;
+    write_optional_duration_ms writer None;
+    write_optional_duration_ms writer None;
+    write_optional_sparse_extent_curve writer None;
+    write_optional_sparse_extent_curve writer None
+  | Some
+      { enabled; expand_duration_ms; collapse_duration_ms; expand_curve; collapse_curve }
+    ->
+    write_optional_bool writer (Some enabled);
+    write_optional_duration_ms writer (Some expand_duration_ms);
+    write_optional_duration_ms writer (Some collapse_duration_ms);
+    write_optional_sparse_extent_curve writer (Some expand_curve);
+    write_optional_sparse_extent_curve writer (Some collapse_curve)
 ;;
 
 let semantics_role_id = function
@@ -658,9 +662,23 @@ let write_props writer kind props =
     check_u32 "sliver fill flex" flex;
     if flex = 0 then fail Invalid_props "sliver fill flex must be positive";
     Writer.u32 writer flex
-  | Sliver_fixed_extent, Sliver_fixed_extent_props { total_count; first_index; item_extent; overscan } ->
-    write_sliver_fixed_extent_payload writer ~total_count ~first_index ~item_extent ~overscan
-  | Sliver_varied_extent, Sliver_varied_extent_props { total_count; first_index; default_item_extent; overscan; extent_overrides; transition } ->
+  | ( Sliver_fixed_extent
+    , Sliver_fixed_extent_props { total_count; first_index; item_extent; overscan } ) ->
+    write_sliver_fixed_extent_payload
+      writer
+      ~total_count
+      ~first_index
+      ~item_extent
+      ~overscan
+  | ( Sliver_varied_extent
+    , Sliver_varied_extent_props
+        { total_count
+        ; first_index
+        ; default_item_extent
+        ; overscan
+        ; extent_overrides
+        ; transition
+        } ) ->
     write_sliver_varied_extent_payload
       writer
       ~total_count
@@ -1181,8 +1199,7 @@ let write_update_props writer props =
   | Gesture_props
   | Environment_boundary_props
   | Sliver_box_props
-  | Sliver_list_props ->
-    ()
+  | Sliver_list_props -> ()
   | Text_props props -> write_text_props writer props
   | Rich_text_props { spans } ->
     check_u16 "rich text span count" (List.length spans);
@@ -1246,8 +1263,20 @@ let write_update_props writer props =
     if flex = 0 then fail Invalid_props "sliver fill flex must be positive";
     Writer.u32 writer flex
   | Sliver_fixed_extent_props { total_count; first_index; item_extent; overscan } ->
-    write_sliver_fixed_extent_payload writer ~total_count ~first_index ~item_extent ~overscan
-  | Sliver_varied_extent_props { total_count; first_index; default_item_extent; overscan; extent_overrides; transition } ->
+    write_sliver_fixed_extent_payload
+      writer
+      ~total_count
+      ~first_index
+      ~item_extent
+      ~overscan
+  | Sliver_varied_extent_props
+      { total_count
+      ; first_index
+      ; default_item_extent
+      ; overscan
+      ; extent_overrides
+      ; transition
+      } ->
     write_sliver_varied_extent_payload
       writer
       ~total_count
@@ -2110,7 +2139,8 @@ let read_sliver_extent_overrides reader ~total_count =
   if count < 0 || count > total_count
   then fail Invalid_props "sliver override count is out of range";
   let rec read remaining previous =
-    if remaining = 0 then []
+    if remaining = 0
+    then []
     else (
       let index64 = Reader.u64 reader in
       if Int64.compare index64 0L < 0
@@ -2138,12 +2168,23 @@ let read_sliver_varied_extent_transition reader =
   let collapse_duration_ms = read_optional_duration_ms reader in
   let expand_curve = read_optional_sparse_extent_curve reader in
   let collapse_curve = read_optional_sparse_extent_curve reader in
-  match (enabled, expand_duration_ms, collapse_duration_ms, expand_curve, collapse_curve) with
+  match
+    enabled, expand_duration_ms, collapse_duration_ms, expand_curve, collapse_curve
+  with
   | None, None, None, None, None -> None
-  | Some enabled, Some expand_duration_ms, Some collapse_duration_ms, Some expand_curve, Some collapse_curve ->
+  | ( Some enabled
+    , Some expand_duration_ms
+    , Some collapse_duration_ms
+    , Some expand_curve
+    , Some collapse_curve ) ->
     Some
       Wire_frame.
-        { enabled; expand_duration_ms; collapse_duration_ms; expand_curve; collapse_curve }
+        { enabled
+        ; expand_duration_ms
+        ; collapse_duration_ms
+        ; expand_curve
+        ; collapse_curve
+        }
   | _ -> fail Invalid_props "sliver transition fields must be all-present or all-absent"
 ;;
 
@@ -2186,8 +2227,10 @@ let read_node_kind reader =
   | value when value = Generated_protocol.Node_kind.sliver_box -> Sliver_box
   | value when value = Generated_protocol.Node_kind.sliver_list -> Sliver_list
   | value when value = Generated_protocol.Node_kind.sliver_fill -> Sliver_fill
-  | value when value = Generated_protocol.Node_kind.sliver_fixed_extent -> Sliver_fixed_extent
-  | value when value = Generated_protocol.Node_kind.sliver_varied_extent -> Sliver_varied_extent
+  | value when value = Generated_protocol.Node_kind.sliver_fixed_extent ->
+    Sliver_fixed_extent
+  | value when value = Generated_protocol.Node_kind.sliver_varied_extent ->
+    Sliver_varied_extent
   | value when value = Generated_protocol.Node_kind.sliver_padding -> Sliver_padding
   | value when value = Generated_protocol.Node_kind.sliver_app_bar -> Sliver_app_bar
   | value when value = Generated_protocol.Node_kind.gesture -> Gesture

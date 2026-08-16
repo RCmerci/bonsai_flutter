@@ -148,7 +148,6 @@ type material_button_variant =
   | Text_button
   | Icon_button
 
-
 module Sparse_extent_override = struct
   type t =
     { index : int
@@ -194,276 +193,280 @@ module Sparse_extent_transition = struct
   ;;
 end
 
-
 module Private_types = struct
-type 'k node =
-  | Empty : [ `Empty ] node
-  | Text :
-      { value : string
-      ; style : Style.Text_style.Private.view option
-      ; text_align : Style.Text_align.t
-      ; max_lines : int option
-      ; overflow : Style.Text_overflow.t
-      }
-      -> [ `Text ] node
-  | Rich_text : { spans : string list } -> [ `Rich_text ] node
-  | Icon :
-      { code_point : int
-      ; font_family : string option
-      ; size : float option
-      ; color : int32 option
-      }
-      -> [ `Icon ] node
-  | Image :
-      { uri : string
-      ; fit : Style.Image_fit.t
-      ; width : float option
-      ; height : float option
-      }
-      -> [ `Image ] node
-  | Row : [ `Row ] node
-  | Column : [ `Column ] node
-  | Flex_row : [ `Flex_row ] node
-  | Flex_column : [ `Flex_column ] node
-  | Stack : [ `Stack ] node
-  | Button : { enabled : bool } -> [ `Button ] node
-  | Pressable :
-      { overlay_color : Style.Color.t
-      ; release_delay_ms : int
-      }
-      -> [ `Pressable ] node
-  | Padding :
-      { left : float
-      ; top : float
-      ; right : float
-      ; bottom : float
-      }
-      -> [ `Padding ] node
-  | Align : { alignment : Layout.Alignment.t } -> [ `Align ] node
-  | Center :
-      { width_factor : float option
-      ; height_factor : float option
-      }
-      -> [ `Center ] node
-  | Sized_box :
-      { width : float option
-      ; height : float option
-      }
-      -> [ `Sized_box ] node
-  | Constrained_box :
-      { min_width : float
-      ; max_width : float
-      ; min_height : float
-      ; max_height : float
-      }
-      -> [ `Constrained_box ] node
-  | Decorated_box :
-      { background : int32 option
-      ; border_radius : float
-      }
-      -> [ `Decorated_box ] node
-  | Clip : { behavior : Style.Clip.t } -> [ `Clip ] node
-  | Opacity : { opacity : float } -> [ `Opacity ] node
-  | Animated_opacity :
-      { opacity : float
-      ; animation : Animation.t
-      }
-      -> [ `Animated_opacity ] node
-  | Transform : { matrix4 : float array } -> [ `Transform ] node
-  | Scroll_view :
-      { axis : Layout.Axis.t
-      ; reverse : bool
-      ; primary : bool
-      }
-      -> [ `Scroll_view ] node
-  | Sliver_box : [ `Sliver_box ] node
-  | Sliver_list : [ `Sliver_list ] node
-  | Sliver_fill : { flex : int } -> [ `Sliver_fill ] node
-  | Sliver_fixed_extent :
-      { total_count : int
-      ; first_index : int
-      ; item_extent : float
-      ; overscan : int
-      }
-      -> [ `Sliver_fixed_extent ] node
-  | Sliver_varied_extent :
-      { total_count : int
-      ; first_index : int
-      ; default_item_extent : float
-      ; extent_overrides : Sparse_extent_override.t list
-      ; overscan : int
-      ; transition : Sparse_extent_transition.t option
-      }
-      -> [ `Sliver_varied_extent ] node
-  | Sliver_padding :
-      { left : float; top : float; right : float; bottom : float }
-      -> [ `Sliver_padding ] node
-  | Sliver_app_bar :
-      { pinned : bool
-      ; expanded_height : float option
-      ; collapsed_height : float option
-      }
-      -> [ `Sliver_app_bar ] node
-  | Gesture : [ `Gesture ] node
-  | Focus_scope : { autofocus : bool } -> [ `Focus_scope ] node
-  | Mouse_region : { opaque : bool } -> [ `Mouse_region ] node
-  | Keyboard_listener :
-      { autofocus : bool
-      ; key_policy : Event.Key_policy.t
-      }
-      -> [ `Keyboard_listener ] node
-  | Semantics :
-      { label : string option
-      ; hint : string option
-      ; value : string option
-      ; role : Semantics.Role.t
-      ; enabled : bool option
-      ; selected : bool option
-      ; checked : bool option
-      ; focusable : bool option
-      ; obscured : bool
-      ; live_region : bool
-      ; heading_level : int option
-      ; sort_key : float option
-      ; actions : Semantics.Action.t list
-      }
-      -> [ `Semantics ] node
-  | Theme :
-      { brightness : Style.Brightness.t
-      ; color_seed : int32
-      }
-      -> [ `Theme ] node
-  | Material_scaffold : { has_app_bar : bool } -> [ `Material_scaffold ] node
-  | Material_app_bar : { center_title : bool } -> [ `Material_app_bar ] node
-  | Material_elevated_button :
-      { variant : material_button_variant
-      ; enabled : bool
-      ; autofocus : bool
-      }
-      -> [ `Material_elevated_button ] node
-  | Material_text_button :
-      { variant : material_button_variant
-      ; enabled : bool
-      ; autofocus : bool
-      }
-      -> [ `Material_text_button ] node
-  | Material_icon_button :
-      { variant : material_button_variant
-      ; enabled : bool
-      ; autofocus : bool
-      }
-      -> [ `Material_icon_button ] node
-  | Material_checkbox :
-      { value : bool
-      ; enabled : bool
-      }
-      -> [ `Material_checkbox ] node
-  | Material_switch :
-      { value : bool
-      ; enabled : bool
-      }
-      -> [ `Material_switch ] node
-  | Material_list_tile :
-      { enabled : bool
-      ; selected : bool
-      ; has_subtitle : bool
-      ; has_leading : bool
-      ; has_trailing : bool
-      }
-      -> [ `Material_list_tile ] node
-  | Material_divider : { thickness : float } -> [ `Material_divider ] node
-  | Material_card : { elevation : float } -> [ `Material_card ] node
-  | Material_circular_progress_indicator :
-      { value : float option }
-      -> [ `Material_circular_progress_indicator ] node
-  | Cupertino_button : { enabled : bool } -> [ `Cupertino_button ] node
-  | Cupertino_switch :
-      { value : bool
-      ; enabled : bool
-      }
-      -> [ `Cupertino_switch ] node
-  | Text_input :
-      { session_id : ID.Text_input.session_id
-      ; document_revision : ID.Text_input.document_revision
-      ; value : Text_editing.Value.t
-      ; enabled : bool
-      ; read_only : bool
-      ; obscure_text : bool
-      ; keyboard_type : Text_editing.keyboard_type
-      ; input_action : Text_editing.input_action
-      ; accepted_local_revision : ID.Text_input.local_revision
-      ; update_mode : Text_editing.update_mode
-      ; autofocus : bool
-      ; max_utf8_bytes : int option
-      }
-      -> [ `Text_input ] node
-  | Overlay :
-      { alignment : Navigation.overlay_alignment
-      ; dismissible : bool
-      }
-      -> [ `Overlay ] node
-  | Navigator :
-      { restoration_scope_id : ID.Navigation.restoration_scope_id option }
-      -> [ `Navigator ] node
-  | Page :
-      { page_key : ID.Navigation.page_key
-      ; presentation : Navigation.page_presentation
-      ; can_pop : bool
-      ; restoration_id : ID.Navigation.restoration_id option
-      }
-      -> [ `Page ] node
-  | Safe_area :
-      { left : bool
-      ; top : bool
-      ; right : bool
-      ; bottom : bool
-      ; minimum_left : float
-      ; minimum_top : float
-      ; minimum_right : float
-      ; minimum_bottom : float
-      }
-      -> [ `Safe_area ] node
-  | Environment_boundary : [ `Environment_boundary ] node
-  | Material_dialog :
-      { barrier_dismissible : bool }
-      -> [ `Material_dialog ] node
-  | Native_widget :
-      { kind_id : ID.Native_widget.kind_id
-      ; version : int
-      ; capabilities : int64
-      ; payload : bytes
-      }
-      -> [ `Native_widget ] node
+  type 'k node =
+    | Empty : [ `Empty ] node
+    | Text :
+        { value : string
+        ; style : Style.Text_style.Private.view option
+        ; text_align : Style.Text_align.t
+        ; max_lines : int option
+        ; overflow : Style.Text_overflow.t
+        }
+        -> [ `Text ] node
+    | Rich_text : { spans : string list } -> [ `Rich_text ] node
+    | Icon :
+        { code_point : int
+        ; font_family : string option
+        ; size : float option
+        ; color : int32 option
+        }
+        -> [ `Icon ] node
+    | Image :
+        { uri : string
+        ; fit : Style.Image_fit.t
+        ; width : float option
+        ; height : float option
+        }
+        -> [ `Image ] node
+    | Row : [ `Row ] node
+    | Column : [ `Column ] node
+    | Flex_row : [ `Flex_row ] node
+    | Flex_column : [ `Flex_column ] node
+    | Stack : [ `Stack ] node
+    | Button : { enabled : bool } -> [ `Button ] node
+    | Pressable :
+        { overlay_color : Style.Color.t
+        ; release_delay_ms : int
+        }
+        -> [ `Pressable ] node
+    | Padding :
+        { left : float
+        ; top : float
+        ; right : float
+        ; bottom : float
+        }
+        -> [ `Padding ] node
+    | Align : { alignment : Layout.Alignment.t } -> [ `Align ] node
+    | Center :
+        { width_factor : float option
+        ; height_factor : float option
+        }
+        -> [ `Center ] node
+    | Sized_box :
+        { width : float option
+        ; height : float option
+        }
+        -> [ `Sized_box ] node
+    | Constrained_box :
+        { min_width : float
+        ; max_width : float
+        ; min_height : float
+        ; max_height : float
+        }
+        -> [ `Constrained_box ] node
+    | Decorated_box :
+        { background : int32 option
+        ; border_radius : float
+        }
+        -> [ `Decorated_box ] node
+    | Clip : { behavior : Style.Clip.t } -> [ `Clip ] node
+    | Opacity : { opacity : float } -> [ `Opacity ] node
+    | Animated_opacity :
+        { opacity : float
+        ; animation : Animation.t
+        }
+        -> [ `Animated_opacity ] node
+    | Transform : { matrix4 : float array } -> [ `Transform ] node
+    | Scroll_view :
+        { axis : Layout.Axis.t
+        ; reverse : bool
+        ; primary : bool
+        }
+        -> [ `Scroll_view ] node
+    | Sliver_box : [ `Sliver_box ] node
+    | Sliver_list : [ `Sliver_list ] node
+    | Sliver_fill : { flex : int } -> [ `Sliver_fill ] node
+    | Sliver_fixed_extent :
+        { total_count : int
+        ; first_index : int
+        ; item_extent : float
+        ; overscan : int
+        }
+        -> [ `Sliver_fixed_extent ] node
+    | Sliver_varied_extent :
+        { total_count : int
+        ; first_index : int
+        ; default_item_extent : float
+        ; extent_overrides : Sparse_extent_override.t list
+        ; overscan : int
+        ; transition : Sparse_extent_transition.t option
+        }
+        -> [ `Sliver_varied_extent ] node
+    | Sliver_padding :
+        { left : float
+        ; top : float
+        ; right : float
+        ; bottom : float
+        }
+        -> [ `Sliver_padding ] node
+    | Sliver_app_bar :
+        { pinned : bool
+        ; expanded_height : float option
+        ; collapsed_height : float option
+        }
+        -> [ `Sliver_app_bar ] node
+    | Gesture : [ `Gesture ] node
+    | Focus_scope : { autofocus : bool } -> [ `Focus_scope ] node
+    | Mouse_region : { opaque : bool } -> [ `Mouse_region ] node
+    | Keyboard_listener :
+        { autofocus : bool
+        ; key_policy : Event.Key_policy.t
+        }
+        -> [ `Keyboard_listener ] node
+    | Semantics :
+        { label : string option
+        ; hint : string option
+        ; value : string option
+        ; role : Semantics.Role.t
+        ; enabled : bool option
+        ; selected : bool option
+        ; checked : bool option
+        ; focusable : bool option
+        ; obscured : bool
+        ; live_region : bool
+        ; heading_level : int option
+        ; sort_key : float option
+        ; actions : Semantics.Action.t list
+        }
+        -> [ `Semantics ] node
+    | Theme :
+        { brightness : Style.Brightness.t
+        ; color_seed : int32
+        }
+        -> [ `Theme ] node
+    | Material_scaffold : { has_app_bar : bool } -> [ `Material_scaffold ] node
+    | Material_app_bar : { center_title : bool } -> [ `Material_app_bar ] node
+    | Material_elevated_button :
+        { variant : material_button_variant
+        ; enabled : bool
+        ; autofocus : bool
+        }
+        -> [ `Material_elevated_button ] node
+    | Material_text_button :
+        { variant : material_button_variant
+        ; enabled : bool
+        ; autofocus : bool
+        }
+        -> [ `Material_text_button ] node
+    | Material_icon_button :
+        { variant : material_button_variant
+        ; enabled : bool
+        ; autofocus : bool
+        }
+        -> [ `Material_icon_button ] node
+    | Material_checkbox :
+        { value : bool
+        ; enabled : bool
+        }
+        -> [ `Material_checkbox ] node
+    | Material_switch :
+        { value : bool
+        ; enabled : bool
+        }
+        -> [ `Material_switch ] node
+    | Material_list_tile :
+        { enabled : bool
+        ; selected : bool
+        ; has_subtitle : bool
+        ; has_leading : bool
+        ; has_trailing : bool
+        }
+        -> [ `Material_list_tile ] node
+    | Material_divider : { thickness : float } -> [ `Material_divider ] node
+    | Material_card : { elevation : float } -> [ `Material_card ] node
+    | Material_circular_progress_indicator :
+        { value : float option }
+        -> [ `Material_circular_progress_indicator ] node
+    | Cupertino_button : { enabled : bool } -> [ `Cupertino_button ] node
+    | Cupertino_switch :
+        { value : bool
+        ; enabled : bool
+        }
+        -> [ `Cupertino_switch ] node
+    | Text_input :
+        { session_id : ID.Text_input.session_id
+        ; document_revision : ID.Text_input.document_revision
+        ; value : Text_editing.Value.t
+        ; enabled : bool
+        ; read_only : bool
+        ; obscure_text : bool
+        ; keyboard_type : Text_editing.keyboard_type
+        ; input_action : Text_editing.input_action
+        ; accepted_local_revision : ID.Text_input.local_revision
+        ; update_mode : Text_editing.update_mode
+        ; autofocus : bool
+        ; max_utf8_bytes : int option
+        }
+        -> [ `Text_input ] node
+    | Overlay :
+        { alignment : Navigation.overlay_alignment
+        ; dismissible : bool
+        }
+        -> [ `Overlay ] node
+    | Navigator :
+        { restoration_scope_id : ID.Navigation.restoration_scope_id option }
+        -> [ `Navigator ] node
+    | Page :
+        { page_key : ID.Navigation.page_key
+        ; presentation : Navigation.page_presentation
+        ; can_pop : bool
+        ; restoration_id : ID.Navigation.restoration_id option
+        }
+        -> [ `Page ] node
+    | Safe_area :
+        { left : bool
+        ; top : bool
+        ; right : bool
+        ; bottom : bool
+        ; minimum_left : float
+        ; minimum_top : float
+        ; minimum_right : float
+        ; minimum_bottom : float
+        }
+        -> [ `Safe_area ] node
+    | Environment_boundary : [ `Environment_boundary ] node
+    | Material_dialog : { barrier_dismissible : bool } -> [ `Material_dialog ] node
+    | Native_widget :
+        { kind_id : ID.Native_widget.kind_id
+        ; version : int
+        ; capabilities : int64
+        ; payload : bytes
+        }
+        -> [ `Native_widget ] node
 
-type event_binding =
-  { tag : Event.Tag.t
-  ; handler : Event.Handler.t
-  }
+  type event_binding =
+    { tag : Event.Tag.t
+    ; handler : Event.Handler.t
+    }
 
-type t = T : 'k view -> t
+  type t = T : 'k view -> t
 
-and child =
-  { widget : t
-  ; parent_data : child_parent_data
-  }
+  and child =
+    { widget : t
+    ; parent_data : child_parent_data
+    }
 
-and 'k view =
-  { key : Key.t option
-  ; test_id : Test_id.t option
-  ; node : 'k node
-  ; event_bindings : event_binding array
-  ; children : child array
-  ; fingerprint : int64
-  }
+  and 'k view =
+    { key : Key.t option
+    ; test_id : Test_id.t option
+    ; node : 'k node
+    ; event_bindings : event_binding array
+    ; children : child array
+    ; fingerprint : int64
+    }
 end
 
 [@@@ocaml.warning "-34"]
+
 type t = Private_types.t
 type child = Private_types.child
 type 'k view = 'k Private_types.view
 type 'k node = 'k Private_types.node
 type event_binding = Private_types.event_binding
+
 [@@@ocaml.warning "+34"]
+
 open Private_types
 
 let node_kind_tag (type k) (n : k node) : kind_tag =
@@ -570,8 +573,7 @@ let node_equal (type k1 k2) (a : k1 node) (b : k2 node) : bool =
     Option.equal Float.equal x.width_factor y.width_factor
     && Option.equal Float.equal x.height_factor y.height_factor
   | Sized_box x, Sized_box y ->
-    Option.equal Float.equal x.width y.width
-    && Option.equal Float.equal x.height y.height
+    Option.equal Float.equal x.width y.width && Option.equal Float.equal x.height y.height
   | Constrained_box x, Constrained_box y ->
     Float.equal x.min_width y.min_width
     && Float.equal x.max_width y.max_width
@@ -583,15 +585,12 @@ let node_equal (type k1 k2) (a : k1 node) (b : k2 node) : bool =
   | Clip x, Clip y -> x.behavior = y.behavior
   | Opacity x, Opacity y -> Float.equal x.opacity y.opacity
   | Animated_opacity x, Animated_opacity y ->
-    Float.equal x.opacity y.opacity
-    && Animation.Private.equal x.animation y.animation
+    Float.equal x.opacity y.opacity && Animation.Private.equal x.animation y.animation
   | Transform x, Transform y ->
     Array.length x.matrix4 = Array.length y.matrix4
     && Array.for_all2 Float.equal x.matrix4 y.matrix4
   | Scroll_view x, Scroll_view y ->
-    x.axis = y.axis
-    && Bool.equal x.reverse y.reverse
-    && Bool.equal x.primary y.primary
+    x.axis = y.axis && Bool.equal x.reverse y.reverse && Bool.equal x.primary y.primary
   | Sliver_box, Sliver_box -> true
   | Sliver_list, Sliver_list -> true
   | Sliver_fill x, Sliver_fill y -> Int.equal x.flex y.flex
@@ -608,8 +607,9 @@ let node_equal (type k1 k2) (a : k1 node) (b : k2 node) : bool =
     && List.length x.extent_overrides = List.length y.extent_overrides
     && List.for_all2
          (fun (a : Sparse_extent_override.t) (b : Sparse_extent_override.t) ->
-           Int.equal a.index b.index && Float.equal a.extent b.extent)
-         x.extent_overrides y.extent_overrides
+            Int.equal a.index b.index && Float.equal a.extent b.extent)
+         x.extent_overrides
+         y.extent_overrides
     && Option.equal
          (fun a b ->
             Bool.equal a.Sparse_extent_transition.enabled b.enabled
@@ -617,7 +617,8 @@ let node_equal (type k1 k2) (a : k1 node) (b : k2 node) : bool =
             && Int.equal a.collapse_duration_ms b.collapse_duration_ms
             && a.expand_curve = b.expand_curve
             && a.collapse_curve = b.collapse_curve)
-         x.transition y.transition
+         x.transition
+         y.transition
   | Sliver_padding x, Sliver_padding y ->
     Float.equal x.left y.left
     && Float.equal x.top y.top
@@ -647,10 +648,8 @@ let node_equal (type k1 k2) (a : k1 node) (b : k2 node) : bool =
     && List.equal Semantics.Action.equal x.actions y.actions
   | Theme x, Theme y ->
     x.brightness = y.brightness && Int32.equal x.color_seed y.color_seed
-  | Material_scaffold x, Material_scaffold y ->
-    Bool.equal x.has_app_bar y.has_app_bar
-  | Material_app_bar x, Material_app_bar y ->
-    Bool.equal x.center_title y.center_title
+  | Material_scaffold x, Material_scaffold y -> Bool.equal x.has_app_bar y.has_app_bar
+  | Material_app_bar x, Material_app_bar y -> Bool.equal x.center_title y.center_title
   | Material_elevated_button x, Material_elevated_button y ->
     x.variant = y.variant
     && Bool.equal x.enabled y.enabled
@@ -673,21 +672,16 @@ let node_equal (type k1 k2) (a : k1 node) (b : k2 node) : bool =
     && Bool.equal x.has_subtitle y.has_subtitle
     && Bool.equal x.has_leading y.has_leading
     && Bool.equal x.has_trailing y.has_trailing
-  | Material_divider x, Material_divider y ->
-    Float.equal x.thickness y.thickness
-  | Material_card x, Material_card y ->
-    Float.equal x.elevation y.elevation
+  | Material_divider x, Material_divider y -> Float.equal x.thickness y.thickness
+  | Material_card x, Material_card y -> Float.equal x.elevation y.elevation
   | Material_circular_progress_indicator x, Material_circular_progress_indicator y ->
     Option.equal Float.equal x.value y.value
-  | Cupertino_button x, Cupertino_button y ->
-    Bool.equal x.enabled y.enabled
+  | Cupertino_button x, Cupertino_button y -> Bool.equal x.enabled y.enabled
   | Cupertino_switch x, Cupertino_switch y ->
     Bool.equal x.value y.value && Bool.equal x.enabled y.enabled
   | Text_input x, Text_input y ->
     ID.Text_input.Session_id.equal x.session_id y.session_id
-    && ID.Text_input.Document_revision.equal
-         x.document_revision
-         y.document_revision
+    && ID.Text_input.Document_revision.equal x.document_revision y.document_revision
     && Text_editing.Value.equal x.value y.value
     && Bool.equal x.enabled y.enabled
     && Bool.equal x.read_only y.read_only
@@ -711,10 +705,7 @@ let node_equal (type k1 k2) (a : k1 node) (b : k2 node) : bool =
     ID.Navigation.Page_key.equal x.page_key y.page_key
     && x.presentation = y.presentation
     && Bool.equal x.can_pop y.can_pop
-    && Option.equal
-         ID.Navigation.Restoration_id.equal
-         x.restoration_id
-         y.restoration_id
+    && Option.equal ID.Navigation.Restoration_id.equal x.restoration_id y.restoration_id
   | Safe_area x, Safe_area y ->
     Bool.equal x.left y.left
     && Bool.equal x.top y.top
@@ -767,7 +758,7 @@ let fingerprint (type k) ~key ~test_id ~(node : k node) ~event_bindings ~childre
   Array.iter
     (fun child ->
        state := hash_combine !state child.parent_data;
-       let T child_view = child.widget in
+       let (T child_view) = child.widget in
        state := hash_combine !state child_view.fingerprint)
     children;
   !state
@@ -780,7 +771,7 @@ let create_typed (type k) ~key ~(node : k node) ~event_bindings ~children =
 ;;
 
 let with_test_id test_id widget =
-  let T view = widget in
+  let (T view) = widget in
   let fingerprint =
     fingerprint
       ~key:view.key
@@ -798,9 +789,7 @@ let plain_children widgets =
   |> Array.of_list
 ;;
 
-let empty ?key () =
-  create_typed ~key ~node:Empty ~event_bindings:[||] ~children:[||]
-;;
+let empty ?key () = create_typed ~key ~node:Empty ~event_bindings:[||] ~children:[||]
 
 let text
       ?key
@@ -829,11 +818,7 @@ let text
 ;;
 
 let rich_text ?key spans =
-  create_typed
-    ~key
-    ~node:(Rich_text { spans })
-    ~event_bindings:[||]
-    ~children:[||]
+  create_typed ~key ~node:(Rich_text { spans }) ~event_bindings:[||] ~children:[||]
 ;;
 
 let optional_dimension label = function
@@ -879,19 +864,11 @@ let image ?key ?(fit = Style.Image_fit.Contain) ?width ?height ~uri () =
 ;;
 
 let row ?key children =
-  create_typed
-    ~key
-    ~node:Row
-    ~event_bindings:[||]
-    ~children:(plain_children children)
+  create_typed ~key ~node:Row ~event_bindings:[||] ~children:(plain_children children)
 ;;
 
 let column ?key children =
-  create_typed
-    ~key
-    ~node:Column
-    ~event_bindings:[||]
-    ~children:(plain_children children)
+  create_typed ~key ~node:Column ~event_bindings:[||] ~children:(plain_children children)
 ;;
 
 let button ?key ?(enabled = true) ~on_press ~child () =
@@ -1052,16 +1029,28 @@ let scroll_view_widget
 ;;
 
 let sliver_box_widget ?key child () =
-  create_typed ~key ~node:Sliver_box ~event_bindings:[||] ~children:(plain_children [ child ])
+  create_typed
+    ~key
+    ~node:Sliver_box
+    ~event_bindings:[||]
+    ~children:(plain_children [ child ])
 ;;
 
 let sliver_list_widget ?key children () =
-  create_typed ~key ~node:Sliver_list ~event_bindings:[||] ~children:(plain_children children)
+  create_typed
+    ~key
+    ~node:Sliver_list
+    ~event_bindings:[||]
+    ~children:(plain_children children)
 ;;
 
 let sliver_fill_widget ?key ?(flex = 1) child () =
   if flex <= 0 then invalid_arg "Widget.Sliver.fill: flex must be positive";
-  create_typed ~key ~node:(Sliver_fill { flex }) ~event_bindings:[||] ~children:(plain_children [ child ])
+  create_typed
+    ~key
+    ~node:(Sliver_fill { flex })
+    ~event_bindings:[||]
+    ~children:(plain_children [ child ])
 ;;
 
 let sliver_padding_widget ?key ~insets child () =
@@ -1073,7 +1062,14 @@ let sliver_padding_widget ?key ~insets child () =
     ~children:(plain_children [ child ])
 ;;
 
-let sliver_app_bar_widget ?key ?(pinned = false) ?expanded_height ?collapsed_height child () =
+let sliver_app_bar_widget
+      ?key
+      ?(pinned = false)
+      ?expanded_height
+      ?collapsed_height
+      child
+      ()
+  =
   create_typed
     ~key
     ~node:(Sliver_app_bar { pinned; expanded_height; collapsed_height })
@@ -1090,13 +1086,16 @@ let validate_sliver_extent label extent =
 
 let validate_sliver_window label ~total_count ~first_index child_count =
   if total_count < 0
-  then invalid_arg (Printf.sprintf "Widget.Sliver.%s: total_count must be non-negative" label);
+  then
+    invalid_arg
+      (Printf.sprintf "Widget.Sliver.%s: total_count must be non-negative" label);
   if first_index < 0 || first_index > total_count
   then
     invalid_arg
       (Printf.sprintf "Widget.Sliver.%s: first_index is outside the logical list" label);
   if child_count > total_count - first_index
-  then invalid_arg (Printf.sprintf "Widget.Sliver.%s: item window exceeds total_count" label)
+  then
+    invalid_arg (Printf.sprintf "Widget.Sliver.%s: item window exceeds total_count" label)
 ;;
 
 let sliver_fixed_extent_widget
@@ -1116,7 +1115,8 @@ let sliver_fixed_extent_widget
   create_typed
     ~key
     ~node:(Sliver_fixed_extent { total_count; first_index; item_extent; overscan })
-    ~event_bindings:[| { tag = Event.Tag.Visible_range_changed; handler = on_visible_range } |]
+    ~event_bindings:
+      [| { tag = Event.Tag.Visible_range_changed; handler = on_visible_range } |]
     ~children:(plain_children items)
 ;;
 
@@ -1127,11 +1127,15 @@ let validate_extent_overrides label ~total_count overrides =
       if index < 0 || index >= total_count
       then
         invalid_arg
-          (Printf.sprintf "Widget.Sliver.%s: override index is outside the logical list" label);
+          (Printf.sprintf
+             "Widget.Sliver.%s: override index is outside the logical list"
+             label);
       (match previous with
        | Some previous when index <= previous ->
          invalid_arg
-           (Printf.sprintf "Widget.Sliver.%s: override indexes must be sorted and unique" label)
+           (Printf.sprintf
+              "Widget.Sliver.%s: override indexes must be sorted and unique"
+              label)
        | None | Some _ -> ());
       validate_sliver_extent label extent;
       check (Some index) tail
@@ -1167,7 +1171,8 @@ let sliver_varied_extent_widget
          ; overscan
          ; transition
          })
-    ~event_bindings:[| { tag = Event.Tag.Visible_range_changed; handler = on_visible_range } |]
+    ~event_bindings:
+      [| { tag = Event.Tag.Visible_range_changed; handler = on_visible_range } |]
     ~children:(plain_children items)
 ;;
 
@@ -1463,8 +1468,7 @@ let finite_nonnegative label value =
 let material_divider ?key ?(thickness = 1.) () =
   create_typed
     ~key
-    ~node:
-      (Material_divider { thickness = finite_nonnegative "thickness" thickness })
+    ~node:(Material_divider { thickness = finite_nonnegative "thickness" thickness })
     ~event_bindings:[||]
     ~children:[||]
 ;;
@@ -1601,11 +1605,7 @@ module Flex = struct
   ;;
 
   let create_linear ?key node children =
-    create_typed
-      ~key
-      ~node
-      ~event_bindings:[||]
-      ~children:(Array.of_list children)
+    create_typed ~key ~node ~event_bindings:[||] ~children:(Array.of_list children)
   ;;
 
   let row ?key children = create_linear ?key Flex_row children
@@ -1622,11 +1622,7 @@ module Stack = struct
   ;;
 
   let create ?key children =
-    create_typed
-      ~key
-      ~node:Stack
-      ~event_bindings:[||]
-      ~children:(Array.of_list children)
+    create_typed ~key ~node:Stack ~event_bindings:[||] ~children:(Array.of_list children)
   ;;
 end
 
@@ -1684,17 +1680,12 @@ end
 
 module Sliver = struct
   type widget = t
-
   type sliver = Sliver of t
-
   type t = sliver
 
   let with_test_id test_id (Sliver widget) = Sliver (with_test_id test_id widget)
-
   let box ?key child = Sliver (sliver_box_widget ?key child ())
-
   let list ?key children = Sliver (sliver_list_widget ?key children ())
-
   let fill ?key ?flex child = Sliver (sliver_fill_widget ?key ?flex child ())
 
   let fixed_extent
@@ -1750,7 +1741,8 @@ module Sliver = struct
   ;;
 
   let app_bar ?key ?pinned ?expanded_height ?collapsed_height child =
-    Sliver (sliver_app_bar_widget ?key ?pinned ?expanded_height ?collapsed_height child ())
+    Sliver
+      (sliver_app_bar_widget ?key ?pinned ?expanded_height ?collapsed_height child ())
   ;;
 
   let visible_range_of_payload = function
@@ -1881,27 +1873,27 @@ let material_scaffold ?key ?app_bar ~body () =
 
 module For_testing = struct
   let kind_name widget =
-    let T view = widget in
+    let (T view) = widget in
     kind_tag_to_string (node_kind_tag view.node)
   ;;
 
   let key widget =
-    let T view = widget in
+    let (T view) = widget in
     view.key
   ;;
 
   let test_id widget =
-    let T view = widget in
+    let (T view) = widget in
     view.test_id
   ;;
 
   let children widget =
-    let T view = widget in
+    let (T view) = widget in
     Array.map (fun child -> child.widget) view.children
   ;;
 
   let text_content widget =
-    let T view = widget in
+    let (T view) = widget in
     match view.node with
     | Text { value; _ } -> Some value
     | _ -> None
@@ -2003,18 +1995,18 @@ module Private = struct
   type any_view = Av : 'k view -> any_view
 
   let view widget =
-    let T v = widget in
+    let (T v) = widget in
     Av v
   ;;
 
   let node_equal_widgets left right =
-    let Av left_view = view left in
-    let Av right_view = view right in
+    let (Av left_view) = view left in
+    let (Av right_view) = view right in
     node_equal left_view.node right_view.node
   ;;
 
   let kind_tag_of_widget widget =
-    let Av view = view widget in
+    let (Av view) = view widget in
     node_kind_tag view.node
   ;;
 

@@ -391,7 +391,14 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
   | Sliver_fill { flex } -> Ok (Sliver_fill_props { flex })
   | Sliver_fixed_extent { total_count; first_index; item_extent; overscan } ->
     Ok (Sliver_fixed_extent_props { total_count; first_index; item_extent; overscan })
-  | Sliver_varied_extent { total_count; first_index; default_item_extent; extent_overrides; overscan; transition } ->
+  | Sliver_varied_extent
+      { total_count
+      ; first_index
+      ; default_item_extent
+      ; extent_overrides
+      ; overscan
+      ; transition
+      } ->
     let extent_overrides =
       List.map
         (fun { Ui.Widget.Sparse_extent_override.index; extent } ->
@@ -442,7 +449,8 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
       | Ignored -> Ignored
     in
     Ok (Keyboard_listener_props { autofocus; key_policy })
-  | Semantics       { label
+  | Semantics
+      { label
       ; hint
       ; value
       ; role
@@ -491,10 +499,8 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
       | Dark -> Dark
     in
     Ok (Theme_props { brightness; color_seed })
-  | Material_scaffold { has_app_bar } ->
-    Ok (Material_scaffold_props { has_app_bar })
-  | Material_app_bar { center_title } ->
-    Ok (Material_app_bar_props { center_title })
+  | Material_scaffold { has_app_bar } -> Ok (Material_scaffold_props { has_app_bar })
+  | Material_app_bar { center_title } -> Ok (Material_app_bar_props { center_title })
   | Material_elevated_button { variant; enabled; autofocus }
   | Material_text_button { variant; enabled; autofocus }
   | Material_icon_button { variant; enabled; autofocus } ->
@@ -507,19 +513,19 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
     Ok (Material_button_props { variant; enabled; autofocus })
   | Material_checkbox { value; enabled } ->
     Ok (Material_checkbox_props { value; enabled })
-  | Material_switch { value; enabled } ->
-    Ok (Material_switch_props { value; enabled })
-  | Material_list_tile       { enabled; selected; has_subtitle; has_leading; has_trailing } ->
+  | Material_switch { value; enabled } -> Ok (Material_switch_props { value; enabled })
+  | Material_list_tile { enabled; selected; has_subtitle; has_leading; has_trailing } ->
     Ok
       (Material_list_tile_props
          { enabled; selected; has_subtitle; has_leading; has_trailing })
   | Material_divider { thickness } -> Ok (Material_divider_props { thickness })
   | Material_card { elevation } -> Ok (Material_card_props { elevation })
-  | Material_circular_progress_indicator { value } -> Ok (Material_progress_props { value })
+  | Material_circular_progress_indicator { value } ->
+    Ok (Material_progress_props { value })
   | Cupertino_button { enabled } -> Ok (Cupertino_button_props { enabled })
-  | Cupertino_switch { value; enabled } ->
-    Ok (Cupertino_switch_props { value; enabled })
-  | Text_input       { session_id
+  | Cupertino_switch { value; enabled } -> Ok (Cupertino_switch_props { value; enabled })
+  | Text_input
+      { session_id
       ; document_revision
       ; value
       ; enabled
@@ -599,8 +605,7 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
       | Bottom_end -> Bottom_end
     in
     Ok (Overlay_props { alignment; dismissible })
-  | Navigator { restoration_scope_id } ->
-    Ok (Navigator_props { restoration_scope_id })
+  | Navigator { restoration_scope_id } -> Ok (Navigator_props { restoration_scope_id })
   | Page { page_key; presentation; can_pop; restoration_id } ->
     let presentation =
       match presentation with
@@ -660,7 +665,8 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
           }
     in
     Ok (Page_props { page_key; presentation; can_pop; restoration_id })
-  | Safe_area       { left
+  | Safe_area
+      { left
       ; top
       ; right
       ; bottom
@@ -736,7 +742,7 @@ let wire_bindings bindings =
 let wire_operation = function
   | Runtime.Frame_patch.Operation.Create_node
       { node_id; node_tag; widget; event_bindings; parent_data; _ } ->
-    let Av view = Ui.Widget.Private.view widget in
+    let (Av view) = Ui.Widget.Private.view widget in
     (match wire_node_kind node_tag, wire_node_props view.node with
      | Ok kind, Ok props ->
        Ok
@@ -749,7 +755,7 @@ let wire_operation = function
             })
      | Error error, _ | _, Error error -> Error error)
   | Update_node { node_id; widget } ->
-    let Av view = Ui.Widget.Private.view widget in
+    let (Av view) = Ui.Widget.Private.view widget in
     (match wire_node_props view.node with
      | Ok props -> Ok (Protocol.Wire_frame.Update_props { node_id; props })
      | Error error -> Error error)

@@ -19,18 +19,15 @@ let widget_of_vertical_viewport viewport =
   |> fun children -> children.(0)
 ;;
 
-
 let sliver_range_handler callback =
   Ui.Event.Handler.create (fun payload ->
     Option.iter callback (Ui.Widget.Sliver.visible_range_of_payload payload))
 ;;
 
-let sliver_override index extent : Ui.Widget.Sparse_extent_override.t =
-  { index; extent }
-;;
+let sliver_override index extent : Ui.Widget.Sparse_extent_override.t = { index; extent }
 
 let scroll_view_child viewport =
-  let Av view = Ui.Widget.Private.view (widget_of_vertical_viewport viewport) in
+  let (Av view) = Ui.Widget.Private.view (widget_of_vertical_viewport viewport) in
   view.children.(0).widget
 ;;
 
@@ -41,14 +38,14 @@ let test_sliver_box_and_scroll_view () =
       [ Ui.Widget.Sliver.box (Ui.Widget.text "Hi") ]
       ()
   in
-  let Av sv = Ui.Widget.Private.view (widget_of_vertical_viewport viewport) in
+  let (Av sv) = Ui.Widget.Private.view (widget_of_vertical_viewport viewport) in
   check
     (Ui.Widget.Private.kind_tag_equal
        (Ui.Widget.Private.node_kind_tag sv.node)
        Ui.Widget.Private.K_scroll_view)
     "scroll view kind";
   check (Array.length sv.children = 1) "scroll view has one sliver child";
-  let Av bv = Ui.Widget.Private.view sv.children.(0).widget in
+  let (Av bv) = Ui.Widget.Private.view sv.children.(0).widget in
   check
     (Ui.Widget.Private.kind_tag_equal
        (Ui.Widget.Private.node_kind_tag bv.node)
@@ -75,10 +72,11 @@ let test_sliver_fixed_extent_contract () =
       ]
       ()
   in
-  let Av fv = Ui.Widget.Private.view (scroll_view_child viewport) in
+  let (Av fv) = Ui.Widget.Private.view (scroll_view_child viewport) in
   check (Array.length fv.children = 20) "only the supplied window is mounted";
   (match fv.node with
-   | Ui.Widget.Private.Sliver_fixed_extent { total_count; first_index; item_extent; overscan } ->
+   | Ui.Widget.Private.Sliver_fixed_extent
+       { total_count; first_index; item_extent; overscan } ->
      check (total_count = 50_000) "fixed total count";
      check (first_index = 100) "fixed first index";
      check (Float.equal item_extent 48.) "fixed item extent";
@@ -91,11 +89,11 @@ let test_sliver_fixed_extent_contract () =
   Ui.Event.Handler.Private.invoke
     binding.handler
     (Visible_range { first_index = 104L; last_exclusive = 116L });
-  (match !received with
-   | Some { Ui.Event.Payload.first_index; last_exclusive } ->
-     check (Int64.equal first_index 104L) "visible first index";
-     check (Int64.equal last_exclusive 116L) "visible last index"
-   | None -> failwith "visible range callback")
+  match !received with
+  | Some { Ui.Event.Payload.first_index; last_exclusive } ->
+    check (Int64.equal first_index 104L) "visible first index";
+    check (Int64.equal last_exclusive 116L) "visible last index"
+  | None -> failwith "visible range callback"
 ;;
 
 let test_sliver_varied_extent_contract () =
@@ -117,11 +115,17 @@ let test_sliver_varied_extent_contract () =
       ]
       ()
   in
-  let Av vv = Ui.Widget.Private.view (scroll_view_child viewport) in
+  let (Av vv) = Ui.Widget.Private.view (scroll_view_child viewport) in
   check (Array.length vv.children = 6) "varied extent mounted window";
   (match vv.node with
    | Ui.Widget.Private.Sliver_varied_extent
-       { total_count; first_index; default_item_extent; extent_overrides; overscan; transition } ->
+       { total_count
+       ; first_index
+       ; default_item_extent
+       ; extent_overrides
+       ; overscan
+       ; transition
+       } ->
      check (total_count = 50_000) "varied total count";
      check (first_index = 40) "varied first index";
      check (Float.equal default_item_extent 48.) "varied default extent";
@@ -135,11 +139,11 @@ let test_sliver_varied_extent_contract () =
   Ui.Event.Handler.Private.invoke
     binding.handler
     (Visible_range { first_index = 41L; last_exclusive = 44L });
-  (match !received with
-   | Some { Ui.Event.Payload.first_index; last_exclusive } ->
-     check (Int64.equal first_index 41L) "varied visible first index";
-     check (Int64.equal last_exclusive 44L) "varied visible last index"
-   | None -> failwith "varied visible range callback")
+  match !received with
+  | Some { Ui.Event.Payload.first_index; last_exclusive } ->
+    check (Int64.equal first_index 41L) "varied visible first index";
+    check (Int64.equal last_exclusive 44L) "varied visible last index"
+  | None -> failwith "varied visible range callback"
 ;;
 
 let test_sliver_varied_extent_transition () =
@@ -167,16 +171,16 @@ let test_sliver_varied_extent_transition () =
       ]
       ()
   in
-  let Av vv = Ui.Widget.Private.view (scroll_view_child viewport) in
-  (match vv.node with
-   | Ui.Widget.Private.Sliver_varied_extent { transition = Some decoded; _ } ->
-     let open Ui.Widget.Sparse_extent_transition in
-     check decoded.enabled "transition enabled";
-     check (decoded.expand_duration_ms = 240) "expand duration";
-     check (decoded.collapse_duration_ms = 190) "collapse duration";
-     check (decoded.expand_curve = Ease_out_cubic) "expand curve";
-     check (decoded.collapse_curve = Ease_in_out_cubic) "collapse curve"
-   | _ -> failwith "varied extent transition node")
+  let (Av vv) = Ui.Widget.Private.view (scroll_view_child viewport) in
+  match vv.node with
+  | Ui.Widget.Private.Sliver_varied_extent { transition = Some decoded; _ } ->
+    let open Ui.Widget.Sparse_extent_transition in
+    check decoded.enabled "transition enabled";
+    check (decoded.expand_duration_ms = 240) "expand duration";
+    check (decoded.collapse_duration_ms = 190) "collapse duration";
+    check (decoded.expand_curve = Ease_out_cubic) "expand curve";
+    check (decoded.collapse_curve = Ease_in_out_cubic) "collapse curve"
+  | _ -> failwith "varied extent transition node"
 ;;
 
 let test_sliver_varied_extent_validation () =
@@ -206,16 +210,13 @@ let test_sliver_varied_extent_validation () =
   in
   List.iter
     (fun (build, message) -> expect_invalid_argument build message)
-    [ ( (fun () -> create ~total_count:(-1) ())
-      , "sliver accepted a negative total" )
-    ; ( (fun () -> create ~first_index:11 ())
-      , "sliver accepted an invalid first index" )
+    [ (fun () -> create ~total_count:(-1) ()), "sliver accepted a negative total"
+    ; (fun () -> create ~first_index:11 ()), "sliver accepted an invalid first index"
     ; ( (fun () -> create ~default_item_extent:Float.nan ())
       , "sliver accepted a non-finite default extent" )
     ; ( (fun () -> create ~default_item_extent:0. ())
       , "sliver accepted a non-positive default extent" )
-    ; ( (fun () -> create ~overscan:(-1) ())
-      , "sliver accepted negative overscan" )
+    ; (fun () -> create ~overscan:(-1) ()), "sliver accepted negative overscan"
     ; ( (fun () -> create ~extent_overrides:[ sliver_override (-1) 80. ] ())
       , "sliver accepted a negative override index" )
     ; ( (fun () -> create ~extent_overrides:[ sliver_override 10 80. ] ())
@@ -231,7 +232,11 @@ let test_sliver_varied_extent_validation () =
     ; ( (fun () -> create ~extent_overrides:[ sliver_override 3 0. ] ())
       , "sliver accepted a non-positive override extent" )
     ; ( (fun () ->
-          create ~total_count:2 ~first_index:1 ~items:[ Ui.Widget.empty (); Ui.Widget.empty () ] ())
+          create
+            ~total_count:2
+            ~first_index:1
+            ~items:[ Ui.Widget.empty (); Ui.Widget.empty () ]
+            ())
       , "sliver accepted a child window beyond total_count" )
     ]
 ;;
@@ -246,14 +251,14 @@ let test_sliver_fill_and_padding () =
       ]
       ()
   in
-  let Av sv = Ui.Widget.Private.view (widget_of_vertical_viewport viewport) in
-  let Av pad = Ui.Widget.Private.view sv.children.(0).widget in
+  let (Av sv) = Ui.Widget.Private.view (widget_of_vertical_viewport viewport) in
+  let (Av pad) = Ui.Widget.Private.view sv.children.(0).widget in
   check
     (Ui.Widget.Private.kind_tag_equal
        (Ui.Widget.Private.node_kind_tag pad.node)
        Ui.Widget.Private.K_sliver_padding)
     "sliver padding kind";
-  let Av fill = Ui.Widget.Private.view pad.children.(0).widget in
+  let (Av fill) = Ui.Widget.Private.view pad.children.(0).widget in
   check
     (Ui.Widget.Private.kind_tag_equal
        (Ui.Widget.Private.node_kind_tag fill.node)
@@ -297,8 +302,12 @@ let test_typed_native_widget () =
       ~on_event:(fun event -> received := Some event)
       ()
   in
-  let Av view = Ui.Widget.Private.view widget in
-  check (Ui.Widget.Private.kind_tag_equal (Ui.Widget.Private.node_kind_tag view.node) Ui.Widget.Private.K_native_widget) "native widget kind";
+  let (Av view) = Ui.Widget.Private.view widget in
+  check
+    (Ui.Widget.Private.kind_tag_equal
+       (Ui.Widget.Private.node_kind_tag view.node)
+       Ui.Widget.Private.K_native_widget)
+    "native widget kind";
   (match view.node with
    | Native_widget { kind_id; version; capabilities; payload } ->
      check (ID.Native_widget.Kind_id.equal kind_id (native_kind_id 42)) "native kind ID";
@@ -317,6 +326,7 @@ let test_typed_native_widget () =
        });
   check (!received = Some (Changed 23)) "typed native event"
 ;;
+
 let test_morphing_surface_contract () =
   let widget =
     Ui.Native_widget.Morphing_surface.create
@@ -325,7 +335,7 @@ let test_morphing_surface_contract () =
       ~expanded_content:(Ui.Widget.text "Expanded")
       ()
   in
-  let Av view = Ui.Widget.Private.view widget in
+  let (Av view) = Ui.Widget.Private.view widget in
   check (Array.length view.children = 2) "morphing surface child slots";
   match view.node with
   | Native_widget { kind_id; version; capabilities; payload } ->
@@ -336,6 +346,7 @@ let test_morphing_surface_contract () =
     check props.expanded "morphing surface expanded state"
   | _ -> failwith "morphing surface native props"
 ;;
+
 let swipe_action
       ?(label = "Archive")
       ?(background = Ui.Style.Color.argb ~alpha:255 ~red:80 ~green:125 ~blue:88)
@@ -368,7 +379,7 @@ let test_swipe_action_props_contract () =
       ~on_commit:(fun direction -> received := Some direction)
       ()
   in
-  let Av view = Ui.Widget.Private.view widget in
+  let (Av view) = Ui.Widget.Private.view widget in
   check (Array.length view.children = 3) "swipe action must always have three children";
   (match view.node with
    | Native_widget { kind_id; version; capabilities; payload } ->
@@ -445,7 +456,7 @@ let test_swipe_action_omitted_direction_and_validation () =
       ~on_commit:(fun _ -> ())
       ()
   in
-  let Av view = Ui.Widget.Private.view widget in
+  let (Av view) = Ui.Widget.Private.view widget in
   (match view.node with
    | Native_widget { payload; _ } ->
      check (Char.code (Bytes.get payload 0) = 1) "omitted end direction flag";
@@ -458,7 +469,8 @@ let test_swipe_action_omitted_direction_and_validation () =
    | _ -> failwith "swipe action native props");
   check
     (Ui.Widget.Private.kind_tag_equal
-       (let Av v = Ui.Widget.Private.view view.children.(2).widget in Ui.Widget.Private.node_kind_tag v.node)
+       (let (Av v) = Ui.Widget.Private.view view.children.(2).widget in
+        Ui.Widget.Private.node_kind_tag v.node)
        K_empty)
     "omitted end action must use an empty icon child";
   expect_invalid_argument
@@ -499,7 +511,10 @@ let test_swipe_action_event_filtering () =
       ~on_commit:(fun direction -> received := direction :: !received)
       ()
   in
-  let binding = (let Av v = Ui.Widget.Private.view widget in v.event_bindings).(0) in
+  let binding =
+    (let (Av v) = Ui.Widget.Private.view widget in
+     v.event_bindings).(0)
+  in
   let invoke kind_id version event_id payload =
     Ui.Event.Handler.Private.invoke
       binding.handler
@@ -534,7 +549,7 @@ let test_navigation_shell_contract_and_events () =
       ~on_drawer_state_changed:(fun state -> received := Some state)
       ()
   in
-  let Av view = Ui.Widget.Private.view widget in
+  let (Av view) = Ui.Widget.Private.view widget in
   check (Array.length view.children = 4) "navigation shell child shape";
   (match view.node with
    | Native_widget { kind_id; version; capabilities; payload } ->
@@ -657,11 +672,11 @@ let test_message_composer_contract_and_custom_buttons () =
       ~on_event:(fun event -> events := event :: !events)
       ()
   in
-  let Av view = Ui.Widget.Private.view widget in
+  let (Av view) = Ui.Widget.Private.view widget in
   check (Array.length view.children = 3) "message composer custom button child count";
   Array.iteri
     (fun index expected ->
-       let Av child = Ui.Widget.Private.view view.children.(index).widget in
+       let (Av child) = Ui.Widget.Private.view view.children.(index).widget in
        match child.node with
        | Ui.Widget.Private.Text { value; _ } ->
          check (String.equal value expected) "message composer custom button order"
@@ -757,7 +772,10 @@ let test_message_composer_validation_and_event_filtering () =
       ~on_event:(fun event -> received := event :: !received)
       ()
   in
-  let binding = (let Av v = Ui.Widget.Private.view widget in v.event_bindings).(0) in
+  let binding =
+    (let (Av v) = Ui.Widget.Private.view widget in
+     v.event_bindings).(0)
+  in
   let invoke kind_id version event_id payload =
     Ui.Event.Handler.Private.invoke
       binding.handler

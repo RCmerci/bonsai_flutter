@@ -45,7 +45,10 @@ let widgets =
       ~on_completed:handler
       child
   ; Ui.Widget.transform ~transform:(Ui.Style.Transform.scale ~x:2. ~y:3. ()) child
-  ; Ui.Widget.Scroll_view.vertical ~on_scroll:handler [ Ui.Widget.Sliver.list [ child ] ] ()
+  ; Ui.Widget.Scroll_view.vertical
+      ~on_scroll:handler
+      [ Ui.Widget.Sliver.list [ child ] ]
+      ()
     |> Ui.Widget.Viewport.Vertical.with_height ~height:120.
   ; Ui.Widget.safe_area child
   ; Ui.Widget.environment_boundary child
@@ -110,8 +113,8 @@ let test_navigation_constructors () =
   check
     (String.equal (Ui.Widget.For_testing.kind_name children.(0)) "Page")
     "navigator child is not a Page";
-  (let Av view = Ui.Widget.Private.view children.(0) in
-    match view.node with
+  (let (Av view) = Ui.Widget.Private.view children.(0) in
+   match view.node with
    | Ui.Widget.Private.Page
        { presentation = Ui.Navigation.Standard Ui.Navigation.Fade; _ } -> ()
    | _ -> failwith "standard page presentation or transition was not preserved");
@@ -150,8 +153,8 @@ let test_navigation_constructors () =
       ~restoration_id:(ID.Navigation.Restoration_id.of_string "editor-page")
       (Ui.Widget.text "Editor")
   in
-  (let Av view = Ui.Widget.Private.view modal_page in
-    match view.node with
+  (let (Av view) = Ui.Widget.Private.view modal_page in
+   match view.node with
    | Ui.Widget.Private.Page
        { page_key
        ; presentation = Ui.Navigation.Modal_bottom_sheet modal
@@ -409,8 +412,8 @@ let test_styled_text_constructor_and_validation () =
       ~overflow:Ui.Style.Text_overflow.Ellipsis
       "A long subject"
   in
-  (let Av view = Ui.Widget.Private.view text in
-    match view.node with
+  (let (Av view) = Ui.Widget.Private.view text in
+   match view.node with
    | Text
        { value
        ; style =
@@ -454,7 +457,10 @@ let expect_invalid create message =
 
 let test_typed_viewport_body_encoding () =
   let viewport =
-    Ui.Widget.Scroll_view.vertical ~on_scroll:handler [ Ui.Widget.Sliver.list [ Ui.Widget.text "Row" ] ] ()
+    Ui.Widget.Scroll_view.vertical
+      ~on_scroll:handler
+      [ Ui.Widget.Sliver.list [ Ui.Widget.text "Row" ] ]
+      ()
   in
   let body =
     Ui.Widget.Body.Vertical.create
@@ -469,7 +475,7 @@ let test_typed_viewport_body_encoding () =
   check
     (String.equal (Ui.Widget.For_testing.kind_name column) "Flex_column")
     "vertical body did not encode as a flex column";
-  let Av column_view = Ui.Widget.Private.view column in
+  let (Av column_view) = Ui.Widget.Private.view column in
   let children = column_view.children in
   check (Array.length children = 2) "vertical body lost a child";
   (match children.(0).parent_data, children.(1).parent_data with
@@ -487,7 +493,7 @@ let test_typed_viewport_body_encoding () =
   check
     (String.equal (Ui.Widget.For_testing.kind_name stack) "Stack")
     "body overlay did not encode as a stack";
-  let Av stack_view = Ui.Widget.Private.view stack in
+  let (Av stack_view) = Ui.Widget.Private.view stack in
   let stack_children = stack_view.children in
   match stack_children.(0).parent_data, stack_children.(1).parent_data with
   | ( Stack_position { left = Some 0.; top = Some 0.; right = Some 0.; bottom = Some 0. }
@@ -496,14 +502,18 @@ let test_typed_viewport_body_encoding () =
 ;;
 
 let test_viewport_extent_and_body_validation () =
-  let vertical = Ui.Widget.Scroll_view.vertical ~on_scroll:handler [ Ui.Widget.Sliver.list [] ] () in
+  let vertical =
+    Ui.Widget.Scroll_view.vertical ~on_scroll:handler [ Ui.Widget.Sliver.list [] ] ()
+  in
   List.iter
     (fun height ->
        expect_invalid
          (fun () -> Ui.Widget.Viewport.Vertical.with_height ~height vertical)
          "invalid explicit viewport height was accepted")
     [ nan; infinity; neg_infinity; 0.; -1. ];
-  let horizontal = Ui.Widget.Scroll_view.horizontal ~on_scroll:handler [ Ui.Widget.Sliver.list [] ] () in
+  let horizontal =
+    Ui.Widget.Scroll_view.horizontal ~on_scroll:handler [ Ui.Widget.Sliver.list [] ] ()
+  in
   List.iter
     (fun width ->
        expect_invalid

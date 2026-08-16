@@ -129,7 +129,6 @@ end
     It is not a [t] and cannot be placed in a column, row, or body. *)
 module Sliver : sig
   type widget = t
-
   type t
 
   val with_test_id : Test_id.t -> t -> t
@@ -403,63 +402,64 @@ module For_testing : sig
 end
 
 module Private : sig
-  type kind_tag = | K_empty
-  | K_text
-  | K_rich_text
-  | K_icon
-  | K_image
-  | K_row
-  | K_column
-  | K_flex_row
-  | K_flex_column
-  | K_stack
-  | K_button
-  | K_padding
-  | K_align
-  | K_center
-  | K_sized_box
-  | K_constrained_box
-  | K_decorated_box
-  | K_clip
-  | K_opacity
-  | K_animated_opacity
-  | K_transform
-  | K_scroll_view
-  | K_sliver_box
-  | K_sliver_list
-  | K_sliver_fill
-  | K_sliver_fixed_extent
-  | K_sliver_varied_extent
-  | K_sliver_padding
-  | K_sliver_app_bar
-  | K_gesture
-  | K_focus_scope
-  | K_mouse_region
-  | K_keyboard_listener
-  | K_pressable
-  | K_semantics
-  | K_theme
-  | K_material_scaffold
-  | K_material_app_bar
-  | K_material_elevated_button
-  | K_material_text_button
-  | K_material_icon_button
-  | K_material_checkbox
-  | K_material_switch
-  | K_material_list_tile
-  | K_material_divider
-  | K_material_card
-  | K_material_circular_progress_indicator
-  | K_cupertino_button
-  | K_cupertino_switch
-  | K_text_input
-  | K_overlay
-  | K_navigator
-  | K_page
-  | K_safe_area
-  | K_environment_boundary
-  | K_material_dialog
-  | K_native_widget
+  type kind_tag =
+    | K_empty
+    | K_text
+    | K_rich_text
+    | K_icon
+    | K_image
+    | K_row
+    | K_column
+    | K_flex_row
+    | K_flex_column
+    | K_stack
+    | K_button
+    | K_padding
+    | K_align
+    | K_center
+    | K_sized_box
+    | K_constrained_box
+    | K_decorated_box
+    | K_clip
+    | K_opacity
+    | K_animated_opacity
+    | K_transform
+    | K_scroll_view
+    | K_sliver_box
+    | K_sliver_list
+    | K_sliver_fill
+    | K_sliver_fixed_extent
+    | K_sliver_varied_extent
+    | K_sliver_padding
+    | K_sliver_app_bar
+    | K_gesture
+    | K_focus_scope
+    | K_mouse_region
+    | K_keyboard_listener
+    | K_pressable
+    | K_semantics
+    | K_theme
+    | K_material_scaffold
+    | K_material_app_bar
+    | K_material_elevated_button
+    | K_material_text_button
+    | K_material_icon_button
+    | K_material_checkbox
+    | K_material_switch
+    | K_material_list_tile
+    | K_material_divider
+    | K_material_card
+    | K_material_circular_progress_indicator
+    | K_cupertino_button
+    | K_cupertino_switch
+    | K_text_input
+    | K_overlay
+    | K_navigator
+    | K_page
+    | K_safe_area
+    | K_environment_boundary
+    | K_material_dialog
+    | K_native_widget
 
   val kind_tag_compare : kind_tag -> kind_tag -> int
   val kind_tag_equal : kind_tag -> kind_tag -> bool
@@ -491,243 +491,248 @@ module Private : sig
     | Text_button
     | Icon_button
 
-  type 'k node = | Empty : [ `Empty ] node
-  | Text :
-      { value : string
-      ; style : Style.Text_style.Private.view option
-      ; text_align : Style.Text_align.t
-      ; max_lines : int option
-      ; overflow : Style.Text_overflow.t
-      }
-      -> [ `Text ] node
-  | Rich_text : { spans : string list } -> [ `Rich_text ] node
-  | Icon :
-      { code_point : int
-      ; font_family : string option
-      ; size : float option
-      ; color : int32 option
-      }
-      -> [ `Icon ] node
-  | Image :
-      { uri : string
-      ; fit : Style.Image_fit.t
-      ; width : float option
-      ; height : float option
-      }
-      -> [ `Image ] node
-  | Row : [ `Row ] node
-  | Column : [ `Column ] node
-  | Flex_row : [ `Flex_row ] node
-  | Flex_column : [ `Flex_column ] node
-  | Stack : [ `Stack ] node
-  | Button : { enabled : bool } -> [ `Button ] node
-  | Pressable :
-      { overlay_color : Style.Color.t
-      ; release_delay_ms : int
-      }
-      -> [ `Pressable ] node
-  | Padding :
-      { left : float
-      ; top : float
-      ; right : float
-      ; bottom : float
-      }
-      -> [ `Padding ] node
-  | Align : { alignment : Layout.Alignment.t } -> [ `Align ] node
-  | Center :
-      { width_factor : float option
-      ; height_factor : float option
-      }
-      -> [ `Center ] node
-  | Sized_box :
-      { width : float option
-      ; height : float option
-      }
-      -> [ `Sized_box ] node
-  | Constrained_box :
-      { min_width : float
-      ; max_width : float
-      ; min_height : float
-      ; max_height : float
-      }
-      -> [ `Constrained_box ] node
-  | Decorated_box :
-      { background : int32 option
-      ; border_radius : float
-      }
-      -> [ `Decorated_box ] node
-  | Clip : { behavior : Style.Clip.t } -> [ `Clip ] node
-  | Opacity : { opacity : float } -> [ `Opacity ] node
-  | Animated_opacity :
-      { opacity : float
-      ; animation : Animation.t
-      }
-      -> [ `Animated_opacity ] node
-  | Transform : { matrix4 : float array } -> [ `Transform ] node
-  | Scroll_view :
-      { axis : Layout.Axis.t
-      ; reverse : bool
-      ; primary : bool
-      }
-      -> [ `Scroll_view ] node
-  | Sliver_box : [ `Sliver_box ] node
-  | Sliver_list : [ `Sliver_list ] node
-  | Sliver_fill : { flex : int } -> [ `Sliver_fill ] node
-  | Sliver_fixed_extent :
-      { total_count : int
-      ; first_index : int
-      ; item_extent : float
-      ; overscan : int
-      }
-      -> [ `Sliver_fixed_extent ] node
-  | Sliver_varied_extent :
-      { total_count : int
-      ; first_index : int
-      ; default_item_extent : float
-      ; extent_overrides : Sparse_extent_override.t list
-      ; overscan : int
-      ; transition : Sparse_extent_transition.t option
-      }
-      -> [ `Sliver_varied_extent ] node
-  | Sliver_padding :
-      { left : float; top : float; right : float; bottom : float }
-      -> [ `Sliver_padding ] node
-  | Sliver_app_bar :
-      { pinned : bool
-      ; expanded_height : float option
-      ; collapsed_height : float option
-      }
-      -> [ `Sliver_app_bar ] node
-  | Gesture : [ `Gesture ] node
-  | Focus_scope : { autofocus : bool } -> [ `Focus_scope ] node
-  | Mouse_region : { opaque : bool } -> [ `Mouse_region ] node
-  | Keyboard_listener :
-      { autofocus : bool
-      ; key_policy : Event.Key_policy.t
-      }
-      -> [ `Keyboard_listener ] node
-  | Semantics :
-      { label : string option
-      ; hint : string option
-      ; value : string option
-      ; role : Semantics.Role.t
-      ; enabled : bool option
-      ; selected : bool option
-      ; checked : bool option
-      ; focusable : bool option
-      ; obscured : bool
-      ; live_region : bool
-      ; heading_level : int option
-      ; sort_key : float option
-      ; actions : Semantics.Action.t list
-      }
-      -> [ `Semantics ] node
-  | Theme :
-      { brightness : Style.Brightness.t
-      ; color_seed : int32
-      }
-      -> [ `Theme ] node
-  | Material_scaffold : { has_app_bar : bool } -> [ `Material_scaffold ] node
-  | Material_app_bar : { center_title : bool } -> [ `Material_app_bar ] node
-  | Material_elevated_button :
-      { variant : material_button_variant
-      ; enabled : bool
-      ; autofocus : bool
-      }
-      -> [ `Material_elevated_button ] node
-  | Material_text_button :
-      { variant : material_button_variant
-      ; enabled : bool
-      ; autofocus : bool
-      }
-      -> [ `Material_text_button ] node
-  | Material_icon_button :
-      { variant : material_button_variant
-      ; enabled : bool
-      ; autofocus : bool
-      }
-      -> [ `Material_icon_button ] node
-  | Material_checkbox :
-      { value : bool
-      ; enabled : bool
-      }
-      -> [ `Material_checkbox ] node
-  | Material_switch :
-      { value : bool
-      ; enabled : bool
-      }
-      -> [ `Material_switch ] node
-  | Material_list_tile :
-      { enabled : bool
-      ; selected : bool
-      ; has_subtitle : bool
-      ; has_leading : bool
-      ; has_trailing : bool
-      }
-      -> [ `Material_list_tile ] node
-  | Material_divider : { thickness : float } -> [ `Material_divider ] node
-  | Material_card : { elevation : float } -> [ `Material_card ] node
-  | Material_circular_progress_indicator :
-      { value : float option }
-      -> [ `Material_circular_progress_indicator ] node
-  | Cupertino_button : { enabled : bool } -> [ `Cupertino_button ] node
-  | Cupertino_switch :
-      { value : bool
-      ; enabled : bool
-      }
-      -> [ `Cupertino_switch ] node
-  | Text_input :
-      { session_id : Bonsai_flutter_spec.Id.Text_input.session_id
-      ; document_revision : Bonsai_flutter_spec.Id.Text_input.document_revision
-      ; value : Text_editing.Value.t
-      ; enabled : bool
-      ; read_only : bool
-      ; obscure_text : bool
-      ; keyboard_type : Text_editing.keyboard_type
-      ; input_action : Text_editing.input_action
-      ; accepted_local_revision : Bonsai_flutter_spec.Id.Text_input.local_revision
-      ; update_mode : Text_editing.update_mode
-      ; autofocus : bool
-      ; max_utf8_bytes : int option
-      }
-      -> [ `Text_input ] node
-  | Overlay :
-      { alignment : Navigation.overlay_alignment
-      ; dismissible : bool
-      }
-      -> [ `Overlay ] node
-  | Navigator :
-      { restoration_scope_id : Bonsai_flutter_spec.Id.Navigation.restoration_scope_id option }
-      -> [ `Navigator ] node
-  | Page :
-      { page_key : Bonsai_flutter_spec.Id.Navigation.page_key
-      ; presentation : Navigation.page_presentation
-      ; can_pop : bool
-      ; restoration_id : Bonsai_flutter_spec.Id.Navigation.restoration_id option
-      }
-      -> [ `Page ] node
-  | Safe_area :
-      { left : bool
-      ; top : bool
-      ; right : bool
-      ; bottom : bool
-      ; minimum_left : float
-      ; minimum_top : float
-      ; minimum_right : float
-      ; minimum_bottom : float
-      }
-      -> [ `Safe_area ] node
-  | Environment_boundary : [ `Environment_boundary ] node
-  | Material_dialog :
-      { barrier_dismissible : bool }
-      -> [ `Material_dialog ] node
-  | Native_widget :
-      { kind_id : Bonsai_flutter_spec.Id.Native_widget.kind_id
-      ; version : int
-      ; capabilities : int64
-      ; payload : bytes
-      }
-      -> [ `Native_widget ] node
+  type 'k node =
+    | Empty : [ `Empty ] node
+    | Text :
+        { value : string
+        ; style : Style.Text_style.Private.view option
+        ; text_align : Style.Text_align.t
+        ; max_lines : int option
+        ; overflow : Style.Text_overflow.t
+        }
+        -> [ `Text ] node
+    | Rich_text : { spans : string list } -> [ `Rich_text ] node
+    | Icon :
+        { code_point : int
+        ; font_family : string option
+        ; size : float option
+        ; color : int32 option
+        }
+        -> [ `Icon ] node
+    | Image :
+        { uri : string
+        ; fit : Style.Image_fit.t
+        ; width : float option
+        ; height : float option
+        }
+        -> [ `Image ] node
+    | Row : [ `Row ] node
+    | Column : [ `Column ] node
+    | Flex_row : [ `Flex_row ] node
+    | Flex_column : [ `Flex_column ] node
+    | Stack : [ `Stack ] node
+    | Button : { enabled : bool } -> [ `Button ] node
+    | Pressable :
+        { overlay_color : Style.Color.t
+        ; release_delay_ms : int
+        }
+        -> [ `Pressable ] node
+    | Padding :
+        { left : float
+        ; top : float
+        ; right : float
+        ; bottom : float
+        }
+        -> [ `Padding ] node
+    | Align : { alignment : Layout.Alignment.t } -> [ `Align ] node
+    | Center :
+        { width_factor : float option
+        ; height_factor : float option
+        }
+        -> [ `Center ] node
+    | Sized_box :
+        { width : float option
+        ; height : float option
+        }
+        -> [ `Sized_box ] node
+    | Constrained_box :
+        { min_width : float
+        ; max_width : float
+        ; min_height : float
+        ; max_height : float
+        }
+        -> [ `Constrained_box ] node
+    | Decorated_box :
+        { background : int32 option
+        ; border_radius : float
+        }
+        -> [ `Decorated_box ] node
+    | Clip : { behavior : Style.Clip.t } -> [ `Clip ] node
+    | Opacity : { opacity : float } -> [ `Opacity ] node
+    | Animated_opacity :
+        { opacity : float
+        ; animation : Animation.t
+        }
+        -> [ `Animated_opacity ] node
+    | Transform : { matrix4 : float array } -> [ `Transform ] node
+    | Scroll_view :
+        { axis : Layout.Axis.t
+        ; reverse : bool
+        ; primary : bool
+        }
+        -> [ `Scroll_view ] node
+    | Sliver_box : [ `Sliver_box ] node
+    | Sliver_list : [ `Sliver_list ] node
+    | Sliver_fill : { flex : int } -> [ `Sliver_fill ] node
+    | Sliver_fixed_extent :
+        { total_count : int
+        ; first_index : int
+        ; item_extent : float
+        ; overscan : int
+        }
+        -> [ `Sliver_fixed_extent ] node
+    | Sliver_varied_extent :
+        { total_count : int
+        ; first_index : int
+        ; default_item_extent : float
+        ; extent_overrides : Sparse_extent_override.t list
+        ; overscan : int
+        ; transition : Sparse_extent_transition.t option
+        }
+        -> [ `Sliver_varied_extent ] node
+    | Sliver_padding :
+        { left : float
+        ; top : float
+        ; right : float
+        ; bottom : float
+        }
+        -> [ `Sliver_padding ] node
+    | Sliver_app_bar :
+        { pinned : bool
+        ; expanded_height : float option
+        ; collapsed_height : float option
+        }
+        -> [ `Sliver_app_bar ] node
+    | Gesture : [ `Gesture ] node
+    | Focus_scope : { autofocus : bool } -> [ `Focus_scope ] node
+    | Mouse_region : { opaque : bool } -> [ `Mouse_region ] node
+    | Keyboard_listener :
+        { autofocus : bool
+        ; key_policy : Event.Key_policy.t
+        }
+        -> [ `Keyboard_listener ] node
+    | Semantics :
+        { label : string option
+        ; hint : string option
+        ; value : string option
+        ; role : Semantics.Role.t
+        ; enabled : bool option
+        ; selected : bool option
+        ; checked : bool option
+        ; focusable : bool option
+        ; obscured : bool
+        ; live_region : bool
+        ; heading_level : int option
+        ; sort_key : float option
+        ; actions : Semantics.Action.t list
+        }
+        -> [ `Semantics ] node
+    | Theme :
+        { brightness : Style.Brightness.t
+        ; color_seed : int32
+        }
+        -> [ `Theme ] node
+    | Material_scaffold : { has_app_bar : bool } -> [ `Material_scaffold ] node
+    | Material_app_bar : { center_title : bool } -> [ `Material_app_bar ] node
+    | Material_elevated_button :
+        { variant : material_button_variant
+        ; enabled : bool
+        ; autofocus : bool
+        }
+        -> [ `Material_elevated_button ] node
+    | Material_text_button :
+        { variant : material_button_variant
+        ; enabled : bool
+        ; autofocus : bool
+        }
+        -> [ `Material_text_button ] node
+    | Material_icon_button :
+        { variant : material_button_variant
+        ; enabled : bool
+        ; autofocus : bool
+        }
+        -> [ `Material_icon_button ] node
+    | Material_checkbox :
+        { value : bool
+        ; enabled : bool
+        }
+        -> [ `Material_checkbox ] node
+    | Material_switch :
+        { value : bool
+        ; enabled : bool
+        }
+        -> [ `Material_switch ] node
+    | Material_list_tile :
+        { enabled : bool
+        ; selected : bool
+        ; has_subtitle : bool
+        ; has_leading : bool
+        ; has_trailing : bool
+        }
+        -> [ `Material_list_tile ] node
+    | Material_divider : { thickness : float } -> [ `Material_divider ] node
+    | Material_card : { elevation : float } -> [ `Material_card ] node
+    | Material_circular_progress_indicator :
+        { value : float option }
+        -> [ `Material_circular_progress_indicator ] node
+    | Cupertino_button : { enabled : bool } -> [ `Cupertino_button ] node
+    | Cupertino_switch :
+        { value : bool
+        ; enabled : bool
+        }
+        -> [ `Cupertino_switch ] node
+    | Text_input :
+        { session_id : Bonsai_flutter_spec.Id.Text_input.session_id
+        ; document_revision : Bonsai_flutter_spec.Id.Text_input.document_revision
+        ; value : Text_editing.Value.t
+        ; enabled : bool
+        ; read_only : bool
+        ; obscure_text : bool
+        ; keyboard_type : Text_editing.keyboard_type
+        ; input_action : Text_editing.input_action
+        ; accepted_local_revision : Bonsai_flutter_spec.Id.Text_input.local_revision
+        ; update_mode : Text_editing.update_mode
+        ; autofocus : bool
+        ; max_utf8_bytes : int option
+        }
+        -> [ `Text_input ] node
+    | Overlay :
+        { alignment : Navigation.overlay_alignment
+        ; dismissible : bool
+        }
+        -> [ `Overlay ] node
+    | Navigator :
+        { restoration_scope_id :
+            Bonsai_flutter_spec.Id.Navigation.restoration_scope_id option
+        }
+        -> [ `Navigator ] node
+    | Page :
+        { page_key : Bonsai_flutter_spec.Id.Navigation.page_key
+        ; presentation : Navigation.page_presentation
+        ; can_pop : bool
+        ; restoration_id : Bonsai_flutter_spec.Id.Navigation.restoration_id option
+        }
+        -> [ `Page ] node
+    | Safe_area :
+        { left : bool
+        ; top : bool
+        ; right : bool
+        ; bottom : bool
+        ; minimum_left : float
+        ; minimum_top : float
+        ; minimum_right : float
+        ; minimum_bottom : float
+        }
+        -> [ `Safe_area ] node
+    | Environment_boundary : [ `Environment_boundary ] node
+    | Material_dialog : { barrier_dismissible : bool } -> [ `Material_dialog ] node
+    | Native_widget :
+        { kind_id : Bonsai_flutter_spec.Id.Native_widget.kind_id
+        ; version : int
+        ; capabilities : int64
+        ; payload : bytes
+        }
+        -> [ `Native_widget ] node
 
   type event_binding =
     { tag : Event.Tag.t
@@ -753,7 +758,6 @@ module Private : sig
   val view : t -> any_view
   val node_equal_widgets : t -> t -> bool
   val kind_tag_of_widget : t -> kind_tag
-
   val node_kind_tag : 'k node -> kind_tag
   val node_equal : 'k1 node -> 'k2 node -> bool
   val parent_data_equal : child_parent_data -> child_parent_data -> bool

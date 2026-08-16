@@ -64,13 +64,7 @@ val native_event
   -> payload:bytes
   -> unit
 
-val visible_range
-  :  t
-  -> Query.t
-  -> first_index:int64
-  -> last_exclusive:int64
-  -> unit
-
+val visible_range : t -> Query.t -> first_index:int64 -> last_exclusive:int64 -> unit
 val resize : t -> width:float -> height:float -> unit
 val set_environment : t -> Environment.snapshot -> unit
 

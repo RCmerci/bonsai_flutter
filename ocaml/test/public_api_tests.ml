@@ -82,7 +82,10 @@ let (_ : Ui.Body.t) =
   Ui.Body.Vertical.create
     [ Ui.Body.Vertical.fixed (Ui.Widget.text "Search")
     ; Ui.Body.Vertical.fill
-        (Ui.Widget.Scroll_view.vertical ~on_scroll:viewport_handler [ Ui.Widget.Sliver.list [] ] ())
+        (Ui.Widget.Scroll_view.vertical
+           ~on_scroll:viewport_handler
+           [ Ui.Widget.Sliver.list [] ]
+           ())
     ]
 ;;
 

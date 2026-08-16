@@ -18,7 +18,8 @@ let semantics_label value = Semantics_label value
 let kind value = Kind (normalized value)
 
 let kind_name node =
-  Ui.Widget.Private.kind_tag_to_string node.Runtime.Mounted_tree.Snapshot.node_tag |> normalized
+  Ui.Widget.Private.kind_tag_to_string node.Runtime.Mounted_tree.Snapshot.node_tag
+  |> normalized
 ;;
 
 let node_role node =
@@ -27,8 +28,8 @@ let node_role node =
   | K_material_checkbox -> Some "checkbox"
   | K_text_input -> Some "text_field"
   | K_semantics ->
-    (let Av view = Ui.Widget.Private.view node.Runtime.Mounted_tree.Snapshot.widget in
-     match view.node with
+    let (Av view) = Ui.Widget.Private.view node.Runtime.Mounted_tree.Snapshot.widget in
+    (match view.node with
      | Ui.Widget.Private.Semantics { role; _ } -> Some (Ui.Semantics.Role.to_string role)
      | _ -> None)
   | _ -> None
@@ -49,15 +50,14 @@ let matches query node =
      | Some candidate -> String.equal role candidate
      | None -> false)
   | Visible_text text ->
-    (let Av view = Ui.Widget.Private.view node.Runtime.Mounted_tree.Snapshot.widget in
-     match view.node with
+    let (Av view) = Ui.Widget.Private.view node.Runtime.Mounted_tree.Snapshot.widget in
+    (match view.node with
      | Ui.Widget.Private.Text { value; _ } -> String.equal value text
      | _ -> false)
   | Semantics_label label ->
-    (let Av view = Ui.Widget.Private.view node.Runtime.Mounted_tree.Snapshot.widget in
-     match view.node with
-     | Ui.Widget.Private.Semantics { label = Some value; _ } ->
-       String.equal value label
+    let (Av view) = Ui.Widget.Private.view node.Runtime.Mounted_tree.Snapshot.widget in
+    (match view.node with
+     | Ui.Widget.Private.Semantics { label = Some value; _ } -> String.equal value label
      | _ -> false)
   | Kind expected -> String.equal expected (kind_name node)
 ;;

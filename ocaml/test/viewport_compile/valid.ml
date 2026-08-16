@@ -13,7 +13,9 @@ let vertical =
   |> Ui.Widget.Viewport.Vertical.theme ~data:(Ui.Theme.material ())
 ;;
 
-let horizontal = Ui.Widget.Scroll_view.horizontal ~on_scroll:handler [ Ui.Widget.Sliver.list [ row ] ] ()
+let horizontal =
+  Ui.Widget.Scroll_view.horizontal ~on_scroll:handler [ Ui.Widget.Sliver.list [ row ] ] ()
+;;
 
 let (_ : Ui.Widget.Body.t) =
   Ui.Widget.Body.Vertical.create

@@ -62,7 +62,7 @@ let ordered_nodes snapshot =
         (Runtime.Node_id.to_int64 node_id)
     | Some node ->
       let children =
-        let Av view = Ui.Widget.Private.view node.widget in
+        let (Av view) = Ui.Widget.Private.view node.widget in
         match view.node with
         | Ui.Widget.Private.Native_widget { kind_id; payload; _ }
           when kind_id = Ui.Native_widget.Morphing_surface.kind_id
@@ -123,7 +123,7 @@ let render_tree t =
     Option.iter
       (fun test_id -> Printf.bprintf output " test_id=%s" (Ui.Test_id.to_string test_id))
       node.test_id;
-    (let Av view = Ui.Widget.Private.view node.widget in
+    (let (Av view) = Ui.Widget.Private.view node.widget in
      match view.node with
      | Ui.Widget.Private.Text { value; _ } ->
        Buffer.add_char output ' ';
@@ -317,7 +317,7 @@ let apply_text_edit
   =
   let node = require_node t query in
   let session_id =
-    let Av view = Ui.Widget.Private.view node.widget in
+    let (Av view) = Ui.Widget.Private.view node.widget in
     match view.node with
     | Ui.Widget.Private.Text_input { session_id; _ } -> session_id
     | _ -> fail "text edit query did not match a Text_input node"
@@ -344,10 +344,10 @@ let apply_text_edit
 let input_text t query text =
   let node = require_node t query in
   let document_revision, accepted_local_revision =
-    let Av view = Ui.Widget.Private.view node.widget in
+    let (Av view) = Ui.Widget.Private.view node.widget in
     match view.node with
-    | Ui.Widget.Private.Text_input { document_revision; accepted_local_revision; _ }
-      -> document_revision, accepted_local_revision
+    | Ui.Widget.Private.Text_input { document_revision; accepted_local_revision; _ } ->
+      document_revision, accepted_local_revision
     | _ -> fail "input_text query did not match a Text_input node"
   in
   let cursor = Ui.Text_editing.Utf16.length text in

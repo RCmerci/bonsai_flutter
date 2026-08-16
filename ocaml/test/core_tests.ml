@@ -232,9 +232,11 @@ let test_pressable_is_a_typed_core_widget () =
       ~child:(Widget.text "Message")
       ()
   in
-  let Av view = Widget.Private.view widget in
+  let (Av view) = Widget.Private.view widget in
   check
-    (Widget.Private.kind_tag_equal (Widget.Private.node_kind_tag view.node) Widget.Private.K_pressable)
+    (Widget.Private.kind_tag_equal
+       (Widget.Private.node_kind_tag view.node)
+       Widget.Private.K_pressable)
     "pressable must be a core widget kind";
   check_int ~expected:1 ~actual:(Array.length view.children) "pressable child count";
   (match view.node with
@@ -548,19 +550,13 @@ let test_nested_duplicate_keys_fail () =
        ; { kind = center_kind; key = None }
        ; { kind = parent_kind; key = Some actual_parent_key }
        ] ->
-       check_kind
-         ~expected:Widget.Private.K_column
-         ~actual:root_kind
-         "nested root kind";
+       check_kind ~expected:Widget.Private.K_column ~actual:root_kind "nested root kind";
        check (Key.equal actual_root_key root_key) "nested root key was not preserved";
        check_kind
          ~expected:Widget.Private.K_center
          ~actual:center_kind
          "nested unkeyed ancestor kind";
-       check_kind
-         ~expected:Widget.Private.K_row
-         ~actual:parent_kind
-         "nested parent kind";
+       check_kind ~expected:Widget.Private.K_row ~actual:parent_kind "nested parent kind";
        check
          (Key.equal actual_parent_key parent_key)
          "nested parent key was not preserved"
@@ -743,7 +739,8 @@ let test_optimized_key_validation_matches_reference () =
       | Ok _ -> None
       | Error (Runtime_error.Duplicate_key { parent_path; key; _ }) ->
         (match List.rev parent_path with
-         | { Runtime_error.kind; _ } :: _ -> Some (Widget.Private.kind_tag_to_string kind, key)
+         | { Runtime_error.kind; _ } :: _ ->
+           Some (Widget.Private.kind_tag_to_string kind, key)
          | [] -> fail "duplicate error omitted its parent path")
       | Error error -> fail "reference case returned %s" (Runtime_error.to_string error)
     in
@@ -1666,7 +1663,7 @@ let test_text_input_utf8_limit_contract () =
       ()
   in
   let widget = create_widget 64 in
-  let Av view = Widget.Private.view widget in
+  let (Av view) = Widget.Private.view widget in
   (match view.node with
    | Widget.Private.Text_input { max_utf8_bytes = Some 64; _ } -> ()
    | _ -> fail "text input did not retain max_utf8_bytes");
