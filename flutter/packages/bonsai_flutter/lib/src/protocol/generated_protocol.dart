@@ -88,6 +88,7 @@ abstract final class NodeKindId {
   static const int sliverVariedExtent = 36;
   static const int sliverPadding = 37;
   static const int sliverAppBar = 38;
+  static const int preferredSize = 39;
   static const int gesture = 48;
   static const int button = 49;
   static const int textInput = 50;
@@ -148,6 +149,7 @@ abstract final class NodeKindId {
     36 => 'sliver_varied_extent',
     37 => 'sliver_padding',
     38 => 'sliver_app_bar',
+    39 => 'preferred_size',
     48 => 'gesture',
     49 => 'button',
     50 => 'text_input',
@@ -519,20 +521,19 @@ abstract final class ScrollViewPropId {
   static const int axis = 1;
   static const int reverse = 2;
   static const int primary = 3;
+  static const int cacheExtent = 4;
 
   static String? debugName(int id) => switch (id) {
     1 => 'axis',
     2 => 'reverse',
     3 => 'primary',
+    4 => 'cache_extent',
     _ => null,
   };
 }
 
 abstract final class SliverFillPropId {
-  static const int flex = 1;
-
   static String? debugName(int id) => switch (id) {
-    1 => 'flex',
     _ => null,
   };
 }
@@ -594,11 +595,48 @@ abstract final class SliverAppBarPropId {
   static const int pinned = 1;
   static const int expandedHeight = 2;
   static const int collapsedHeight = 3;
+  static const int floating = 4;
+  static const int snap = 5;
+  static const int stretch = 6;
+  static const int toolbarHeight = 7;
+  static const int hasLeading = 8;
+  static const int hasFlexibleSpace = 9;
+  static const int hasBottom = 10;
+  static const int hasActions = 11;
+  static const int forceElevated = 12;
+  static const int automaticallyImplyLeading = 13;
+  static const int centerTitle = 14;
+  static const int backgroundColor = 15;
+  static const int foregroundColor = 16;
+  static const int elevation = 17;
 
   static String? debugName(int id) => switch (id) {
     1 => 'pinned',
     2 => 'expanded_height',
     3 => 'collapsed_height',
+    4 => 'floating',
+    5 => 'snap',
+    6 => 'stretch',
+    7 => 'toolbar_height',
+    8 => 'has_leading',
+    9 => 'has_flexible_space',
+    10 => 'has_bottom',
+    11 => 'has_actions',
+    12 => 'force_elevated',
+    13 => 'automatically_imply_leading',
+    14 => 'center_title',
+    15 => 'background_color',
+    16 => 'foreground_color',
+    17 => 'elevation',
+    _ => null,
+  };
+}
+
+abstract final class PreferredSizePropId {
+  static const int height = 1;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'height',
     _ => null,
   };
 }

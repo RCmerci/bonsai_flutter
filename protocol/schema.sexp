@@ -58,6 +58,7 @@
    (sliver_varied_extent 36)
    (sliver_padding 37)
    (sliver_app_bar 38)
+   (preferred_size 39)
    (gesture 48)
    (button 49)
    (text_input 50)
@@ -155,9 +156,10 @@
    (scroll_view
     ((axis 1 axis)
      (reverse 2 bool)
-     (primary 3 bool)))
+     (primary 3 bool)
+     (cache_extent 4 optional_f64)))
    (sliver_fill
-    ((flex 1 u32)))
+    ())
    (sliver_fixed_extent
     ((total_count 1 u64)
      (first_index 2 u64)
@@ -180,7 +182,23 @@
    (sliver_app_bar
     ((pinned 1 bool)
      (expanded_height 2 optional_f64)
-     (collapsed_height 3 optional_f64)))
+     (collapsed_height 3 optional_f64)
+     (floating 4 bool)
+     (snap 5 bool)
+     (stretch 6 bool)
+     (toolbar_height 7 f64)
+     (has_leading 8 bool)
+     (has_flexible_space 9 bool)
+     (has_bottom 10 bool)
+     (has_actions 11 bool)
+     (force_elevated 12 bool)
+     (automatically_imply_leading 13 bool)
+     (center_title 14 optional_bool)
+     (background_color 15 optional_argb32)
+     (foreground_color 16 optional_argb32)
+     (elevation 17 optional_f64)))
+   (preferred_size
+    ((height 1 f64)))
    (focus_scope
     ((autofocus 1 bool)))
    (mouse_region

@@ -2,10 +2,12 @@ import 'dart:collection';
 import 'dart:ui' show PointerDeviceKind;
 import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
 import '../native_widget/native_widget_registry.dart';
+import 'sliver_virtual_host.dart';
 import '../native_widget/morphing_surface.dart';
 import '../native_widget/message_composer.dart';
 import '../native_widget/navigation_shell.dart';
@@ -87,6 +89,7 @@ final class WidgetRegistry {
       NodeKind.sliverVariedExtent: _buildSliverVariedExtent,
       NodeKind.sliverPadding: _buildSliverPadding,
       NodeKind.sliverAppBar: _buildSliverAppBar,
+      NodeKind.preferredSize: _buildPreferredSize,
       NodeKind.gesture: _buildGesture,
       NodeKind.focusScope: _buildFocusScope,
       NodeKind.mouseRegion: _buildMouseRegion,
@@ -553,6 +556,9 @@ Widget _buildScrollView(
       controller: controller,
       scrollDirection: scrollAxis,
       reverse: props.reverse,
+      scrollCacheExtent: props.cacheExtent != null
+          ? ScrollCacheExtent.pixels(props.cacheExtent!)
+          : null,
       slivers: children,
     ),
   );
@@ -610,13 +616,20 @@ Widget _buildSliverFixedExtent(
   RendererEventCallback? onEvent,
 ) {
   final props = _expectProps<SliverFixedExtentProps>(node);
-  // SliverFixedExtentList with the visible window of children. The
-  // full visible-range state machine (controller-based range computation,
-  // anchor correction, overscan) will be wired up in a follow-up; for now
-  // the supplied children are laid out at the fixed item extent.
-  return SliverFixedExtentList(
-    delegate: SliverChildListDelegate(children),
-    itemExtent: props.itemExtent,
+  final scope = ScrollViewScope.of(context);
+  if (scope == null) {
+    throw RendererBuildException(
+      'Sliver_fixed_extent node ${node.id} must be inside a Scroll_view',
+    );
+  }
+  return SliverFixedExtentHost(
+    nodeId: node.id,
+    localRevision: node.localRevision,
+    props: props,
+    controller: scope.controller,
+    binding: _binding(node, EventTagId.visibleRangeChanged),
+    onEvent: onEvent,
+    children: children,
   );
 }
 
@@ -626,12 +639,22 @@ Widget _buildSliverVariedExtent(
   List<Widget> children,
   RendererEventCallback? onEvent,
 ) {
-  _expectProps<SliverVariedExtentProps>(node);
-  // SliverVariedExtentList requires an extent builder over the full
-  // logical list; the renderer currently receives only the visible window
-  // of children. Fall back to a plain SliverList until the full
-  // varied-extent state machine is wired up.
-  return SliverList(delegate: SliverChildListDelegate(children));
+  final props = _expectProps<SliverVariedExtentProps>(node);
+  final scope = ScrollViewScope.of(context);
+  if (scope == null) {
+    throw RendererBuildException(
+      'Sliver_varied_extent node ${node.id} must be inside a Scroll_view',
+    );
+  }
+  return SliverVariedExtentHost(
+    nodeId: node.id,
+    localRevision: node.localRevision,
+    props: props,
+    controller: scope.controller,
+    binding: _binding(node, EventTagId.visibleRangeChanged),
+    onEvent: onEvent,
+    children: children,
+  );
 }
 
 Widget _buildSliverPadding(
@@ -659,13 +682,98 @@ Widget _buildSliverAppBar(
   List<Widget> children,
   RendererEventCallback? onEvent,
 ) {
-  _expectChildCount(node, children, 1);
   final props = _expectProps<SliverAppBarProps>(node);
+  _validateSliverAppBarProps(node, props);
+  final slotCount =
+      1 +
+      (props.hasLeading ? 1 : 0) +
+      (props.hasFlexibleSpace ? 1 : 0) +
+      (props.hasBottom ? 1 : 0);
+  if (props.hasActions) {
+    if (children.length <= slotCount) {
+      throw RendererBuildException(
+        'Node ${node.id} of kind ${node.kind} requires at least one action',
+      );
+    }
+  } else {
+    _expectChildCount(node, children, slotCount);
+  }
+  var index = 0;
+  final leading = props.hasLeading ? children[index++] : null;
+  final title = children[index++];
+  final flexibleSpace = props.hasFlexibleSpace ? children[index++] : null;
+  final bottom = props.hasBottom ? children[index++] : null;
+  if (bottom != null && bottom is! PreferredSizeWidget) {
+    throw RendererBuildException(
+      'Node ${node.id} of kind ${node.kind} requires a PreferredSize bottom',
+    );
+  }
+  final actions = props.hasActions ? children.sublist(index) : null;
   return SliverAppBar(
     pinned: props.pinned,
     expandedHeight: props.expandedHeight,
     collapsedHeight: props.collapsedHeight,
-    title: children.single,
+    floating: props.floating,
+    snap: props.snap,
+    stretch: props.stretch,
+    toolbarHeight: props.toolbarHeight,
+    forceElevated: props.forceElevated,
+    automaticallyImplyLeading: props.automaticallyImplyLeading,
+    centerTitle: props.centerTitle,
+    backgroundColor: props.backgroundColor != null
+        ? Color(props.backgroundColor!)
+        : null,
+    foregroundColor: props.foregroundColor != null
+        ? Color(props.foregroundColor!)
+        : null,
+    elevation: props.elevation,
+    leading: leading,
+    title: title,
+    flexibleSpace: flexibleSpace,
+    bottom: bottom as PreferredSizeWidget?,
+    actions: actions,
+  );
+}
+
+void _validateSliverAppBarProps(UiNode node, SliverAppBarProps props) {
+  void finiteNonNegative(String name, double? value) {
+    if (value != null && (!value.isFinite || value < 0)) {
+      throw RendererBuildException(
+        'Node ${node.id} of kind ${node.kind} requires $name to be finite '
+        'and non-negative',
+      );
+    }
+  }
+
+  finiteNonNegative('toolbarHeight', props.toolbarHeight);
+  finiteNonNegative('expandedHeight', props.expandedHeight);
+  finiteNonNegative('collapsedHeight', props.collapsedHeight);
+  finiteNonNegative('elevation', props.elevation);
+  if (props.snap && !props.floating) {
+    throw RendererBuildException(
+      'Node ${node.id} of kind ${node.kind} requires floating when snap is true',
+    );
+  }
+  final collapsedHeight = props.collapsedHeight;
+  if (collapsedHeight != null && collapsedHeight < props.toolbarHeight) {
+    throw RendererBuildException(
+      'Node ${node.id} of kind ${node.kind} requires collapsedHeight to be '
+      'at least toolbarHeight',
+    );
+  }
+}
+
+Widget _buildPreferredSize(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  _expectChildCount(node, children, 1);
+  final props = _expectProps<PreferredSizeProps>(node);
+  return PreferredSize(
+    preferredSize: Size.fromHeight(props.height),
+    child: children.single,
   );
 }
 

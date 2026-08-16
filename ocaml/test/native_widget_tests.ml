@@ -247,7 +247,7 @@ let test_sliver_fill_and_padding () =
       ~on_scroll:(Ui.Event.Handler.create (fun _ -> ()))
       [ Ui.Widget.Sliver.padding
           ~insets:(Ui.Layout.Edge_insets.all 8.)
-          (Ui.Widget.Sliver.fill ~flex:2 (Ui.Widget.text "Fill"))
+          (Ui.Widget.Sliver.fill (Ui.Widget.text "Fill"))
       ]
       ()
   in
@@ -264,17 +264,290 @@ let test_sliver_fill_and_padding () =
        (Ui.Widget.Private.node_kind_tag fill.node)
        Ui.Widget.Private.K_sliver_fill)
     "sliver fill kind";
-  (match fill.node with
-   | Ui.Widget.Private.Sliver_fill { flex } -> check (flex = 2) "sliver fill flex"
-   | _ -> failwith "sliver fill node");
-  expect_invalid_argument
-    (fun () ->
-       ignore
-         (Ui.Widget.Scroll_view.vertical
-            ~on_scroll:(Ui.Event.Handler.create (fun _ -> ()))
-            [ Ui.Widget.Sliver.fill ~flex:0 (Ui.Widget.text "Bad") ]
-            ()))
-    "sliver accepted non-positive fill flex"
+  match fill.node with
+  | Ui.Widget.Private.Sliver_fill -> ()
+  | _ -> failwith "sliver fill node"
+;;
+
+let test_sliver_app_bar_contract () =
+  let bottom = Ui.Widget.preferred_size ~height:36. (Ui.Widget.text "Bottom") in
+  let viewport =
+    Ui.Widget.Scroll_view.vertical
+      ~on_scroll:(Ui.Event.Handler.create (fun _ -> ()))
+      [ Ui.Widget.Sliver.app_bar
+          ~pinned:true
+          ~bottom
+          ~actions:[ Ui.Widget.text "Search"; Ui.Widget.text "Settings" ]
+          ~title:(Ui.Widget.text "Title")
+          ()
+      ]
+      ()
+  in
+  let (Av app_bar) = Ui.Widget.Private.view (scroll_view_child viewport) in
+  check (Array.length app_bar.children = 4) "app bar exposes bottom and every action";
+  (match app_bar.node with
+   | Ui.Widget.Private.Sliver_app_bar { has_bottom; has_actions; _ } ->
+     check has_bottom "app bar bottom flag";
+     check has_actions "app bar actions flag"
+   | _ -> failwith "sliver app bar node");
+  let child_text index =
+    let (Av child) = Ui.Widget.Private.view app_bar.children.(index).widget in
+    match child.node with
+    | Ui.Widget.Private.Text { value; _ } -> Some value
+    | _ -> None
+  in
+  check (child_text 0 = Some "Title") "app bar title order";
+  check (child_text 2 = Some "Search") "app bar first action order";
+  check (child_text 3 = Some "Settings") "app bar second action order";
+  let empty_actions =
+    Ui.Widget.Scroll_view.vertical
+      ~on_scroll:(Ui.Event.Handler.create (fun _ -> ()))
+      [ Ui.Widget.Sliver.app_bar ~actions:[] ~title:(Ui.Widget.text "Title") () ]
+      ()
+  in
+  let (Av empty) = Ui.Widget.Private.view (scroll_view_child empty_actions) in
+  match empty.node with
+  | Ui.Widget.Private.Sliver_app_bar { has_actions; _ } ->
+    check (not has_actions) "empty actions do not set the actions flag"
+  | _ -> failwith "sliver app bar empty actions node"
+;;
+
+let test_sliver_app_bar_validation () =
+  let create
+        ?(floating = false)
+        ?(snap = false)
+        ?expanded_height
+        ?collapsed_height
+        ?(toolbar_height = 56.)
+        ?elevation
+        ?bottom
+        ()
+    =
+    ignore
+      (Ui.Widget.Sliver.app_bar
+         ~floating
+         ~snap
+         ?expanded_height
+         ?collapsed_height
+         ~toolbar_height
+         ?elevation
+         ?bottom
+         ~title:(Ui.Widget.text "Title")
+         ())
+  in
+  List.iter
+    (fun (build, message) -> expect_invalid_argument build message)
+    [ (fun () -> create ~snap:true ()), "sliver app bar accepted snap without floating"
+    ; ( (fun () -> create ~toolbar_height:(-1.) ())
+      , "sliver app bar accepted a negative toolbar height" )
+    ; ( (fun () -> create ~toolbar_height:Float.nan ())
+      , "sliver app bar accepted a non-finite toolbar height" )
+    ; ( (fun () -> create ~expanded_height:(-1.) ())
+      , "sliver app bar accepted a negative expanded height" )
+    ; ( (fun () -> create ~collapsed_height:40. ())
+      , "sliver app bar accepted collapsed height below toolbar height" )
+    ; ( (fun () -> create ~elevation:(-1.) ())
+      , "sliver app bar accepted a negative elevation" )
+    ; ( (fun () -> create ~bottom:(Ui.Widget.text "Bottom") ())
+      , "sliver app bar accepted a bottom without preferred size" )
+    ]
+;;
+
+(* ------------------------------------------------------------------ *)
+(* Scroll_view cache_extent auto-calculation (plan B, issues #2 / #3). *)
+(* overscan on each virtualized sliver must drive the viewport-level    *)
+(* cache_extent = max(child overscan * extent) so Flutter pre-renders   *)
+(* the overscan window instead of running on the ~250px default.        *)
+(* ------------------------------------------------------------------ *)
+
+let scroll_view_cache_extent viewport =
+  let (Av sv) = Ui.Widget.Private.view (widget_of_vertical_viewport viewport) in
+  match sv.node with
+  | Ui.Widget.Private.Scroll_view { cache_extent; _ } -> cache_extent
+  | _ -> failwith "expected scroll view node"
+;;
+
+let widget_of_horizontal_viewport viewport =
+  viewport
+  |> Ui.Widget.Viewport.Horizontal.with_width ~width:240.
+  |> Ui.Widget.For_testing.children
+  |> fun children -> children.(0)
+;;
+
+let horizontal_scroll_view_cache_extent viewport =
+  let (Av sv) = Ui.Widget.Private.view (widget_of_horizontal_viewport viewport) in
+  match sv.node with
+  | Ui.Widget.Private.Scroll_view { cache_extent; _ } -> cache_extent
+  | _ -> failwith "expected scroll view node"
+;;
+
+let no_scroll = Ui.Event.Handler.create (fun _ -> ())
+let no_range = sliver_range_handler (fun _ -> ())
+
+let test_scroll_view_cache_extent_auto_fixed () =
+  let viewport =
+    Ui.Widget.Scroll_view.vertical
+      ~on_scroll:no_scroll
+      [ Ui.Widget.Sliver.fixed_extent
+          ~total_count:50_000
+          ~first_index:0
+          ~item_extent:48.
+          ~overscan:4
+          ~items:[]
+          ~on_visible_range:no_range
+          ()
+      ]
+      ()
+  in
+  match scroll_view_cache_extent viewport with
+  | Some ce -> check (Float.equal ce 192.) "fixed overscan*extent cache extent (4*48)"
+  | None -> failwith "expected auto cache extent for fixed sliver"
+;;
+
+let test_scroll_view_cache_extent_auto_varied () =
+  let viewport =
+    Ui.Widget.Scroll_view.vertical
+      ~on_scroll:no_scroll
+      [ Ui.Widget.Sliver.varied_extent
+          ~total_count:50_000
+          ~first_index:0
+          ~default_item_extent:48.
+          ~extent_overrides:[]
+          ~overscan:5
+          ~items:[]
+          ~on_visible_range:no_range
+          ()
+      ]
+      ()
+  in
+  match scroll_view_cache_extent viewport with
+  | Some ce -> check (Float.equal ce 240.) "varied overscan*extent cache extent (5*48)"
+  | None -> failwith "expected auto cache extent for varied sliver"
+;;
+
+let test_scroll_view_cache_extent_auto_max () =
+  let viewport =
+    Ui.Widget.Scroll_view.vertical
+      ~on_scroll:no_scroll
+      [ Ui.Widget.Sliver.box (Ui.Widget.text "header")
+      ; Ui.Widget.Sliver.fixed_extent
+          ~total_count:50_000
+          ~first_index:0
+          ~item_extent:48.
+          ~overscan:4
+          ~items:[]
+          ~on_visible_range:no_range
+          ()
+      ; Ui.Widget.Sliver.varied_extent
+          ~total_count:50_000
+          ~first_index:0
+          ~default_item_extent:48.
+          ~extent_overrides:[]
+          ~overscan:5
+          ~items:[]
+          ~on_visible_range:no_range
+          ()
+      ]
+      ()
+  in
+  match scroll_view_cache_extent viewport with
+  | Some ce -> check (Float.equal ce 240.) "max overscan*extent across slivers"
+  | None -> failwith "expected auto cache extent for mixed slivers"
+;;
+
+let test_scroll_view_cache_extent_auto_none () =
+  let viewport =
+    Ui.Widget.Scroll_view.vertical
+      ~on_scroll:no_scroll
+      [ Ui.Widget.Sliver.box (Ui.Widget.text "Hi") ]
+      ()
+  in
+  check
+    (scroll_view_cache_extent viewport = None)
+    "no virtualized sliver leaves cache extent None"
+;;
+
+let test_scroll_view_cache_extent_explicit_wins () =
+  let viewport =
+    Ui.Widget.Scroll_view.vertical
+      ~on_scroll:no_scroll
+      ~cache_extent:500.
+      [ Ui.Widget.Sliver.fixed_extent
+          ~total_count:50_000
+          ~first_index:0
+          ~item_extent:48.
+          ~overscan:4
+          ~items:[]
+          ~on_visible_range:no_range
+          ()
+      ]
+      ()
+  in
+  match scroll_view_cache_extent viewport with
+  | Some ce -> check (Float.equal ce 500.) "explicit cache extent overrides auto-calc"
+  | None -> failwith "expected explicit cache extent to be preserved"
+;;
+
+let test_scroll_view_cache_extent_padding_recurse () =
+  let viewport =
+    Ui.Widget.Scroll_view.vertical
+      ~on_scroll:no_scroll
+      [ Ui.Widget.Sliver.padding
+          ~insets:(Ui.Layout.Edge_insets.all 8.)
+          (Ui.Widget.Sliver.fixed_extent
+             ~total_count:50_000
+             ~first_index:0
+             ~item_extent:80.
+             ~overscan:3
+             ~items:[]
+             ~on_visible_range:no_range
+             ())
+      ]
+      ()
+  in
+  match scroll_view_cache_extent viewport with
+  | Some ce -> check (Float.equal ce 240.) "padding-wrapped sliver recurses (3*80)"
+  | None -> failwith "expected auto cache extent for padded sliver"
+;;
+
+let test_scroll_view_cache_extent_default_overscan () =
+  let viewport =
+    Ui.Widget.Scroll_view.vertical
+      ~on_scroll:no_scroll
+      [ Ui.Widget.Sliver.fixed_extent
+          ~total_count:50_000
+          ~first_index:0
+          ~item_extent:80.
+          ~items:[]
+          ~on_visible_range:no_range
+          ()
+      ]
+      ()
+  in
+  match scroll_view_cache_extent viewport with
+  | Some ce -> check (Float.equal ce 160.) "default overscan 2 drives cache extent (2*80)"
+  | None -> failwith "expected auto cache extent for default overscan"
+;;
+
+let test_scroll_view_cache_extent_horizontal () =
+  let viewport =
+    Ui.Widget.Scroll_view.horizontal
+      ~on_scroll:no_scroll
+      [ Ui.Widget.Sliver.fixed_extent
+          ~total_count:100
+          ~first_index:0
+          ~item_extent:50.
+          ~overscan:3
+          ~items:[]
+          ~on_visible_range:no_range
+          ()
+      ]
+      ()
+  in
+  match horizontal_scroll_view_cache_extent viewport with
+  | Some ce ->
+    check (Float.equal ce 150.) "horizontal overscan*extent cache extent (3*50)"
+  | None -> failwith "expected auto cache extent for horizontal fixed sliver"
 ;;
 
 type dial_event = Changed of int
@@ -800,6 +1073,16 @@ let () =
   test_sliver_varied_extent_transition ();
   test_sliver_varied_extent_validation ();
   test_sliver_fill_and_padding ();
+  test_sliver_app_bar_contract ();
+  test_sliver_app_bar_validation ();
+  test_scroll_view_cache_extent_auto_fixed ();
+  test_scroll_view_cache_extent_auto_varied ();
+  test_scroll_view_cache_extent_auto_max ();
+  test_scroll_view_cache_extent_auto_none ();
+  test_scroll_view_cache_extent_explicit_wins ();
+  test_scroll_view_cache_extent_padding_recurse ();
+  test_scroll_view_cache_extent_default_overscan ();
+  test_scroll_view_cache_extent_horizontal ();
   test_morphing_surface_contract ();
   test_swipe_action_props_contract ();
   test_swipe_action_omitted_direction_and_validation ();

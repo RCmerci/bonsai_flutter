@@ -34,6 +34,7 @@ type node_kind =
   | Sliver_varied_extent
   | Sliver_padding
   | Sliver_app_bar
+  | Preferred_size
   | Gesture
   | Focus_scope
   | Mouse_region
@@ -345,10 +346,11 @@ type props =
       { axis : axis
       ; reverse : bool
       ; primary : bool
+      ; cache_extent : float option
       }
   | Sliver_box_props
   | Sliver_list_props
-  | Sliver_fill_props of { flex : int }
+  | Sliver_fill_props
   | Sliver_fixed_extent_props of
       { total_count : int
       ; first_index : int
@@ -373,7 +375,22 @@ type props =
       { pinned : bool
       ; expanded_height : float option
       ; collapsed_height : float option
+      ; floating : bool
+      ; snap : bool
+      ; stretch : bool
+      ; toolbar_height : float
+      ; has_leading : bool
+      ; has_flexible_space : bool
+      ; has_bottom : bool
+      ; has_actions : bool
+      ; force_elevated : bool
+      ; automatically_imply_leading : bool
+      ; center_title : bool option
+      ; background_color : int32 option
+      ; foreground_color : int32 option
+      ; elevation : float option
       }
+  | Preferred_size_props of { height : float }
   | Gesture_props
   | Focus_scope_props of { autofocus : bool }
   | Mouse_region_props of { opaque : bool }

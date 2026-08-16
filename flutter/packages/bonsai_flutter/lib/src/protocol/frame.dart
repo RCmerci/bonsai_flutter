@@ -58,6 +58,7 @@ enum NodeKind {
   environmentBoundary,
   materialDialog,
   nativeWidget,
+  preferredSize,
 }
 
 enum ScrollAxis { horizontal, vertical }
@@ -630,21 +631,25 @@ final class ScrollViewProps extends UiProps {
     required this.axis,
     required this.reverse,
     this.primary = false,
+    this.cacheExtent,
   });
 
   final ScrollAxis axis;
   final bool reverse;
   final bool primary;
+  final double? cacheExtent;
 
   @override
   bool operator ==(Object other) =>
       other is ScrollViewProps &&
       other.axis == axis &&
       other.reverse == reverse &&
-      other.primary == primary;
+      other.primary == primary &&
+      other.cacheExtent == cacheExtent;
 
   @override
-  int get hashCode => Object.hash(ScrollViewProps, axis, reverse, primary);
+  int get hashCode =>
+      Object.hash(ScrollViewProps, axis, reverse, primary, cacheExtent);
 }
 
 enum SparseExtentCurve {
@@ -726,16 +731,13 @@ final class SparseExtentOverride {
 }
 
 final class SliverFillProps extends UiProps {
-  const SliverFillProps({required this.flex});
-
-  final int flex;
+  const SliverFillProps();
 
   @override
-  bool operator ==(Object other) =>
-      other is SliverFillProps && other.flex == flex;
+  bool operator ==(Object other) => other is SliverFillProps;
 
   @override
-  int get hashCode => Object.hash(SliverFillProps, flex);
+  int get hashCode => 0;
 }
 
 final class SliverFixedExtentProps extends UiProps {
@@ -826,22 +828,95 @@ final class SliverAppBarProps extends UiProps {
     required this.pinned,
     this.expandedHeight,
     this.collapsedHeight,
+    this.floating = false,
+    this.snap = false,
+    this.stretch = false,
+    this.toolbarHeight = 56.0,
+    this.hasLeading = false,
+    this.hasFlexibleSpace = false,
+    this.hasBottom = false,
+    this.hasActions = false,
+    this.forceElevated = false,
+    this.automaticallyImplyLeading = true,
+    this.centerTitle,
+    this.backgroundColor,
+    this.foregroundColor,
+    this.elevation,
   });
 
   final bool pinned;
   final double? expandedHeight;
   final double? collapsedHeight;
+  final bool floating;
+  final bool snap;
+  final bool stretch;
+  final double toolbarHeight;
+  final bool hasLeading;
+  final bool hasFlexibleSpace;
+  final bool hasBottom;
+  final bool hasActions;
+  final bool forceElevated;
+  final bool automaticallyImplyLeading;
+  final bool? centerTitle;
+  final int? backgroundColor;
+  final int? foregroundColor;
+  final double? elevation;
 
   @override
   bool operator ==(Object other) =>
       other is SliverAppBarProps &&
       other.pinned == pinned &&
       other.expandedHeight == expandedHeight &&
-      other.collapsedHeight == collapsedHeight;
+      other.collapsedHeight == collapsedHeight &&
+      other.floating == floating &&
+      other.snap == snap &&
+      other.stretch == stretch &&
+      other.toolbarHeight == toolbarHeight &&
+      other.hasLeading == hasLeading &&
+      other.hasFlexibleSpace == hasFlexibleSpace &&
+      other.hasBottom == hasBottom &&
+      other.hasActions == hasActions &&
+      other.forceElevated == forceElevated &&
+      other.automaticallyImplyLeading == automaticallyImplyLeading &&
+      other.centerTitle == centerTitle &&
+      other.backgroundColor == backgroundColor &&
+      other.foregroundColor == foregroundColor &&
+      other.elevation == elevation;
 
   @override
-  int get hashCode =>
-      Object.hash(SliverAppBarProps, pinned, expandedHeight, collapsedHeight);
+  int get hashCode => Object.hash(
+    SliverAppBarProps,
+    pinned,
+    expandedHeight,
+    collapsedHeight,
+    floating,
+    snap,
+    stretch,
+    toolbarHeight,
+    hasLeading,
+    hasFlexibleSpace,
+    hasBottom,
+    hasActions,
+    forceElevated,
+    automaticallyImplyLeading,
+    centerTitle,
+    backgroundColor,
+    foregroundColor,
+    elevation,
+  );
+}
+
+final class PreferredSizeProps extends UiProps {
+  const PreferredSizeProps({required this.height});
+
+  final double height;
+
+  @override
+  bool operator ==(Object other) =>
+      other is PreferredSizeProps && other.height == height;
+
+  @override
+  int get hashCode => Object.hash(PreferredSizeProps, height);
 }
 
 final class GestureProps extends UiProps {

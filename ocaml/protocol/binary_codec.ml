@@ -560,6 +560,7 @@ let node_kind_id = function
   | Sliver_varied_extent -> Generated_protocol.Node_kind.sliver_varied_extent
   | Sliver_padding -> Generated_protocol.Node_kind.sliver_padding
   | Sliver_app_bar -> Generated_protocol.Node_kind.sliver_app_bar
+  | Preferred_size -> Generated_protocol.Node_kind.preferred_size
   | Gesture -> Generated_protocol.Node_kind.gesture
   | Focus_scope -> Generated_protocol.Node_kind.focus_scope
   | Mouse_region -> Generated_protocol.Node_kind.mouse_region
@@ -648,20 +649,18 @@ let write_props writer kind props =
     if Array.length matrix4 <> 16
     then fail Invalid_props "transform matrix must contain 16 values";
     Array.iter (Writer.f64 writer) matrix4
-  | Scroll_view, Scroll_view_props { axis; reverse; primary } ->
+  | Scroll_view, Scroll_view_props { axis; reverse; primary; cache_extent } ->
     Writer.u8
       writer
       (match axis with
        | Horizontal -> 0
        | Vertical -> 1);
     write_bool writer reverse;
-    write_bool writer primary
+    write_bool writer primary;
+    write_optional_f64 writer cache_extent
   | Sliver_box, Sliver_box_props -> ()
   | Sliver_list, Sliver_list_props -> ()
-  | Sliver_fill, Sliver_fill_props { flex } ->
-    check_u32 "sliver fill flex" flex;
-    if flex = 0 then fail Invalid_props "sliver fill flex must be positive";
-    Writer.u32 writer flex
+  | Sliver_fill, Sliver_fill_props -> ()
   | ( Sliver_fixed_extent
     , Sliver_fixed_extent_props { total_count; first_index; item_extent; overscan } ) ->
     write_sliver_fixed_extent_payload
@@ -692,10 +691,44 @@ let write_props writer kind props =
     Writer.f64 writer top;
     Writer.f64 writer right;
     Writer.f64 writer bottom
-  | Sliver_app_bar, Sliver_app_bar_props { pinned; expanded_height; collapsed_height } ->
+  | ( Sliver_app_bar
+    , Sliver_app_bar_props
+        { pinned
+        ; expanded_height
+        ; collapsed_height
+        ; floating
+        ; snap
+        ; stretch
+        ; toolbar_height
+        ; has_leading
+        ; has_flexible_space
+        ; has_bottom
+        ; has_actions
+        ; force_elevated
+        ; automatically_imply_leading
+        ; center_title
+        ; background_color
+        ; foreground_color
+        ; elevation
+        } ) ->
     write_bool writer pinned;
     write_optional_f64 writer expanded_height;
-    write_optional_f64 writer collapsed_height
+    write_optional_f64 writer collapsed_height;
+    write_bool writer floating;
+    write_bool writer snap;
+    write_bool writer stretch;
+    Writer.f64 writer toolbar_height;
+    write_bool writer has_leading;
+    write_bool writer has_flexible_space;
+    write_bool writer has_bottom;
+    write_bool writer has_actions;
+    write_bool writer force_elevated;
+    write_bool writer automatically_imply_leading;
+    write_optional_bool writer center_title;
+    write_optional_argb32 writer background_color;
+    write_optional_argb32 writer foreground_color;
+    write_optional_f64 writer elevation
+  | Preferred_size, Preferred_size_props { height } -> Writer.f64 writer height
   | Gesture, Gesture_props -> ()
   | Focus_scope, Focus_scope_props { autofocus } -> write_bool writer autofocus
   | Mouse_region, Mouse_region_props { opaque } -> write_bool writer opaque
@@ -888,11 +921,12 @@ let props_kind_id = function
   | Scroll_view_props _ -> Generated_protocol.Node_kind.scroll_view
   | Sliver_box_props -> Generated_protocol.Node_kind.sliver_box
   | Sliver_list_props -> Generated_protocol.Node_kind.sliver_list
-  | Sliver_fill_props _ -> Generated_protocol.Node_kind.sliver_fill
+  | Sliver_fill_props -> Generated_protocol.Node_kind.sliver_fill
   | Sliver_fixed_extent_props _ -> Generated_protocol.Node_kind.sliver_fixed_extent
   | Sliver_varied_extent_props _ -> Generated_protocol.Node_kind.sliver_varied_extent
   | Sliver_padding_props _ -> Generated_protocol.Node_kind.sliver_padding
   | Sliver_app_bar_props _ -> Generated_protocol.Node_kind.sliver_app_bar
+  | Preferred_size_props _ -> Generated_protocol.Node_kind.preferred_size
   | Gesture_props -> Generated_protocol.Node_kind.gesture
   | Focus_scope_props _ -> Generated_protocol.Node_kind.focus_scope
   | Mouse_region_props _ -> Generated_protocol.Node_kind.mouse_region
@@ -1009,9 +1043,10 @@ let changed_fields = function
       [ field_mask Generated_protocol.Scroll_view_prop.axis
       ; field_mask Generated_protocol.Scroll_view_prop.reverse
       ; field_mask Generated_protocol.Scroll_view_prop.primary
+      ; field_mask Generated_protocol.Scroll_view_prop.cache_extent
       ]
   | Sliver_box_props | Sliver_list_props -> 0L
-  | Sliver_fill_props _ -> field_mask Generated_protocol.Sliver_fill_prop.flex
+  | Sliver_fill_props -> 0L
   | Sliver_fixed_extent_props _ ->
     List.fold_left
       Int64.logor
@@ -1045,7 +1080,22 @@ let changed_fields = function
       [ field_mask Generated_protocol.Sliver_app_bar_prop.pinned
       ; field_mask Generated_protocol.Sliver_app_bar_prop.expanded_height
       ; field_mask Generated_protocol.Sliver_app_bar_prop.collapsed_height
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.floating
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.snap
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.stretch
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.toolbar_height
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.has_leading
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.has_flexible_space
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.has_bottom
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.has_actions
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.force_elevated
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.automatically_imply_leading
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.center_title
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.background_color
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.foreground_color
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.elevation
       ]
+  | Preferred_size_props _ -> field_mask Generated_protocol.Preferred_size_prop.height
   | Focus_scope_props _ -> field_mask Generated_protocol.Focus_scope_prop.autofocus
   | Mouse_region_props _ -> field_mask Generated_protocol.Mouse_region_prop.opaque
   | Keyboard_listener_props _ ->
@@ -1250,18 +1300,16 @@ let write_update_props writer props =
     if Array.length matrix4 <> 16
     then fail Invalid_props "transform matrix must contain 16 values";
     Array.iter (Writer.f64 writer) matrix4
-  | Scroll_view_props { axis; reverse; primary } ->
+  | Scroll_view_props { axis; reverse; primary; cache_extent } ->
     Writer.u8
       writer
       (match axis with
        | Horizontal -> 0
        | Vertical -> 1);
     write_bool writer reverse;
-    write_bool writer primary
-  | Sliver_fill_props { flex } ->
-    check_u32 "sliver fill flex" flex;
-    if flex = 0 then fail Invalid_props "sliver fill flex must be positive";
-    Writer.u32 writer flex
+    write_bool writer primary;
+    write_optional_f64 writer cache_extent
+  | Sliver_fill_props -> ()
   | Sliver_fixed_extent_props { total_count; first_index; item_extent; overscan } ->
     write_sliver_fixed_extent_payload
       writer
@@ -1290,10 +1338,43 @@ let write_update_props writer props =
     Writer.f64 writer top;
     Writer.f64 writer right;
     Writer.f64 writer bottom
-  | Sliver_app_bar_props { pinned; expanded_height; collapsed_height } ->
+  | Sliver_app_bar_props
+      { pinned
+      ; expanded_height
+      ; collapsed_height
+      ; floating
+      ; snap
+      ; stretch
+      ; toolbar_height
+      ; has_leading
+      ; has_flexible_space
+      ; has_bottom
+      ; has_actions
+      ; force_elevated
+      ; automatically_imply_leading
+      ; center_title
+      ; background_color
+      ; foreground_color
+      ; elevation
+      } ->
     write_bool writer pinned;
     write_optional_f64 writer expanded_height;
-    write_optional_f64 writer collapsed_height
+    write_optional_f64 writer collapsed_height;
+    write_bool writer floating;
+    write_bool writer snap;
+    write_bool writer stretch;
+    Writer.f64 writer toolbar_height;
+    write_bool writer has_leading;
+    write_bool writer has_flexible_space;
+    write_bool writer has_bottom;
+    write_bool writer has_actions;
+    write_bool writer force_elevated;
+    write_bool writer automatically_imply_leading;
+    write_optional_bool writer center_title;
+    write_optional_argb32 writer background_color;
+    write_optional_argb32 writer foreground_color;
+    write_optional_f64 writer elevation
+  | Preferred_size_props { height } -> Writer.f64 writer height
   | Focus_scope_props { autofocus } -> write_bool writer autofocus
   | Mouse_region_props { opaque } -> write_bool writer opaque
   | Keyboard_listener_props { autofocus; key_policy } ->
@@ -2233,6 +2314,7 @@ let read_node_kind reader =
     Sliver_varied_extent
   | value when value = Generated_protocol.Node_kind.sliver_padding -> Sliver_padding
   | value when value = Generated_protocol.Node_kind.sliver_app_bar -> Sliver_app_bar
+  | value when value = Generated_protocol.Node_kind.preferred_size -> Preferred_size
   | value when value = Generated_protocol.Node_kind.gesture -> Gesture
   | value when value = Generated_protocol.Node_kind.focus_scope -> Focus_scope
   | value when value = Generated_protocol.Node_kind.mouse_region -> Mouse_region
@@ -2393,11 +2475,8 @@ let read_props reader kind ~protocol_minor =
     let primary = read_bool reader in
     if axis = Horizontal && primary
     then fail Invalid_props "horizontal scroll view cannot be primary";
-    Scroll_view_props { axis; reverse; primary }
-  | Sliver_fill ->
-    let flex = Reader.u32 reader in
-    if flex = 0 then fail Invalid_props "sliver fill flex must be positive";
-    Sliver_fill_props { flex }
+    Scroll_view_props { axis; reverse; primary; cache_extent = read_optional_f64 reader }
+  | Sliver_fill -> Sliver_fill_props
   | Sliver_fixed_extent ->
     let total_count64 = Reader.u64 reader in
     if Int64.compare total_count64 (Int64.of_int max_int) > 0
@@ -2449,7 +2528,58 @@ let read_props reader kind ~protocol_minor =
     let pinned = read_bool reader in
     let expanded_height = read_optional_f64 reader in
     let collapsed_height = read_optional_f64 reader in
-    Sliver_app_bar_props { pinned; expanded_height; collapsed_height }
+    let floating = read_bool reader in
+    let snap = read_bool reader in
+    let stretch = read_bool reader in
+    let toolbar_height = read_finite_f64 reader in
+    if Float.compare toolbar_height 0. <= 0
+    then fail Invalid_props "sliver toolbar_height must be positive";
+    let has_leading = read_bool reader in
+    let has_flexible_space = read_bool reader in
+    let has_bottom = read_bool reader in
+    let has_actions = read_bool reader in
+    let force_elevated = read_bool reader in
+    let automatically_imply_leading = read_bool reader in
+    let center_title = read_optional_bool reader in
+    let background_color = read_optional_argb32 reader in
+    let foreground_color = read_optional_argb32 reader in
+    let elevation = read_optional_f64 reader in
+    (match expanded_height with
+     | Some e when (not (Float.is_finite e)) || Float.compare e 0. < 0 ->
+       fail Invalid_props "expanded_height must be non-negative and finite"
+     | _ -> ());
+    (match collapsed_height with
+     | Some c when (not (Float.is_finite c)) || Float.compare c 0. < 0 ->
+       fail Invalid_props "collapsed_height must be non-negative and finite"
+     | _ -> ());
+    (match expanded_height, collapsed_height with
+     | Some e, Some c when Float.compare c e > 0 ->
+       fail Invalid_props "collapsed_height must not exceed expanded_height"
+     | _ -> ());
+    Sliver_app_bar_props
+      { pinned
+      ; expanded_height
+      ; collapsed_height
+      ; floating
+      ; snap
+      ; stretch
+      ; toolbar_height
+      ; has_leading
+      ; has_flexible_space
+      ; has_bottom
+      ; has_actions
+      ; force_elevated
+      ; automatically_imply_leading
+      ; center_title
+      ; background_color
+      ; foreground_color
+      ; elevation
+      }
+  | Preferred_size ->
+    let height = read_finite_f64 reader in
+    if Float.compare height 0. <= 0
+    then fail Invalid_props "preferred_size height must be positive";
+    Preferred_size_props { height }
   | Gesture -> Gesture_props
   | Focus_scope -> Focus_scope_props { autofocus = read_bool reader }
   | Mouse_region -> Mouse_region_props { opaque = read_bool reader }

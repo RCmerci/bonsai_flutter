@@ -942,7 +942,7 @@ void main() {
               1,
             ]),
           ),
-          UpdateProps(nodeId: 11, props: SliverFillProps(flex: 3)),
+          UpdateProps(nodeId: 11, props: SliverFillProps()),
           UpdateProps(
             nodeId: 12,
             props: SafeAreaProps(

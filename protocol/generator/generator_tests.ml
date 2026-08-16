@@ -28,7 +28,7 @@ let load_schema () =
 let test_schema_values () =
   let schema = load_schema () in
   expect (schema.major = 1) "unexpected protocol major";
-  expect (schema.minor = 18) "unexpected protocol minor";
+  expect (schema.minor = 19) "unexpected protocol minor";
   expect (schema.limits.header_bytes = 48) "unexpected header size";
   expect
     (schema.limits.max_application_payload_bytes = 1_048_576)

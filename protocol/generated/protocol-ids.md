@@ -61,6 +61,7 @@ Protocol version: `1.19`
 | `sliver_varied_extent` | 36 |
 | `sliver_padding` | 37 |
 | `sliver_app_bar` | 38 |
+| `preferred_size` | 39 |
 | `gesture` | 48 |
 | `button` | 49 |
 | `text_input` | 50 |
@@ -296,12 +297,12 @@ Protocol version: `1.19`
 | `axis` | 1 | `axis` |
 | `reverse` | 2 | `bool` |
 | `primary` | 3 | `bool` |
+| `cache_extent` | 4 | `optional_f64` |
 
 ## Sliver fill properties
 
 | Name | ID | Encoding |
 |---|---:|---|
-| `flex` | 1 | `u32` |
 
 ## Sliver fixed extent properties
 
@@ -341,6 +342,26 @@ Protocol version: `1.19`
 | `pinned` | 1 | `bool` |
 | `expanded_height` | 2 | `optional_f64` |
 | `collapsed_height` | 3 | `optional_f64` |
+| `floating` | 4 | `bool` |
+| `snap` | 5 | `bool` |
+| `stretch` | 6 | `bool` |
+| `toolbar_height` | 7 | `f64` |
+| `has_leading` | 8 | `bool` |
+| `has_flexible_space` | 9 | `bool` |
+| `has_bottom` | 10 | `bool` |
+| `has_actions` | 11 | `bool` |
+| `force_elevated` | 12 | `bool` |
+| `automatically_imply_leading` | 13 | `bool` |
+| `center_title` | 14 | `optional_bool` |
+| `background_color` | 15 | `optional_argb32` |
+| `foreground_color` | 16 | `optional_argb32` |
+| `elevation` | 17 | `optional_f64` |
+
+## Preferred size properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `height` | 1 | `f64` |
 
 ## Focus scope properties
 

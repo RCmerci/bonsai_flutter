@@ -236,6 +236,7 @@ let wire_node_kind = function
   | K_sliver_varied_extent -> Ok Sliver_varied_extent
   | K_sliver_padding -> Ok Sliver_padding
   | K_sliver_app_bar -> Ok Sliver_app_bar
+  | K_preferred_size -> Ok Preferred_size
   | K_gesture -> Ok Gesture
   | K_focus_scope -> Ok Focus_scope
   | K_mouse_region -> Ok Mouse_region
@@ -379,16 +380,16 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
     in
     Ok (Animated_opacity_props { opacity; animation })
   | Transform { matrix4 } -> Ok (Transform_props { matrix4 = Array.copy matrix4 })
-  | Scroll_view { axis; reverse; primary } ->
+  | Scroll_view { axis; reverse; primary; cache_extent } ->
     let axis =
       match axis with
       | Ui.Layout.Axis.Horizontal -> Protocol.Wire_frame.Horizontal
       | Vertical -> Vertical
     in
-    Ok (Scroll_view_props { axis; reverse; primary })
+    Ok (Scroll_view_props { axis; reverse; primary; cache_extent })
   | Sliver_box -> Ok Sliver_box_props
   | Sliver_list -> Ok Sliver_list_props
-  | Sliver_fill { flex } -> Ok (Sliver_fill_props { flex })
+  | Sliver_fill -> Ok Sliver_fill_props
   | Sliver_fixed_extent { total_count; first_index; item_extent; overscan } ->
     Ok (Sliver_fixed_extent_props { total_count; first_index; item_extent; overscan })
   | Sliver_varied_extent
@@ -437,8 +438,46 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
          })
   | Sliver_padding { left; top; right; bottom } ->
     Ok (Sliver_padding_props { left; top; right; bottom })
-  | Sliver_app_bar { pinned; expanded_height; collapsed_height } ->
-    Ok (Sliver_app_bar_props { pinned; expanded_height; collapsed_height })
+  | Sliver_app_bar
+      { pinned
+      ; expanded_height
+      ; collapsed_height
+      ; floating
+      ; snap
+      ; stretch
+      ; toolbar_height
+      ; has_leading
+      ; has_flexible_space
+      ; has_bottom
+      ; has_actions
+      ; force_elevated
+      ; automatically_imply_leading
+      ; center_title
+      ; background_color
+      ; foreground_color
+      ; elevation
+      } ->
+    Ok
+      (Sliver_app_bar_props
+         { pinned
+         ; expanded_height
+         ; collapsed_height
+         ; floating
+         ; snap
+         ; stretch
+         ; toolbar_height
+         ; has_leading
+         ; has_flexible_space
+         ; has_bottom
+         ; has_actions
+         ; force_elevated
+         ; automatically_imply_leading
+         ; center_title
+         ; background_color
+         ; foreground_color
+         ; elevation
+         })
+  | Preferred_size { height } -> Ok (Preferred_size_props { height })
   | Gesture -> Ok Gesture_props
   | Focus_scope { autofocus } -> Ok (Focus_scope_props { autofocus })
   | Mouse_region { opaque } -> Ok (Mouse_region_props { opaque })

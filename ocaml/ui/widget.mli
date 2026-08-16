@@ -140,7 +140,7 @@ module Sliver : sig
   val list : ?key:Key.t -> widget list -> t
 
   (** Fills the remaining viewport extent. *)
-  val fill : ?key:Key.t -> ?flex:int -> widget -> t
+  val fill : ?key:Key.t -> widget -> t
 
   (** Fixed-extent virtual list. Replaces [Native_widget.Virtual_list]. *)
   val fixed_extent
@@ -178,7 +178,22 @@ module Sliver : sig
     -> ?pinned:bool
     -> ?expanded_height:float
     -> ?collapsed_height:float
-    -> widget
+    -> ?floating:bool
+    -> ?snap:bool
+    -> ?stretch:bool
+    -> ?toolbar_height:float
+    -> ?force_elevated:bool
+    -> ?automatically_imply_leading:bool
+    -> ?center_title:bool
+    -> ?background_color:int32
+    -> ?foreground_color:int32
+    -> ?elevation:float
+    -> ?leading:widget
+    -> ?flexible_space:widget
+    -> ?bottom:widget
+    -> ?actions:widget list
+    -> title:widget
+    -> unit
     -> t
 
   val visible_range_of_payload : Event.Payload.t -> Event.Payload.visible_range option
@@ -193,6 +208,7 @@ module Scroll_view : sig
     :  ?key:Key.t
     -> ?reverse:bool
     -> ?primary:bool
+    -> ?cache_extent:float
     -> on_scroll:Event.Handler.t
     -> Sliver.t list
     -> unit
@@ -201,6 +217,7 @@ module Scroll_view : sig
   val horizontal
     :  ?key:Key.t
     -> ?reverse:bool
+    -> ?cache_extent:float
     -> on_scroll:Event.Handler.t
     -> Sliver.t list
     -> unit
@@ -218,6 +235,7 @@ val safe_area
   -> t
 
 val environment_boundary : ?key:Key.t -> t -> t
+val preferred_size : ?key:Key.t -> height:float -> t -> t
 
 val gesture
   :  ?key:Key.t
@@ -432,6 +450,7 @@ module Private : sig
     | K_sliver_varied_extent
     | K_sliver_padding
     | K_sliver_app_bar
+    | K_preferred_size
     | K_gesture
     | K_focus_scope
     | K_mouse_region
@@ -569,11 +588,12 @@ module Private : sig
         { axis : Layout.Axis.t
         ; reverse : bool
         ; primary : bool
+        ; cache_extent : float option
         }
         -> [ `Scroll_view ] node
     | Sliver_box : [ `Sliver_box ] node
     | Sliver_list : [ `Sliver_list ] node
-    | Sliver_fill : { flex : int } -> [ `Sliver_fill ] node
+    | Sliver_fill : [ `Sliver_fill ] node
     | Sliver_fixed_extent :
         { total_count : int
         ; first_index : int
@@ -601,8 +621,23 @@ module Private : sig
         { pinned : bool
         ; expanded_height : float option
         ; collapsed_height : float option
+        ; floating : bool
+        ; snap : bool
+        ; stretch : bool
+        ; toolbar_height : float
+        ; has_leading : bool
+        ; has_flexible_space : bool
+        ; has_bottom : bool
+        ; has_actions : bool
+        ; force_elevated : bool
+        ; automatically_imply_leading : bool
+        ; center_title : bool option
+        ; background_color : int32 option
+        ; foreground_color : int32 option
+        ; elevation : float option
         }
         -> [ `Sliver_app_bar ] node
+    | Preferred_size : { height : float } -> [ `Preferred_size ] node
     | Gesture : [ `Gesture ] node
     | Focus_scope : { autofocus : bool } -> [ `Focus_scope ] node
     | Mouse_region : { opaque : bool } -> [ `Mouse_region ] node

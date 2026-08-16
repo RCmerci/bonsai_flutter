@@ -30,6 +30,7 @@ type kind_tag =
   | K_sliver_varied_extent
   | K_sliver_padding
   | K_sliver_app_bar
+  | K_preferred_size
   | K_gesture
   | K_focus_scope
   | K_mouse_region
@@ -92,6 +93,7 @@ let kind_tag_to_string = function
   | K_sliver_varied_extent -> "Sliver_varied_extent"
   | K_sliver_padding -> "Sliver_padding"
   | K_sliver_app_bar -> "Sliver_app_bar"
+  | K_preferred_size -> "Preferred_size"
   | K_gesture -> "Gesture"
   | K_focus_scope -> "Focus_scope"
   | K_mouse_region -> "Mouse_region"
@@ -272,11 +274,12 @@ module Private_types = struct
         { axis : Layout.Axis.t
         ; reverse : bool
         ; primary : bool
+        ; cache_extent : float option
         }
         -> [ `Scroll_view ] node
     | Sliver_box : [ `Sliver_box ] node
     | Sliver_list : [ `Sliver_list ] node
-    | Sliver_fill : { flex : int } -> [ `Sliver_fill ] node
+    | Sliver_fill : [ `Sliver_fill ] node
     | Sliver_fixed_extent :
         { total_count : int
         ; first_index : int
@@ -304,8 +307,23 @@ module Private_types = struct
         { pinned : bool
         ; expanded_height : float option
         ; collapsed_height : float option
+        ; floating : bool
+        ; snap : bool
+        ; stretch : bool
+        ; toolbar_height : float
+        ; has_leading : bool
+        ; has_flexible_space : bool
+        ; has_bottom : bool
+        ; has_actions : bool
+        ; force_elevated : bool
+        ; automatically_imply_leading : bool
+        ; center_title : bool option
+        ; background_color : int32 option
+        ; foreground_color : int32 option
+        ; elevation : float option
         }
         -> [ `Sliver_app_bar ] node
+    | Preferred_size : { height : float } -> [ `Preferred_size ] node
     | Gesture : [ `Gesture ] node
     | Focus_scope : { autofocus : bool } -> [ `Focus_scope ] node
     | Mouse_region : { opaque : bool } -> [ `Mouse_region ] node
@@ -496,11 +514,12 @@ let node_kind_tag (type k) (n : k node) : kind_tag =
   | Scroll_view _ -> K_scroll_view
   | Sliver_box -> K_sliver_box
   | Sliver_list -> K_sliver_list
-  | Sliver_fill _ -> K_sliver_fill
+  | Sliver_fill -> K_sliver_fill
   | Sliver_fixed_extent _ -> K_sliver_fixed_extent
   | Sliver_varied_extent _ -> K_sliver_varied_extent
   | Sliver_padding _ -> K_sliver_padding
   | Sliver_app_bar _ -> K_sliver_app_bar
+  | Preferred_size _ -> K_preferred_size
   | Gesture -> K_gesture
   | Focus_scope _ -> K_focus_scope
   | Mouse_region _ -> K_mouse_region
@@ -590,10 +609,13 @@ let node_equal (type k1 k2) (a : k1 node) (b : k2 node) : bool =
     Array.length x.matrix4 = Array.length y.matrix4
     && Array.for_all2 Float.equal x.matrix4 y.matrix4
   | Scroll_view x, Scroll_view y ->
-    x.axis = y.axis && Bool.equal x.reverse y.reverse && Bool.equal x.primary y.primary
+    x.axis = y.axis
+    && Bool.equal x.reverse y.reverse
+    && Bool.equal x.primary y.primary
+    && Option.equal Float.equal x.cache_extent y.cache_extent
   | Sliver_box, Sliver_box -> true
   | Sliver_list, Sliver_list -> true
-  | Sliver_fill x, Sliver_fill y -> Int.equal x.flex y.flex
+  | Sliver_fill, Sliver_fill -> true
   | Sliver_fixed_extent x, Sliver_fixed_extent y ->
     Int.equal x.total_count y.total_count
     && Int.equal x.first_index y.first_index
@@ -628,6 +650,21 @@ let node_equal (type k1 k2) (a : k1 node) (b : k2 node) : bool =
     Bool.equal x.pinned y.pinned
     && Option.equal Float.equal x.expanded_height y.expanded_height
     && Option.equal Float.equal x.collapsed_height y.collapsed_height
+    && Bool.equal x.floating y.floating
+    && Bool.equal x.snap y.snap
+    && Bool.equal x.stretch y.stretch
+    && Float.equal x.toolbar_height y.toolbar_height
+    && Bool.equal x.has_leading y.has_leading
+    && Bool.equal x.has_flexible_space y.has_flexible_space
+    && Bool.equal x.has_bottom y.has_bottom
+    && Bool.equal x.has_actions y.has_actions
+    && Bool.equal x.force_elevated y.force_elevated
+    && Bool.equal x.automatically_imply_leading y.automatically_imply_leading
+    && Option.equal Bool.equal x.center_title y.center_title
+    && Option.equal Int32.equal x.background_color y.background_color
+    && Option.equal Int32.equal x.foreground_color y.foreground_color
+    && Option.equal Float.equal x.elevation y.elevation
+  | Preferred_size x, Preferred_size y -> Float.equal x.height y.height
   | Focus_scope x, Focus_scope y -> Bool.equal x.autofocus y.autofocus
   | Mouse_region x, Mouse_region y -> Bool.equal x.opaque y.opaque
   | Keyboard_listener x, Keyboard_listener y ->
@@ -1012,18 +1049,48 @@ let transform ?key ~transform child =
     ~children:(plain_children [ child ])
 ;;
 
+(* Plan B (docs/sliver-fix-plan.md D1): the viewport-level [cache_extent] is
+   derived from the virtualized child slivers so Flutter pre-renders the
+   [overscan] window instead of falling back to its ~250px default. Each
+   [Sliver_fixed_extent] / [Sliver_varied_extent] contributes
+   [overscan * extent]; [Sliver_padding] transparently wraps a single inner
+   sliver, so we recurse to find the virtualized descendant. *)
+let rec sliver_cache_extent_candidate (widget : t) : float option =
+  let (T view) = widget in
+  match view.node with
+  | Sliver_fixed_extent { overscan; item_extent; _ } ->
+    Some (float_of_int overscan *. item_extent)
+  | Sliver_varied_extent { overscan; default_item_extent; _ } ->
+    Some (float_of_int overscan *. default_item_extent)
+  | Sliver_padding _ ->
+    if Array.length view.children > 0
+    then sliver_cache_extent_candidate view.children.(0).widget
+    else None
+  | _ -> None
+;;
+
 let scroll_view_widget
       ?key
       ~axis
       ?(reverse = false)
       ?(primary = false)
+      ?cache_extent
       ~on_scroll
       children
       ()
   =
+  let cache_extent =
+    match cache_extent with
+    | Some _ as explicit -> explicit
+    | None ->
+      let candidates = List.filter_map sliver_cache_extent_candidate children in
+      (match candidates with
+       | [] -> None
+       | _ -> Some (List.fold_left max 0. candidates))
+  in
   create_typed
     ~key
-    ~node:(Scroll_view { axis; reverse; primary })
+    ~node:(Scroll_view { axis; reverse; primary; cache_extent })
     ~event_bindings:[| { tag = Event.Tag.Scroll_notification; handler = on_scroll } |]
     ~children:(plain_children children)
 ;;
@@ -1044,11 +1111,10 @@ let sliver_list_widget ?key children () =
     ~children:(plain_children children)
 ;;
 
-let sliver_fill_widget ?key ?(flex = 1) child () =
-  if flex <= 0 then invalid_arg "Widget.Sliver.fill: flex must be positive";
+let sliver_fill_widget ?key child () =
   create_typed
     ~key
-    ~node:(Sliver_fill { flex })
+    ~node:Sliver_fill
     ~event_bindings:[||]
     ~children:(plain_children [ child ])
 ;;
@@ -1067,14 +1133,79 @@ let sliver_app_bar_widget
       ?(pinned = false)
       ?expanded_height
       ?collapsed_height
-      child
+      ?(floating = false)
+      ?(snap = false)
+      ?(stretch = false)
+      ?(toolbar_height = 56.)
+      ?(force_elevated = false)
+      ?(automatically_imply_leading = true)
+      ?center_title
+      ?background_color
+      ?foreground_color
+      ?elevation
+      ?leading
+      ?flexible_space
+      ?bottom
+      ?actions
+      ~title
       ()
   =
+  let optional value = Option.to_list value in
+  let finite_nonnegative label value =
+    if (not (Float.is_finite value)) || Float.compare value 0. < 0
+    then
+      invalid_arg
+        (Printf.sprintf "Widget.Sliver.app_bar: %s must be finite and non-negative" label)
+  in
+  finite_nonnegative "toolbar_height" toolbar_height;
+  Option.iter (finite_nonnegative "expanded_height") expanded_height;
+  Option.iter (finite_nonnegative "collapsed_height") collapsed_height;
+  Option.iter (finite_nonnegative "elevation") elevation;
+  if snap && not floating then invalid_arg "Widget.Sliver.app_bar: snap requires floating";
+  Option.iter
+    (fun height ->
+       if Float.compare height toolbar_height < 0
+       then
+         invalid_arg
+           "Widget.Sliver.app_bar: collapsed_height must be at least toolbar_height")
+    collapsed_height;
+  Option.iter
+    (fun (T view) ->
+       match view.node with
+       | Preferred_size _ -> ()
+       | _ -> invalid_arg "Widget.Sliver.app_bar: bottom must use Widget.preferred_size")
+    bottom;
+  let actions = Option.value actions ~default:[] in
   create_typed
     ~key
-    ~node:(Sliver_app_bar { pinned; expanded_height; collapsed_height })
+    ~node:
+      (Sliver_app_bar
+         { pinned
+         ; expanded_height
+         ; collapsed_height
+         ; floating
+         ; snap
+         ; stretch
+         ; toolbar_height
+         ; has_leading = Option.is_some leading
+         ; has_flexible_space = Option.is_some flexible_space
+         ; has_bottom = Option.is_some bottom
+         ; has_actions = not (List.is_empty actions)
+         ; force_elevated
+         ; automatically_imply_leading
+         ; center_title
+         ; background_color
+         ; foreground_color
+         ; elevation
+         })
     ~event_bindings:[||]
-    ~children:(plain_children [ child ])
+    ~children:
+      (plain_children
+         (optional leading
+          @ [ title ]
+          @ optional flexible_space
+          @ optional bottom
+          @ actions))
 ;;
 
 let validate_sliver_extent label extent =
@@ -1174,6 +1305,15 @@ let sliver_varied_extent_widget
     ~event_bindings:
       [| { tag = Event.Tag.Visible_range_changed; handler = on_visible_range } |]
     ~children:(plain_children items)
+;;
+
+let preferred_size ?key ~height child =
+  validate_sliver_extent "preferred_size" height;
+  create_typed
+    ~key
+    ~node:(Preferred_size { height })
+    ~event_bindings:[||]
+    ~children:(plain_children [ child ])
 ;;
 
 let safe_area
@@ -1686,7 +1826,7 @@ module Sliver = struct
   let with_test_id test_id (Sliver widget) = Sliver (with_test_id test_id widget)
   let box ?key child = Sliver (sliver_box_widget ?key child ())
   let list ?key children = Sliver (sliver_list_widget ?key children ())
-  let fill ?key ?flex child = Sliver (sliver_fill_widget ?key ?flex child ())
+  let fill ?key child = Sliver (sliver_fill_widget ?key child ())
 
   let fixed_extent
         ?key
@@ -1740,9 +1880,50 @@ module Sliver = struct
     Sliver (sliver_padding_widget ?key ~insets inner ())
   ;;
 
-  let app_bar ?key ?pinned ?expanded_height ?collapsed_height child =
+  let app_bar
+        ?key
+        ?pinned
+        ?expanded_height
+        ?collapsed_height
+        ?floating
+        ?snap
+        ?stretch
+        ?toolbar_height
+        ?force_elevated
+        ?automatically_imply_leading
+        ?center_title
+        ?background_color
+        ?foreground_color
+        ?elevation
+        ?leading
+        ?flexible_space
+        ?bottom
+        ?actions
+        ~title
+        ()
+    =
     Sliver
-      (sliver_app_bar_widget ?key ?pinned ?expanded_height ?collapsed_height child ())
+      (sliver_app_bar_widget
+         ?key
+         ?pinned
+         ?expanded_height
+         ?collapsed_height
+         ?floating
+         ?snap
+         ?stretch
+         ?toolbar_height
+         ?force_elevated
+         ?automatically_imply_leading
+         ?center_title
+         ?background_color
+         ?foreground_color
+         ?elevation
+         ?leading
+         ?flexible_space
+         ?bottom
+         ?actions
+         ~title
+         ())
   ;;
 
   let visible_range_of_payload = function
@@ -1752,23 +1933,25 @@ module Sliver = struct
 end
 
 module Scroll_view = struct
-  let vertical ?key ?reverse ?primary ~on_scroll slivers () =
+  let vertical ?key ?reverse ?primary ?cache_extent ~on_scroll slivers () =
     scroll_view_widget
       ?key
       ~axis:Layout.Axis.Vertical
       ?reverse
       ?primary
+      ?cache_extent
       ~on_scroll
       (List.map (fun (Sliver.Sliver widget) -> widget) slivers)
       ()
     |> vertical_viewport
   ;;
 
-  let horizontal ?key ?reverse ~on_scroll slivers () =
+  let horizontal ?key ?reverse ?cache_extent ~on_scroll slivers () =
     scroll_view_widget
       ?key
       ~axis:Layout.Axis.Horizontal
       ?reverse
+      ?cache_extent
       ~on_scroll
       (List.map (fun (Sliver.Sliver widget) -> widget) slivers)
       ()
@@ -1931,6 +2114,7 @@ module Private = struct
     | K_sliver_varied_extent
     | K_sliver_padding
     | K_sliver_app_bar
+    | K_preferred_size
     | K_gesture
     | K_focus_scope
     | K_mouse_region

@@ -90,6 +90,7 @@ module Node_kind = struct
   let sliver_varied_extent = ID.Protocol.Node_kind.of_int 36
   let sliver_padding = ID.Protocol.Node_kind.of_int 37
   let sliver_app_bar = ID.Protocol.Node_kind.of_int 38
+  let preferred_size = ID.Protocol.Node_kind.of_int 39
   let gesture = ID.Protocol.Node_kind.of_int 48
   let button = ID.Protocol.Node_kind.of_int 49
   let text_input = ID.Protocol.Node_kind.of_int 50
@@ -151,6 +152,7 @@ module Node_kind = struct
     | 36 -> Some "sliver_varied_extent"
     | 37 -> Some "sliver_padding"
     | 38 -> Some "sliver_app_bar"
+    | 39 -> Some "preferred_size"
     | 48 -> Some "gesture"
     | 49 -> Some "button"
     | 50 -> Some "text_input"
@@ -542,22 +544,21 @@ module Scroll_view_prop = struct
   let axis = ID.Protocol.Property.of_int 1
   let reverse = ID.Protocol.Property.of_int 2
   let primary = ID.Protocol.Property.of_int 3
+  let cache_extent = ID.Protocol.Property.of_int 4
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "axis"
     | 2 -> Some "reverse"
     | 3 -> Some "primary"
+    | 4 -> Some "cache_extent"
     | _ -> None
   ;;
 end
 
 module Sliver_fill_prop = struct
-  let flex = ID.Protocol.Property.of_int 1
-
   let debug_name id =
     match ID.Protocol.Property.to_int id with
-    | 1 -> Some "flex"
     | _ -> None
   ;;
 end
@@ -622,12 +623,50 @@ module Sliver_app_bar_prop = struct
   let pinned = ID.Protocol.Property.of_int 1
   let expanded_height = ID.Protocol.Property.of_int 2
   let collapsed_height = ID.Protocol.Property.of_int 3
+  let floating = ID.Protocol.Property.of_int 4
+  let snap = ID.Protocol.Property.of_int 5
+  let stretch = ID.Protocol.Property.of_int 6
+  let toolbar_height = ID.Protocol.Property.of_int 7
+  let has_leading = ID.Protocol.Property.of_int 8
+  let has_flexible_space = ID.Protocol.Property.of_int 9
+  let has_bottom = ID.Protocol.Property.of_int 10
+  let has_actions = ID.Protocol.Property.of_int 11
+  let force_elevated = ID.Protocol.Property.of_int 12
+  let automatically_imply_leading = ID.Protocol.Property.of_int 13
+  let center_title = ID.Protocol.Property.of_int 14
+  let background_color = ID.Protocol.Property.of_int 15
+  let foreground_color = ID.Protocol.Property.of_int 16
+  let elevation = ID.Protocol.Property.of_int 17
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "pinned"
     | 2 -> Some "expanded_height"
     | 3 -> Some "collapsed_height"
+    | 4 -> Some "floating"
+    | 5 -> Some "snap"
+    | 6 -> Some "stretch"
+    | 7 -> Some "toolbar_height"
+    | 8 -> Some "has_leading"
+    | 9 -> Some "has_flexible_space"
+    | 10 -> Some "has_bottom"
+    | 11 -> Some "has_actions"
+    | 12 -> Some "force_elevated"
+    | 13 -> Some "automatically_imply_leading"
+    | 14 -> Some "center_title"
+    | 15 -> Some "background_color"
+    | 16 -> Some "foreground_color"
+    | 17 -> Some "elevation"
+    | _ -> None
+  ;;
+end
+
+module Preferred_size_prop = struct
+  let height = ID.Protocol.Property.of_int 1
+
+  let debug_name id =
+    match ID.Protocol.Property.to_int id with
+    | 1 -> Some "height"
     | _ -> None
   ;;
 end

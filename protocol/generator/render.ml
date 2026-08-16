@@ -55,7 +55,8 @@ let render_ocaml_module_implementation buffer name id_module entries =
            entry.id;
          previous_binding_was_multiline := true))
     entries;
-  Printf.bprintf buffer "\n  let debug_name id =\n    match %s.to_int id with\n" id_module;
+  if entries <> [] then Buffer.add_char buffer '\n';
+  Printf.bprintf buffer "  let debug_name id =\n    match %s.to_int id with\n" id_module;
   List.iter
     (fun (entry : Schema.entry) ->
        Printf.bprintf buffer "    | %d -> Some %S\n" entry.id entry.name)
@@ -74,7 +75,8 @@ let render_dart_class buffer name entries =
          (snake_to_camel entry.name)
          entry.id)
     entries;
-  Buffer.add_string buffer "\n  static String? debugName(int id) => switch (id) {\n";
+  if entries <> [] then Buffer.add_char buffer '\n';
+  Buffer.add_string buffer "  static String? debugName(int id) => switch (id) {\n";
   List.iter
     (fun (entry : Schema.entry) ->
        Printf.bprintf buffer "    %d => '%s',\n" entry.id entry.name)

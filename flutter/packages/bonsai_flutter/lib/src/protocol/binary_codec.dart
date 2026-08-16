@@ -494,7 +494,12 @@ abstract final class FrameCodec {
         }
       case (
         NodeKind.scrollView,
-        ScrollViewProps(:final axis, :final reverse, :final primary),
+        ScrollViewProps(
+          :final axis,
+          :final reverse,
+          :final primary,
+          :final cacheExtent,
+        ),
       ):
         if (axis == ScrollAxis.horizontal && primary) {
           _fail(
@@ -505,19 +510,14 @@ abstract final class FrameCodec {
         writer
           ..uint8(axis == ScrollAxis.horizontal ? 0 : 1)
           ..uint8(reverse ? 1 : 0)
-          ..uint8(primary ? 1 : 0);
+          ..uint8(primary ? 1 : 0)
+          ..optionalFloat64(cacheExtent);
       case (NodeKind.sliverBox, EmptyProps()):
         break;
       case (NodeKind.sliverList, EmptyProps()):
         break;
-      case (NodeKind.sliverFill, SliverFillProps(:final flex)):
-        if (flex == 0) {
-          _fail(
-            ProtocolErrorCode.invalidProps,
-            'Sliver fill flex must be positive',
-          );
-        }
-        writer.uint32(flex);
+      case (NodeKind.sliverFill, SliverFillProps()):
+        break;
       case (
         NodeKind.sliverFixedExtent,
         SliverFixedExtentProps(
@@ -566,12 +566,44 @@ abstract final class FrameCodec {
           :final pinned,
           :final expandedHeight,
           :final collapsedHeight,
+          :final floating,
+          :final snap,
+          :final stretch,
+          :final toolbarHeight,
+          :final hasLeading,
+          :final hasFlexibleSpace,
+          :final hasBottom,
+          :final hasActions,
+          :final forceElevated,
+          :final automaticallyImplyLeading,
+          :final centerTitle,
+          :final backgroundColor,
+          :final foregroundColor,
+          :final elevation,
         ),
       ):
-        writer
-          ..uint8(pinned ? 1 : 0)
-          ..optionalFloat64(expandedHeight)
-          ..optionalFloat64(collapsedHeight);
+        _writeSliverAppBar(
+          writer,
+          pinned: pinned,
+          expandedHeight: expandedHeight,
+          collapsedHeight: collapsedHeight,
+          floating: floating,
+          snap: snap,
+          stretch: stretch,
+          toolbarHeight: toolbarHeight,
+          hasLeading: hasLeading,
+          hasFlexibleSpace: hasFlexibleSpace,
+          hasBottom: hasBottom,
+          hasActions: hasActions,
+          forceElevated: forceElevated,
+          automaticallyImplyLeading: automaticallyImplyLeading,
+          centerTitle: centerTitle,
+          backgroundColor: backgroundColor,
+          foregroundColor: foregroundColor,
+          elevation: elevation,
+        );
+      case (NodeKind.preferredSize, PreferredSizeProps(:final height)):
+        writer.float64(height);
       case (NodeKind.focusScope, FocusScopeProps(:final autofocus)):
         writer.uint8(autofocus ? 1 : 0);
       case (NodeKind.mouseRegion, MouseRegionProps(:final opaque)):
@@ -825,7 +857,12 @@ abstract final class FrameCodec {
         for (final value in matrix4) {
           writer.float64(value);
         }
-      case ScrollViewProps(:final axis, :final reverse, :final primary):
+      case ScrollViewProps(
+        :final axis,
+        :final reverse,
+        :final primary,
+        :final cacheExtent,
+      ):
         if (axis == ScrollAxis.horizontal && primary) {
           _fail(
             ProtocolErrorCode.invalidProps,
@@ -834,25 +871,15 @@ abstract final class FrameCodec {
         }
         writer
           ..uint16(NodeKindId.scrollView)
-          ..uint64(
-            _fieldMask(ScrollViewPropId.axis) |
-                _fieldMask(ScrollViewPropId.reverse) |
-                _fieldMask(ScrollViewPropId.primary),
-          )
+          ..uint64(_changedFields(props))
           ..uint8(axis == ScrollAxis.horizontal ? 0 : 1)
           ..uint8(reverse ? 1 : 0)
-          ..uint8(primary ? 1 : 0);
-      case SliverFillProps(:final flex):
-        if (flex == 0) {
-          _fail(
-            ProtocolErrorCode.invalidProps,
-            'Sliver fill flex must be positive',
-          );
-        }
+          ..uint8(primary ? 1 : 0)
+          ..optionalFloat64(cacheExtent);
+      case SliverFillProps():
         writer
           ..uint16(NodeKindId.sliverFill)
-          ..uint64(_changedFields(props))
-          ..uint32(flex);
+          ..uint64(0);
       case SliverFixedExtentProps(
         :final totalCount,
         :final firstIndex,
@@ -901,13 +928,49 @@ abstract final class FrameCodec {
         :final pinned,
         :final expandedHeight,
         :final collapsedHeight,
+        :final floating,
+        :final snap,
+        :final stretch,
+        :final toolbarHeight,
+        :final hasLeading,
+        :final hasFlexibleSpace,
+        :final hasBottom,
+        :final hasActions,
+        :final forceElevated,
+        :final automaticallyImplyLeading,
+        :final centerTitle,
+        :final backgroundColor,
+        :final foregroundColor,
+        :final elevation,
       ):
         writer
           ..uint16(NodeKindId.sliverAppBar)
+          ..uint64(_changedFields(props));
+        _writeSliverAppBar(
+          writer,
+          pinned: pinned,
+          expandedHeight: expandedHeight,
+          collapsedHeight: collapsedHeight,
+          floating: floating,
+          snap: snap,
+          stretch: stretch,
+          toolbarHeight: toolbarHeight,
+          hasLeading: hasLeading,
+          hasFlexibleSpace: hasFlexibleSpace,
+          hasBottom: hasBottom,
+          hasActions: hasActions,
+          forceElevated: forceElevated,
+          automaticallyImplyLeading: automaticallyImplyLeading,
+          centerTitle: centerTitle,
+          backgroundColor: backgroundColor,
+          foregroundColor: foregroundColor,
+          elevation: elevation,
+        );
+      case PreferredSizeProps(:final height):
+        writer
+          ..uint16(NodeKindId.preferredSize)
           ..uint64(_changedFields(props))
-          ..uint8(pinned ? 1 : 0)
-          ..optionalFloat64(expandedHeight)
-          ..optionalFloat64(collapsedHeight);
+          ..float64(height);
       case GestureProps():
         writer
           ..uint16(NodeKindId.gesture)
@@ -1195,6 +1258,7 @@ abstract final class FrameCodec {
     NodeKind.sliverVariedExtent => _readSliverVariedExtentProps(reader),
     NodeKind.sliverPadding => _readSliverPaddingProps(reader),
     NodeKind.sliverAppBar => _readSliverAppBarProps(reader),
+    NodeKind.preferredSize => _readPreferredSizeProps(reader),
     NodeKind.gesture => const GestureProps(),
     NodeKind.focusScope => FocusScopeProps(autofocus: reader.boolean()),
     NodeKind.mouseRegion => MouseRegionProps(opaque: reader.boolean()),
@@ -1365,6 +1429,7 @@ abstract final class FrameCodec {
     NodeKind.sliverVariedExtent => NodeKindId.sliverVariedExtent,
     NodeKind.sliverPadding => NodeKindId.sliverPadding,
     NodeKind.sliverAppBar => NodeKindId.sliverAppBar,
+    NodeKind.preferredSize => NodeKindId.preferredSize,
     NodeKind.gesture => NodeKindId.gesture,
     NodeKind.focusScope => NodeKindId.focusScope,
     NodeKind.mouseRegion => NodeKindId.mouseRegion,
@@ -1656,8 +1721,9 @@ int _changedFields(UiProps props) => switch (props) {
   ScrollViewProps() =>
     _fieldMask(ScrollViewPropId.axis) |
         _fieldMask(ScrollViewPropId.reverse) |
-        _fieldMask(ScrollViewPropId.primary),
-  SliverFillProps() => _fieldMask(SliverFillPropId.flex),
+        _fieldMask(ScrollViewPropId.primary) |
+        _fieldMask(ScrollViewPropId.cacheExtent),
+  SliverFillProps() => 0,
   SliverFixedExtentProps() =>
     _fieldMask(SliverFixedExtentPropId.totalCount) |
         _fieldMask(SliverFixedExtentPropId.firstIndex) |
@@ -1679,7 +1745,22 @@ int _changedFields(UiProps props) => switch (props) {
   SliverAppBarProps() =>
     _fieldMask(SliverAppBarPropId.pinned) |
         _fieldMask(SliverAppBarPropId.expandedHeight) |
-        _fieldMask(SliverAppBarPropId.collapsedHeight),
+        _fieldMask(SliverAppBarPropId.collapsedHeight) |
+        _fieldMask(SliverAppBarPropId.floating) |
+        _fieldMask(SliverAppBarPropId.snap) |
+        _fieldMask(SliverAppBarPropId.stretch) |
+        _fieldMask(SliverAppBarPropId.toolbarHeight) |
+        _fieldMask(SliverAppBarPropId.hasLeading) |
+        _fieldMask(SliverAppBarPropId.hasFlexibleSpace) |
+        _fieldMask(SliverAppBarPropId.hasBottom) |
+        _fieldMask(SliverAppBarPropId.hasActions) |
+        _fieldMask(SliverAppBarPropId.forceElevated) |
+        _fieldMask(SliverAppBarPropId.automaticallyImplyLeading) |
+        _fieldMask(SliverAppBarPropId.centerTitle) |
+        _fieldMask(SliverAppBarPropId.backgroundColor) |
+        _fieldMask(SliverAppBarPropId.foregroundColor) |
+        _fieldMask(SliverAppBarPropId.elevation),
+  PreferredSizeProps() => _fieldMask(PreferredSizePropId.height),
   FocusScopeProps() => _fieldMask(FocusScopePropId.autofocus),
   MouseRegionProps() => _fieldMask(MouseRegionPropId.opaque),
   KeyboardListenerProps() =>
@@ -2358,12 +2439,74 @@ void _writeSliverVariedExtent(
   }
 }
 
-SliverFillProps _readSliverFillProps(_Reader reader) {
-  final flex = reader.uint32();
-  if (flex == 0) {
-    _fail(ProtocolErrorCode.invalidProps, 'Sliver fill flex must be positive');
+void _writeSliverAppBar(
+  _Writer writer, {
+  required bool pinned,
+  required double? expandedHeight,
+  required double? collapsedHeight,
+  required bool floating,
+  required bool snap,
+  required bool stretch,
+  required double toolbarHeight,
+  required bool hasLeading,
+  required bool hasFlexibleSpace,
+  required bool hasBottom,
+  required bool hasActions,
+  required bool forceElevated,
+  required bool automaticallyImplyLeading,
+  required bool? centerTitle,
+  required int? backgroundColor,
+  required int? foregroundColor,
+  required double? elevation,
+}) {
+  if (expandedHeight case final e when e != null && (!e.isFinite || e < 0)) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'expanded_height must be non-negative and finite',
+    );
   }
-  return SliverFillProps(flex: flex);
+  if (collapsedHeight case final c when c != null && (!c.isFinite || c < 0)) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'collapsed_height must be non-negative and finite',
+    );
+  }
+  if (expandedHeight != null &&
+      collapsedHeight != null &&
+      collapsedHeight > expandedHeight) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'collapsed_height must not exceed expanded_height',
+    );
+  }
+  if (toolbarHeight <= 0 || !toolbarHeight.isFinite) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'toolbar_height must be positive and finite',
+    );
+  }
+  writer
+    ..uint8(pinned ? 1 : 0)
+    ..optionalFloat64(expandedHeight)
+    ..optionalFloat64(collapsedHeight)
+    ..uint8(floating ? 1 : 0)
+    ..uint8(snap ? 1 : 0)
+    ..uint8(stretch ? 1 : 0)
+    ..float64(toolbarHeight)
+    ..uint8(hasLeading ? 1 : 0)
+    ..uint8(hasFlexibleSpace ? 1 : 0)
+    ..uint8(hasBottom ? 1 : 0)
+    ..uint8(hasActions ? 1 : 0)
+    ..uint8(forceElevated ? 1 : 0)
+    ..uint8(automaticallyImplyLeading ? 1 : 0);
+  writer.optionalBool(centerTitle);
+  _writeOptionalArgb32(writer, backgroundColor);
+  _writeOptionalArgb32(writer, foregroundColor);
+  writer.optionalFloat64(elevation);
+}
+
+SliverFillProps _readSliverFillProps(_Reader reader) {
+  return const SliverFillProps();
 }
 
 SliverFixedExtentProps _readSliverFixedExtentProps(_Reader reader) {
@@ -2464,10 +2607,64 @@ SliverPaddingProps _readSliverPaddingProps(_Reader reader) {
 }
 
 SliverAppBarProps _readSliverAppBarProps(_Reader reader) {
+  final pinned = reader.boolean();
+  final expandedHeight = reader.optionalFloat64();
+  final collapsedHeight = reader.optionalFloat64();
+  final floating = reader.boolean();
+  final snap = reader.boolean();
+  final stretch = reader.boolean();
+  final toolbarHeight = reader.finiteFloat64();
+  if (toolbarHeight <= 0) {
+    _fail(ProtocolErrorCode.invalidProps, 'toolbar_height must be positive');
+  }
+  final hasLeading = reader.boolean();
+  final hasFlexibleSpace = reader.boolean();
+  final hasBottom = reader.boolean();
+  final hasActions = reader.boolean();
+  final forceElevated = reader.boolean();
+  final automaticallyImplyLeading = reader.boolean();
+  final centerTitle = reader.optionalBool();
+  final backgroundColor = _readOptionalArgb32(reader);
+  final foregroundColor = _readOptionalArgb32(reader);
+  final elevation = reader.optionalFloat64();
+  if (expandedHeight case final e when e != null && (!e.isFinite || e < 0)) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'expanded_height must be non-negative and finite',
+    );
+  }
+  if (collapsedHeight case final c when c != null && (!c.isFinite || c < 0)) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'collapsed_height must be non-negative and finite',
+    );
+  }
+  if (expandedHeight != null &&
+      collapsedHeight != null &&
+      collapsedHeight > expandedHeight) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'collapsed_height must not exceed expanded_height',
+    );
+  }
   return SliverAppBarProps(
-    pinned: reader.boolean(),
-    expandedHeight: reader.optionalFloat64(),
-    collapsedHeight: reader.optionalFloat64(),
+    pinned: pinned,
+    expandedHeight: expandedHeight,
+    collapsedHeight: collapsedHeight,
+    floating: floating,
+    snap: snap,
+    stretch: stretch,
+    toolbarHeight: toolbarHeight,
+    hasLeading: hasLeading,
+    hasFlexibleSpace: hasFlexibleSpace,
+    hasBottom: hasBottom,
+    hasActions: hasActions,
+    forceElevated: forceElevated,
+    automaticallyImplyLeading: automaticallyImplyLeading,
+    centerTitle: centerTitle,
+    backgroundColor: backgroundColor,
+    foregroundColor: foregroundColor,
+    elevation: elevation,
   );
 }
 
@@ -2481,7 +2678,23 @@ ScrollViewProps _readScrollViewProps(_Reader reader) {
       'Horizontal scroll view cannot be primary',
     );
   }
-  return ScrollViewProps(axis: axis, reverse: reverse, primary: primary);
+  return ScrollViewProps(
+    axis: axis,
+    reverse: reverse,
+    primary: primary,
+    cacheExtent: reader.optionalFloat64(),
+  );
+}
+
+PreferredSizeProps _readPreferredSizeProps(_Reader reader) {
+  final height = reader.finiteFloat64();
+  if (height <= 0) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'preferred_size height must be positive',
+    );
+  }
+  return PreferredSizeProps(height: height);
 }
 
 PageProps _readPageProps(_Reader reader) {

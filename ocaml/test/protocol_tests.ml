@@ -416,7 +416,12 @@ let test_layout_material_and_semantics_props_round_trip () =
               { node_id = node 3L
               ; kind = Scroll_view
               ; props =
-                  Scroll_view_props { axis = Vertical; reverse = false; primary = true }
+                  Scroll_view_props
+                    { axis = Vertical
+                    ; reverse = false
+                    ; primary = true
+                    ; cache_extent = None
+                    }
               ; event_bindings =
                   [ { event_tag = Generated_protocol.Event_tag.scroll_notification
                     ; handler_id = handler 80L

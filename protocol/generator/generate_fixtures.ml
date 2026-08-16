@@ -87,7 +87,8 @@ let viewport_body_frame : Protocol.Wire_frame.t =
           ~parent_data:(Flex_parent_data { flex = 1; fit = Tight })
           6
           Scroll_view
-          (Scroll_view_props { axis = Vertical; reverse = false; primary = true })
+          (Scroll_view_props
+             { axis = Vertical; reverse = false; primary = true; cache_extent = None })
       ; Create_node
           { node_id = node 9L
           ; kind = Sliver_varied_extent
@@ -292,7 +293,12 @@ let fixtures : (string * Protocol.Wire_frame.t) list =
           [ Update_props
               { node_id = node 71L
               ; props =
-                  Scroll_view_props { axis = Vertical; reverse = false; primary = true }
+                  Scroll_view_props
+                    { axis = Vertical
+                    ; reverse = false
+                    ; primary = true
+                    ; cache_extent = None
+                    }
               }
           ]
       } )

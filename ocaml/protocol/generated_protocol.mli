@@ -64,6 +64,7 @@ module Node_kind : sig
   val sliver_varied_extent : Bonsai_flutter_spec.Id.Protocol.node_kind
   val sliver_padding : Bonsai_flutter_spec.Id.Protocol.node_kind
   val sliver_app_bar : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val preferred_size : Bonsai_flutter_spec.Id.Protocol.node_kind
   val gesture : Bonsai_flutter_spec.Id.Protocol.node_kind
   val button : Bonsai_flutter_spec.Id.Protocol.node_kind
   val text_input : Bonsai_flutter_spec.Id.Protocol.node_kind
@@ -278,11 +279,11 @@ module Scroll_view_prop : sig
   val axis : Bonsai_flutter_spec.Id.Protocol.property
   val reverse : Bonsai_flutter_spec.Id.Protocol.property
   val primary : Bonsai_flutter_spec.Id.Protocol.property
+  val cache_extent : Bonsai_flutter_spec.Id.Protocol.property
   val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
 end
 
 module Sliver_fill_prop : sig
-  val flex : Bonsai_flutter_spec.Id.Protocol.property
   val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
 end
 
@@ -318,6 +319,25 @@ module Sliver_app_bar_prop : sig
   val pinned : Bonsai_flutter_spec.Id.Protocol.property
   val expanded_height : Bonsai_flutter_spec.Id.Protocol.property
   val collapsed_height : Bonsai_flutter_spec.Id.Protocol.property
+  val floating : Bonsai_flutter_spec.Id.Protocol.property
+  val snap : Bonsai_flutter_spec.Id.Protocol.property
+  val stretch : Bonsai_flutter_spec.Id.Protocol.property
+  val toolbar_height : Bonsai_flutter_spec.Id.Protocol.property
+  val has_leading : Bonsai_flutter_spec.Id.Protocol.property
+  val has_flexible_space : Bonsai_flutter_spec.Id.Protocol.property
+  val has_bottom : Bonsai_flutter_spec.Id.Protocol.property
+  val has_actions : Bonsai_flutter_spec.Id.Protocol.property
+  val force_elevated : Bonsai_flutter_spec.Id.Protocol.property
+  val automatically_imply_leading : Bonsai_flutter_spec.Id.Protocol.property
+  val center_title : Bonsai_flutter_spec.Id.Protocol.property
+  val background_color : Bonsai_flutter_spec.Id.Protocol.property
+  val foreground_color : Bonsai_flutter_spec.Id.Protocol.property
+  val elevation : Bonsai_flutter_spec.Id.Protocol.property
+  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
+end
+
+module Preferred_size_prop : sig
+  val height : Bonsai_flutter_spec.Id.Protocol.property
   val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
 end
 

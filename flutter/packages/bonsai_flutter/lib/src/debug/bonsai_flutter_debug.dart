@@ -64,6 +64,7 @@ String _kindName(NodeKind kind) => switch (kind) {
   NodeKind.sliverVariedExtent => 'SliverVariedExtent',
   NodeKind.sliverPadding => 'SliverPadding',
   NodeKind.sliverAppBar => 'SliverAppBar',
+  NodeKind.preferredSize => 'PreferredSize',
   NodeKind.gesture => 'Gesture',
   NodeKind.focusScope => 'FocusScope',
   NodeKind.mouseRegion => 'MouseRegion',

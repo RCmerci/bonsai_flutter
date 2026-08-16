@@ -233,14 +233,7 @@ final class _NodeHostState extends State<NodeHost> {
     _buildError = null;
     _failedLocalRevision = null;
     final children = [
-      for (final childId in node.children)
-        NodeHost(
-          key: ValueKey<int>(childId),
-          store: widget.store,
-          nodeId: childId,
-          registry: widget.registry,
-          onEvent: widget.onEvent,
-        ),
+      for (final childId in node.children) _buildChildHost(childId),
     ];
     try {
       final onEvent = widget.onEvent;
@@ -316,6 +309,24 @@ final class _NodeHostState extends State<NodeHost> {
     }
   }
 
+  Widget _buildChildHost(int childId) {
+    final host = NodeHost(
+      key: ValueKey<int>(childId),
+      store: widget.store,
+      nodeId: childId,
+      registry: widget.registry,
+      onEvent: widget.onEvent,
+    );
+    final child = widget.store.node(childId);
+    return switch (child.props) {
+      PreferredSizeProps(:final height) => _PreferredSizeNodeHost(
+        height: height,
+        child: host,
+      ),
+      _ => host,
+    };
+  }
+
   void _synchronizeNavigationPageSubscriptions(UiNode node) {
     final desired = node.kind == NodeKind.navigator
         ? node.children.toSet()
@@ -342,4 +353,18 @@ final class _NodeHostState extends State<NodeHost> {
     }
     _navigationPageUnsubscribes.clear();
   }
+}
+
+final class _PreferredSizeNodeHost extends StatelessWidget
+    implements PreferredSizeWidget {
+  const _PreferredSizeNodeHost({required this.height, required this.child});
+
+  final double height;
+  final Widget child;
+
+  @override
+  Size get preferredSize => Size.fromHeight(height);
+
+  @override
+  Widget build(BuildContext context) => child;
 }

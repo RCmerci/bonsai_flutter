@@ -428,6 +428,7 @@ final class NodeStore {
       NodeKind.sliverVariedExtent => props is SliverVariedExtentProps,
       NodeKind.sliverPadding => props is SliverPaddingProps,
       NodeKind.sliverAppBar => props is SliverAppBarProps,
+      NodeKind.preferredSize => props is PreferredSizeProps,
       NodeKind.gesture => props is GestureProps,
       NodeKind.focusScope => props is FocusScopeProps,
       NodeKind.mouseRegion => props is MouseRegionProps,
