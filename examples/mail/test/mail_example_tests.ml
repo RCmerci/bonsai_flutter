@@ -109,7 +109,7 @@ let native_visible_range handle ~first_index ~last_exclusive =
   Test.Handle.present handle;
   Test.Handle.visible_range
     handle
-    (Test.Query.test_id "mail-virtual-list")
+    (Test.Query.kind "Sliver_varied_extent")
     ~first_index:(Int64.of_int first_index)
     ~last_exclusive:(Int64.of_int last_exclusive)
 ;;
