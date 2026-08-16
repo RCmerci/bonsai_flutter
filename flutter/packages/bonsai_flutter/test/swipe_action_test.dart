@@ -719,13 +719,13 @@ Frame _swipeFrame({
         props: EmptyProps(),
         eventBindings: [],
       ),
-      const CreateNode(
+      CreateNode(
         nodeId: 20,
         kind: NodeKind.scrollView,
         props: ScrollViewProps(axis: ScrollAxis.vertical, reverse: false),
         eventBindings: [],
       ),
-      const CreateNode(
+      CreateNode(
         nodeId: 21,
         kind: NodeKind.sliverList,
         props: EmptyProps(),

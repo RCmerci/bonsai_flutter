@@ -423,7 +423,7 @@ void main() {
                 EventBinding(eventTag: EventTagId.valueChanged, handlerId: 81),
               ],
             ),
-            const CreateNode(
+            CreateNode(
               nodeId: 61,
               kind: NodeKind.sliverBox,
               props: EmptyProps(),
