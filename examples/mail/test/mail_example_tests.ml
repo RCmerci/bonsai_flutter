@@ -203,9 +203,9 @@ let test_navigation_shell_owns_one_colored_bottom_safe_area () =
         "mail bottom navigation background is missing"
     in
     require
-      Ui.Widget.Private.kind_tag_equal
-        bottom_background.Runtime.Mounted_tree.Snapshot.node_tag
-        Ui.Widget.Private.K_decorated_box
+      (Ui.Widget.Private.kind_tag_equal
+         bottom_background.Runtime.Mounted_tree.Snapshot.node_tag
+         Ui.Widget.Private.K_decorated_box)
       "mail bottom navigation background is not outside its safe area";
     let bottom_safe_area =
       match find_child_by_kind handle bottom_background "Safe_area" with
@@ -526,6 +526,17 @@ let test_detail_star_attachment_and_reply_notice () =
       "reply scope notice has the wrong content")
 ;;
 
+let sliver_varied_extent_node handle =
+  let slivers =
+    Test.Handle.find_all
+      handle
+      (Test.Query.kind "Sliver_varied_extent")
+  in
+  match slivers with
+  | sliver :: _ -> sliver
+  | [] -> fail "mail scroll view has no sliver_varied_extent child"
+;;
+
 let test_initial_virtual_inbox_has_twenty_unique_pressable_rows () =
   with_handle (fun handle ->
     require
@@ -777,28 +788,16 @@ let test_rapid_activation_does_not_duplicate_expansion_or_detail () =
       "Open created duplicate detail pages")
 ;;
 
-let sliver_varied_extent_node handle =
-  let scroll_view =
-    require_node
-      handle
-      (Test.Query.test_id "mail-virtual-list")
-      "mail virtual list (scroll view) is missing"
-  in
-  let Av sv_view = Ui.Widget.Private.view scroll_view.Runtime.Mounted_tree.Snapshot.widget in
-  match sv_view.node with
-  | Ui.Widget.Private.Scroll_view _ ->
-    (match Array.find_opt
-       (fun child ->
-          let Av cv = Ui.Widget.Private.view child.widget in
-          match cv.node with
-          | Ui.Widget.Private.Sliver_varied_extent _ -> true
-          | _ -> false)
-       scroll_view.children
-     with
-     | Some child -> child
-     | None -> fail "mail scroll view has no sliver_varied_extent child")
-  | _ -> fail "mail virtual list is not a scroll view"
-;;
+[@@@warning "-69"]
+
+type sparse_list_props_record =
+  { total_count : int
+  ; first_index : int
+  ; default_item_extent : float
+  ; extent_overrides : Ui.Widget.Sparse_extent_override.t list
+  ; overscan : int
+  ; transition : Ui.Widget.Sparse_extent_transition.t option
+  }
 
 let sparse_list_props handle =
   let sliver = sliver_varied_extent_node handle in
@@ -807,18 +806,11 @@ let sparse_list_props handle =
   | Ui.Widget.Private.Sliver_varied_extent
       { total_count; first_index; default_item_extent; extent_overrides; overscan; transition } ->
     require (Option.is_some transition) "mail list omitted its transition spec";
-    { Ui.Native_widget.Sparse_extent_list.For_testing.total_count
+    { total_count
     ; first_index
     ; default_item_extent
-    ; extent_overrides =
-        List.map
-          (fun (o : Ui.Widget.Sparse_extent_override.t) ->
-             { Ui.Native_widget.Sparse_extent_list.For_testing.index = o.index
-             ; extent = o.extent
-             })
-          extent_overrides
+    ; extent_overrides
     ; overscan
-    ; axis = Ui.Layout.Axis.Vertical
     ; transition
     }
   | _ -> fail "expected a sliver_varied_extent node"
