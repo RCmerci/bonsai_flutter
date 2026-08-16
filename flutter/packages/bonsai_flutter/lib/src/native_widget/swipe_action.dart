@@ -7,7 +7,6 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
 import 'native_widget_registry.dart';
-import 'virtual_list.dart';
 
 enum SwipeActionDirection { startToEnd, endToStart }
 

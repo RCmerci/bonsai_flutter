@@ -369,9 +369,6 @@ final class RendererResourceStore implements RendererHostResources {
       for (final entry in store.nodes.entries)
         if (entry.value.props case ScrollViewProps(:final primary))
           entry.key: primary,
-      for (final entry in store.nodes.entries)
-        if (entry.value.props case ListViewProps(:final primary))
-          entry.key: primary,
     };
     for (final entry in _scrollControllers.entries.toList(growable: false)) {
       final primary = retainedScrollControllers[entry.key];

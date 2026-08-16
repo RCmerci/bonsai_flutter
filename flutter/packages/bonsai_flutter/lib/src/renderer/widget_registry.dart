@@ -9,9 +9,7 @@ import '../native_widget/native_widget_registry.dart';
 import '../native_widget/morphing_surface.dart';
 import '../native_widget/message_composer.dart';
 import '../native_widget/navigation_shell.dart';
-import '../native_widget/sparse_extent_list.dart';
 import '../native_widget/swipe_action.dart';
-import '../native_widget/virtual_list.dart';
 import '../navigation/navigation_host.dart';
 import '../protocol/event_batch.dart';
 import '../protocol/frame.dart';
@@ -55,8 +53,6 @@ final class WidgetRegistry {
         nativeWidgets ??
         NativeWidgetRegistry(capabilityBits: NativeCapability.core);
     if (nativeWidgets == null) {
-      registerVirtualList(extensions);
-      registerSparseExtentList(extensions);
       registerMorphingSurface(extensions);
       registerSwipeAction(extensions);
       registerNavigationShell(extensions);
@@ -84,7 +80,13 @@ final class WidgetRegistry {
       NodeKind.animatedOpacity: _buildAnimatedOpacity,
       NodeKind.transform: _buildTransform,
       NodeKind.scrollView: _buildScrollView,
-      NodeKind.listView: _buildListView,
+      NodeKind.sliverBox: _buildSliverBox,
+      NodeKind.sliverList: _buildSliverList,
+      NodeKind.sliverFill: _buildSliverFill,
+      NodeKind.sliverFixedExtent: _buildSliverFixedExtent,
+      NodeKind.sliverVariedExtent: _buildSliverVariedExtent,
+      NodeKind.sliverPadding: _buildSliverPadding,
+      NodeKind.sliverAppBar: _buildSliverAppBar,
       NodeKind.gesture: _buildGesture,
       NodeKind.focusScope: _buildFocusScope,
       NodeKind.mouseRegion: _buildMouseRegion,
@@ -500,13 +502,33 @@ Widget _buildTransform(
   );
 }
 
+/// Provides the shared [ScrollController] and scroll [Axis] to sliver
+/// children built inside a [CustomScrollView].
+class ScrollViewScope extends InheritedWidget {
+  const ScrollViewScope({
+    required this.controller,
+    required this.axis,
+    required super.child,
+    super.key,
+  });
+
+  final ScrollController controller;
+  final Axis axis;
+
+  static ScrollViewScope? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<ScrollViewScope>();
+
+  @override
+  bool updateShouldNotify(ScrollViewScope old) =>
+      controller != old.controller || axis != old.axis;
+}
+
 Widget _buildScrollView(
   BuildContext context,
   UiNode node,
   List<Widget> children,
   RendererEventCallback? onEvent,
 ) {
-  _expectChildCount(node, children, 1);
   final props = _expectProps<ScrollViewProps>(node);
   final binding = _binding(node, EventTagId.scrollNotification);
   final resources = RendererResourceScope.of(context);
@@ -518,71 +540,133 @@ Widget _buildScrollView(
       'Primary ScrollView node ${node.id} has no route scroll controller',
     );
   }
+  final scrollAxis = props.axis == ScrollAxis.horizontal
+      ? Axis.horizontal
+      : Axis.vertical;
   final viewport = _guardedScrollable(
     node: node,
     widgetKind: 'ScrollView',
     axis: props.axis,
     binding: binding,
     onEvent: onEvent,
-    viewportBuilder: () => SingleChildScrollView(
+    viewportBuilder: () => CustomScrollView(
       controller: controller,
-      scrollDirection: props.axis == ScrollAxis.horizontal
-          ? Axis.horizontal
-          : Axis.vertical,
+      scrollDirection: scrollAxis,
       reverse: props.reverse,
-      child: children.single,
+      slivers: children,
     ),
+  );
+  final scoped = ScrollViewScope(
+    controller: controller,
+    axis: scrollAxis,
+    child: viewport,
   );
   return props.primary
       ? _BorrowedScrollControllerHost(
           nodeId: node.id,
           resources: resources,
           controller: controller,
-          child: viewport,
+          child: scoped,
         )
-      : viewport;
+      : scoped;
 }
 
-Widget _buildListView(
+Widget _buildSliverBox(
   BuildContext context,
   UiNode node,
   List<Widget> children,
   RendererEventCallback? onEvent,
 ) {
-  final props = _expectProps<ListViewProps>(node);
-  final binding = _binding(node, EventTagId.scrollNotification);
-  final resources = RendererResourceScope.of(context);
-  final controller = props.primary
-      ? PrimaryScrollController.maybeOf(context)
-      : resources.acquireScrollController(node.id);
-  if (controller == null) {
-    throw RendererBuildException(
-      'Primary ListView node ${node.id} has no route scroll controller',
-    );
-  }
-  final viewport = _guardedScrollable(
-    node: node,
-    widgetKind: 'ListView',
-    axis: props.axis,
-    binding: binding,
-    onEvent: onEvent,
-    viewportBuilder: () => ListView(
-      controller: controller,
-      scrollDirection: props.axis == ScrollAxis.horizontal
-          ? Axis.horizontal
-          : Axis.vertical,
-      reverse: props.reverse,
-      children: children,
-    ),
+  _expectChildCount(node, children, 1);
+  _expectProps<EmptyProps>(node);
+  return SliverToBoxAdapter(child: children.single);
+}
+
+Widget _buildSliverList(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  _expectProps<EmptyProps>(node);
+  return SliverList(delegate: SliverChildListDelegate(children));
+}
+
+Widget _buildSliverFill(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  _expectChildCount(node, children, 1);
+  _expectProps<SliverFillProps>(node);
+  return SliverFillRemaining(child: children.single);
+}
+
+Widget _buildSliverFixedExtent(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  final props = _expectProps<SliverFixedExtentProps>(node);
+  // SliverFixedExtentList with the visible window of children. The
+  // full visible-range state machine (controller-based range computation,
+  // anchor correction, overscan) will be wired up in a follow-up; for now
+  // the supplied children are laid out at the fixed item extent.
+  return SliverFixedExtentList(
+    delegate: SliverChildListDelegate(children),
+    itemExtent: props.itemExtent,
   );
-  return props.primary
-      ? _BorrowedScrollControllerHost(
-          nodeId: node.id,
-          resources: resources,
-          controller: controller,
-          child: viewport,
-        )
-      : viewport;
+}
+
+Widget _buildSliverVariedExtent(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  _expectProps<SliverVariedExtentProps>(node);
+  // SliverVariedExtentList requires an extent builder over the full
+  // logical list; the renderer currently receives only the visible window
+  // of children. Fall back to a plain SliverList until the full
+  // varied-extent state machine is wired up.
+  return SliverList(delegate: SliverChildListDelegate(children));
+}
+
+Widget _buildSliverPadding(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  _expectChildCount(node, children, 1);
+  final props = _expectProps<SliverPaddingProps>(node);
+  return SliverPadding(
+    padding: EdgeInsets.fromLTRB(
+      props.insets.left,
+      props.insets.top,
+      props.insets.right,
+      props.insets.bottom,
+    ),
+    sliver: children.single,
+  );
+}
+
+Widget _buildSliverAppBar(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  _expectChildCount(node, children, 1);
+  final props = _expectProps<SliverAppBarProps>(node);
+  return SliverAppBar(
+    pinned: props.pinned,
+    expandedHeight: props.expandedHeight,
+    collapsedHeight: props.collapsedHeight,
+    title: children.single,
+  );
 }
 
 final class _BorrowedScrollControllerHost extends StatefulWidget {
@@ -1222,14 +1306,6 @@ Widget _buildNavigator(
               throw RendererBuildException(
                 'Detented Page ${pageProps.pageKey} has horizontal primary '
                 'ScrollView node $nodeId',
-              );
-            }
-            primaryNodeIds.add(nodeId);
-          case ListViewProps(:final axis, primary: true):
-            if (axis != ScrollAxis.vertical) {
-              throw RendererBuildException(
-                'Detented Page ${pageProps.pageKey} has horizontal primary '
-                'ListView node $nodeId',
               );
             }
             primaryNodeIds.add(nodeId);

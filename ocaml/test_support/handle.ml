@@ -295,6 +295,14 @@ let native_event t query ~kind_id ~version ~event_id ~payload =
     (Protocol.Inbound_event.Native_event { kind_id; version; event_id; payload })
 ;;
 
+let visible_range t query ~first_index ~last_exclusive =
+  dispatch
+    t
+    query
+    Ui.Event.Tag.Visible_range_changed
+    (Protocol.Inbound_event.Visible_range { first_index; last_exclusive })
+;;
+
 let apply_text_edit
       t
       query

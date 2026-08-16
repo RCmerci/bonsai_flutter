@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import 'native_widget_registry.dart';
-import 'virtual_list.dart';
 
 abstract final class NavigationShellEvent {
   static const int drawerStateChanged = 1;

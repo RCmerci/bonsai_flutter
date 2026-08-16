@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import '../protocol/frame.dart';
 import 'native_widget_registry.dart';
 import 'sparse_extent_transition_scope.dart';
-import 'virtual_list.dart';
 
 @immutable
 final class MorphingSurfaceProps {

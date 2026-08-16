@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 
 import '../protocol/frame.dart';
 import 'native_widget_registry.dart';
-import 'virtual_list.dart';
 
 enum MessageComposerButtonPosition { leading, trailing }
 

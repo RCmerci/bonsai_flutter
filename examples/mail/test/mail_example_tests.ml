@@ -66,7 +66,9 @@ let test_initial_inbox_and_semantics () =
              (Printf.sprintf "swipe host for message %d is missing" id)
          in
          require
-           (Ui.Widget.Private.Kind.equal swipe.kind Native_widget)
+           (Ui.Widget.Private.kind_tag_equal
+              swipe.Runtime.Mounted_tree.Snapshot.node_tag
+              Ui.Widget.Private.K_native_widget)
            "mail swipe host is not a native widget";
          require
            (Array.length swipe.children = 3)
@@ -105,16 +107,11 @@ let open_card handle id =
 
 let native_visible_range handle ~first_index ~last_exclusive =
   Test.Handle.present handle;
-  Test.Handle.native_event
+  Test.Handle.visible_range
     handle
     (Test.Query.test_id "mail-virtual-list")
-    ~kind_id:Ui.Native_widget.Sparse_extent_list.kind_id
-    ~version:2
-    ~event_id:Ui.Native_widget.Sparse_extent_list.visible_range_event_id
-    ~payload:
-      (Ui.Native_widget.Sparse_extent_list.For_testing.encode_visible_range
-         ~first_index
-         ~last_exclusive)
+    ~first_index:(Int64.of_int first_index)
+    ~last_exclusive:(Int64.of_int last_exclusive)
 ;;
 
 let advance_logical_time handle nanoseconds =
@@ -130,8 +127,9 @@ let navigation_props handle =
       (Test.Query.test_id "mail-navigation-shell")
       "mail navigation shell is missing"
   in
-  match shell.props with
-  | Ui.Widget.Private.Native_widget_props { kind_id; payload; _ }
+  let Av view = Ui.Widget.Private.view shell.Runtime.Mounted_tree.Snapshot.widget in
+  match view.node with
+  | Ui.Widget.Private.Native_widget { kind_id; payload; _ }
     when ID.Native_widget.Kind_id.equal kind_id (ID.Native_widget.Kind_id.of_int 3) ->
     Ui.Native_widget.Navigation_shell.For_testing.decode_props_exn payload
   | _ -> fail "mail navigation shell has the wrong native contract"
@@ -178,8 +176,9 @@ let test_only_selected_bottom_destination_has_an_icon_indicator () =
 ;;
 
 let safe_area_props node =
-  match node.Runtime.Mounted_tree.Snapshot.props with
-  | Ui.Widget.Private.Safe_area_props { left; top; right; bottom; _ } ->
+  let Av view = Ui.Widget.Private.view node.Runtime.Mounted_tree.Snapshot.widget in
+  match view.node with
+  | Ui.Widget.Private.Safe_area { left; top; right; bottom; _ } ->
     left, top, right, bottom
   | _ -> fail "expected a safe area node"
 ;;
@@ -204,7 +203,9 @@ let test_navigation_shell_owns_one_colored_bottom_safe_area () =
         "mail bottom navigation background is missing"
     in
     require
-      Ui.Widget.Private.Kind.(equal bottom_background.kind Decorated_box)
+      Ui.Widget.Private.kind_tag_equal
+        bottom_background.Runtime.Mounted_tree.Snapshot.node_tag
+        Ui.Widget.Private.K_decorated_box
       "mail bottom navigation background is not outside its safe area";
     let bottom_safe_area =
       match find_child_by_kind handle bottom_background "Safe_area" with
@@ -540,25 +541,15 @@ let test_initial_virtual_inbox_has_twenty_unique_pressable_rows () =
            (Test.Query.test_id (Printf.sprintf "mail-pressable-%d" id))
            (Printf.sprintf "initial pressable row %d is missing" id))
       Mail.For_testing.initial_inbox_ids;
-    let virtual_list =
-      require_node
-        handle
-        (Test.Query.test_id "mail-virtual-list")
-        "initial inbox is not virtualized"
-    in
-    match virtual_list.props with
-    | Ui.Widget.Private.Native_widget_props { kind_id; payload; _ } ->
-      require
-        (kind_id = Ui.Native_widget.Sparse_extent_list.kind_id)
-        "inbox uses the wrong native kind";
-      let props =
-        Ui.Native_widget.Sparse_extent_list.For_testing.decode_props_exn payload
-      in
-      require (props.total_count = 20) "initial logical mail count is not twenty";
-      require
-        (Array.length virtual_list.children <= 24)
-        "initial virtual window exceeds the supplied bound"
-    | _ -> fail "mail virtual list has non-native props")
+    let sliver = sliver_varied_extent_node handle in
+    let Av view = Ui.Widget.Private.view sliver.widget in
+    (match view.node with
+     | Ui.Widget.Private.Sliver_varied_extent { total_count; _ } ->
+       require (total_count = 20) "initial logical mail count is not twenty";
+       require
+         (Array.length sliver.children <= 24)
+         "initial virtual window exceeds the supplied bound"
+     | _ -> fail "mail virtual list has non-sliver-varied-extent node"))
 ;;
 
 let test_three_sequential_pages_load_once_and_preserve_overlap_identity () =
@@ -592,19 +583,12 @@ let test_three_sequential_pages_load_once_and_preserve_overlap_identity () =
       handle
       (Test.Query.test_id "mail-pressable-41")
       "duplicate tail notifications appended more than one page";
-    let first_page_list =
-      require_node
-        handle
-        (Test.Query.test_id "mail-virtual-list")
-        "virtual list disappeared after first page"
-    in
-    (match first_page_list.props with
-     | Ui.Widget.Private.Native_widget_props { payload; _ } ->
-       let props =
-         Ui.Native_widget.Sparse_extent_list.For_testing.decode_props_exn payload
-       in
-       require (props.total_count = 40) "first cursor appended more than one page"
-     | _ -> fail "mail virtual list has non-native props");
+    let first_page_sliver = sliver_varied_extent_node handle in
+    let Av fp_view = Ui.Widget.Private.view first_page_sliver.widget in
+    (match fp_view.node with
+     | Ui.Widget.Private.Sliver_varied_extent { total_count; _ } ->
+       require (total_count = 40) "first cursor appended more than one page"
+     | _ -> fail "mail virtual list has non-sliver-varied-extent node");
     let overlap_after =
       require_node
         handle
@@ -631,14 +615,9 @@ let test_three_sequential_pages_load_once_and_preserve_overlap_identity () =
       handle
       (Test.Query.test_id "mail-loading-more")
       "the feed stopped offering another page after three appends";
-    let virtual_list =
-      require_node
-        handle
-        (Test.Query.test_id "mail-virtual-list")
-        "virtual list disappeared after pagination"
-    in
+    let final_sliver = sliver_varied_extent_node handle in
     require
-      (Array.length virtual_list.children <= 24)
+      (Array.length final_sliver.children <= 24)
       "rendered mail window grew with loaded session data")
 ;;
 
@@ -798,25 +777,51 @@ let test_rapid_activation_does_not_duplicate_expansion_or_detail () =
       "Open created duplicate detail pages")
 ;;
 
-let sparse_list_props handle =
-  let list =
+let sliver_varied_extent_node handle =
+  let scroll_view =
     require_node
       handle
       (Test.Query.test_id "mail-virtual-list")
-      "mail sparse virtual list is missing"
+      "mail virtual list (scroll view) is missing"
   in
-  match list.props with
-  | Ui.Widget.Private.Native_widget_props { kind_id; version; payload; _ } ->
-    require
-      (kind_id = Ui.Native_widget.Sparse_extent_list.kind_id)
-      "mail list does not use Sparse_extent_list kind 4";
-    require (version = 2) "mail list does not opt into sparse transition v2";
-    let props =
-      Ui.Native_widget.Sparse_extent_list.For_testing.decode_props_exn payload
-    in
-    require (Option.is_some props.transition) "mail list omitted its transition spec";
-    props
-  | _ -> fail "mail sparse list has non-native props"
+  let Av sv_view = Ui.Widget.Private.view scroll_view.Runtime.Mounted_tree.Snapshot.widget in
+  match sv_view.node with
+  | Ui.Widget.Private.Scroll_view _ ->
+    (match Array.find_opt
+       (fun child ->
+          let Av cv = Ui.Widget.Private.view child.widget in
+          match cv.node with
+          | Ui.Widget.Private.Sliver_varied_extent _ -> true
+          | _ -> false)
+       scroll_view.children
+     with
+     | Some child -> child
+     | None -> fail "mail scroll view has no sliver_varied_extent child")
+  | _ -> fail "mail virtual list is not a scroll view"
+;;
+
+let sparse_list_props handle =
+  let sliver = sliver_varied_extent_node handle in
+  let Av view = Ui.Widget.Private.view sliver.widget in
+  match view.node with
+  | Ui.Widget.Private.Sliver_varied_extent
+      { total_count; first_index; default_item_extent; extent_overrides; overscan; transition } ->
+    require (Option.is_some transition) "mail list omitted its transition spec";
+    { Ui.Native_widget.Sparse_extent_list.For_testing.total_count
+    ; first_index
+    ; default_item_extent
+    ; extent_overrides =
+        List.map
+          (fun (o : Ui.Widget.Sparse_extent_override.t) ->
+             { Ui.Native_widget.Sparse_extent_list.For_testing.index = o.index
+             ; extent = o.extent
+             })
+          extent_overrides
+    ; overscan
+    ; axis = Ui.Layout.Axis.Vertical
+    ; transition
+    }
+  | _ -> fail "expected a sliver_varied_extent node"
 ;;
 
 let test_expansion_accordion_outline_and_collapse () =
@@ -868,7 +873,7 @@ let test_expansion_accordion_outline_and_collapse () =
     let second_props = sparse_list_props handle in
     require
       (List.map
-         (fun (override : Ui.Native_widget.Sparse_extent_list.extent_override) ->
+         (fun (override : Ui.Widget.Sparse_extent_override.t) ->
             override.index)
          second_props.extent_overrides
        = [ 1 ])
