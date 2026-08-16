@@ -1,7 +1,7 @@
 ((protocol
   (name bonsai_flutter)
   (major 1)
-  (minor 18)
+  (minor 19)
   (endianness little)
   (header_bytes 48)
   (max_frame_bytes 16777216)
@@ -51,7 +51,13 @@
    (opacity 28)
    (transform 29)
    (scroll_view 30)
-   (list_view 31)
+   (sliver_box 32)
+   (sliver_list 33)
+   (sliver_fill 34)
+   (sliver_fixed_extent 35)
+   (sliver_varied_extent 36)
+   (sliver_padding 37)
+   (sliver_app_bar 38)
    (gesture 48)
    (button 49)
    (text_input 50)
@@ -150,10 +156,31 @@
     ((axis 1 axis)
      (reverse 2 bool)
      (primary 3 bool)))
-   (list_view
-    ((axis 1 axis)
-     (reverse 2 bool)
-     (primary 3 bool)))
+   (sliver_fill
+    ((flex 1 u32)))
+   (sliver_fixed_extent
+    ((total_count 1 u64)
+     (first_index 2 u64)
+     (item_extent 3 f64)
+     (overscan 4 u32)))
+   (sliver_varied_extent
+    ((total_count 1 u64)
+     (first_index 2 u64)
+     (default_item_extent 3 f64)
+     (overscan 4 u32)
+     (override_count 5 u32)
+     (overrides 6 varied_extent_overrides)
+     (transition_enabled 7 optional_bool)
+     (expand_duration_ms 8 optional_u32)
+     (collapse_duration_ms 9 optional_u32)
+     (expand_curve 10 optional_animation_curve)
+     (collapse_curve 11 optional_animation_curve)))
+   (sliver_padding
+    ((insets 1 edge_insets)))
+   (sliver_app_bar
+    ((pinned 1 bool)
+     (expanded_height 2 optional_f64)
+     (collapsed_height 3 optional_f64)))
    (focus_scope
     ((autofocus 1 bool)))
    (mouse_region

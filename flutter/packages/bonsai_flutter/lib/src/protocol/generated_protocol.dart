@@ -2,7 +2,7 @@
 
 abstract final class ProtocolVersion {
   static const int protocolMajor = 1;
-  static const int protocolMinor = 18;
+  static const int protocolMinor = 19;
 }
 
 abstract final class ProtocolLimits {
@@ -81,7 +81,13 @@ abstract final class NodeKindId {
   static const int opacity = 28;
   static const int transform = 29;
   static const int scrollView = 30;
-  static const int listView = 31;
+  static const int sliverBox = 32;
+  static const int sliverList = 33;
+  static const int sliverFill = 34;
+  static const int sliverFixedExtent = 35;
+  static const int sliverVariedExtent = 36;
+  static const int sliverPadding = 37;
+  static const int sliverAppBar = 38;
   static const int gesture = 48;
   static const int button = 49;
   static const int textInput = 50;
@@ -135,7 +141,13 @@ abstract final class NodeKindId {
     28 => 'opacity',
     29 => 'transform',
     30 => 'scroll_view',
-    31 => 'list_view',
+    32 => 'sliver_box',
+    33 => 'sliver_list',
+    34 => 'sliver_fill',
+    35 => 'sliver_fixed_extent',
+    36 => 'sliver_varied_extent',
+    37 => 'sliver_padding',
+    38 => 'sliver_app_bar',
     48 => 'gesture',
     49 => 'button',
     50 => 'text_input',
@@ -516,15 +528,77 @@ abstract final class ScrollViewPropId {
   };
 }
 
-abstract final class ListViewPropId {
-  static const int axis = 1;
-  static const int reverse = 2;
-  static const int primary = 3;
+abstract final class SliverFillPropId {
+  static const int flex = 1;
 
   static String? debugName(int id) => switch (id) {
-    1 => 'axis',
-    2 => 'reverse',
-    3 => 'primary',
+    1 => 'flex',
+    _ => null,
+  };
+}
+
+abstract final class SliverFixedExtentPropId {
+  static const int totalCount = 1;
+  static const int firstIndex = 2;
+  static const int itemExtent = 3;
+  static const int overscan = 4;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'total_count',
+    2 => 'first_index',
+    3 => 'item_extent',
+    4 => 'overscan',
+    _ => null,
+  };
+}
+
+abstract final class SliverVariedExtentPropId {
+  static const int totalCount = 1;
+  static const int firstIndex = 2;
+  static const int defaultItemExtent = 3;
+  static const int overscan = 4;
+  static const int overrideCount = 5;
+  static const int overrides = 6;
+  static const int transitionEnabled = 7;
+  static const int expandDurationMs = 8;
+  static const int collapseDurationMs = 9;
+  static const int expandCurve = 10;
+  static const int collapseCurve = 11;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'total_count',
+    2 => 'first_index',
+    3 => 'default_item_extent',
+    4 => 'overscan',
+    5 => 'override_count',
+    6 => 'overrides',
+    7 => 'transition_enabled',
+    8 => 'expand_duration_ms',
+    9 => 'collapse_duration_ms',
+    10 => 'expand_curve',
+    11 => 'collapse_curve',
+    _ => null,
+  };
+}
+
+abstract final class SliverPaddingPropId {
+  static const int insets = 1;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'insets',
+    _ => null,
+  };
+}
+
+abstract final class SliverAppBarPropId {
+  static const int pinned = 1;
+  static const int expandedHeight = 2;
+  static const int collapsedHeight = 3;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'pinned',
+    2 => 'expanded_height',
+    3 => 'collapsed_height',
     _ => null,
   };
 }

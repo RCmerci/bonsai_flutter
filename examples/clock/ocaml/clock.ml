@@ -872,7 +872,7 @@ let view ~timings model recurring_state deadline_state exact_now approx_now hand
     Ui.Widget.Scroll_view.vertical
       ~key:(Ui.Key.string "clock-scroll")
       ~on_scroll:handlers.scroll
-      body
+      [ Ui.Widget.Sliver.box body ]
       ()
     |> Ui.Widget.Viewport.Vertical.padding
          ~insets:(Ui.Layout.Edge_insets.symmetric ~horizontal:16. ~vertical:12. ())

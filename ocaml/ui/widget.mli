@@ -91,13 +91,111 @@ module Viewport : sig
   end
 end
 
+module Sparse_extent_override : sig
+  type t =
+    { index : int
+    ; extent : float
+    }
+end
+
+module Sparse_extent_transition : sig
+  type curve =
+    | Linear
+    | Ease_in
+    | Ease_out
+    | Ease_in_out
+    | Ease_out_cubic
+    | Ease_in_out_cubic
+
+  type t =
+    { enabled : bool
+    ; expand_duration_ms : int
+    ; collapse_duration_ms : int
+    ; expand_curve : curve
+    ; collapse_curve : curve
+    }
+
+  val create
+    :  ?enabled:bool
+    -> expand_duration_ms:int
+    -> collapse_duration_ms:int
+    -> ?expand_curve:curve
+    -> ?collapse_curve:curve
+    -> unit
+    -> t
+end
+
+(** A sliver is scroll-axis content that lives only inside a [Scroll_view].
+    It is not a [t] and cannot be placed in a column, row, or body. *)
+module Sliver : sig
+  type widget = t
+
+  type t
+
+  val with_test_id : Test_id.t -> t -> t
+
+  (** Wraps a single box widget. *)
+  val box : ?key:Key.t -> widget -> t
+
+  (** A non-virtualized list of box widgets. *)
+  val list : ?key:Key.t -> widget list -> t
+
+  (** Fills the remaining viewport extent. *)
+  val fill : ?key:Key.t -> ?flex:int -> widget -> t
+
+  (** Fixed-extent virtual list. Replaces [Native_widget.Virtual_list]. *)
+  val fixed_extent
+    :  ?key:Key.t
+    -> total_count:int
+    -> first_index:int
+    -> item_extent:float
+    -> ?overscan:int
+    -> items:widget list
+    -> on_visible_range:Event.Handler.t
+    -> unit
+    -> t
+
+  (** Varied-extent virtual list with sparse overrides.
+      Replaces [Native_widget.Sparse_extent_list]. *)
+  val varied_extent
+    :  ?key:Key.t
+    -> total_count:int
+    -> first_index:int
+    -> default_item_extent:float
+    -> extent_overrides:Sparse_extent_override.t list
+    -> ?overscan:int
+    -> ?transition:Sparse_extent_transition.t
+    -> items:widget list
+    -> on_visible_range:Event.Handler.t
+    -> unit
+    -> t
+
+  (** SliverPadding wrapper. *)
+  val padding : ?key:Key.t -> insets:Layout.Edge_insets.t -> t -> t
+
+  (** Collapsible app bar. *)
+  val app_bar
+    :  ?key:Key.t
+    -> ?pinned:bool
+    -> ?expanded_height:float
+    -> ?collapsed_height:float
+    -> widget
+    -> t
+
+  val visible_range_of_payload : Event.Payload.t -> Event.Payload.visible_range option
+end
+
+(** [Scroll_view] builds a [CustomScrollView]. Its children are [Sliver.t], not
+    ordinary widgets. It still returns [Viewport.Vertical.t] /
+    [Viewport.Horizontal.t] so the existing [Body.fill] /
+    [Viewport.with_height] embedding paths are unchanged. *)
 module Scroll_view : sig
   val vertical
     :  ?key:Key.t
     -> ?reverse:bool
     -> ?primary:bool
     -> on_scroll:Event.Handler.t
-    -> t
+    -> Sliver.t list
     -> unit
     -> Viewport.Vertical.t
 
@@ -105,26 +203,7 @@ module Scroll_view : sig
     :  ?key:Key.t
     -> ?reverse:bool
     -> on_scroll:Event.Handler.t
-    -> t
-    -> unit
-    -> Viewport.Horizontal.t
-end
-
-module List_view : sig
-  val vertical
-    :  ?key:Key.t
-    -> ?reverse:bool
-    -> ?primary:bool
-    -> on_scroll:Event.Handler.t
-    -> t list
-    -> unit
-    -> Viewport.Vertical.t
-
-  val horizontal
-    :  ?key:Key.t
-    -> ?reverse:bool
-    -> on_scroll:Event.Handler.t
-    -> t list
+    -> Sliver.t list
     -> unit
     -> Viewport.Horizontal.t
 end
@@ -346,7 +425,13 @@ module Private : sig
   | K_animated_opacity
   | K_transform
   | K_scroll_view
-  | K_list_view
+  | K_sliver_box
+  | K_sliver_list
+  | K_sliver_fill
+  | K_sliver_fixed_extent
+  | K_sliver_varied_extent
+  | K_sliver_padding
+  | K_sliver_app_bar
   | K_gesture
   | K_focus_scope
   | K_mouse_region
@@ -485,12 +570,34 @@ module Private : sig
       ; primary : bool
       }
       -> [ `Scroll_view ] node
-  | List_view :
-      { axis : Layout.Axis.t
-      ; reverse : bool
-      ; primary : bool
+  | Sliver_box : [ `Sliver_box ] node
+  | Sliver_list : [ `Sliver_list ] node
+  | Sliver_fill : { flex : int } -> [ `Sliver_fill ] node
+  | Sliver_fixed_extent :
+      { total_count : int
+      ; first_index : int
+      ; item_extent : float
+      ; overscan : int
       }
-      -> [ `List_view ] node
+      -> [ `Sliver_fixed_extent ] node
+  | Sliver_varied_extent :
+      { total_count : int
+      ; first_index : int
+      ; default_item_extent : float
+      ; extent_overrides : Sparse_extent_override.t list
+      ; overscan : int
+      ; transition : Sparse_extent_transition.t option
+      }
+      -> [ `Sliver_varied_extent ] node
+  | Sliver_padding :
+      { left : float; top : float; right : float; bottom : float }
+      -> [ `Sliver_padding ] node
+  | Sliver_app_bar :
+      { pinned : bool
+      ; expanded_height : float option
+      ; collapsed_height : float option
+      }
+      -> [ `Sliver_app_bar ] node
   | Gesture : [ `Gesture ] node
   | Focus_scope : { autofocus : bool } -> [ `Focus_scope ] node
   | Mouse_region : { opaque : bool } -> [ `Mouse_region ] node

@@ -46,21 +46,6 @@ let encode_frame frame =
   | Error error -> failwith error.message
 ;;
 
-let set_u64 bytes offset value = Bytes.set_int64_le bytes offset value
-let set_u32 bytes offset value = Bytes.set_int32_le bytes offset (Int32.of_int value)
-let set_f64 bytes offset value = set_u64 bytes offset (Int64.bits_of_float value)
-
-let sparse_extent_list_payload () =
-  let payload = Bytes.make 36 '\000' in
-  set_u64 payload 0 100L;
-  set_u64 payload 8 0L;
-  set_f64 payload 16 48.;
-  set_u32 payload 24 2;
-  Bytes.set payload 28 '\001';
-  set_u32 payload 32 0;
-  payload
-;;
-
 let text_props value =
   Protocol.Wire_frame.Text_props
     { value; style = None; text_align = Start; max_lines = None; overflow = Clip_text }
@@ -77,7 +62,7 @@ let viewport_body_frame : Protocol.Wire_frame.t =
       ; parent_data
       }
   in
-  let row_ids = List.init 10 (fun index -> 9 + index) in
+  let row_ids = List.init 10 (fun index -> 10 + index) in
   { runtime_epoch = epoch 57L
   ; base_revision = revision 0L
   ; target_revision = revision 1L
@@ -98,22 +83,29 @@ let viewport_body_frame : Protocol.Wire_frame.t =
           (Material_button_props
              { variant = Text_button; enabled = true; autofocus = false })
       ; create 5 Text (text_props "Search")
+      ; create
+          ~parent_data:(Flex_parent_data { flex = 1; fit = Tight })
+          6
+          Scroll_view
+          (Scroll_view_props { axis = Vertical; reverse = false; primary = true })
       ; Create_node
-          { node_id = node 6L
-          ; kind = Native_widget
+          { node_id = node 9L
+          ; kind = Sliver_varied_extent
           ; props =
-              Native_widget_props
-                { kind_id = ID.Native_widget.Kind_id.of_int 4
-                ; version = 1
-                ; capabilities = 23L
-                ; payload = sparse_extent_list_payload ()
+              Sliver_varied_extent_props
+                { total_count = 100
+                ; first_index = 0
+                ; default_item_extent = 48.
+                ; overscan = 2
+                ; extent_overrides = []
+                ; transition = None
                 }
           ; event_bindings =
-              [ { event_tag = Protocol.Generated_protocol.Event_tag.native_event
+              [ { event_tag = Protocol.Generated_protocol.Event_tag.visible_range_changed
                 ; handler_id = ID.Ui.Handler_id.of_int64 400L
                 }
               ]
-          ; parent_data = Flex_parent_data { flex = 1; fit = Tight }
+          ; parent_data = No_parent_data
           }
       ; create
           ~parent_data:
@@ -133,8 +125,9 @@ let viewport_body_frame : Protocol.Wire_frame.t =
         ; Set_children { node_id = node 2L; children = [ node 3L; node 7L ] }
         ; Set_children { node_id = node 3L; children = [ node 4L; node 6L ] }
         ; Set_children { node_id = node 4L; children = [ node 5L ] }
+        ; Set_children { node_id = node 6L; children = [ node 9L ] }
         ; Set_children
-            { node_id = node 6L
+            { node_id = node 9L
             ; children = List.map (fun id -> node (Int64.of_int id)) row_ids
             }
         ; Set_children { node_id = node 7L; children = [ node 8L ] }
@@ -299,7 +292,7 @@ let fixtures : (string * Protocol.Wire_frame.t) list =
           [ Update_props
               { node_id = node 71L
               ; props =
-                  List_view_props { axis = Vertical; reverse = false; primary = true }
+                  Scroll_view_props { axis = Vertical; reverse = false; primary = true }
               }
           ]
       } )

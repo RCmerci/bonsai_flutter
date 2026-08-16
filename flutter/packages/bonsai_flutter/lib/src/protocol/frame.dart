@@ -23,7 +23,13 @@ enum NodeKind {
   animatedOpacity,
   transform,
   scrollView,
-  listView,
+  sliverBox,
+  sliverList,
+  sliverFill,
+  sliverFixedExtent,
+  sliverVariedExtent,
+  sliverPadding,
+  sliverAppBar,
   gesture,
   focusScope,
   mouseRegion,
@@ -641,26 +647,199 @@ final class ScrollViewProps extends UiProps {
   int get hashCode => Object.hash(ScrollViewProps, axis, reverse, primary);
 }
 
-final class ListViewProps extends UiProps {
-  const ListViewProps({
-    required this.axis,
-    required this.reverse,
-    this.primary = false,
+enum SparseExtentCurve {
+  linear,
+  easeIn,
+  easeOut,
+  easeInOut,
+  easeOutCubic,
+  easeInOutCubic;
+
+  int get wireId => switch (this) {
+        linear => 0,
+        easeIn => 1,
+        easeOut => 2,
+        easeInOut => 3,
+        easeOutCubic => 4,
+        easeInOutCubic => 5,
+      };
+
+  static SparseExtentCurve fromWireId(int value) => switch (value) {
+        0 => linear,
+        1 => easeIn,
+        2 => easeOut,
+        3 => easeInOut,
+        4 => easeOutCubic,
+        5 => easeInOutCubic,
+        _ => throw const FormatException('invalid sparse extent curve'),
+      };
+}
+
+final class SparseExtentTransition {
+  const SparseExtentTransition({
+    required this.enabled,
+    required this.expandDurationMs,
+    required this.collapseDurationMs,
+    required this.expandCurve,
+    required this.collapseCurve,
   });
 
-  final ScrollAxis axis;
-  final bool reverse;
-  final bool primary;
+  final bool enabled;
+  final int expandDurationMs;
+  final int collapseDurationMs;
+  final SparseExtentCurve expandCurve;
+  final SparseExtentCurve collapseCurve;
 
   @override
   bool operator ==(Object other) =>
-      other is ListViewProps &&
-      other.axis == axis &&
-      other.reverse == reverse &&
-      other.primary == primary;
+      other is SparseExtentTransition &&
+      other.enabled == enabled &&
+      other.expandDurationMs == expandDurationMs &&
+      other.collapseDurationMs == collapseDurationMs &&
+      other.expandCurve == expandCurve &&
+      other.collapseCurve == collapseCurve;
 
   @override
-  int get hashCode => Object.hash(ListViewProps, axis, reverse, primary);
+  int get hashCode => Object.hash(
+    enabled,
+    expandDurationMs,
+    collapseDurationMs,
+    expandCurve,
+    collapseCurve,
+  );
+}
+
+final class SparseExtentOverride {
+  const SparseExtentOverride({required this.index, required this.extent});
+
+  final int index;
+  final double extent;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SparseExtentOverride &&
+      other.index == index &&
+      other.extent == extent;
+
+  @override
+  int get hashCode => Object.hash(index, extent);
+}
+
+final class SliverFillProps extends UiProps {
+  const SliverFillProps({required this.flex});
+
+  final int flex;
+
+  @override
+  bool operator ==(Object other) => other is SliverFillProps && other.flex == flex;
+
+  @override
+  int get hashCode => Object.hash(SliverFillProps, flex);
+}
+
+final class SliverFixedExtentProps extends UiProps {
+  const SliverFixedExtentProps({
+    required this.totalCount,
+    required this.firstIndex,
+    required this.itemExtent,
+    required this.overscan,
+  });
+
+  final int totalCount;
+  final int firstIndex;
+  final double itemExtent;
+  final int overscan;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SliverFixedExtentProps &&
+      other.totalCount == totalCount &&
+      other.firstIndex == firstIndex &&
+      other.itemExtent == itemExtent &&
+      other.overscan == overscan;
+
+  @override
+  int get hashCode => Object.hash(
+    SliverFixedExtentProps,
+    totalCount,
+    firstIndex,
+    itemExtent,
+    overscan,
+  );
+}
+
+final class SliverVariedExtentProps extends UiProps {
+  const SliverVariedExtentProps({
+    required this.totalCount,
+    required this.firstIndex,
+    required this.defaultItemExtent,
+    required this.overscan,
+    required this.extentOverrides,
+    this.transition,
+  });
+
+  final int totalCount;
+  final int firstIndex;
+  final double defaultItemExtent;
+  final int overscan;
+  final List<SparseExtentOverride> extentOverrides;
+  final SparseExtentTransition? transition;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SliverVariedExtentProps &&
+      other.totalCount == totalCount &&
+      other.firstIndex == firstIndex &&
+      other.defaultItemExtent == defaultItemExtent &&
+      other.overscan == overscan &&
+      _listEquals(other.extentOverrides, extentOverrides) &&
+      other.transition == transition;
+
+  @override
+  int get hashCode => Object.hash(
+    SliverVariedExtentProps,
+    totalCount,
+    firstIndex,
+    defaultItemExtent,
+    overscan,
+    Object.hashAll(extentOverrides),
+    transition,
+  );
+}
+
+final class SliverPaddingProps extends UiProps {
+  const SliverPaddingProps(this.insets);
+
+  final EdgeInsetsValue insets;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SliverPaddingProps && other.insets == insets;
+
+  @override
+  int get hashCode => Object.hash(SliverPaddingProps, insets);
+}
+
+final class SliverAppBarProps extends UiProps {
+  const SliverAppBarProps({
+    required this.pinned,
+    this.expandedHeight,
+    this.collapsedHeight,
+  });
+
+  final bool pinned;
+  final double? expandedHeight;
+  final double? collapsedHeight;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SliverAppBarProps &&
+      other.pinned == pinned &&
+      other.expandedHeight == expandedHeight &&
+      other.collapsedHeight == collapsedHeight;
+
+  @override
+  int get hashCode => Object.hash(SliverAppBarProps, pinned, expandedHeight, collapsedHeight);
 }
 
 final class GestureProps extends UiProps {
@@ -1310,6 +1489,14 @@ final class Frame {
   final int targetRevision;
   final FrameKind kind;
   final List<FrameOperation> operations;
+}
+
+bool _listEquals<T>(List<T> left, List<T> right) {
+  if (left.length != right.length) return false;
+  for (var i = 0; i < left.length; i++) {
+    if (left[i] != right[i]) return false;
+  }
+  return true;
 }
 
 bool _frameBytesEqual(List<int> left, List<int> right) {

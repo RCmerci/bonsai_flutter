@@ -25,7 +25,13 @@ type node_kind =
   | Animated_opacity
   | Transform
   | Scroll_view
-  | List_view
+  | Sliver_box
+  | Sliver_list
+  | Sliver_fill
+  | Sliver_fixed_extent
+  | Sliver_varied_extent
+  | Sliver_padding
+  | Sliver_app_bar
   | Gesture
   | Focus_scope
   | Mouse_region
@@ -258,6 +264,27 @@ type animation =
   ; curve : animation_curve
   }
 
+type sparse_extent_curve =
+  | Se_linear
+  | Se_ease_in
+  | Se_ease_out
+  | Se_ease_in_out
+  | Se_ease_out_cubic
+  | Se_ease_in_out_cubic
+
+type sparse_extent_transition =
+  { enabled : bool
+  ; expand_duration_ms : int
+  ; collapse_duration_ms : int
+  ; expand_curve : sparse_extent_curve
+  ; collapse_curve : sparse_extent_curve
+  }
+
+type sliver_extent_override =
+  { index : int
+  ; extent : float
+  }
+
 type props =
   | Empty_props
   | Text_props of text_props
@@ -317,10 +344,33 @@ type props =
       ; reverse : bool
       ; primary : bool
       }
-  | List_view_props of
-      { axis : axis
-      ; reverse : bool
-      ; primary : bool
+  | Sliver_box_props
+  | Sliver_list_props
+  | Sliver_fill_props of { flex : int }
+  | Sliver_fixed_extent_props of
+      { total_count : int
+      ; first_index : int
+      ; item_extent : float
+      ; overscan : int
+      }
+  | Sliver_varied_extent_props of
+      { total_count : int
+      ; first_index : int
+      ; default_item_extent : float
+      ; overscan : int
+      ; extent_overrides : sliver_extent_override list
+      ; transition : sparse_extent_transition option
+      }
+  | Sliver_padding_props of
+      { left : float
+      ; top : float
+      ; right : float
+      ; bottom : float
+      }
+  | Sliver_app_bar_props of
+      { pinned : bool
+      ; expanded_height : float option
+      ; collapsed_height : float option
       }
   | Gesture_props
   | Focus_scope_props of { autofocus : bool }

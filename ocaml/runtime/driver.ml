@@ -229,7 +229,13 @@ let wire_node_kind = function
   | K_animated_opacity -> Ok Animated_opacity
   | K_transform -> Ok Transform
   | K_scroll_view -> Ok Scroll_view
-  | K_list_view -> Ok List_view
+  | K_sliver_box -> Ok Sliver_box
+  | K_sliver_list -> Ok Sliver_list
+  | K_sliver_fill -> Ok Sliver_fill
+  | K_sliver_fixed_extent -> Ok Sliver_fixed_extent
+  | K_sliver_varied_extent -> Ok Sliver_varied_extent
+  | K_sliver_padding -> Ok Sliver_padding
+  | K_sliver_app_bar -> Ok Sliver_app_bar
   | K_gesture -> Ok Gesture
   | K_focus_scope -> Ok Focus_scope
   | K_mouse_region -> Ok Mouse_region
@@ -380,13 +386,52 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
       | Vertical -> Vertical
     in
     Ok (Scroll_view_props { axis; reverse; primary })
-  | List_view { axis; reverse; primary } ->
-    let axis =
-      match axis with
-      | Ui.Layout.Axis.Horizontal -> Protocol.Wire_frame.Horizontal
-      | Vertical -> Vertical
+  | Sliver_box -> Ok Sliver_box_props
+  | Sliver_list -> Ok Sliver_list_props
+  | Sliver_fill { flex } -> Ok (Sliver_fill_props { flex })
+  | Sliver_fixed_extent { total_count; first_index; item_extent; overscan } ->
+    Ok (Sliver_fixed_extent_props { total_count; first_index; item_extent; overscan })
+  | Sliver_varied_extent { total_count; first_index; default_item_extent; extent_overrides; overscan; transition } ->
+    let extent_overrides =
+      List.map
+        (fun { Ui.Widget.Sparse_extent_override.index; extent } ->
+           Protocol.Wire_frame.{ index; extent })
+        extent_overrides
     in
-    Ok (List_view_props { axis; reverse; primary })
+    let transition =
+      Option.map
+        (fun (transition : Ui.Widget.Sparse_extent_transition.t) ->
+           let open Ui.Widget.Sparse_extent_transition in
+           let wire_curve = function
+             | Linear -> Protocol.Wire_frame.Se_linear
+             | Ease_in -> Se_ease_in
+             | Ease_out -> Se_ease_out
+             | Ease_in_out -> Se_ease_in_out
+             | Ease_out_cubic -> Se_ease_out_cubic
+             | Ease_in_out_cubic -> Se_ease_in_out_cubic
+           in
+           Protocol.Wire_frame.
+             { enabled = transition.enabled
+             ; expand_duration_ms = transition.expand_duration_ms
+             ; collapse_duration_ms = transition.collapse_duration_ms
+             ; expand_curve = wire_curve transition.expand_curve
+             ; collapse_curve = wire_curve transition.collapse_curve
+             })
+        transition
+    in
+    Ok
+      (Sliver_varied_extent_props
+         { total_count
+         ; first_index
+         ; default_item_extent
+         ; overscan
+         ; extent_overrides
+         ; transition
+         })
+  | Sliver_padding { left; top; right; bottom } ->
+    Ok (Sliver_padding_props { left; top; right; bottom })
+  | Sliver_app_bar { pinned; expanded_height; collapsed_height } ->
+    Ok (Sliver_app_bar_props { pinned; expanded_height; collapsed_height })
   | Gesture -> Ok Gesture_props
   | Focus_scope { autofocus } -> Ok (Focus_scope_props { autofocus })
   | Mouse_region { opaque } -> Ok (Mouse_region_props { opaque })

@@ -3,7 +3,7 @@
 module ID = Bonsai_flutter_spec.Id
 
 let protocol_major = 1
-let protocol_minor = 18
+let protocol_minor = 19
 
 module Limits = struct
   let header_bytes = 48
@@ -83,7 +83,13 @@ module Node_kind = struct
   let opacity = ID.Protocol.Node_kind.of_int 28
   let transform = ID.Protocol.Node_kind.of_int 29
   let scroll_view = ID.Protocol.Node_kind.of_int 30
-  let list_view = ID.Protocol.Node_kind.of_int 31
+  let sliver_box = ID.Protocol.Node_kind.of_int 32
+  let sliver_list = ID.Protocol.Node_kind.of_int 33
+  let sliver_fill = ID.Protocol.Node_kind.of_int 34
+  let sliver_fixed_extent = ID.Protocol.Node_kind.of_int 35
+  let sliver_varied_extent = ID.Protocol.Node_kind.of_int 36
+  let sliver_padding = ID.Protocol.Node_kind.of_int 37
+  let sliver_app_bar = ID.Protocol.Node_kind.of_int 38
   let gesture = ID.Protocol.Node_kind.of_int 48
   let button = ID.Protocol.Node_kind.of_int 49
   let text_input = ID.Protocol.Node_kind.of_int 50
@@ -138,7 +144,13 @@ module Node_kind = struct
     | 28 -> Some "opacity"
     | 29 -> Some "transform"
     | 30 -> Some "scroll_view"
-    | 31 -> Some "list_view"
+    | 32 -> Some "sliver_box"
+    | 33 -> Some "sliver_list"
+    | 34 -> Some "sliver_fill"
+    | 35 -> Some "sliver_fixed_extent"
+    | 36 -> Some "sliver_varied_extent"
+    | 37 -> Some "sliver_padding"
+    | 38 -> Some "sliver_app_bar"
     | 48 -> Some "gesture"
     | 49 -> Some "button"
     | 50 -> Some "text_input"
@@ -540,16 +552,82 @@ module Scroll_view_prop = struct
   ;;
 end
 
-module List_view_prop = struct
-  let axis = ID.Protocol.Property.of_int 1
-  let reverse = ID.Protocol.Property.of_int 2
-  let primary = ID.Protocol.Property.of_int 3
+module Sliver_fill_prop = struct
+  let flex = ID.Protocol.Property.of_int 1
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
-    | 1 -> Some "axis"
-    | 2 -> Some "reverse"
-    | 3 -> Some "primary"
+    | 1 -> Some "flex"
+    | _ -> None
+  ;;
+end
+
+module Sliver_fixed_extent_prop = struct
+  let total_count = ID.Protocol.Property.of_int 1
+  let first_index = ID.Protocol.Property.of_int 2
+  let item_extent = ID.Protocol.Property.of_int 3
+  let overscan = ID.Protocol.Property.of_int 4
+
+  let debug_name id =
+    match ID.Protocol.Property.to_int id with
+    | 1 -> Some "total_count"
+    | 2 -> Some "first_index"
+    | 3 -> Some "item_extent"
+    | 4 -> Some "overscan"
+    | _ -> None
+  ;;
+end
+
+module Sliver_varied_extent_prop = struct
+  let total_count = ID.Protocol.Property.of_int 1
+  let first_index = ID.Protocol.Property.of_int 2
+  let default_item_extent = ID.Protocol.Property.of_int 3
+  let overscan = ID.Protocol.Property.of_int 4
+  let override_count = ID.Protocol.Property.of_int 5
+  let overrides = ID.Protocol.Property.of_int 6
+  let transition_enabled = ID.Protocol.Property.of_int 7
+  let expand_duration_ms = ID.Protocol.Property.of_int 8
+  let collapse_duration_ms = ID.Protocol.Property.of_int 9
+  let expand_curve = ID.Protocol.Property.of_int 10
+  let collapse_curve = ID.Protocol.Property.of_int 11
+
+  let debug_name id =
+    match ID.Protocol.Property.to_int id with
+    | 1 -> Some "total_count"
+    | 2 -> Some "first_index"
+    | 3 -> Some "default_item_extent"
+    | 4 -> Some "overscan"
+    | 5 -> Some "override_count"
+    | 6 -> Some "overrides"
+    | 7 -> Some "transition_enabled"
+    | 8 -> Some "expand_duration_ms"
+    | 9 -> Some "collapse_duration_ms"
+    | 10 -> Some "expand_curve"
+    | 11 -> Some "collapse_curve"
+    | _ -> None
+  ;;
+end
+
+module Sliver_padding_prop = struct
+  let insets = ID.Protocol.Property.of_int 1
+
+  let debug_name id =
+    match ID.Protocol.Property.to_int id with
+    | 1 -> Some "insets"
+    | _ -> None
+  ;;
+end
+
+module Sliver_app_bar_prop = struct
+  let pinned = ID.Protocol.Property.of_int 1
+  let expanded_height = ID.Protocol.Property.of_int 2
+  let collapsed_height = ID.Protocol.Property.of_int 3
+
+  let debug_name id =
+    match ID.Protocol.Property.to_int id with
+    | 1 -> Some "pinned"
+    | 2 -> Some "expanded_height"
+    | 3 -> Some "collapsed_height"
     | _ -> None
   ;;
 end

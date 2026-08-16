@@ -1513,7 +1513,7 @@ let test_layout_material_and_semantics_widgets_are_incremental () =
             (Widget.center
                (Widget.Scroll_view.vertical
                   ~on_scroll
-                  (Ui.Material.checkbox ~key ~value ~on_changed ())
+                  [ Widget.Sliver.box (Ui.Material.checkbox ~key ~value ~on_changed ()) ]
                   ()
                 |> Widget.Viewport.Vertical.with_height ~height:240.))))
   in

@@ -574,7 +574,7 @@ let card_divider_extent = 1.
 let card_footer_extent = 56.
 
 let mail_list_transition =
-  Ui.Native_widget.Sparse_extent_list.Transition.create
+  Ui.Widget.Sparse_extent_transition.create
     ~expand_duration_ms:240
     ~collapse_duration_ms:190
     ~expand_curve:Ease_out_cubic
@@ -1125,7 +1125,7 @@ let expanded_extent_override state =
       | message :: tail ->
         if Int.equal message.id expanded_id
         then (
-          let override : Ui.Native_widget.Sparse_extent_list.extent_override =
+          let override : Ui.Widget.Sparse_extent_override.t =
             { index
             ; extent =
                 expanded_mail_extent
@@ -1213,15 +1213,19 @@ let render_mail_body ~state ~rows ~open_menu ~on_visible_range =
       | _, Settings_view -> 0
     in
     let list =
-      Ui.Native_widget.Sparse_extent_list.vertical
-        ~total_count
-        ~first_index:state.window_first
-        ~default_item_extent:compact_mail_extent
-        ~extent_overrides:(expanded_extent_override state)
-        ~overscan:4
-        ~transition:mail_list_transition
-        ~items:rows
-        ~on_visible_range
+      Ui.Widget.Scroll_view.vertical
+        ~on_scroll:(Ui.Event.Handler.create (fun _ -> ()))
+        [ Ui.Widget.Sliver.varied_extent
+            ~total_count
+            ~first_index:state.window_first
+            ~default_item_extent:compact_mail_extent
+            ~extent_overrides:(expanded_extent_override state)
+            ~overscan:4
+            ~transition:mail_list_transition
+            ~items:rows
+            ~on_visible_range
+            ()
+        ]
         ()
       |> Ui.Widget.Viewport.Vertical.with_test_id (Ui.Test_id.string "mail-virtual-list")
       |> Ui.Widget.Viewport.Vertical.decorated_box
@@ -1579,7 +1583,7 @@ let render_detail_page
     Ui.Widget.Body.Vertical.create
       [ Ui.Widget.Body.Vertical.fixed toolbar
       ; Ui.Widget.Body.Vertical.fill
-          (Ui.Widget.Scroll_view.vertical ~on_scroll:scroll (Ui.Widget.column blocks) ())
+          (Ui.Widget.Scroll_view.vertical ~on_scroll:scroll [ Ui.Widget.Sliver.box (Ui.Widget.column blocks) ] ())
       ]
   in
   let page_key = Printf.sprintf "mail-detail-%d" message.id in
@@ -1819,7 +1823,7 @@ let component handlers graph =
         equal_state left right && left_set == right_set && left_sleep == right_sleep)
       visible_range_dependencies
       ~f:(fun (snapshot, set_state, sleep) payload ->
-        match Ui.Native_widget.Sparse_extent_list.visible_range_of_payload payload with
+        match Ui.Widget.Sliver.visible_range_of_payload payload with
         | None -> Bonsai.Effect.Ignore
         | Some { first_index; last_exclusive } ->
           let count = List.length (messages_for_destination snapshot) in

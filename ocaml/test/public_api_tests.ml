@@ -71,10 +71,10 @@ let (_ : Ui.Navigation.page_presentation) =
 ;;
 
 let (_ : Ui.Viewport.Vertical.t) =
-  Ui.Widget.List_view.vertical
+  Ui.Widget.Scroll_view.vertical
     ~primary:true
     ~on_scroll:viewport_handler
-    [ Ui.Widget.text "Public row" ]
+    [ Ui.Widget.Sliver.list [ Ui.Widget.text "Public row" ] ]
     ()
 ;;
 
@@ -82,7 +82,7 @@ let (_ : Ui.Body.t) =
   Ui.Body.Vertical.create
     [ Ui.Body.Vertical.fixed (Ui.Widget.text "Search")
     ; Ui.Body.Vertical.fill
-        (Ui.Widget.List_view.vertical ~on_scroll:viewport_handler [] ())
+        (Ui.Widget.Scroll_view.vertical ~on_scroll:viewport_handler [ Ui.Widget.Sliver.list [] ] ())
     ]
 ;;
 

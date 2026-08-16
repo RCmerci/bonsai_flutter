@@ -23,7 +23,13 @@ type kind_tag =
   | K_animated_opacity
   | K_transform
   | K_scroll_view
-  | K_list_view
+  | K_sliver_box
+  | K_sliver_list
+  | K_sliver_fill
+  | K_sliver_fixed_extent
+  | K_sliver_varied_extent
+  | K_sliver_padding
+  | K_sliver_app_bar
   | K_gesture
   | K_focus_scope
   | K_mouse_region
@@ -79,7 +85,13 @@ let kind_tag_to_string = function
   | K_animated_opacity -> "Animated_opacity"
   | K_transform -> "Transform"
   | K_scroll_view -> "Scroll_view"
-  | K_list_view -> "List_view"
+  | K_sliver_box -> "Sliver_box"
+  | K_sliver_list -> "Sliver_list"
+  | K_sliver_fill -> "Sliver_fill"
+  | K_sliver_fixed_extent -> "Sliver_fixed_extent"
+  | K_sliver_varied_extent -> "Sliver_varied_extent"
+  | K_sliver_padding -> "Sliver_padding"
+  | K_sliver_app_bar -> "Sliver_app_bar"
   | K_gesture -> "Gesture"
   | K_focus_scope -> "Focus_scope"
   | K_mouse_region -> "Mouse_region"
@@ -135,6 +147,52 @@ type material_button_variant =
   | Elevated
   | Text_button
   | Icon_button
+
+
+module Sparse_extent_override = struct
+  type t =
+    { index : int
+    ; extent : float
+    }
+end
+
+module Sparse_extent_transition = struct
+  type curve =
+    | Linear
+    | Ease_in
+    | Ease_out
+    | Ease_in_out
+    | Ease_out_cubic
+    | Ease_in_out_cubic
+
+  type t =
+    { enabled : bool
+    ; expand_duration_ms : int
+    ; collapse_duration_ms : int
+    ; expand_curve : curve
+    ; collapse_curve : curve
+    }
+
+  let validate_duration label duration =
+    if duration < 0 || Int64.of_int duration > 0xffff_ffffL
+    then
+      invalid_arg
+        (Printf.sprintf "Widget.Sparse_extent_transition: %s must be a valid u32" label)
+  ;;
+
+  let create
+        ?(enabled = true)
+        ~expand_duration_ms
+        ~collapse_duration_ms
+        ?(expand_curve = Ease_out_cubic)
+        ?(collapse_curve = Ease_in_out_cubic)
+        ()
+    =
+    validate_duration "expand_duration_ms" expand_duration_ms;
+    validate_duration "collapse_duration_ms" collapse_duration_ms;
+    { enabled; expand_duration_ms; collapse_duration_ms; expand_curve; collapse_curve }
+  ;;
+end
 
 
 module Private_types = struct
@@ -218,12 +276,34 @@ type 'k node =
       ; primary : bool
       }
       -> [ `Scroll_view ] node
-  | List_view :
-      { axis : Layout.Axis.t
-      ; reverse : bool
-      ; primary : bool
+  | Sliver_box : [ `Sliver_box ] node
+  | Sliver_list : [ `Sliver_list ] node
+  | Sliver_fill : { flex : int } -> [ `Sliver_fill ] node
+  | Sliver_fixed_extent :
+      { total_count : int
+      ; first_index : int
+      ; item_extent : float
+      ; overscan : int
       }
-      -> [ `List_view ] node
+      -> [ `Sliver_fixed_extent ] node
+  | Sliver_varied_extent :
+      { total_count : int
+      ; first_index : int
+      ; default_item_extent : float
+      ; extent_overrides : Sparse_extent_override.t list
+      ; overscan : int
+      ; transition : Sparse_extent_transition.t option
+      }
+      -> [ `Sliver_varied_extent ] node
+  | Sliver_padding :
+      { left : float; top : float; right : float; bottom : float }
+      -> [ `Sliver_padding ] node
+  | Sliver_app_bar :
+      { pinned : bool
+      ; expanded_height : float option
+      ; collapsed_height : float option
+      }
+      -> [ `Sliver_app_bar ] node
   | Gesture : [ `Gesture ] node
   | Focus_scope : { autofocus : bool } -> [ `Focus_scope ] node
   | Mouse_region : { opaque : bool } -> [ `Mouse_region ] node
@@ -411,7 +491,13 @@ let node_kind_tag (type k) (n : k node) : kind_tag =
   | Animated_opacity _ -> K_animated_opacity
   | Transform _ -> K_transform
   | Scroll_view _ -> K_scroll_view
-  | List_view _ -> K_list_view
+  | Sliver_box -> K_sliver_box
+  | Sliver_list -> K_sliver_list
+  | Sliver_fill _ -> K_sliver_fill
+  | Sliver_fixed_extent _ -> K_sliver_fixed_extent
+  | Sliver_varied_extent _ -> K_sliver_varied_extent
+  | Sliver_padding _ -> K_sliver_padding
+  | Sliver_app_bar _ -> K_sliver_app_bar
   | Gesture -> K_gesture
   | Focus_scope _ -> K_focus_scope
   | Mouse_region _ -> K_mouse_region
@@ -506,10 +592,41 @@ let node_equal (type k1 k2) (a : k1 node) (b : k2 node) : bool =
     x.axis = y.axis
     && Bool.equal x.reverse y.reverse
     && Bool.equal x.primary y.primary
-  | List_view x, List_view y ->
-    x.axis = y.axis
-    && Bool.equal x.reverse y.reverse
-    && Bool.equal x.primary y.primary
+  | Sliver_box, Sliver_box -> true
+  | Sliver_list, Sliver_list -> true
+  | Sliver_fill x, Sliver_fill y -> Int.equal x.flex y.flex
+  | Sliver_fixed_extent x, Sliver_fixed_extent y ->
+    Int.equal x.total_count y.total_count
+    && Int.equal x.first_index y.first_index
+    && Float.equal x.item_extent y.item_extent
+    && Int.equal x.overscan y.overscan
+  | Sliver_varied_extent x, Sliver_varied_extent y ->
+    Int.equal x.total_count y.total_count
+    && Int.equal x.first_index y.first_index
+    && Float.equal x.default_item_extent y.default_item_extent
+    && Int.equal x.overscan y.overscan
+    && List.length x.extent_overrides = List.length y.extent_overrides
+    && List.for_all2
+         (fun (a : Sparse_extent_override.t) (b : Sparse_extent_override.t) ->
+           Int.equal a.index b.index && Float.equal a.extent b.extent)
+         x.extent_overrides y.extent_overrides
+    && Option.equal
+         (fun a b ->
+            Bool.equal a.Sparse_extent_transition.enabled b.enabled
+            && Int.equal a.expand_duration_ms b.expand_duration_ms
+            && Int.equal a.collapse_duration_ms b.collapse_duration_ms
+            && a.expand_curve = b.expand_curve
+            && a.collapse_curve = b.collapse_curve)
+         x.transition y.transition
+  | Sliver_padding x, Sliver_padding y ->
+    Float.equal x.left y.left
+    && Float.equal x.top y.top
+    && Float.equal x.right y.right
+    && Float.equal x.bottom y.bottom
+  | Sliver_app_bar x, Sliver_app_bar y ->
+    Bool.equal x.pinned y.pinned
+    && Option.equal Float.equal x.expanded_height y.expanded_height
+    && Option.equal Float.equal x.collapsed_height y.collapsed_height
   | Focus_scope x, Focus_scope y -> Bool.equal x.autofocus y.autofocus
   | Mouse_region x, Mouse_region y -> Bool.equal x.opaque y.opaque
   | Keyboard_listener x, Keyboard_listener y ->
@@ -924,30 +1041,134 @@ let scroll_view_widget
       ?(reverse = false)
       ?(primary = false)
       ~on_scroll
-      child
+      children
       ()
   =
   create_typed
     ~key
     ~node:(Scroll_view { axis; reverse; primary })
     ~event_bindings:[| { tag = Event.Tag.Scroll_notification; handler = on_scroll } |]
+    ~children:(plain_children children)
+;;
+
+let sliver_box_widget ?key child () =
+  create_typed ~key ~node:Sliver_box ~event_bindings:[||] ~children:(plain_children [ child ])
+;;
+
+let sliver_list_widget ?key children () =
+  create_typed ~key ~node:Sliver_list ~event_bindings:[||] ~children:(plain_children children)
+;;
+
+let sliver_fill_widget ?key ?(flex = 1) child () =
+  if flex <= 0 then invalid_arg "Widget.Sliver.fill: flex must be positive";
+  create_typed ~key ~node:(Sliver_fill { flex }) ~event_bindings:[||] ~children:(plain_children [ child ])
+;;
+
+let sliver_padding_widget ?key ~insets child () =
+  let left, top, right, bottom = Layout.Edge_insets.Private.to_sides insets in
+  create_typed
+    ~key
+    ~node:(Sliver_padding { left; top; right; bottom })
+    ~event_bindings:[||]
     ~children:(plain_children [ child ])
 ;;
 
-let list_view_widget
-      ?key
-      ~axis
-      ?(reverse = false)
-      ?(primary = false)
-      ~on_scroll
-      children
-      ()
-  =
+let sliver_app_bar_widget ?key ?(pinned = false) ?expanded_height ?collapsed_height child () =
   create_typed
     ~key
-    ~node:(List_view { axis; reverse; primary })
-    ~event_bindings:[| { tag = Event.Tag.Scroll_notification; handler = on_scroll } |]
-    ~children:(plain_children children)
+    ~node:(Sliver_app_bar { pinned; expanded_height; collapsed_height })
+    ~event_bindings:[||]
+    ~children:(plain_children [ child ])
+;;
+
+let validate_sliver_extent label extent =
+  if (not (Float.is_finite extent)) || Float.compare extent 0. <= 0
+  then
+    invalid_arg
+      (Printf.sprintf "Widget.Sliver.%s: extent must be finite and positive" label)
+;;
+
+let validate_sliver_window label ~total_count ~first_index child_count =
+  if total_count < 0
+  then invalid_arg (Printf.sprintf "Widget.Sliver.%s: total_count must be non-negative" label);
+  if first_index < 0 || first_index > total_count
+  then
+    invalid_arg
+      (Printf.sprintf "Widget.Sliver.%s: first_index is outside the logical list" label);
+  if child_count > total_count - first_index
+  then invalid_arg (Printf.sprintf "Widget.Sliver.%s: item window exceeds total_count" label)
+;;
+
+let sliver_fixed_extent_widget
+      ?key
+      ~total_count
+      ~first_index
+      ~item_extent
+      ?(overscan = 2)
+      ~items
+      ~on_visible_range
+      ()
+  =
+  validate_sliver_window "fixed_extent" ~total_count ~first_index (List.length items);
+  validate_sliver_extent "fixed_extent" item_extent;
+  if overscan < 0
+  then invalid_arg "Widget.Sliver.fixed_extent: overscan must be non-negative";
+  create_typed
+    ~key
+    ~node:(Sliver_fixed_extent { total_count; first_index; item_extent; overscan })
+    ~event_bindings:[| { tag = Event.Tag.Visible_range_changed; handler = on_visible_range } |]
+    ~children:(plain_children items)
+;;
+
+let validate_extent_overrides label ~total_count overrides =
+  let rec check previous = function
+    | [] -> ()
+    | { Sparse_extent_override.index; extent } :: tail ->
+      if index < 0 || index >= total_count
+      then
+        invalid_arg
+          (Printf.sprintf "Widget.Sliver.%s: override index is outside the logical list" label);
+      (match previous with
+       | Some previous when index <= previous ->
+         invalid_arg
+           (Printf.sprintf "Widget.Sliver.%s: override indexes must be sorted and unique" label)
+       | None | Some _ -> ());
+      validate_sliver_extent label extent;
+      check (Some index) tail
+  in
+  check None overrides
+;;
+
+let sliver_varied_extent_widget
+      ?key
+      ~total_count
+      ~first_index
+      ~default_item_extent
+      ~extent_overrides
+      ?(overscan = 2)
+      ?transition
+      ~items
+      ~on_visible_range
+      ()
+  =
+  validate_sliver_window "varied_extent" ~total_count ~first_index (List.length items);
+  validate_sliver_extent "varied_extent" default_item_extent;
+  if overscan < 0
+  then invalid_arg "Widget.Sliver.varied_extent: overscan must be non-negative";
+  validate_extent_overrides "varied_extent" ~total_count extent_overrides;
+  create_typed
+    ~key
+    ~node:
+      (Sliver_varied_extent
+         { total_count
+         ; first_index
+         ; default_item_extent
+         ; extent_overrides
+         ; overscan
+         ; transition
+         })
+    ~event_bindings:[| { tag = Event.Tag.Visible_range_changed; handler = on_visible_range } |]
+    ~children:(plain_children items)
 ;;
 
 let safe_area
@@ -1461,40 +1682,104 @@ module Viewport = struct
   end
 end
 
+module Sliver = struct
+  type widget = t
+
+  type sliver = Sliver of t
+
+  type t = sliver
+
+  let with_test_id test_id (Sliver widget) = Sliver (with_test_id test_id widget)
+
+  let box ?key child = Sliver (sliver_box_widget ?key child ())
+
+  let list ?key children = Sliver (sliver_list_widget ?key children ())
+
+  let fill ?key ?flex child = Sliver (sliver_fill_widget ?key ?flex child ())
+
+  let fixed_extent
+        ?key
+        ~total_count
+        ~first_index
+        ~item_extent
+        ?overscan
+        ~items
+        ~on_visible_range
+        ()
+    =
+    Sliver
+      (sliver_fixed_extent_widget
+         ?key
+         ~total_count
+         ~first_index
+         ~item_extent
+         ?overscan
+         ~items
+         ~on_visible_range
+         ())
+  ;;
+
+  let varied_extent
+        ?key
+        ~total_count
+        ~first_index
+        ~default_item_extent
+        ~extent_overrides
+        ?overscan
+        ?transition
+        ~items
+        ~on_visible_range
+        ()
+    =
+    Sliver
+      (sliver_varied_extent_widget
+         ?key
+         ~total_count
+         ~first_index
+         ~default_item_extent
+         ~extent_overrides
+         ?overscan
+         ?transition
+         ~items
+         ~on_visible_range
+         ())
+  ;;
+
+  let padding ?key ~insets (Sliver inner) =
+    Sliver (sliver_padding_widget ?key ~insets inner ())
+  ;;
+
+  let app_bar ?key ?pinned ?expanded_height ?collapsed_height child =
+    Sliver (sliver_app_bar_widget ?key ?pinned ?expanded_height ?collapsed_height child ())
+  ;;
+
+  let visible_range_of_payload = function
+    | Event.Payload.Visible_range range -> Some range
+    | _ -> None
+  ;;
+end
+
 module Scroll_view = struct
-  let vertical ?key ?reverse ?primary ~on_scroll child () =
+  let vertical ?key ?reverse ?primary ~on_scroll slivers () =
     scroll_view_widget
       ?key
       ~axis:Layout.Axis.Vertical
       ?reverse
       ?primary
       ~on_scroll
-      child
+      (List.map (fun (Sliver.Sliver widget) -> widget) slivers)
       ()
     |> vertical_viewport
   ;;
 
-  let horizontal ?key ?reverse ~on_scroll child () =
-    scroll_view_widget ?key ~axis:Layout.Axis.Horizontal ?reverse ~on_scroll child ()
-    |> horizontal_viewport
-  ;;
-end
-
-module List_view = struct
-  let vertical ?key ?reverse ?primary ~on_scroll children () =
-    list_view_widget
+  let horizontal ?key ?reverse ~on_scroll slivers () =
+    scroll_view_widget
       ?key
-      ~axis:Layout.Axis.Vertical
+      ~axis:Layout.Axis.Horizontal
       ?reverse
-      ?primary
       ~on_scroll
-      children
+      (List.map (fun (Sliver.Sliver widget) -> widget) slivers)
       ()
-    |> vertical_viewport
-  ;;
-
-  let horizontal ?key ?reverse ~on_scroll children () =
-    list_view_widget ?key ~axis:Layout.Axis.Horizontal ?reverse ~on_scroll children ()
     |> horizontal_viewport
   ;;
 end
@@ -1647,7 +1932,13 @@ module Private = struct
     | K_animated_opacity
     | K_transform
     | K_scroll_view
-    | K_list_view
+    | K_sliver_box
+    | K_sliver_list
+    | K_sliver_fill
+    | K_sliver_fixed_extent
+    | K_sliver_varied_extent
+    | K_sliver_padding
+    | K_sliver_app_bar
     | K_gesture
     | K_focus_scope
     | K_mouse_region

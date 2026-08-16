@@ -19,16 +19,257 @@ let widget_of_vertical_viewport viewport =
   |> fun children -> children.(0)
 ;;
 
-let virtual_range_handler callback =
+
+let sliver_range_handler callback =
   Ui.Event.Handler.create (fun payload ->
-    Option.iter callback (Ui.Native_widget.Virtual_list.visible_range_of_payload payload))
+    Option.iter callback (Ui.Widget.Sliver.visible_range_of_payload payload))
 ;;
 
-let sparse_range_handler callback =
-  Ui.Event.Handler.create (fun payload ->
-    Option.iter
-      callback
-      (Ui.Native_widget.Sparse_extent_list.visible_range_of_payload payload))
+let sliver_override index extent : Ui.Widget.Sparse_extent_override.t =
+  { index; extent }
+;;
+
+let scroll_view_child viewport =
+  let Av view = Ui.Widget.Private.view (widget_of_vertical_viewport viewport) in
+  view.children.(0).widget
+;;
+
+let test_sliver_box_and_scroll_view () =
+  let viewport =
+    Ui.Widget.Scroll_view.vertical
+      ~on_scroll:(Ui.Event.Handler.create (fun _ -> ()))
+      [ Ui.Widget.Sliver.box (Ui.Widget.text "Hi") ]
+      ()
+  in
+  let Av sv = Ui.Widget.Private.view (widget_of_vertical_viewport viewport) in
+  check
+    (Ui.Widget.Private.kind_tag_equal
+       (Ui.Widget.Private.node_kind_tag sv.node)
+       Ui.Widget.Private.K_scroll_view)
+    "scroll view kind";
+  check (Array.length sv.children = 1) "scroll view has one sliver child";
+  let Av bv = Ui.Widget.Private.view sv.children.(0).widget in
+  check
+    (Ui.Widget.Private.kind_tag_equal
+       (Ui.Widget.Private.node_kind_tag bv.node)
+       Ui.Widget.Private.K_sliver_box)
+    "sliver box kind";
+  check (Array.length bv.children = 1) "sliver box has one child"
+;;
+
+let test_sliver_fixed_extent_contract () =
+  let received = ref None in
+  let items = List.init 20 (fun i -> Ui.Widget.text (string_of_int (100 + i))) in
+  let viewport =
+    Ui.Widget.Scroll_view.vertical
+      ~on_scroll:(Ui.Event.Handler.create (fun _ -> ()))
+      [ Ui.Widget.Sliver.fixed_extent
+          ~key:(Ui.Key.string "large-list")
+          ~total_count:50_000
+          ~first_index:100
+          ~item_extent:48.
+          ~overscan:4
+          ~items
+          ~on_visible_range:(sliver_range_handler (fun range -> received := Some range))
+          ()
+      ]
+      ()
+  in
+  let Av fv = Ui.Widget.Private.view (scroll_view_child viewport) in
+  check (Array.length fv.children = 20) "only the supplied window is mounted";
+  (match fv.node with
+   | Ui.Widget.Private.Sliver_fixed_extent { total_count; first_index; item_extent; overscan } ->
+     check (total_count = 50_000) "fixed total count";
+     check (first_index = 100) "fixed first index";
+     check (Float.equal item_extent 48.) "fixed item extent";
+     check (overscan = 4) "fixed overscan"
+   | _ -> failwith "fixed extent node");
+  let binding = fv.event_bindings.(0) in
+  check
+    (Ui.Event.Tag.equal binding.tag Ui.Event.Tag.Visible_range_changed)
+    "fixed extent visible range binding";
+  Ui.Event.Handler.Private.invoke
+    binding.handler
+    (Visible_range { first_index = 104L; last_exclusive = 116L });
+  (match !received with
+   | Some { Ui.Event.Payload.first_index; last_exclusive } ->
+     check (Int64.equal first_index 104L) "visible first index";
+     check (Int64.equal last_exclusive 116L) "visible last index"
+   | None -> failwith "visible range callback")
+;;
+
+let test_sliver_varied_extent_contract () =
+  let received = ref None in
+  let items = List.init 6 (fun i -> Ui.Widget.text (string_of_int (40 + i))) in
+  let viewport =
+    Ui.Widget.Scroll_view.vertical
+      ~on_scroll:(Ui.Event.Handler.create (fun _ -> ()))
+      [ Ui.Widget.Sliver.varied_extent
+          ~key:(Ui.Key.string "sparse-list")
+          ~total_count:50_000
+          ~first_index:40
+          ~default_item_extent:48.
+          ~extent_overrides:[ sliver_override 3 120.; sliver_override 42 312. ]
+          ~overscan:5
+          ~items
+          ~on_visible_range:(sliver_range_handler (fun range -> received := Some range))
+          ()
+      ]
+      ()
+  in
+  let Av vv = Ui.Widget.Private.view (scroll_view_child viewport) in
+  check (Array.length vv.children = 6) "varied extent mounted window";
+  (match vv.node with
+   | Ui.Widget.Private.Sliver_varied_extent
+       { total_count; first_index; default_item_extent; extent_overrides; overscan; transition } ->
+     check (total_count = 50_000) "varied total count";
+     check (first_index = 40) "varied first index";
+     check (Float.equal default_item_extent 48.) "varied default extent";
+     check (overscan = 5) "varied overscan";
+     check (transition = None) "varied default transition";
+     check
+       (extent_overrides = [ sliver_override 3 120.; sliver_override 42 312. ])
+       "varied overrides round trip"
+   | _ -> failwith "varied extent node");
+  let binding = vv.event_bindings.(0) in
+  Ui.Event.Handler.Private.invoke
+    binding.handler
+    (Visible_range { first_index = 41L; last_exclusive = 44L });
+  (match !received with
+   | Some { Ui.Event.Payload.first_index; last_exclusive } ->
+     check (Int64.equal first_index 41L) "varied visible first index";
+     check (Int64.equal last_exclusive 44L) "varied visible last index"
+   | None -> failwith "varied visible range callback")
+;;
+
+let test_sliver_varied_extent_transition () =
+  let transition =
+    Ui.Widget.Sparse_extent_transition.create
+      ~expand_duration_ms:240
+      ~collapse_duration_ms:190
+      ~expand_curve:Ease_out_cubic
+      ~collapse_curve:Ease_in_out_cubic
+      ()
+  in
+  let viewport =
+    Ui.Widget.Scroll_view.vertical
+      ~on_scroll:(Ui.Event.Handler.create (fun _ -> ()))
+      [ Ui.Widget.Sliver.varied_extent
+          ~total_count:20
+          ~first_index:4
+          ~default_item_extent:88.
+          ~extent_overrides:[ sliver_override 6 320. ]
+          ~overscan:4
+          ~transition
+          ~items:[ Ui.Widget.empty () ]
+          ~on_visible_range:(sliver_range_handler (fun _ -> ()))
+          ()
+      ]
+      ()
+  in
+  let Av vv = Ui.Widget.Private.view (scroll_view_child viewport) in
+  (match vv.node with
+   | Ui.Widget.Private.Sliver_varied_extent { transition = Some decoded; _ } ->
+     let open Ui.Widget.Sparse_extent_transition in
+     check decoded.enabled "transition enabled";
+     check (decoded.expand_duration_ms = 240) "expand duration";
+     check (decoded.collapse_duration_ms = 190) "collapse duration";
+     check (decoded.expand_curve = Ease_out_cubic) "expand curve";
+     check (decoded.collapse_curve = Ease_in_out_cubic) "collapse curve"
+   | _ -> failwith "varied extent transition node")
+;;
+
+let test_sliver_varied_extent_validation () =
+  let create
+        ?(total_count = 10)
+        ?(first_index = 0)
+        ?(default_item_extent = 48.)
+        ?(extent_overrides = [])
+        ?(overscan = 2)
+        ?(items = [])
+        ()
+    =
+    ignore
+      (Ui.Widget.Scroll_view.vertical
+         ~on_scroll:(Ui.Event.Handler.create (fun _ -> ()))
+         [ Ui.Widget.Sliver.varied_extent
+             ~total_count
+             ~first_index
+             ~default_item_extent
+             ~extent_overrides
+             ~overscan
+             ~items
+             ~on_visible_range:(sliver_range_handler (fun _ -> ()))
+             ()
+         ]
+         ())
+  in
+  List.iter
+    (fun (build, message) -> expect_invalid_argument build message)
+    [ ( (fun () -> create ~total_count:(-1) ())
+      , "sliver accepted a negative total" )
+    ; ( (fun () -> create ~first_index:11 ())
+      , "sliver accepted an invalid first index" )
+    ; ( (fun () -> create ~default_item_extent:Float.nan ())
+      , "sliver accepted a non-finite default extent" )
+    ; ( (fun () -> create ~default_item_extent:0. ())
+      , "sliver accepted a non-positive default extent" )
+    ; ( (fun () -> create ~overscan:(-1) ())
+      , "sliver accepted negative overscan" )
+    ; ( (fun () -> create ~extent_overrides:[ sliver_override (-1) 80. ] ())
+      , "sliver accepted a negative override index" )
+    ; ( (fun () -> create ~extent_overrides:[ sliver_override 10 80. ] ())
+      , "sliver accepted an out-of-bounds override index" )
+    ; ( (fun () ->
+          create ~extent_overrides:[ sliver_override 4 80.; sliver_override 3 90. ] ())
+      , "sliver accepted unsorted overrides" )
+    ; ( (fun () ->
+          create ~extent_overrides:[ sliver_override 3 80.; sliver_override 3 90. ] ())
+      , "sliver accepted duplicate overrides" )
+    ; ( (fun () -> create ~extent_overrides:[ sliver_override 3 Float.infinity ] ())
+      , "sliver accepted a non-finite override extent" )
+    ; ( (fun () -> create ~extent_overrides:[ sliver_override 3 0. ] ())
+      , "sliver accepted a non-positive override extent" )
+    ; ( (fun () ->
+          create ~total_count:2 ~first_index:1 ~items:[ Ui.Widget.empty (); Ui.Widget.empty () ] ())
+      , "sliver accepted a child window beyond total_count" )
+    ]
+;;
+
+let test_sliver_fill_and_padding () =
+  let viewport =
+    Ui.Widget.Scroll_view.vertical
+      ~on_scroll:(Ui.Event.Handler.create (fun _ -> ()))
+      [ Ui.Widget.Sliver.padding
+          ~insets:(Ui.Layout.Edge_insets.all 8.)
+          (Ui.Widget.Sliver.fill ~flex:2 (Ui.Widget.text "Fill"))
+      ]
+      ()
+  in
+  let Av sv = Ui.Widget.Private.view (widget_of_vertical_viewport viewport) in
+  let Av pad = Ui.Widget.Private.view sv.children.(0).widget in
+  check
+    (Ui.Widget.Private.kind_tag_equal
+       (Ui.Widget.Private.node_kind_tag pad.node)
+       Ui.Widget.Private.K_sliver_padding)
+    "sliver padding kind";
+  let Av fill = Ui.Widget.Private.view pad.children.(0).widget in
+  check
+    (Ui.Widget.Private.kind_tag_equal
+       (Ui.Widget.Private.node_kind_tag fill.node)
+       Ui.Widget.Private.K_sliver_fill)
+    "sliver fill kind";
+  (match fill.node with
+   | Ui.Widget.Private.Sliver_fill { flex } -> check (flex = 2) "sliver fill flex"
+   | _ -> failwith "sliver fill node");
+  expect_invalid_argument
+    (fun () ->
+       ignore
+         (Ui.Widget.Scroll_view.vertical
+            ~on_scroll:(Ui.Event.Handler.create (fun _ -> ()))
+            [ Ui.Widget.Sliver.fill ~flex:0 (Ui.Widget.text "Bad") ]
+            ()))
+    "sliver accepted non-positive fill flex"
 ;;
 
 type dial_event = Changed of int
@@ -76,203 +317,6 @@ let test_typed_native_widget () =
        });
   check (!received = Some (Changed 23)) "typed native event"
 ;;
-
-let test_virtual_list_window () =
-  let items =
-    List.init 20 (fun index ->
-      Ui.Widget.text
-        ~key:(Ui.Key.string (string_of_int (100 + index)))
-        (string_of_int (100 + index)))
-  in
-  let received = ref None in
-  let widget =
-    Ui.Native_widget.Virtual_list.vertical
-      ~key:(Ui.Key.string "large-list")
-      ~total_count:50_000
-      ~first_index:100
-      ~item_extent:48.
-      ~overscan:4
-      ~items
-      ~on_visible_range:(virtual_range_handler (fun range -> received := Some range))
-      ()
-    |> widget_of_vertical_viewport
-  in
-  let Av view = Ui.Widget.Private.view widget in
-  check (Array.length view.children = 20) "only the supplied window is mounted";
-  (match view.node with
-   | Native_widget { kind_id; payload; _ } ->
-     check (kind_id = Ui.Native_widget.Virtual_list.kind_id) "virtual list extension ID";
-     let props = Ui.Native_widget.Virtual_list.For_testing.decode_props_exn payload in
-     check (props.total_count = 50_000) "virtual total count";
-     check (props.first_index = 100) "virtual first index";
-     check (props.overscan = 4) "virtual overscan"
-   | _ -> failwith "virtual list props");
-  let binding = view.event_bindings.(0) in
-  Ui.Event.Handler.Private.invoke
-    binding.handler
-    (Native_event
-       { kind_id = Ui.Native_widget.Virtual_list.kind_id
-       ; version = 1
-       ; event_id = Ui.Native_widget.Virtual_list.visible_range_event_id
-       ; payload =
-           Ui.Native_widget.Virtual_list.For_testing.encode_visible_range
-             ~first_index:104
-             ~last_exclusive:116
-       });
-  match !received with
-  | Some { Ui.Event.Payload.first_index; last_exclusive } ->
-    check (Int64.equal first_index 104L) "visible first index";
-    check (Int64.equal last_exclusive 116L) "visible last index"
-  | None -> failwith "visible range callback"
-;;
-
-let test_virtual_list_handler_path_and_payload_filtering () =
-  let received = ref None in
-  let handler =
-    Ui.Event.Handler.create ~name:"virtual-range" (fun payload ->
-      received := Ui.Native_widget.Virtual_list.visible_range_of_payload payload)
-  in
-  let widget =
-    Ui.Native_widget.Virtual_list.vertical
-      ~total_count:40
-      ~first_index:8
-      ~item_extent:88.
-      ~overscan:4
-      ~items:(List.init 24 (fun index -> Ui.Widget.text (string_of_int index)))
-      ~on_visible_range:handler
-      ()
-    |> widget_of_vertical_viewport
-  in
-  let binding = (let Av v = Ui.Widget.Private.view widget in v.event_bindings).(0) in
-  let invoke kind_id version event_id payload =
-    Ui.Event.Handler.Private.invoke
-      binding.handler
-      (Native_event { kind_id; version; event_id; payload })
-  in
-  let valid =
-    Ui.Native_widget.Virtual_list.For_testing.encode_visible_range
-      ~first_index:12
-      ~last_exclusive:20
-  in
-  invoke (native_kind_id 99) 1 (native_event_id 1) valid;
-  invoke Ui.Native_widget.Virtual_list.kind_id 2 (native_event_id 1) valid;
-  invoke Ui.Native_widget.Virtual_list.kind_id 1 (native_event_id 2) valid;
-  invoke Ui.Native_widget.Virtual_list.kind_id 1 (native_event_id 1) Bytes.empty;
-  check (!received = None) "malformed virtual-list event was accepted";
-  invoke Ui.Native_widget.Virtual_list.kind_id 1 (native_event_id 1) valid;
-  match !received with
-  | Some { Ui.Event.Payload.first_index; last_exclusive } ->
-    check (Int64.equal first_index 12L) "handler visible first index";
-    check (Int64.equal last_exclusive 20L) "handler visible last index"
-  | None -> failwith "valid virtual-list handler event was filtered"
-;;
-
-let sparse_extent index extent : Ui.Native_widget.Sparse_extent_list.extent_override =
-  { index; extent }
-;;
-
-let test_sparse_extent_list_contract () =
-  let received = ref None in
-  let items =
-    List.init 6 (fun index ->
-      Ui.Widget.text
-        ~key:(Ui.Key.string (string_of_int (40 + index)))
-        (string_of_int (40 + index)))
-  in
-  let widget =
-    Ui.Native_widget.Sparse_extent_list.vertical
-      ~key:(Ui.Key.string "sparse-list")
-      ~total_count:50_000
-      ~first_index:40
-      ~default_item_extent:48.
-      ~extent_overrides:[ sparse_extent 3 120.; sparse_extent 42 312. ]
-      ~overscan:5
-      ~items
-      ~on_visible_range:(sparse_range_handler (fun range -> received := Some range))
-      ()
-    |> widget_of_vertical_viewport
-  in
-  let Av view = Ui.Widget.Private.view widget in
-  check (Array.length view.children = 6) "sparse list mounted outside its supplied window";
-  (match view.node with
-   | Native_widget { kind_id; version; capabilities; payload } ->
-     check (kind_id = native_kind_id 4) "sparse list kind ID";
-     check (version = 1) "sparse list schema version";
-     check (Int64.equal capabilities 23L) "sparse list capabilities";
-     check (Bytes.length payload = 68) "sparse list exact payload length";
-     let props =
-       Ui.Native_widget.Sparse_extent_list.For_testing.decode_props_exn payload
-     in
-     check (props.total_count = 50_000) "sparse total count";
-     check (props.first_index = 40) "sparse first index";
-     check (Float.equal props.default_item_extent 48.) "sparse default extent";
-     check (props.overscan = 5) "sparse overscan";
-     check (props.axis = Ui.Layout.Axis.Vertical) "sparse default axis";
-     check
-       (props.extent_overrides = [ sparse_extent 3 120.; sparse_extent 42 312. ])
-       "sparse overrides did not round trip"
-   | _ -> failwith "sparse list native props");
-  let binding = view.event_bindings.(0) in
-  Ui.Event.Handler.Private.invoke
-    binding.handler
-    (Native_event
-       { kind_id = native_kind_id 4
-       ; version = 1
-       ; event_id = native_event_id 1
-       ; payload =
-           Ui.Native_widget.Sparse_extent_list.For_testing.encode_visible_range
-             ~first_index:41
-             ~last_exclusive:44
-       });
-  match !received with
-  | Some { Ui.Event.Payload.first_index; last_exclusive } ->
-    check (Int64.equal first_index 41L) "sparse visible first index";
-    check (Int64.equal last_exclusive 44L) "sparse visible last index"
-  | None -> failwith "sparse visible range callback"
-;;
-
-let test_sparse_extent_list_transition_contract () =
-  let transition =
-    Ui.Native_widget.Sparse_extent_list.Transition.create
-      ~expand_duration_ms:240
-      ~collapse_duration_ms:190
-      ~expand_curve:Ease_out_cubic
-      ~collapse_curve:Ease_in_out_cubic
-      ()
-  in
-  let widget =
-    Ui.Native_widget.Sparse_extent_list.vertical
-      ~total_count:20
-      ~first_index:4
-      ~default_item_extent:88.
-      ~extent_overrides:[ sparse_extent 6 320. ]
-      ~overscan:4
-      ~transition
-      ~items:[ Ui.Widget.empty () ]
-      ~on_visible_range:(sparse_range_handler (fun _ -> ()))
-      ()
-    |> widget_of_vertical_viewport
-  in
-  let Av v = Ui.Widget.Private.view widget in
-   match v.node with
-  | Native_widget { kind_id; version; payload; _ } ->
-    check (kind_id = native_kind_id 4) "animated sparse list kind ID";
-    check (version = 2) "animated sparse list schema version";
-    check (Bytes.length payload = 64) "animated sparse list exact payload length";
-    let props =
-      Ui.Native_widget.Sparse_extent_list.For_testing.decode_props_exn payload
-    in
-    (match props.transition with
-     | None -> failwith "animated sparse list omitted transition props"
-     | Some decoded ->
-       check decoded.enabled "sparse transition enabled";
-       check (decoded.expand_duration_ms = 240) "sparse expand duration";
-       check (decoded.collapse_duration_ms = 190) "sparse collapse duration";
-       check (decoded.expand_curve = Ease_out_cubic) "sparse expand curve";
-       check (decoded.collapse_curve = Ease_in_out_cubic) "sparse collapse curve")
-  | _ -> failwith "animated sparse list native props"
-;;
-
 let test_morphing_surface_contract () =
   let widget =
     Ui.Native_widget.Morphing_surface.create
@@ -292,144 +336,6 @@ let test_morphing_surface_contract () =
     check props.expanded "morphing surface expanded state"
   | _ -> failwith "morphing surface native props"
 ;;
-
-let test_sparse_extent_list_validation () =
-  let create
-        ?(total_count = 10)
-        ?(first_index = 0)
-        ?(default_item_extent = 48.)
-        ?(extent_overrides = [])
-        ?(overscan = 2)
-        ?(items = [])
-        ()
-    =
-    Ui.Native_widget.Sparse_extent_list.vertical
-      ~total_count
-      ~first_index
-      ~default_item_extent
-      ~extent_overrides
-      ~overscan
-      ~items
-      ~on_visible_range:(sparse_range_handler (fun _ -> ()))
-      ()
-  in
-  List.iter
-    (fun (build, message) -> expect_invalid_argument build message)
-    [ ( (fun () -> ignore (create ~total_count:(-1) ()))
-      , "sparse list accepted a negative total" )
-    ; ( (fun () -> ignore (create ~first_index:11 ()))
-      , "sparse list accepted an invalid first index" )
-    ; ( (fun () -> ignore (create ~default_item_extent:Float.nan ()))
-      , "sparse list accepted a non-finite default extent" )
-    ; ( (fun () -> ignore (create ~default_item_extent:0. ()))
-      , "sparse list accepted a non-positive default extent" )
-    ; ( (fun () -> ignore (create ~overscan:(-1) ()))
-      , "sparse list accepted negative overscan" )
-    ; ( (fun () -> ignore (create ~extent_overrides:[ sparse_extent (-1) 80. ] ()))
-      , "sparse list accepted a negative override index" )
-    ; ( (fun () -> ignore (create ~extent_overrides:[ sparse_extent 10 80. ] ()))
-      , "sparse list accepted an out-of-bounds override index" )
-    ; ( (fun () ->
-          ignore
-            (create ~extent_overrides:[ sparse_extent 4 80.; sparse_extent 3 90. ] ()))
-      , "sparse list accepted unsorted overrides" )
-    ; ( (fun () ->
-          ignore
-            (create ~extent_overrides:[ sparse_extent 3 80.; sparse_extent 3 90. ] ()))
-      , "sparse list accepted duplicate overrides" )
-    ; ( (fun () -> ignore (create ~extent_overrides:[ sparse_extent 3 Float.infinity ] ()))
-      , "sparse list accepted a non-finite override extent" )
-    ; ( (fun () -> ignore (create ~extent_overrides:[ sparse_extent 3 0. ] ()))
-      , "sparse list accepted a non-positive override extent" )
-    ; ( (fun () ->
-          ignore
-            (create
-               ~total_count:2
-               ~first_index:1
-               ~items:[ Ui.Widget.empty (); Ui.Widget.empty () ]
-               ()))
-      , "sparse list accepted a child window beyond total_count" )
-    ];
-  let valid =
-    Ui.Native_widget.Sparse_extent_list.vertical
-      ~total_count:8
-      ~first_index:2
-      ~default_item_extent:48.
-      ~extent_overrides:[ sparse_extent 4 96. ]
-      ~items:[ Ui.Widget.empty () ]
-      ~on_visible_range:(sparse_range_handler (fun _ -> ()))
-      ()
-    |> widget_of_vertical_viewport
-  in
-  let payload =
-    let Av v = Ui.Widget.Private.view valid in
-    match v.node with
-    | Native_widget { payload; _ } -> payload
-    | _ -> failwith "sparse list native props"
-  in
-  let reject payload message =
-    expect_invalid_argument
-      (fun () ->
-         ignore (Ui.Native_widget.Sparse_extent_list.For_testing.decode_props_exn payload))
-      message
-  in
-  reject
-    (Bytes.sub payload 0 (Bytes.length payload - 1))
-    "truncated sparse payload accepted";
-  let trailing = Bytes.cat payload (Bytes.of_string "\000") in
-  reject trailing "trailing sparse payload byte accepted";
-  let bad_reserved = Bytes.copy payload in
-  Bytes.set bad_reserved 29 '\001';
-  reject bad_reserved "nonzero sparse reserved byte accepted";
-  let bad_axis = Bytes.copy payload in
-  Bytes.set bad_axis 28 '\002';
-  reject bad_axis "invalid sparse axis accepted";
-  let bad_count = Bytes.copy payload in
-  Bytes.set_int32_le bad_count 32 2l;
-  reject bad_count "sparse override count/length mismatch accepted"
-;;
-
-let test_sparse_extent_handler_path_and_payload_filtering () =
-  let received = ref None in
-  let handler =
-    Ui.Event.Handler.create ~name:"sparse-range" (fun payload ->
-      received := Ui.Native_widget.Sparse_extent_list.visible_range_of_payload payload)
-  in
-  let widget =
-    Ui.Native_widget.Sparse_extent_list.vertical
-      ~total_count:40
-      ~first_index:8
-      ~default_item_extent:88.
-      ~extent_overrides:[ sparse_extent 12 320. ]
-      ~items:(List.init 24 (fun index -> Ui.Widget.text (string_of_int index)))
-      ~on_visible_range:handler
-      ()
-    |> widget_of_vertical_viewport
-  in
-  let binding = (let Av v = Ui.Widget.Private.view widget in v.event_bindings).(0) in
-  let invoke kind_id version event_id payload =
-    Ui.Event.Handler.Private.invoke
-      binding.handler
-      (Native_event { kind_id; version; event_id; payload })
-  in
-  let valid =
-    Ui.Native_widget.Sparse_extent_list.For_testing.encode_visible_range
-      ~first_index:12
-      ~last_exclusive:20
-  in
-  invoke (native_kind_id 99) 1 (native_event_id 1) valid;
-  invoke (native_kind_id 4) 3 (native_event_id 1) valid;
-  invoke (native_kind_id 4) 1 (native_event_id 2) valid;
-  invoke (native_kind_id 4) 1 (native_event_id 1) Bytes.empty;
-  check (!received = None) "malformed sparse-list event was accepted";
-  invoke (native_kind_id 4) 1 (native_event_id 1) valid;
-  match !received with
-  | Some { Ui.Event.Payload.first_index; last_exclusive } ->
-    check (Int64.equal first_index 12L) "sparse handler visible first index";
-    check (Int64.equal last_exclusive 20L) "sparse handler visible last index"
-  | None -> failwith "valid sparse-list handler event was filtered"
-;;
-
 let swipe_action
       ?(label = "Archive")
       ?(background = Ui.Style.Color.argb ~alpha:255 ~red:80 ~green:125 ~blue:88)
@@ -870,13 +776,13 @@ let test_message_composer_validation_and_event_filtering () =
 
 let () =
   test_typed_native_widget ();
-  test_virtual_list_window ();
-  test_virtual_list_handler_path_and_payload_filtering ();
-  test_sparse_extent_list_contract ();
-  test_sparse_extent_list_transition_contract ();
+  test_sliver_box_and_scroll_view ();
+  test_sliver_fixed_extent_contract ();
+  test_sliver_varied_extent_contract ();
+  test_sliver_varied_extent_transition ();
+  test_sliver_varied_extent_validation ();
+  test_sliver_fill_and_padding ();
   test_morphing_surface_contract ();
-  test_sparse_extent_list_validation ();
-  test_sparse_extent_handler_path_and_payload_filtering ();
   test_swipe_action_props_contract ();
   test_swipe_action_omitted_direction_and_validation ();
   test_swipe_action_event_filtering ();

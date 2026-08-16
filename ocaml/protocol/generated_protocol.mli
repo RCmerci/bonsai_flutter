@@ -57,7 +57,13 @@ module Node_kind : sig
   val opacity : Bonsai_flutter_spec.Id.Protocol.node_kind
   val transform : Bonsai_flutter_spec.Id.Protocol.node_kind
   val scroll_view : Bonsai_flutter_spec.Id.Protocol.node_kind
-  val list_view : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val sliver_box : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val sliver_list : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val sliver_fill : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val sliver_fixed_extent : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val sliver_varied_extent : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val sliver_padding : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val sliver_app_bar : Bonsai_flutter_spec.Id.Protocol.node_kind
   val gesture : Bonsai_flutter_spec.Id.Protocol.node_kind
   val button : Bonsai_flutter_spec.Id.Protocol.node_kind
   val text_input : Bonsai_flutter_spec.Id.Protocol.node_kind
@@ -275,10 +281,43 @@ module Scroll_view_prop : sig
   val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
 end
 
-module List_view_prop : sig
-  val axis : Bonsai_flutter_spec.Id.Protocol.property
-  val reverse : Bonsai_flutter_spec.Id.Protocol.property
-  val primary : Bonsai_flutter_spec.Id.Protocol.property
+module Sliver_fill_prop : sig
+  val flex : Bonsai_flutter_spec.Id.Protocol.property
+  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
+end
+
+module Sliver_fixed_extent_prop : sig
+  val total_count : Bonsai_flutter_spec.Id.Protocol.property
+  val first_index : Bonsai_flutter_spec.Id.Protocol.property
+  val item_extent : Bonsai_flutter_spec.Id.Protocol.property
+  val overscan : Bonsai_flutter_spec.Id.Protocol.property
+  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
+end
+
+module Sliver_varied_extent_prop : sig
+  val total_count : Bonsai_flutter_spec.Id.Protocol.property
+  val first_index : Bonsai_flutter_spec.Id.Protocol.property
+  val default_item_extent : Bonsai_flutter_spec.Id.Protocol.property
+  val overscan : Bonsai_flutter_spec.Id.Protocol.property
+  val override_count : Bonsai_flutter_spec.Id.Protocol.property
+  val overrides : Bonsai_flutter_spec.Id.Protocol.property
+  val transition_enabled : Bonsai_flutter_spec.Id.Protocol.property
+  val expand_duration_ms : Bonsai_flutter_spec.Id.Protocol.property
+  val collapse_duration_ms : Bonsai_flutter_spec.Id.Protocol.property
+  val expand_curve : Bonsai_flutter_spec.Id.Protocol.property
+  val collapse_curve : Bonsai_flutter_spec.Id.Protocol.property
+  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
+end
+
+module Sliver_padding_prop : sig
+  val insets : Bonsai_flutter_spec.Id.Protocol.property
+  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
+end
+
+module Sliver_app_bar_prop : sig
+  val pinned : Bonsai_flutter_spec.Id.Protocol.property
+  val expanded_height : Bonsai_flutter_spec.Id.Protocol.property
+  val collapsed_height : Bonsai_flutter_spec.Id.Protocol.property
   val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
 end
 

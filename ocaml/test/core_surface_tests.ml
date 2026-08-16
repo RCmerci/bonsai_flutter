@@ -45,7 +45,7 @@ let widgets =
       ~on_completed:handler
       child
   ; Ui.Widget.transform ~transform:(Ui.Style.Transform.scale ~x:2. ~y:3. ()) child
-  ; Ui.Widget.List_view.vertical ~on_scroll:handler [ child ] ()
+  ; Ui.Widget.Scroll_view.vertical ~on_scroll:handler [ Ui.Widget.Sliver.list [ child ] ] ()
     |> Ui.Widget.Viewport.Vertical.with_height ~height:120.
   ; Ui.Widget.safe_area child
   ; Ui.Widget.environment_boundary child
@@ -454,7 +454,7 @@ let expect_invalid create message =
 
 let test_typed_viewport_body_encoding () =
   let viewport =
-    Ui.Widget.List_view.vertical ~on_scroll:handler [ Ui.Widget.text "Row" ] ()
+    Ui.Widget.Scroll_view.vertical ~on_scroll:handler [ Ui.Widget.Sliver.list [ Ui.Widget.text "Row" ] ] ()
   in
   let body =
     Ui.Widget.Body.Vertical.create
@@ -496,14 +496,14 @@ let test_typed_viewport_body_encoding () =
 ;;
 
 let test_viewport_extent_and_body_validation () =
-  let vertical = Ui.Widget.List_view.vertical ~on_scroll:handler [] () in
+  let vertical = Ui.Widget.Scroll_view.vertical ~on_scroll:handler [ Ui.Widget.Sliver.list [] ] () in
   List.iter
     (fun height ->
        expect_invalid
          (fun () -> Ui.Widget.Viewport.Vertical.with_height ~height vertical)
          "invalid explicit viewport height was accepted")
     [ nan; infinity; neg_infinity; 0.; -1. ];
-  let horizontal = Ui.Widget.List_view.horizontal ~on_scroll:handler [] () in
+  let horizontal = Ui.Widget.Scroll_view.horizontal ~on_scroll:handler [ Ui.Widget.Sliver.list [] ] () in
   List.iter
     (fun width ->
        expect_invalid

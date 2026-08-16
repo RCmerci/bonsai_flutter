@@ -506,20 +506,65 @@ abstract final class FrameCodec {
           ..uint8(axis == ScrollAxis.horizontal ? 0 : 1)
           ..uint8(reverse ? 1 : 0)
           ..uint8(primary ? 1 : 0);
-      case (
-        NodeKind.listView,
-        ListViewProps(:final axis, :final reverse, :final primary),
-      ):
-        if (axis == ScrollAxis.horizontal && primary) {
-          _fail(
-            ProtocolErrorCode.invalidProps,
-            'Horizontal list view cannot be primary',
-          );
+      case (NodeKind.sliverBox, EmptyProps()):
+        break;
+      case (NodeKind.sliverList, EmptyProps()):
+        break;
+      case (NodeKind.sliverFill, SliverFillProps(:final flex)):
+        if (flex == 0) {
+          _fail(ProtocolErrorCode.invalidProps, 'Sliver fill flex must be positive');
         }
+        writer.uint32(flex);
+      case (
+        NodeKind.sliverFixedExtent,
+        SliverFixedExtentProps(
+          :final totalCount,
+          :final firstIndex,
+          :final itemExtent,
+          :final overscan,
+        ),
+      ):
+        _writeSliverFixedExtent(
+          writer,
+          totalCount: totalCount,
+          firstIndex: firstIndex,
+          itemExtent: itemExtent,
+          overscan: overscan,
+        );
+      case (
+        NodeKind.sliverVariedExtent,
+        SliverVariedExtentProps(
+          :final totalCount,
+          :final firstIndex,
+          :final defaultItemExtent,
+          :final overscan,
+          :final extentOverrides,
+          :final transition,
+        ),
+      ):
+        _writeSliverVariedExtent(
+          writer,
+          totalCount: totalCount,
+          firstIndex: firstIndex,
+          defaultItemExtent: defaultItemExtent,
+          overscan: overscan,
+          extentOverrides: extentOverrides,
+          transition: transition,
+        );
+      case (NodeKind.sliverPadding, SliverPaddingProps(:final insets)):
         writer
-          ..uint8(axis == ScrollAxis.horizontal ? 0 : 1)
-          ..uint8(reverse ? 1 : 0)
-          ..uint8(primary ? 1 : 0);
+          ..float64(insets.left)
+          ..float64(insets.top)
+          ..float64(insets.right)
+          ..float64(insets.bottom);
+      case (
+        NodeKind.sliverAppBar,
+        SliverAppBarProps(:final pinned, :final expandedHeight, :final collapsedHeight),
+      ):
+        writer
+          ..uint8(pinned ? 1 : 0)
+          ..optionalFloat64(expandedHeight)
+          ..optionalFloat64(collapsedHeight);
       case (NodeKind.focusScope, FocusScopeProps(:final autofocus)):
         writer.uint8(autofocus ? 1 : 0);
       case (NodeKind.mouseRegion, MouseRegionProps(:final opaque)):
@@ -790,19 +835,65 @@ abstract final class FrameCodec {
           ..uint8(axis == ScrollAxis.horizontal ? 0 : 1)
           ..uint8(reverse ? 1 : 0)
           ..uint8(primary ? 1 : 0);
-      case ListViewProps(:final axis, :final reverse, :final primary):
-        if (axis == ScrollAxis.horizontal && primary) {
-          _fail(
-            ProtocolErrorCode.invalidProps,
-            'Horizontal list view cannot be primary',
-          );
+      case SliverFillProps(:final flex):
+        if (flex == 0) {
+          _fail(ProtocolErrorCode.invalidProps, 'Sliver fill flex must be positive');
         }
         writer
-          ..uint16(NodeKindId.listView)
+          ..uint16(NodeKindId.sliverFill)
           ..uint64(_changedFields(props))
-          ..uint8(axis == ScrollAxis.horizontal ? 0 : 1)
-          ..uint8(reverse ? 1 : 0)
-          ..uint8(primary ? 1 : 0);
+          ..uint32(flex);
+      case SliverFixedExtentProps(
+        :final totalCount,
+        :final firstIndex,
+        :final itemExtent,
+        :final overscan,
+      ):
+        writer
+          ..uint16(NodeKindId.sliverFixedExtent)
+          ..uint64(_changedFields(props));
+        _writeSliverFixedExtent(
+          writer,
+          totalCount: totalCount,
+          firstIndex: firstIndex,
+          itemExtent: itemExtent,
+          overscan: overscan,
+        );
+      case SliverVariedExtentProps(
+        :final totalCount,
+        :final firstIndex,
+        :final defaultItemExtent,
+        :final overscan,
+        :final extentOverrides,
+        :final transition,
+      ):
+        writer
+          ..uint16(NodeKindId.sliverVariedExtent)
+          ..uint64(_changedFields(props));
+        _writeSliverVariedExtent(
+          writer,
+          totalCount: totalCount,
+          firstIndex: firstIndex,
+          defaultItemExtent: defaultItemExtent,
+          overscan: overscan,
+          extentOverrides: extentOverrides,
+          transition: transition,
+        );
+      case SliverPaddingProps(:final insets):
+        writer
+          ..uint16(NodeKindId.sliverPadding)
+          ..uint64(_changedFields(props))
+          ..float64(insets.left)
+          ..float64(insets.top)
+          ..float64(insets.right)
+          ..float64(insets.bottom);
+      case SliverAppBarProps(:final pinned, :final expandedHeight, :final collapsedHeight):
+        writer
+          ..uint16(NodeKindId.sliverAppBar)
+          ..uint64(_changedFields(props))
+          ..uint8(pinned ? 1 : 0)
+          ..optionalFloat64(expandedHeight)
+          ..optionalFloat64(collapsedHeight);
       case GestureProps():
         writer
           ..uint16(NodeKindId.gesture)
@@ -1083,7 +1174,13 @@ abstract final class FrameCodec {
       List<double>.generate(16, (_) => reader.finiteFloat64()),
     ),
     NodeKind.scrollView => _readScrollViewProps(reader),
-    NodeKind.listView => _readListViewProps(reader),
+    NodeKind.sliverBox => const EmptyProps(),
+    NodeKind.sliverList => const EmptyProps(),
+    NodeKind.sliverFill => _readSliverFillProps(reader),
+    NodeKind.sliverFixedExtent => _readSliverFixedExtentProps(reader),
+    NodeKind.sliverVariedExtent => _readSliverVariedExtentProps(reader),
+    NodeKind.sliverPadding => _readSliverPaddingProps(reader),
+    NodeKind.sliverAppBar => _readSliverAppBarProps(reader),
     NodeKind.gesture => const GestureProps(),
     NodeKind.focusScope => FocusScopeProps(autofocus: reader.boolean()),
     NodeKind.mouseRegion => MouseRegionProps(opaque: reader.boolean()),
@@ -1247,7 +1344,13 @@ abstract final class FrameCodec {
     NodeKind.animatedOpacity => NodeKindId.animatedOpacity,
     NodeKind.transform => NodeKindId.transform,
     NodeKind.scrollView => NodeKindId.scrollView,
-    NodeKind.listView => NodeKindId.listView,
+    NodeKind.sliverBox => NodeKindId.sliverBox,
+    NodeKind.sliverList => NodeKindId.sliverList,
+    NodeKind.sliverFill => NodeKindId.sliverFill,
+    NodeKind.sliverFixedExtent => NodeKindId.sliverFixedExtent,
+    NodeKind.sliverVariedExtent => NodeKindId.sliverVariedExtent,
+    NodeKind.sliverPadding => NodeKindId.sliverPadding,
+    NodeKind.sliverAppBar => NodeKindId.sliverAppBar,
     NodeKind.gesture => NodeKindId.gesture,
     NodeKind.focusScope => NodeKindId.focusScope,
     NodeKind.mouseRegion => NodeKindId.mouseRegion,
@@ -1303,7 +1406,17 @@ abstract final class FrameCodec {
     }
     if (value == NodeKindId.transform) return NodeKind.transform;
     if (value == NodeKindId.scrollView) return NodeKind.scrollView;
-    if (value == NodeKindId.listView) return NodeKind.listView;
+    if (value == NodeKindId.sliverBox) return NodeKind.sliverBox;
+    if (value == NodeKindId.sliverList) return NodeKind.sliverList;
+    if (value == NodeKindId.sliverFill) return NodeKind.sliverFill;
+    if (value == NodeKindId.sliverFixedExtent) {
+      return NodeKind.sliverFixedExtent;
+    }
+    if (value == NodeKindId.sliverVariedExtent) {
+      return NodeKind.sliverVariedExtent;
+    }
+    if (value == NodeKindId.sliverPadding) return NodeKind.sliverPadding;
+    if (value == NodeKindId.sliverAppBar) return NodeKind.sliverAppBar;
     if (value == NodeKindId.gesture) return NodeKind.gesture;
     if (value == NodeKindId.focusScope) return NodeKind.focusScope;
     if (value == NodeKindId.mouseRegion) return NodeKind.mouseRegion;
@@ -1481,6 +1594,7 @@ int _changedFields(UiProps props) => switch (props) {
   LinearProps() ||
   GestureProps() ||
   EnvironmentBoundaryProps() => 0,
+  // SliverBox and SliverList carry no props (their content is children).
   TextProps() =>
     _fieldMask(TextPropId.value) |
         _fieldMask(TextPropId.textStyle) |
@@ -1529,10 +1643,29 @@ int _changedFields(UiProps props) => switch (props) {
     _fieldMask(ScrollViewPropId.axis) |
         _fieldMask(ScrollViewPropId.reverse) |
         _fieldMask(ScrollViewPropId.primary),
-  ListViewProps() =>
-    _fieldMask(ListViewPropId.axis) |
-        _fieldMask(ListViewPropId.reverse) |
-        _fieldMask(ListViewPropId.primary),
+  SliverFillProps() => _fieldMask(SliverFillPropId.flex),
+  SliverFixedExtentProps() =>
+    _fieldMask(SliverFixedExtentPropId.totalCount) |
+        _fieldMask(SliverFixedExtentPropId.firstIndex) |
+        _fieldMask(SliverFixedExtentPropId.itemExtent) |
+        _fieldMask(SliverFixedExtentPropId.overscan),
+  SliverVariedExtentProps() =>
+    _fieldMask(SliverVariedExtentPropId.totalCount) |
+        _fieldMask(SliverVariedExtentPropId.firstIndex) |
+        _fieldMask(SliverVariedExtentPropId.defaultItemExtent) |
+        _fieldMask(SliverVariedExtentPropId.overscan) |
+        _fieldMask(SliverVariedExtentPropId.overrideCount) |
+        _fieldMask(SliverVariedExtentPropId.overrides) |
+        _fieldMask(SliverVariedExtentPropId.transitionEnabled) |
+        _fieldMask(SliverVariedExtentPropId.expandDurationMs) |
+        _fieldMask(SliverVariedExtentPropId.collapseDurationMs) |
+        _fieldMask(SliverVariedExtentPropId.expandCurve) |
+        _fieldMask(SliverVariedExtentPropId.collapseCurve),
+  SliverPaddingProps() => _fieldMask(SliverPaddingPropId.insets),
+  SliverAppBarProps() =>
+    _fieldMask(SliverAppBarPropId.pinned) |
+        _fieldMask(SliverAppBarPropId.expandedHeight) |
+        _fieldMask(SliverAppBarPropId.collapsedHeight),
   FocusScopeProps() => _fieldMask(FocusScopePropId.autofocus),
   MouseRegionProps() => _fieldMask(MouseRegionPropId.opaque),
   KeyboardListenerProps() =>
@@ -2148,6 +2281,168 @@ void _writePageProps(_Writer writer, PageProps props) {
     }(),
 };
 
+void _writeSliverFixedExtent(
+  _Writer writer, {
+  required int totalCount,
+  required int firstIndex,
+  required double itemExtent,
+  required int overscan,
+}) {
+  if (!itemExtent.isFinite || itemExtent <= 0) {
+    _fail(ProtocolErrorCode.invalidProps, 'Sliver item_extent must be finite and positive');
+  }
+  writer
+    ..uint64(totalCount)
+    ..uint64(firstIndex)
+    ..float64(itemExtent)
+    ..uint32(overscan);
+}
+
+void _writeSliverVariedExtent(
+  _Writer writer, {
+  required int totalCount,
+  required int firstIndex,
+  required double defaultItemExtent,
+  required int overscan,
+  required List<SparseExtentOverride> extentOverrides,
+  required SparseExtentTransition? transition,
+}) {
+  if (!defaultItemExtent.isFinite || defaultItemExtent <= 0) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Sliver default_item_extent must be finite and positive',
+    );
+  }
+  writer
+    ..uint64(totalCount)
+    ..uint64(firstIndex)
+    ..float64(defaultItemExtent)
+    ..uint32(overscan)
+    ..uint32(extentOverrides.length);
+  for (final override in extentOverrides) {
+    writer
+      ..uint64(override.index)
+      ..float64(override.extent);
+  }
+  if (transition == null) {
+    writer
+      ..optionalBool(null)
+      ..optionalDurationMs(null)
+      ..optionalDurationMs(null)
+      ..optionalSparseExtentCurve(null)
+      ..optionalSparseExtentCurve(null);
+  } else {
+    writer
+      ..optionalBool(transition.enabled)
+      ..optionalDurationMs(transition.expandDurationMs)
+      ..optionalDurationMs(transition.collapseDurationMs)
+      ..optionalSparseExtentCurve(transition.expandCurve)
+      ..optionalSparseExtentCurve(transition.collapseCurve);
+  }
+}
+
+SliverFillProps _readSliverFillProps(_Reader reader) {
+  final flex = reader.uint32();
+  if (flex == 0) {
+    _fail(ProtocolErrorCode.invalidProps, 'Sliver fill flex must be positive');
+  }
+  return SliverFillProps(flex: flex);
+}
+
+SliverFixedExtentProps _readSliverFixedExtentProps(_Reader reader) {
+  final totalCount = reader.uint64();
+  final firstIndex = reader.uint64();
+  final itemExtent = reader.finiteFloat64();
+  if (itemExtent <= 0) {
+    _fail(ProtocolErrorCode.invalidProps, 'Sliver item_extent must be positive');
+  }
+  final overscan = reader.uint32();
+  return SliverFixedExtentProps(
+    totalCount: totalCount,
+    firstIndex: firstIndex,
+    itemExtent: itemExtent,
+    overscan: overscan,
+  );
+}
+
+SliverVariedExtentProps _readSliverVariedExtentProps(_Reader reader) {
+  final totalCount = reader.uint64();
+  final firstIndex = reader.uint64();
+  final defaultItemExtent = reader.finiteFloat64();
+  if (defaultItemExtent <= 0) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Sliver default_item_extent must be positive',
+    );
+  }
+  final overscan = reader.uint32();
+  final overrideCount = reader.uint32();
+  final overrides = <SparseExtentOverride>[];
+  for (var i = 0; i < overrideCount; i++) {
+    final index = reader.uint64();
+    final extent = reader.finiteFloat64();
+    if (extent <= 0) {
+      _fail(ProtocolErrorCode.invalidProps, 'Sliver override extent must be positive');
+    }
+    overrides.add(SparseExtentOverride(index: index, extent: extent));
+  }
+  final transition = _readSliverTransition(reader);
+  return SliverVariedExtentProps(
+    totalCount: totalCount,
+    firstIndex: firstIndex,
+    defaultItemExtent: defaultItemExtent,
+    overscan: overscan,
+    extentOverrides: overrides,
+    transition: transition,
+  );
+}
+
+SparseExtentTransition? _readSliverTransition(_Reader reader) {
+  final enabled = reader.optionalBool();
+  final expandDurationMs = reader.optionalDurationMs();
+  final collapseDurationMs = reader.optionalDurationMs();
+  final expandCurve = reader.optionalSparseExtentCurve();
+  final collapseCurve = reader.optionalSparseExtentCurve();
+  if (enabled == null &&
+      expandDurationMs == null &&
+      collapseDurationMs == null &&
+      expandCurve == null &&
+      collapseCurve == null) {
+    return null;
+  }
+  if (enabled != null &&
+      expandDurationMs != null &&
+      collapseDurationMs != null &&
+      expandCurve != null &&
+      collapseCurve != null) {
+    return SparseExtentTransition(
+      enabled: enabled,
+      expandDurationMs: expandDurationMs,
+      collapseDurationMs: collapseDurationMs,
+      expandCurve: expandCurve,
+      collapseCurve: collapseCurve,
+    );
+  }
+  _fail(ProtocolErrorCode.invalidProps, 'Sliver transition fields must be all-present or all-absent');
+}
+
+SliverPaddingProps _readSliverPaddingProps(_Reader reader) {
+  return SliverPaddingProps(EdgeInsetsValue(
+    left: reader.finiteFloat64(),
+    top: reader.finiteFloat64(),
+    right: reader.finiteFloat64(),
+    bottom: reader.finiteFloat64(),
+  ));
+}
+
+SliverAppBarProps _readSliverAppBarProps(_Reader reader) {
+  return SliverAppBarProps(
+    pinned: reader.boolean(),
+    expandedHeight: reader.optionalFloat64(),
+    collapsedHeight: reader.optionalFloat64(),
+  );
+}
+
 ScrollViewProps _readScrollViewProps(_Reader reader) {
   final axis = reader.scrollAxis();
   final reverse = reader.boolean();
@@ -2159,19 +2454,6 @@ ScrollViewProps _readScrollViewProps(_Reader reader) {
     );
   }
   return ScrollViewProps(axis: axis, reverse: reverse, primary: primary);
-}
-
-ListViewProps _readListViewProps(_Reader reader) {
-  final axis = reader.scrollAxis();
-  final reverse = reader.boolean();
-  final primary = reader.boolean();
-  if (axis == ScrollAxis.horizontal && primary) {
-    _fail(
-      ProtocolErrorCode.invalidProps,
-      'Horizontal list view cannot be primary',
-    );
-  }
-  return ListViewProps(axis: axis, reverse: reverse, primary: primary);
 }
 
 PageProps _readPageProps(_Reader reader) {
@@ -2606,6 +2888,24 @@ final class _Writer {
     }
   }
 
+  void optionalDurationMs(int? value) {
+    if (value == null) {
+      uint8(0);
+    } else {
+      uint8(1);
+      uint32(value);
+    }
+  }
+
+  void optionalSparseExtentCurve(SparseExtentCurve? value) {
+    if (value == null) {
+      uint8(0);
+    } else {
+      uint8(1);
+      uint8(value.wireId);
+    }
+  }
+
   void envelope(int opcode, void Function(_Writer) writeBody) {
     final body = _Writer();
     writeBody(body);
@@ -2718,6 +3018,24 @@ final class _Reader {
     final value => _fail(
       ProtocolErrorCode.invalidProps,
       'Invalid optional float tag $value',
+    ),
+  };
+
+  int? optionalDurationMs() => switch (uint8()) {
+    0 => null,
+    1 => uint32(),
+    final value => _fail(
+      ProtocolErrorCode.invalidProps,
+      'Invalid optional duration tag $value',
+    ),
+  };
+
+  SparseExtentCurve? optionalSparseExtentCurve() => switch (uint8()) {
+    0 => null,
+    1 => SparseExtentCurve.fromWireId(uint8()),
+    final value => _fail(
+      ProtocolErrorCode.invalidProps,
+      'Invalid optional curve tag $value',
     ),
   };
 

@@ -238,6 +238,93 @@ let write_animation writer { id; duration_ms; curve } =
   Writer.u8 writer (animation_curve_id curve)
 ;;
 
+let sparse_extent_curve_id = function
+  | Wire_frame.Se_linear -> 0
+  | Se_ease_in -> 1
+  | Se_ease_out -> 2
+  | Se_ease_in_out -> 3
+  | Se_ease_out_cubic -> 4
+  | Se_ease_in_out_cubic -> 5
+;;
+
+let write_optional_sparse_extent_curve writer = function
+  | None -> Writer.u8 writer 0
+  | Some curve ->
+    Writer.u8 writer 1;
+    Writer.u8 writer (sparse_extent_curve_id curve)
+;;
+
+let write_optional_duration_ms writer = function
+  | None -> Writer.u8 writer 0
+  | Some value ->
+    check_u32 "sliver transition duration" value;
+    Writer.u8 writer 1;
+    Writer.u32 writer value
+;;
+
+let write_sliver_extent_overrides writer overrides =
+  check_u32 "sliver override count" (List.length overrides);
+  Writer.u32 writer (List.length overrides);
+  List.iter
+    (fun { Wire_frame.index; extent } ->
+       check_u64 "sliver override index" (Int64.of_int index);
+       Writer.u64 writer (Int64.of_int index);
+       Writer.f64 writer extent)
+    overrides
+;;
+
+let write_sliver_fixed_extent_payload
+      writer
+      ~total_count
+      ~first_index
+      ~item_extent
+      ~overscan
+  =
+  check_u64 "sliver total_count" (Int64.of_int total_count);
+  check_u64 "sliver first_index" (Int64.of_int first_index);
+  if (not (Float.is_finite item_extent)) || Float.compare item_extent 0. <= 0
+  then fail Invalid_props "sliver item_extent must be finite and positive";
+  check_u32 "sliver overscan" overscan;
+  Writer.u64 writer (Int64.of_int total_count);
+  Writer.u64 writer (Int64.of_int first_index);
+  Writer.f64 writer item_extent;
+  Writer.u32 writer overscan
+;;
+
+let write_sliver_varied_extent_payload
+      writer
+      ~total_count
+      ~first_index
+      ~default_item_extent
+      ~overscan
+      ~extent_overrides
+      ~(transition : Wire_frame.sparse_extent_transition option)
+  =
+  check_u64 "sliver total_count" (Int64.of_int total_count);
+  check_u64 "sliver first_index" (Int64.of_int first_index);
+  if (not (Float.is_finite default_item_extent)) || Float.compare default_item_extent 0. <= 0
+  then fail Invalid_props "sliver default_item_extent must be finite and positive";
+  check_u32 "sliver overscan" overscan;
+  Writer.u64 writer (Int64.of_int total_count);
+  Writer.u64 writer (Int64.of_int first_index);
+  Writer.f64 writer default_item_extent;
+  Writer.u32 writer overscan;
+  write_sliver_extent_overrides writer extent_overrides;
+  (match transition with
+   | None ->
+     write_optional_bool writer None;
+     write_optional_duration_ms writer None;
+     write_optional_duration_ms writer None;
+     write_optional_sparse_extent_curve writer None;
+     write_optional_sparse_extent_curve writer None
+   | Some { enabled; expand_duration_ms; collapse_duration_ms; expand_curve; collapse_curve } ->
+     write_optional_bool writer (Some enabled);
+     write_optional_duration_ms writer (Some expand_duration_ms);
+     write_optional_duration_ms writer (Some collapse_duration_ms);
+     write_optional_sparse_extent_curve writer (Some expand_curve);
+     write_optional_sparse_extent_curve writer (Some collapse_curve))
+;;
+
 let semantics_role_id = function
   | Wire_frame.Generic -> 0
   | Semantics_button -> 1
@@ -462,7 +549,13 @@ let node_kind_id = function
   | Animated_opacity -> Generated_protocol.Node_kind.animated_opacity
   | Transform -> Generated_protocol.Node_kind.transform
   | Scroll_view -> Generated_protocol.Node_kind.scroll_view
-  | List_view -> Generated_protocol.Node_kind.list_view
+  | Sliver_box -> Generated_protocol.Node_kind.sliver_box
+  | Sliver_list -> Generated_protocol.Node_kind.sliver_list
+  | Sliver_fill -> Generated_protocol.Node_kind.sliver_fill
+  | Sliver_fixed_extent -> Generated_protocol.Node_kind.sliver_fixed_extent
+  | Sliver_varied_extent -> Generated_protocol.Node_kind.sliver_varied_extent
+  | Sliver_padding -> Generated_protocol.Node_kind.sliver_padding
+  | Sliver_app_bar -> Generated_protocol.Node_kind.sliver_app_bar
   | Gesture -> Generated_protocol.Node_kind.gesture
   | Focus_scope -> Generated_protocol.Node_kind.focus_scope
   | Mouse_region -> Generated_protocol.Node_kind.mouse_region
@@ -559,14 +652,32 @@ let write_props writer kind props =
        | Vertical -> 1);
     write_bool writer reverse;
     write_bool writer primary
-  | List_view, List_view_props { axis; reverse; primary } ->
-    Writer.u8
+  | Sliver_box, Sliver_box_props -> ()
+  | Sliver_list, Sliver_list_props -> ()
+  | Sliver_fill, Sliver_fill_props { flex } ->
+    check_u32 "sliver fill flex" flex;
+    if flex = 0 then fail Invalid_props "sliver fill flex must be positive";
+    Writer.u32 writer flex
+  | Sliver_fixed_extent, Sliver_fixed_extent_props { total_count; first_index; item_extent; overscan } ->
+    write_sliver_fixed_extent_payload writer ~total_count ~first_index ~item_extent ~overscan
+  | Sliver_varied_extent, Sliver_varied_extent_props { total_count; first_index; default_item_extent; overscan; extent_overrides; transition } ->
+    write_sliver_varied_extent_payload
       writer
-      (match axis with
-       | Horizontal -> 0
-       | Vertical -> 1);
-    write_bool writer reverse;
-    write_bool writer primary
+      ~total_count
+      ~first_index
+      ~default_item_extent
+      ~overscan
+      ~extent_overrides
+      ~transition
+  | Sliver_padding, Sliver_padding_props { left; top; right; bottom } ->
+    Writer.f64 writer left;
+    Writer.f64 writer top;
+    Writer.f64 writer right;
+    Writer.f64 writer bottom
+  | Sliver_app_bar, Sliver_app_bar_props { pinned; expanded_height; collapsed_height } ->
+    write_bool writer pinned;
+    write_optional_f64 writer expanded_height;
+    write_optional_f64 writer collapsed_height
   | Gesture, Gesture_props -> ()
   | Focus_scope, Focus_scope_props { autofocus } -> write_bool writer autofocus
   | Mouse_region, Mouse_region_props { opaque } -> write_bool writer opaque
@@ -757,7 +868,13 @@ let props_kind_id = function
   | Animated_opacity_props _ -> Generated_protocol.Node_kind.animated_opacity
   | Transform_props _ -> Generated_protocol.Node_kind.transform
   | Scroll_view_props _ -> Generated_protocol.Node_kind.scroll_view
-  | List_view_props _ -> Generated_protocol.Node_kind.list_view
+  | Sliver_box_props -> Generated_protocol.Node_kind.sliver_box
+  | Sliver_list_props -> Generated_protocol.Node_kind.sliver_list
+  | Sliver_fill_props _ -> Generated_protocol.Node_kind.sliver_fill
+  | Sliver_fixed_extent_props _ -> Generated_protocol.Node_kind.sliver_fixed_extent
+  | Sliver_varied_extent_props _ -> Generated_protocol.Node_kind.sliver_varied_extent
+  | Sliver_padding_props _ -> Generated_protocol.Node_kind.sliver_padding
+  | Sliver_app_bar_props _ -> Generated_protocol.Node_kind.sliver_app_bar
   | Gesture_props -> Generated_protocol.Node_kind.gesture
   | Focus_scope_props _ -> Generated_protocol.Node_kind.focus_scope
   | Mouse_region_props _ -> Generated_protocol.Node_kind.mouse_region
@@ -875,13 +992,41 @@ let changed_fields = function
       ; field_mask Generated_protocol.Scroll_view_prop.reverse
       ; field_mask Generated_protocol.Scroll_view_prop.primary
       ]
-  | List_view_props _ ->
+  | Sliver_box_props | Sliver_list_props -> 0L
+  | Sliver_fill_props _ -> field_mask Generated_protocol.Sliver_fill_prop.flex
+  | Sliver_fixed_extent_props _ ->
     List.fold_left
       Int64.logor
       0L
-      [ field_mask Generated_protocol.List_view_prop.axis
-      ; field_mask Generated_protocol.List_view_prop.reverse
-      ; field_mask Generated_protocol.List_view_prop.primary
+      [ field_mask Generated_protocol.Sliver_fixed_extent_prop.total_count
+      ; field_mask Generated_protocol.Sliver_fixed_extent_prop.first_index
+      ; field_mask Generated_protocol.Sliver_fixed_extent_prop.item_extent
+      ; field_mask Generated_protocol.Sliver_fixed_extent_prop.overscan
+      ]
+  | Sliver_varied_extent_props _ ->
+    List.fold_left
+      Int64.logor
+      0L
+      [ field_mask Generated_protocol.Sliver_varied_extent_prop.total_count
+      ; field_mask Generated_protocol.Sliver_varied_extent_prop.first_index
+      ; field_mask Generated_protocol.Sliver_varied_extent_prop.default_item_extent
+      ; field_mask Generated_protocol.Sliver_varied_extent_prop.overscan
+      ; field_mask Generated_protocol.Sliver_varied_extent_prop.override_count
+      ; field_mask Generated_protocol.Sliver_varied_extent_prop.overrides
+      ; field_mask Generated_protocol.Sliver_varied_extent_prop.transition_enabled
+      ; field_mask Generated_protocol.Sliver_varied_extent_prop.expand_duration_ms
+      ; field_mask Generated_protocol.Sliver_varied_extent_prop.collapse_duration_ms
+      ; field_mask Generated_protocol.Sliver_varied_extent_prop.expand_curve
+      ; field_mask Generated_protocol.Sliver_varied_extent_prop.collapse_curve
+      ]
+  | Sliver_padding_props _ -> field_mask Generated_protocol.Sliver_padding_prop.insets
+  | Sliver_app_bar_props _ ->
+    List.fold_left
+      Int64.logor
+      0L
+      [ field_mask Generated_protocol.Sliver_app_bar_prop.pinned
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.expanded_height
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.collapsed_height
       ]
   | Focus_scope_props _ -> field_mask Generated_protocol.Focus_scope_prop.autofocus
   | Mouse_region_props _ -> field_mask Generated_protocol.Mouse_region_prop.opaque
@@ -1031,7 +1176,12 @@ let write_update_props writer props =
   Writer.u16 writer (ID.Protocol.Node_kind.to_int (props_kind_id props));
   Writer.u64 writer (changed_fields props);
   match props with
-  | Wire_frame.Empty_props | Linear_props | Gesture_props | Environment_boundary_props ->
+  | Wire_frame.Empty_props
+  | Linear_props
+  | Gesture_props
+  | Environment_boundary_props
+  | Sliver_box_props
+  | Sliver_list_props ->
     ()
   | Text_props props -> write_text_props writer props
   | Rich_text_props { spans } ->
@@ -1091,14 +1241,30 @@ let write_update_props writer props =
        | Vertical -> 1);
     write_bool writer reverse;
     write_bool writer primary
-  | List_view_props { axis; reverse; primary } ->
-    Writer.u8
+  | Sliver_fill_props { flex } ->
+    check_u32 "sliver fill flex" flex;
+    if flex = 0 then fail Invalid_props "sliver fill flex must be positive";
+    Writer.u32 writer flex
+  | Sliver_fixed_extent_props { total_count; first_index; item_extent; overscan } ->
+    write_sliver_fixed_extent_payload writer ~total_count ~first_index ~item_extent ~overscan
+  | Sliver_varied_extent_props { total_count; first_index; default_item_extent; overscan; extent_overrides; transition } ->
+    write_sliver_varied_extent_payload
       writer
-      (match axis with
-       | Horizontal -> 0
-       | Vertical -> 1);
-    write_bool writer reverse;
-    write_bool writer primary
+      ~total_count
+      ~first_index
+      ~default_item_extent
+      ~overscan
+      ~extent_overrides
+      ~transition
+  | Sliver_padding_props { left; top; right; bottom } ->
+    Writer.f64 writer left;
+    Writer.f64 writer top;
+    Writer.f64 writer right;
+    Writer.f64 writer bottom
+  | Sliver_app_bar_props { pinned; expanded_height; collapsed_height } ->
+    write_bool writer pinned;
+    write_optional_f64 writer expanded_height;
+    write_optional_f64 writer collapsed_height
   | Focus_scope_props { autofocus } -> write_bool writer autofocus
   | Mouse_region_props { opaque } -> write_bool writer opaque
   | Keyboard_listener_props { autofocus; key_policy } ->
@@ -1914,6 +2080,73 @@ let read_animation reader =
   { id; duration_ms; curve }
 ;;
 
+let read_sparse_extent_curve reader =
+  match Reader.u8 reader with
+  | 0 -> Wire_frame.Se_linear
+  | 1 -> Se_ease_in
+  | 2 -> Se_ease_out
+  | 3 -> Se_ease_in_out
+  | 4 -> Se_ease_out_cubic
+  | 5 -> Se_ease_in_out_cubic
+  | value -> fail Invalid_props "invalid sparse extent curve %d" value
+;;
+
+let read_optional_sparse_extent_curve reader =
+  match Reader.u8 reader with
+  | 0 -> None
+  | 1 -> Some (read_sparse_extent_curve reader)
+  | value -> fail Invalid_props "invalid optional curve tag %d" value
+;;
+
+let read_optional_duration_ms reader =
+  match Reader.u8 reader with
+  | 0 -> None
+  | 1 -> Some (Reader.u32 reader)
+  | value -> fail Invalid_props "invalid optional duration tag %d" value
+;;
+
+let read_sliver_extent_overrides reader ~total_count =
+  let count = Reader.u32 reader in
+  if count < 0 || count > total_count
+  then fail Invalid_props "sliver override count is out of range";
+  let rec read remaining previous =
+    if remaining = 0 then []
+    else (
+      let index64 = Reader.u64 reader in
+      if Int64.compare index64 0L < 0
+      then fail Invalid_props "sliver override index is negative";
+      if Int64.compare index64 (Int64.of_int max_int) > 0
+      then fail Invalid_props "sliver override index exceeds OCaml int";
+      let index = Int64.to_int index64 in
+      (match previous with
+       | Some previous when index <= previous ->
+         fail Invalid_props "sliver override indexes must be sorted and unique"
+       | _ -> ());
+      if index >= total_count
+      then fail Invalid_props "sliver override index is outside the logical list";
+      let extent = read_finite_f64 reader in
+      if Float.compare extent 0. <= 0
+      then fail Invalid_props "sliver override extent must be finite and positive";
+      { Wire_frame.index; extent } :: read (remaining - 1) (Some index))
+  in
+  read count None
+;;
+
+let read_sliver_varied_extent_transition reader =
+  let enabled = read_optional_bool reader in
+  let expand_duration_ms = read_optional_duration_ms reader in
+  let collapse_duration_ms = read_optional_duration_ms reader in
+  let expand_curve = read_optional_sparse_extent_curve reader in
+  let collapse_curve = read_optional_sparse_extent_curve reader in
+  match (enabled, expand_duration_ms, collapse_duration_ms, expand_curve, collapse_curve) with
+  | None, None, None, None, None -> None
+  | Some enabled, Some expand_duration_ms, Some collapse_duration_ms, Some expand_curve, Some collapse_curve ->
+    Some
+      Wire_frame.
+        { enabled; expand_duration_ms; collapse_duration_ms; expand_curve; collapse_curve }
+  | _ -> fail Invalid_props "sliver transition fields must be all-present or all-absent"
+;;
+
 let read_semantics_role reader =
   match Reader.u8 reader with
   | 0 -> Wire_frame.Generic
@@ -1950,7 +2183,13 @@ let read_node_kind reader =
   | value when value = Generated_protocol.Node_kind.animated_opacity -> Animated_opacity
   | value when value = Generated_protocol.Node_kind.transform -> Transform
   | value when value = Generated_protocol.Node_kind.scroll_view -> Scroll_view
-  | value when value = Generated_protocol.Node_kind.list_view -> List_view
+  | value when value = Generated_protocol.Node_kind.sliver_box -> Sliver_box
+  | value when value = Generated_protocol.Node_kind.sliver_list -> Sliver_list
+  | value when value = Generated_protocol.Node_kind.sliver_fill -> Sliver_fill
+  | value when value = Generated_protocol.Node_kind.sliver_fixed_extent -> Sliver_fixed_extent
+  | value when value = Generated_protocol.Node_kind.sliver_varied_extent -> Sliver_varied_extent
+  | value when value = Generated_protocol.Node_kind.sliver_padding -> Sliver_padding
+  | value when value = Generated_protocol.Node_kind.sliver_app_bar -> Sliver_app_bar
   | value when value = Generated_protocol.Node_kind.gesture -> Gesture
   | value when value = Generated_protocol.Node_kind.focus_scope -> Focus_scope
   | value when value = Generated_protocol.Node_kind.mouse_region -> Mouse_region
@@ -1993,6 +2232,8 @@ let read_props reader kind ~protocol_minor =
   match kind with
   | Wire_frame.Empty | Stack -> Empty_props
   | Environment_boundary -> Environment_boundary_props
+  | Sliver_box -> Sliver_box_props
+  | Sliver_list -> Sliver_list_props
   | Text -> Text_props (read_text_props reader ~protocol_minor)
   | Rich_text ->
     Rich_text_props
@@ -2110,18 +2351,62 @@ let read_props reader kind ~protocol_minor =
     if axis = Horizontal && primary
     then fail Invalid_props "horizontal scroll view cannot be primary";
     Scroll_view_props { axis; reverse; primary }
-  | List_view ->
-    let axis =
-      match Reader.u8 reader with
-      | 0 -> Horizontal
-      | 1 -> Vertical
-      | value -> fail Invalid_props "invalid list axis %d" value
-    in
-    let reverse = read_bool reader in
-    let primary = read_bool reader in
-    if axis = Horizontal && primary
-    then fail Invalid_props "horizontal list view cannot be primary";
-    List_view_props { axis; reverse; primary }
+  | Sliver_fill ->
+    let flex = Reader.u32 reader in
+    if flex = 0 then fail Invalid_props "sliver fill flex must be positive";
+    Sliver_fill_props { flex }
+  | Sliver_fixed_extent ->
+    let total_count64 = Reader.u64 reader in
+    if Int64.compare total_count64 (Int64.of_int max_int) > 0
+    then fail Invalid_props "sliver total_count exceeds OCaml int";
+    let total_count = Int64.to_int total_count64 in
+    let first_index64 = Reader.u64 reader in
+    if Int64.compare first_index64 (Int64.of_int max_int) > 0
+    then fail Invalid_props "sliver first_index exceeds OCaml int";
+    let first_index = Int64.to_int first_index64 in
+    let item_extent = read_finite_f64 reader in
+    if Float.compare item_extent 0. <= 0
+    then fail Invalid_props "sliver item_extent must be finite and positive";
+    let overscan = Reader.u32 reader in
+    if first_index < 0 || first_index > total_count
+    then fail Invalid_props "sliver first_index is outside the logical list";
+    Sliver_fixed_extent_props { total_count; first_index; item_extent; overscan }
+  | Sliver_varied_extent ->
+    let total_count64 = Reader.u64 reader in
+    if Int64.compare total_count64 (Int64.of_int max_int) > 0
+    then fail Invalid_props "sliver total_count exceeds OCaml int";
+    let total_count = Int64.to_int total_count64 in
+    let first_index64 = Reader.u64 reader in
+    if Int64.compare first_index64 (Int64.of_int max_int) > 0
+    then fail Invalid_props "sliver first_index exceeds OCaml int";
+    let first_index = Int64.to_int first_index64 in
+    let default_item_extent = read_finite_f64 reader in
+    if Float.compare default_item_extent 0. <= 0
+    then fail Invalid_props "sliver default_item_extent must be finite and positive";
+    let overscan = Reader.u32 reader in
+    let extent_overrides = read_sliver_extent_overrides reader ~total_count in
+    let transition = read_sliver_varied_extent_transition reader in
+    if first_index < 0 || first_index > total_count
+    then fail Invalid_props "sliver first_index is outside the logical list";
+    Sliver_varied_extent_props
+      { total_count
+      ; first_index
+      ; default_item_extent
+      ; overscan
+      ; extent_overrides
+      ; transition
+      }
+  | Sliver_padding ->
+    let left = read_finite_f64 reader in
+    let top = read_finite_f64 reader in
+    let right = read_finite_f64 reader in
+    let bottom = read_finite_f64 reader in
+    Sliver_padding_props { left; top; right; bottom }
+  | Sliver_app_bar ->
+    let pinned = read_bool reader in
+    let expanded_height = read_optional_f64 reader in
+    let collapsed_height = read_optional_f64 reader in
+    Sliver_app_bar_props { pinned; expanded_height; collapsed_height }
   | Gesture -> Gesture_props
   | Focus_scope -> Focus_scope_props { autofocus = read_bool reader }
   | Mouse_region -> Mouse_region_props { opaque = read_bool reader }
