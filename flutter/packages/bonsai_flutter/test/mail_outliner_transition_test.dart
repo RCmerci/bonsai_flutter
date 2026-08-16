@@ -60,10 +60,7 @@ void main() {
       SparseExtentCurve.fromWireId(SparseExtentCurve.easeInOutCubic.wireId),
       SparseExtentCurve.easeInOutCubic,
     );
-    expect(
-      () => SparseExtentCurve.fromWireId(99),
-      throwsFormatException,
-    );
+    expect(() => SparseExtentCurve.fromWireId(99), throwsFormatException);
   });
 
   testWidgets('SparseExtentTransitionScope provides inherited values', (

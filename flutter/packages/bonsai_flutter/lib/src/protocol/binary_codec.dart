@@ -512,7 +512,10 @@ abstract final class FrameCodec {
         break;
       case (NodeKind.sliverFill, SliverFillProps(:final flex)):
         if (flex == 0) {
-          _fail(ProtocolErrorCode.invalidProps, 'Sliver fill flex must be positive');
+          _fail(
+            ProtocolErrorCode.invalidProps,
+            'Sliver fill flex must be positive',
+          );
         }
         writer.uint32(flex);
       case (
@@ -559,7 +562,11 @@ abstract final class FrameCodec {
           ..float64(insets.bottom);
       case (
         NodeKind.sliverAppBar,
-        SliverAppBarProps(:final pinned, :final expandedHeight, :final collapsedHeight),
+        SliverAppBarProps(
+          :final pinned,
+          :final expandedHeight,
+          :final collapsedHeight,
+        ),
       ):
         writer
           ..uint8(pinned ? 1 : 0)
@@ -837,7 +844,10 @@ abstract final class FrameCodec {
           ..uint8(primary ? 1 : 0);
       case SliverFillProps(:final flex):
         if (flex == 0) {
-          _fail(ProtocolErrorCode.invalidProps, 'Sliver fill flex must be positive');
+          _fail(
+            ProtocolErrorCode.invalidProps,
+            'Sliver fill flex must be positive',
+          );
         }
         writer
           ..uint16(NodeKindId.sliverFill)
@@ -887,7 +897,11 @@ abstract final class FrameCodec {
           ..float64(insets.top)
           ..float64(insets.right)
           ..float64(insets.bottom);
-      case SliverAppBarProps(:final pinned, :final expandedHeight, :final collapsedHeight):
+      case SliverAppBarProps(
+        :final pinned,
+        :final expandedHeight,
+        :final collapsedHeight,
+      ):
         writer
           ..uint16(NodeKindId.sliverAppBar)
           ..uint64(_changedFields(props))
@@ -2289,7 +2303,10 @@ void _writeSliverFixedExtent(
   required int overscan,
 }) {
   if (!itemExtent.isFinite || itemExtent <= 0) {
-    _fail(ProtocolErrorCode.invalidProps, 'Sliver item_extent must be finite and positive');
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Sliver item_extent must be finite and positive',
+    );
   }
   writer
     ..uint64(totalCount)
@@ -2354,7 +2371,10 @@ SliverFixedExtentProps _readSliverFixedExtentProps(_Reader reader) {
   final firstIndex = reader.uint64();
   final itemExtent = reader.finiteFloat64();
   if (itemExtent <= 0) {
-    _fail(ProtocolErrorCode.invalidProps, 'Sliver item_extent must be positive');
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Sliver item_extent must be positive',
+    );
   }
   final overscan = reader.uint32();
   return SliverFixedExtentProps(
@@ -2382,7 +2402,10 @@ SliverVariedExtentProps _readSliverVariedExtentProps(_Reader reader) {
     final index = reader.uint64();
     final extent = reader.finiteFloat64();
     if (extent <= 0) {
-      _fail(ProtocolErrorCode.invalidProps, 'Sliver override extent must be positive');
+      _fail(
+        ProtocolErrorCode.invalidProps,
+        'Sliver override extent must be positive',
+      );
     }
     overrides.add(SparseExtentOverride(index: index, extent: extent));
   }
@@ -2423,16 +2446,21 @@ SparseExtentTransition? _readSliverTransition(_Reader reader) {
       collapseCurve: collapseCurve,
     );
   }
-  _fail(ProtocolErrorCode.invalidProps, 'Sliver transition fields must be all-present or all-absent');
+  _fail(
+    ProtocolErrorCode.invalidProps,
+    'Sliver transition fields must be all-present or all-absent',
+  );
 }
 
 SliverPaddingProps _readSliverPaddingProps(_Reader reader) {
-  return SliverPaddingProps(EdgeInsetsValue(
-    left: reader.finiteFloat64(),
-    top: reader.finiteFloat64(),
-    right: reader.finiteFloat64(),
-    bottom: reader.finiteFloat64(),
-  ));
+  return SliverPaddingProps(
+    EdgeInsetsValue(
+      left: reader.finiteFloat64(),
+      top: reader.finiteFloat64(),
+      right: reader.finiteFloat64(),
+      bottom: reader.finiteFloat64(),
+    ),
+  );
 }
 
 SliverAppBarProps _readSliverAppBarProps(_Reader reader) {

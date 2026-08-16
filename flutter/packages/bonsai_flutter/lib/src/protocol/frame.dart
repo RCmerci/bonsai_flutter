@@ -656,23 +656,23 @@ enum SparseExtentCurve {
   easeInOutCubic;
 
   int get wireId => switch (this) {
-        linear => 0,
-        easeIn => 1,
-        easeOut => 2,
-        easeInOut => 3,
-        easeOutCubic => 4,
-        easeInOutCubic => 5,
-      };
+    linear => 0,
+    easeIn => 1,
+    easeOut => 2,
+    easeInOut => 3,
+    easeOutCubic => 4,
+    easeInOutCubic => 5,
+  };
 
   static SparseExtentCurve fromWireId(int value) => switch (value) {
-        0 => linear,
-        1 => easeIn,
-        2 => easeOut,
-        3 => easeInOut,
-        4 => easeOutCubic,
-        5 => easeInOutCubic,
-        _ => throw const FormatException('invalid sparse extent curve'),
-      };
+    0 => linear,
+    1 => easeIn,
+    2 => easeOut,
+    3 => easeInOut,
+    4 => easeOutCubic,
+    5 => easeInOutCubic,
+    _ => throw const FormatException('invalid sparse extent curve'),
+  };
 }
 
 final class SparseExtentTransition {
@@ -731,7 +731,8 @@ final class SliverFillProps extends UiProps {
   final int flex;
 
   @override
-  bool operator ==(Object other) => other is SliverFillProps && other.flex == flex;
+  bool operator ==(Object other) =>
+      other is SliverFillProps && other.flex == flex;
 
   @override
   int get hashCode => Object.hash(SliverFillProps, flex);
@@ -839,7 +840,8 @@ final class SliverAppBarProps extends UiProps {
       other.collapsedHeight == collapsedHeight;
 
   @override
-  int get hashCode => Object.hash(SliverAppBarProps, pinned, expandedHeight, collapsedHeight);
+  int get hashCode =>
+      Object.hash(SliverAppBarProps, pinned, expandedHeight, collapsedHeight);
 }
 
 final class GestureProps extends UiProps {

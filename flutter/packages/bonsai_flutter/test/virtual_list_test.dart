@@ -127,10 +127,7 @@ void main() {
     final decoded = FrameCodec.decode(FrameCodec.encode(frame));
     final create = decoded.operations[0] as CreateNode;
     expect(create.props, props);
-    expect(
-      (create.props as SliverVariedExtentProps).transition,
-      isNull,
-    );
+    expect((create.props as SliverVariedExtentProps).transition, isNull);
   });
 
   test('sparse extent transition equality and curve wire ids', () {
@@ -159,10 +156,7 @@ void main() {
     expect(a, isNot(c));
     expect(SparseExtentCurve.linear.wireId, 0);
     expect(SparseExtentCurve.easeOutCubic.wireId, 4);
-    expect(
-      SparseExtentCurve.fromWireId(5),
-      SparseExtentCurve.easeInOutCubic,
-    );
+    expect(SparseExtentCurve.fromWireId(5), SparseExtentCurve.easeInOutCubic);
   });
 
   test('sparse extent override equality', () {
@@ -227,10 +221,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: SizedBox(
-          height: 240,
-          child: BonsaiFlutterView(store: store),
-        ),
+        home: SizedBox(height: 240, child: BonsaiFlutterView(store: store)),
       ),
     );
     await tester.pump();
