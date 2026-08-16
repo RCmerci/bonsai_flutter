@@ -618,7 +618,7 @@ let valid_sdk_manifest =
  (target_components_digest component-digest)
  (required_frameworks Foundation Security)
  (required_system_libraries sqlite3)
- (build_recipe_revision 2)
+ (build_recipe_revision 3)
  (packages
   (base v0.17.0)
   (bonsai_flutter 0.1.0~dev)
