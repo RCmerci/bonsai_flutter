@@ -719,14 +719,21 @@ Frame _swipeFrame({
         props: EmptyProps(),
         eventBindings: [],
       ),
-      CreateNode(
+      const CreateNode(
         nodeId: 20,
-        kind: NodeKind.listView,
-        props: ListViewProps(axis: ScrollAxis.vertical, reverse: false),
+        kind: NodeKind.scrollView,
+        props: ScrollViewProps(axis: ScrollAxis.vertical, reverse: false),
+        eventBindings: [],
+      ),
+      const CreateNode(
+        nodeId: 21,
+        kind: NodeKind.sliverList,
+        props: EmptyProps(),
         eventBindings: [],
       ),
       SetChildren(nodeId: 12, children: [13]),
-      SetChildren(nodeId: 20, children: [1, 12]),
+      SetChildren(nodeId: 21, children: [1, 12]),
+      SetChildren(nodeId: 20, children: [21]),
       SetRoot(20),
     ]);
   } else {

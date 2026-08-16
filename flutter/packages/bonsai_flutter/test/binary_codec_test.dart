@@ -754,15 +754,8 @@ void main() {
           reverse: false,
           primary: true,
         ),
-        ListViewProps(
-          axis: ScrollAxis.horizontal,
-          reverse: false,
-          primary: true,
-        ),
       ]) {
-        final kind = props is ScrollViewProps
-            ? NodeKind.scrollView
-            : NodeKind.listView;
+        final kind = NodeKind.scrollView;
         final frame = Frame(
           runtimeEpoch: 9,
           baseRevision: 0,
@@ -951,11 +944,7 @@ void main() {
           ),
           UpdateProps(
             nodeId: 11,
-            props: ListViewProps(
-              axis: ScrollAxis.vertical,
-              reverse: false,
-              primary: true,
-            ),
+            props: SliverFillProps(flex: 3),
           ),
           UpdateProps(
             nodeId: 12,
@@ -987,7 +976,7 @@ void main() {
           ClipProps,
           OpacityProps,
           TransformProps,
-          ListViewProps,
+          SliverFillProps,
           SafeAreaProps,
           EnvironmentBoundaryProps,
         ],

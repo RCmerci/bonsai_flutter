@@ -353,12 +353,18 @@ void main() {
       expect(overlayPosition.top, isNull);
       expect(overlayPosition.right, 16);
       expect(overlayPosition.bottom, 16);
-      final sparse = creates.singleWhere((node) => node.nodeId == 6);
-      expect(sparse.kind, NodeKind.nativeWidget);
+      final scrollView = creates.singleWhere((node) => node.nodeId == 6);
+      expect(scrollView.kind, NodeKind.scrollView);
       expect(
-        (sparse.props as NativeWidgetProps).kindId,
-        NativeWidgetKind.sparseExtentList,
+        scrollView.props,
+        const ScrollViewProps(
+          axis: ScrollAxis.vertical,
+          reverse: false,
+          primary: true,
+        ),
       );
+      final sliver = creates.singleWhere((node) => node.nodeId == 9);
+      expect(sliver.kind, NodeKind.sliverVariedExtent);
       expectFixtureMatchesDartEncoding('ocaml_viewport_body.hex', frame);
     });
 
@@ -369,7 +375,7 @@ void main() {
       expect(update.nodeId, 71);
       expect(
         update.props,
-        const ListViewProps(
+        const ScrollViewProps(
           axis: ScrollAxis.vertical,
           reverse: false,
           primary: true,

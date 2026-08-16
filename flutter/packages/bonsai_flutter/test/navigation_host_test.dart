@@ -1130,7 +1130,7 @@ void main() {
       tester,
     ) async {
       final fixture = await _pumpDetentedFixture(tester);
-      final list = find.byType(ListView);
+      final list = find.byType(CustomScrollView);
 
       expect(_sheetHeight(tester), closeTo(300, 2));
       expect(_primaryScrollPosition(tester).pixels, 0);
@@ -1158,7 +1158,7 @@ void main() {
     ) async {
       await _pumpDetentedFixture(tester, disableAnimations: true);
       final gesture = await tester.startGesture(
-        tester.getCenter(find.byType(ListView)),
+        tester.getCenter(find.byType(CustomScrollView)),
       );
 
       await gesture.moveBy(const Offset(0, -180));
@@ -1179,7 +1179,7 @@ void main() {
         tester,
         initialDetent: ModalSheetDetent.large,
       );
-      final list = find.byType(ListView);
+      final list = find.byType(CustomScrollView);
 
       expect(_sheetHeight(tester), closeTo(600, 2));
       await tester.drag(list, const Offset(0, 260));
@@ -1224,7 +1224,7 @@ void main() {
       final editable = tester.widget<EditableText>(find.byType(EditableText));
       editable.controller.text = 'retained detented state';
 
-      await tester.drag(find.byType(ListView), const Offset(0, 300));
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, 300));
       await tester.pumpAndSettle();
       expect(_sheetHeight(tester), closeTo(300, 2));
       expect(fixture.events, isEmpty);
@@ -1238,7 +1238,7 @@ void main() {
       );
       expect(editable.controller.text, 'retained detented state');
 
-      await tester.drag(find.byType(ListView), const Offset(0, 300));
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, 300));
       await tester.pumpAndSettle();
       expect(fixture.events, hasLength(1));
       expect(find.text('Detented editor'), findsNothing);
@@ -1249,7 +1249,7 @@ void main() {
     ) async {
       final fixture = await _pumpDetentedFixture(tester);
       final gesture = await tester.startGesture(
-        tester.getCenter(find.byType(ListView)),
+        tester.getCenter(find.byType(CustomScrollView)),
       );
       await gesture.moveBy(const Offset(0, 180));
       await tester.pump();
@@ -1438,7 +1438,7 @@ void main() {
     ) async {
       final fixture = await _pumpDetentedFixture(tester, dismissOnDrag: false);
 
-      await tester.drag(find.byType(ListView), const Offset(0, 320));
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, 320));
       await tester.pumpAndSettle();
 
       expect(_sheetHeight(tester), closeTo(300, 2));
@@ -1596,7 +1596,7 @@ void main() {
       tester,
     ) async {
       final fixture = await _pumpDetentedFixture(tester);
-      await tester.drag(find.byType(ListView), const Offset(0, -260));
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -260));
       await tester.pumpAndSettle();
       expect(_sheetHeight(tester), closeTo(600, 2));
 
@@ -1648,7 +1648,7 @@ void main() {
       tester,
     ) async {
       final fixture = await _pumpDetentedFixture(tester);
-      await tester.drag(find.byType(ListView), const Offset(0, -260));
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -260));
       await tester.pumpAndSettle();
       expect(_sheetHeight(tester), closeTo(600, 2));
 
@@ -1679,9 +1679,9 @@ void main() {
       tester,
     ) async {
       final fixture = await _pumpDetentedFixture(tester);
-      await tester.drag(find.byType(ListView), const Offset(0, -260));
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -260));
       await tester.pumpAndSettle();
-      await tester.drag(find.byType(ListView), const Offset(0, -180));
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -180));
       await tester.pumpAndSettle();
       final before = _primaryScrollPosition(tester).pixels;
       expect(before, greaterThan(0));
@@ -2597,7 +2597,7 @@ ScrollPosition _primaryScrollPosition(WidgetTester tester) => tester
     .state<ScrollableState>(
       find
           .descendant(
-            of: find.byType(ListView),
+            of: find.byType(CustomScrollView),
             matching: find.byType(Scrollable),
           )
           .first,
@@ -2679,6 +2679,7 @@ final class _DetentedFixture {
           DropNode(5),
           DropNode(6),
           DropNode(7),
+          DropNode(71),
           DropNode(8),
           DropNode(9),
           DropNode(10),
@@ -2874,13 +2875,19 @@ Frame _detentedSnapshot({
     ),
     CreateNode(
       nodeId: 7,
-      kind: NodeKind.listView,
-      props: ListViewProps(
+      kind: NodeKind.scrollView,
+      props: ScrollViewProps(
         axis: ScrollAxis.vertical,
         reverse: false,
         primary: primaryCount > 0,
       ),
       eventBindings: const [],
+    ),
+    const CreateNode(
+      nodeId: 71,
+      kind: NodeKind.sliverList,
+      props: EmptyProps(),
+      eventBindings: [],
     ),
     const CreateNode(
       nodeId: 8,
@@ -2933,12 +2940,18 @@ Frame _detentedSnapshot({
       ),
       const CreateNode(
         nodeId: 47,
-        kind: NodeKind.listView,
-        props: ListViewProps(
+        kind: NodeKind.scrollView,
+        props: ScrollViewProps(
           axis: ScrollAxis.vertical,
           reverse: false,
           primary: true,
         ),
+        eventBindings: [],
+      ),
+      const CreateNode(
+        nodeId: 471,
+        kind: NodeKind.sliverList,
+        props: EmptyProps(),
         eventBindings: [],
       ),
       const CreateNode(
@@ -2953,15 +2966,17 @@ Frame _detentedSnapshot({
     const SetChildren(nodeId: 3, children: [4]),
     const SetChildren(nodeId: 5, children: [6]),
     SetChildren(nodeId: 6, children: [primaryCount == 2 ? 40 : 7]),
+    SetChildren(nodeId: 7, children: [71]),
     SetChildren(
-      nodeId: 7,
+      nodeId: 71,
       children: [8, 9, for (var index = 0; index < 6; index += 1) 10 + index],
     ),
     for (var index = 0; index < 6; index += 1)
       SetChildren(nodeId: 10 + index, children: [20 + index]),
     if (primaryCount == 2) ...[
       const SetChildren(nodeId: 40, children: [7, 47]),
-      const SetChildren(nodeId: 47, children: [48]),
+      const SetChildren(nodeId: 47, children: [471]),
+      const SetChildren(nodeId: 471, children: [48]),
     ],
     const SetRoot(1),
   ],

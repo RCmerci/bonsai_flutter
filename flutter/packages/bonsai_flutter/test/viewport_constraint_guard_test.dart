@@ -11,47 +11,47 @@ void main() {
             viewportKind: NodeKind.scrollView,
             axis: ScrollAxis.vertical,
           ),
-          viewportType: SingleChildScrollView,
+          viewportType: CustomScrollView,
           guidance: 'Body.Vertical.fill',
         ),
         (
-          name: 'horizontal ListView',
+          name: 'horizontal ScrollView',
           frame: _coreViewportFrame(
-            viewportKind: NodeKind.listView,
+            viewportKind: NodeKind.scrollView,
             axis: ScrollAxis.horizontal,
           ),
-          viewportType: ListView,
+          viewportType: CustomScrollView,
           guidance: 'Body.Horizontal.fill',
         ),
         (
-          name: 'vertical VirtualList',
-          frame: _nativeViewportFrame(
-            VirtualListProps(
+          name: 'vertical SliverFixedExtent',
+          frame: _sliverViewportFrame(
+            sliverKind: NodeKind.sliverFixedExtent,
+            sliverProps: const SliverFixedExtentProps(
               totalCount: 20,
               firstIndex: 0,
               itemExtent: 48,
               overscan: 2,
-              axis: ScrollAxis.vertical,
-            ).toNativeWidgetProps(),
+            ),
             axis: ScrollAxis.vertical,
           ),
-          viewportType: ListView,
+          viewportType: CustomScrollView,
           guidance: 'Body.Vertical.fill',
         ),
         (
-          name: 'horizontal SparseExtentList',
-          frame: _nativeViewportFrame(
-            const SparseExtentListProps(
+          name: 'horizontal SliverVariedExtent',
+          frame: _sliverViewportFrame(
+            sliverKind: NodeKind.sliverVariedExtent,
+            sliverProps: const SliverVariedExtentProps(
               totalCount: 20,
               firstIndex: 0,
               defaultItemExtent: 48,
-              extentOverrides: [],
               overscan: 2,
-              axis: ScrollAxis.horizontal,
-            ).toNativeWidgetProps(),
+              extentOverrides: [],
+            ),
             axis: ScrollAxis.horizontal,
           ),
-          viewportType: ListView,
+          viewportType: CustomScrollView,
           guidance: 'Body.Horizontal.fill',
         ),
       ]) {
@@ -116,12 +116,18 @@ void main() {
             ),
             CreateNode(
               nodeId: 4,
-              kind: NodeKind.listView,
-              props: ListViewProps(axis: ScrollAxis.vertical, reverse: false),
+              kind: NodeKind.scrollView,
+              props: ScrollViewProps(axis: ScrollAxis.vertical, reverse: false),
               eventBindings: [],
             ),
             CreateNode(
               nodeId: 5,
+              kind: NodeKind.sliverList,
+              props: EmptyProps(),
+              eventBindings: [],
+            ),
+            CreateNode(
+              nodeId: 6,
               kind: NodeKind.text,
               props: TextProps('Row'),
               eventBindings: [],
@@ -129,6 +135,7 @@ void main() {
             SetChildren(nodeId: 1, children: [2, 3]),
             SetChildren(nodeId: 3, children: [4]),
             SetChildren(nodeId: 4, children: [5]),
+            SetChildren(nodeId: 5, children: [6]),
             SetRoot(1),
           ],
         ),
@@ -140,7 +147,7 @@ void main() {
       ),
     );
     expect(tester.takeException(), isNotNull);
-    expect(find.byType(ListView), findsNothing);
+    expect(find.byType(CustomScrollView), findsNothing);
 
     store.apply(
       const Frame(
@@ -159,8 +166,8 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
-    expect(find.byType(ListView), findsOneWidget);
-    expect(tester.getSize(find.byType(ListView)).height, 240);
+    expect(find.byType(CustomScrollView), findsOneWidget);
+    expect(tester.getSize(find.byType(CustomScrollView)).height, 240);
     expect(find.byType(RendererLayoutError), findsNothing);
 
     store.apply(
@@ -180,7 +187,7 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
-    expect(find.byType(ListView), findsNothing);
+    expect(find.byType(CustomScrollView), findsNothing);
     expect(find.byType(RendererLayoutError), findsOneWidget);
   });
 }
@@ -190,11 +197,7 @@ Frame _coreViewportFrame({
   required ScrollAxis axis,
 }) {
   final vertical = axis == ScrollAxis.vertical;
-  final viewportProps = switch (viewportKind) {
-    NodeKind.scrollView => ScrollViewProps(axis: axis, reverse: false),
-    NodeKind.listView => ListViewProps(axis: axis, reverse: false),
-    _ => throw ArgumentError.value(viewportKind, 'viewportKind'),
-  };
+  final viewportProps = ScrollViewProps(axis: axis, reverse: false);
   return Frame(
     runtimeEpoch: 70,
     baseRevision: 0,
@@ -221,19 +224,27 @@ Frame _coreViewportFrame({
       ),
       const CreateNode(
         nodeId: 4,
+        kind: NodeKind.sliverList,
+        props: EmptyProps(),
+        eventBindings: [],
+      ),
+      const CreateNode(
+        nodeId: 5,
         kind: NodeKind.text,
         props: TextProps('Scrollable'),
         eventBindings: [],
       ),
       const SetChildren(nodeId: 1, children: [2, 3]),
       const SetChildren(nodeId: 3, children: [4]),
+      const SetChildren(nodeId: 4, children: [5]),
       const SetRoot(1),
     ],
   );
 }
 
-Frame _nativeViewportFrame(
-  NativeWidgetProps props, {
+Frame _sliverViewportFrame({
+  required NodeKind sliverKind,
+  required UiProps sliverProps,
   required ScrollAxis axis,
 }) {
   final vertical = axis == ScrollAxis.vertical;
@@ -257,18 +268,25 @@ Frame _nativeViewportFrame(
       ),
       CreateNode(
         nodeId: 3,
-        kind: NodeKind.nativeWidget,
-        props: props,
+        kind: NodeKind.scrollView,
+        props: ScrollViewProps(axis: axis, reverse: false),
+        eventBindings: const [],
+      ),
+      CreateNode(
+        nodeId: 4,
+        kind: sliverKind,
+        props: sliverProps,
         eventBindings: const [],
       ),
       const CreateNode(
-        nodeId: 4,
+        nodeId: 5,
         kind: NodeKind.text,
         props: TextProps('Scrollable'),
         eventBindings: [],
       ),
       const SetChildren(nodeId: 1, children: [2, 3]),
       const SetChildren(nodeId: 3, children: [4]),
+      const SetChildren(nodeId: 4, children: [5]),
       const SetRoot(1),
     ],
   );

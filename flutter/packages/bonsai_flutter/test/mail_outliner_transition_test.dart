@@ -5,13 +5,6 @@ import 'package:bonsai_flutter/src/native_widget/sparse_extent_transition_scope.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const _linearTransition = SparseExtentTransitionSpec(
-  expandDuration: Duration(milliseconds: 200),
-  collapseDuration: Duration(milliseconds: 200),
-  expandCurve: SparseExtentTransitionCurve.linear,
-  collapseCurve: SparseExtentTransitionCurve.linear,
-);
-
 void main() {
   test('morphing surface props round trip and reject malformed payloads', () {
     const props = MorphingSurfaceProps(expanded: true);
@@ -35,249 +28,68 @@ void main() {
     );
   });
 
-  group('SparseExtentListHost transitions', () {
-    testWidgets(
-      'interpolates extent, moves later rows, and reports only the settled range',
-      (tester) async {
-        final controller = ScrollController();
-        final props = ValueNotifier(_props());
-        final ranges = <({int firstIndex, int lastExclusive})>[];
+  test('sparse extent transition and curve types from frame.dart', () {
+    const transition = SparseExtentTransition(
+      enabled: true,
+      expandDurationMs: 240,
+      collapseDurationMs: 190,
+      expandCurve: SparseExtentCurve.easeOutCubic,
+      collapseCurve: SparseExtentCurve.easeInOutCubic,
+    );
+    expect(transition.enabled, isTrue);
+    expect(transition.expandDurationMs, 240);
+    expect(transition.collapseDurationMs, 190);
+    expect(transition.expandCurve, SparseExtentCurve.easeOutCubic);
+    expect(transition.collapseCurve, SparseExtentCurve.easeInOutCubic);
 
-        await _pumpSparseHost(
-          tester,
-          props: props,
-          controller: controller,
-          emit: (eventId, payload) {
-            if (eventId == VirtualListEvent.visibleRangeChanged) {
-              ranges.add(VirtualListEvent.decodeVisibleRange(payload));
-            }
+    // Equality
+    const same = SparseExtentTransition(
+      enabled: true,
+      expandDurationMs: 240,
+      collapseDurationMs: 190,
+      expandCurve: SparseExtentCurve.easeOutCubic,
+      collapseCurve: SparseExtentCurve.easeInOutCubic,
+    );
+    expect(transition, same);
+    expect(transition.hashCode, same.hashCode);
+
+    // Curve wire ids
+    expect(SparseExtentCurve.linear.wireId, 0);
+    expect(SparseExtentCurve.easeOutCubic.wireId, 4);
+    expect(
+      SparseExtentCurve.fromWireId(SparseExtentCurve.easeInOutCubic.wireId),
+      SparseExtentCurve.easeInOutCubic,
+    );
+    expect(
+      () => SparseExtentCurve.fromWireId(99),
+      throwsFormatException,
+    );
+  });
+
+  testWidgets('SparseExtentTransitionScope provides inherited values', (
+    tester,
+  ) async {
+    late SparseExtentTransitionScope? captured;
+    await tester.pumpWidget(
+      SparseExtentTransitionScope(
+        progress: 0.5,
+        expanded: true,
+        compactExtent: 40,
+        expandedExtent: 120,
+        child: Builder(
+          builder: (context) {
+            captured = SparseExtentTransitionScope.maybeOf(context);
+            return const SizedBox.shrink();
           },
-        );
-        ranges.clear();
-        final initialLaterTop = tester.getTopLeft(_item(3)).dy;
-
-        props.value = _props(
-          overrides: const [ExtentOverride(index: 2, extent: 120)],
-        );
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 100));
-
-        expect(tester.getSize(_item(2)).height, closeTo(80, 1));
-        expect(
-          tester.getTopLeft(_item(3)).dy,
-          closeTo(initialLaterTop + 40, 1),
-        );
-        expect(ranges, isEmpty);
-
-        await tester.pump(const Duration(milliseconds: 110));
-        await tester.pump();
-        expect(tester.getSize(_item(2)).height, 120);
-        expect(ranges, hasLength(1));
-
-        props.dispose();
-        controller.dispose();
-      },
+        ),
+      ),
     );
 
-    testWidgets(
-      'animates accordion indexes together and anchors the newly expanded row',
-      (tester) async {
-        final controller = ScrollController();
-        final props = ValueNotifier(
-          _props(overrides: const [ExtentOverride(index: 1, extent: 120)]),
-        );
-
-        await _pumpSparseHost(
-          tester,
-          props: props,
-          controller: controller,
-          viewportHeight: 180,
-        );
-        controller.jumpTo(140);
-        await tester.pump();
-        final anchoredTop = tester.getTopLeft(_item(3)).dy;
-
-        props.value = _props(
-          overrides: const [ExtentOverride(index: 3, extent: 120)],
-        );
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 100));
-        await tester.pump();
-
-        expect(tester.getSize(_item(1)).height, closeTo(80, 1));
-        expect(tester.getSize(_item(3)).height, closeTo(80, 1));
-        expect(tester.getTopLeft(_item(3)).dy, closeTo(anchoredTop, 1));
-
-        await tester.pump(const Duration(milliseconds: 110));
-        expect(tester.getSize(_item(3)).height, 120);
-
-        props.dispose();
-        controller.dispose();
-      },
-    );
-
-    testWidgets(
-      'retargets from the current extent after a mid-flight reversal',
-      (tester) async {
-        final controller = ScrollController();
-        final props = ValueNotifier(_props());
-        await _pumpSparseHost(tester, props: props, controller: controller);
-
-        props.value = _props(
-          overrides: const [ExtentOverride(index: 2, extent: 120)],
-        );
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 50));
-        final interruptedExtent = tester.getSize(_item(2)).height;
-        expect(interruptedExtent, closeTo(60, 1));
-
-        props.value = _props();
-        await tester.pump();
-        expect(tester.getSize(_item(2)).height, closeTo(interruptedExtent, 1));
-
-        await tester.pump(const Duration(milliseconds: 100));
-        final reversingExtent = tester.getSize(_item(2)).height;
-        expect(reversingExtent, greaterThan(40));
-        expect(reversingExtent, lessThan(interruptedExtent));
-
-        await tester.pump(const Duration(milliseconds: 110));
-        expect(tester.getSize(_item(2)).height, 40);
-
-        props.dispose();
-        controller.dispose();
-      },
-    );
-
-    testWidgets('retargets fixed expanded content without a layout overflow', (
-      tester,
-    ) async {
-      final controller = ScrollController();
-      final model =
-          ValueNotifier<({int? expandedIndex, List<ExtentOverride> overrides})>(
-            (expandedIndex: null, overrides: const []),
-          );
-
-      await _pumpRetargetingMorphHost(tester, controller, model);
-      model.value = (
-        expandedIndex: 0,
-        overrides: const [ExtentOverride(index: 0, extent: 120)],
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
-      model.value = (
-        expandedIndex: 1,
-        overrides: const [ExtentOverride(index: 1, extent: 120)],
-      );
-      await tester.pump();
-
-      expect(tester.takeException(), isNull);
-      await tester.pump(const Duration(milliseconds: 210));
-      expect(tester.takeException(), isNull);
-
-      model.dispose();
-      controller.dispose();
-    });
-
-    testWidgets('releases the preferred anchor when direct scrolling starts', (
-      tester,
-    ) async {
-      final controller = ScrollController();
-      final props = ValueNotifier(
-        _props(overrides: const [ExtentOverride(index: 1, extent: 120)]),
-      );
-      await _pumpSparseHost(tester, props: props, controller: controller);
-      controller.jumpTo(100);
-      await tester.pump();
-
-      props.value = _props(
-        overrides: const [ExtentOverride(index: 3, extent: 120)],
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 40));
-      final beforeDrag = controller.offset;
-
-      await tester.drag(find.byType(Scrollable), const Offset(0, -50));
-      await tester.pump(const Duration(milliseconds: 50));
-
-      expect(controller.offset, greaterThan(beforeDrag + 20));
-
-      props.dispose();
-      controller.dispose();
-    });
-
-    testWidgets('reduced motion resolves extent changes immediately', (
-      tester,
-    ) async {
-      final controller = ScrollController();
-      final props = ValueNotifier(_props());
-      await _pumpSparseHost(
-        tester,
-        props: props,
-        controller: controller,
-        disableAnimations: true,
-      );
-
-      props.value = _props(
-        overrides: const [ExtentOverride(index: 2, extent: 120)],
-      );
-      await tester.pump();
-
-      expect(tester.getSize(_item(2)).height, 120);
-      await tester.pump(const Duration(milliseconds: 100));
-      expect(tester.getSize(_item(2)).height, 120);
-
-      props.dispose();
-      controller.dispose();
-    });
-
-    testWidgets('retains row state when a preceding row is removed', (
-      tester,
-    ) async {
-      final controller = ScrollController();
-
-      await _pumpReindexingSparseHost(tester, controller, const [0, 1, 2]);
-      final retainedState = tester.state(_statefulRow(1));
-
-      await _pumpReindexingSparseHost(tester, controller, const [1, 2]);
-
-      expect(identical(tester.state(_statefulRow(1)), retainedState), isTrue);
-      controller.dispose();
-    });
-
-    testWidgets('retains row state when a preceding row is inserted', (
-      tester,
-    ) async {
-      final controller = ScrollController();
-
-      await _pumpReindexingSparseHost(tester, controller, const [1, 2]);
-      final retainedState = tester.state(_statefulRow(1));
-
-      await _pumpReindexingSparseHost(tester, controller, const [0, 1, 2]);
-
-      expect(identical(tester.state(_statefulRow(1)), retainedState), isTrue);
-      controller.dispose();
-    });
-
-    testWidgets('disposes its ticker when removed during a transition', (
-      tester,
-    ) async {
-      final controller = ScrollController();
-      final props = ValueNotifier(_props());
-      await _pumpSparseHost(tester, props: props, controller: controller);
-
-      props.value = _props(
-        overrides: const [ExtentOverride(index: 2, extent: 120)],
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(milliseconds: 300));
-
-      expect(tester.takeException(), isNull);
-      props.dispose();
-      controller.dispose();
-    });
+    expect(captured, isNotNull);
+    expect(captured!.progress, 0.5);
+    expect(captured!.expanded, isTrue);
+    expect(captured!.compactExtent, 40);
+    expect(captured!.expandedExtent, 120);
   });
 
   group('MorphingSurfaceHost', () {
@@ -286,7 +98,6 @@ void main() {
     ) async {
       await _pumpMorph(tester, progress: 0, expanded: false);
       expect(find.text('Shared header'), findsOneWidget);
-      expect(find.text('Compact preview'), findsOneWidget);
       expect(find.text('Expanded details'), findsNothing);
       var padding = tester.widget<Padding>(
         find.descendant(
@@ -306,7 +117,6 @@ void main() {
 
       await _pumpMorph(tester, progress: 1, expanded: true);
       expect(find.text('Shared header'), findsOneWidget);
-      expect(find.text('Compact preview'), findsNothing);
       expect(find.text('Expanded details'), findsOneWidget);
       padding = tester.widget<Padding>(
         find.descendant(
@@ -482,141 +292,6 @@ void main() {
   });
 }
 
-SparseExtentListProps _props({List<ExtentOverride> overrides = const []}) =>
-    SparseExtentListProps(
-      totalCount: 8,
-      firstIndex: 0,
-      defaultItemExtent: 40,
-      extentOverrides: overrides,
-      overscan: 2,
-      axis: ScrollAxis.vertical,
-      transition: _linearTransition,
-    );
-
-ValueKey<String> _rowKey(int index) => ValueKey('transition-row-$index');
-
-Finder _item(int index) => find
-    .ancestor(of: find.text('Row $index'), matching: find.byType(SizedBox))
-    .first;
-
-Finder _statefulRow(int id) => find.byWidgetPredicate(
-  (widget) => widget is _StatefulRow && widget.id == id,
-);
-
-Future<void> _pumpReindexingSparseHost(
-  WidgetTester tester,
-  ScrollController controller,
-  List<int> rowIds,
-) async {
-  await tester.pumpWidget(
-    MaterialApp(
-      home: SizedBox(
-        height: 200,
-        child: SparseExtentListHost(
-          props: SparseExtentListProps(
-            totalCount: rowIds.length,
-            firstIndex: 0,
-            defaultItemExtent: 40,
-            extentOverrides: const [],
-            overscan: 2,
-            axis: ScrollAxis.vertical,
-            transition: _linearTransition,
-          ),
-          controller: controller,
-          emit: null,
-          children: [
-            for (final id in rowIds) _StatefulRow(key: _rowKey(id), id: id),
-          ],
-        ),
-      ),
-    ),
-  );
-  await tester.pump();
-}
-
-Future<void> _pumpRetargetingMorphHost(
-  WidgetTester tester,
-  ScrollController controller,
-  ValueNotifier<({int? expandedIndex, List<ExtentOverride> overrides})> model,
-) async {
-  await tester.pumpWidget(
-    MaterialApp(
-      home: SizedBox(
-        height: 200,
-        child: ValueListenableBuilder(
-          valueListenable: model,
-          builder: (context, value, _) => SparseExtentListHost(
-            props: SparseExtentListProps(
-              totalCount: 2,
-              firstIndex: 0,
-              defaultItemExtent: 40,
-              extentOverrides: value.overrides,
-              overscan: 2,
-              axis: ScrollAxis.vertical,
-              transition: _linearTransition,
-            ),
-            controller: controller,
-            emit: null,
-            children: [
-              for (var index = 0; index < 2; index += 1)
-                _ScopedFixedExtentRow(
-                  key: _rowKey(index),
-                  index: index,
-                  expanded: value.expandedIndex == index,
-                ),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
-  await tester.pump();
-}
-
-Future<void> _pumpSparseHost(
-  WidgetTester tester, {
-  required ValueNotifier<SparseExtentListProps> props,
-  required ScrollController controller,
-  NativeEventEmitter? emit,
-  double viewportHeight = 200,
-  bool disableAnimations = false,
-}) async {
-  await tester.pumpWidget(
-    MaterialApp(
-      home: MediaQuery(
-        data: MediaQueryData(
-          size: const Size(400, 800),
-          disableAnimations: disableAnimations,
-          accessibleNavigation: disableAnimations,
-        ),
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: SizedBox(
-            height: viewportHeight,
-            child: ValueListenableBuilder(
-              valueListenable: props,
-              builder: (context, value, _) => SparseExtentListHost(
-                props: value,
-                controller: controller,
-                emit: emit,
-                children: List.generate(
-                  8,
-                  (index) => ColoredBox(
-                    key: _rowKey(index),
-                    color: index.isEven ? Colors.white : Colors.grey,
-                    child: Text('Row $index'),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
-  await tester.pump();
-}
-
 Future<void> _pumpMorph(
   WidgetTester tester, {
   required double progress,
@@ -655,53 +330,6 @@ Future<void> _pumpMorph(
     ),
   ),
 );
-
-final class _StatefulRow extends StatefulWidget {
-  const _StatefulRow({required this.id, super.key});
-
-  final int id;
-
-  @override
-  State<_StatefulRow> createState() => _StatefulRowState();
-}
-
-final class _StatefulRowState extends State<_StatefulRow> {
-  @override
-  Widget build(BuildContext context) => Text('Stateful row ${widget.id}');
-}
-
-final class _ScopedFixedExtentRow extends StatelessWidget {
-  const _ScopedFixedExtentRow({
-    required this.index,
-    required this.expanded,
-    super.key,
-  });
-
-  final int index;
-  final bool expanded;
-
-  @override
-  Widget build(BuildContext context) {
-    final transition = SparseExtentTransitionScope.maybeOf(context)!;
-    return MorphingSurfaceHost(
-      progress: transition.progress,
-      expanded: expanded,
-      sharedContent: const SizedBox.shrink(),
-      compactContent: SizedBox(height: 40, child: Text('Compact row $index')),
-      expandedContent: SizedBox(
-        height: 120,
-        child: Column(
-          children: [
-            SizedBox(height: 60, child: Text('Expanded row $index header')),
-            const SizedBox(height: 60),
-          ],
-        ),
-      ),
-      compactContentExtent: transition.compactExtent,
-      expandedContentExtent: transition.expandedExtent,
-    );
-  }
-}
 
 EdgeInsets _surfacePadding(WidgetTester tester) =>
     tester

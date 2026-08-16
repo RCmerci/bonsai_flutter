@@ -423,11 +423,18 @@ void main() {
                 EventBinding(eventTag: EventTagId.valueChanged, handlerId: 81),
               ],
             ),
+            const CreateNode(
+              nodeId: 61,
+              kind: NodeKind.sliverBox,
+              props: EmptyProps(),
+              eventBindings: [],
+            ),
             SetChildren(nodeId: 1, children: [2]),
             SetChildren(nodeId: 2, children: [3]),
             SetChildren(nodeId: 3, children: [4]),
             SetChildren(nodeId: 4, children: [5]),
-            SetChildren(nodeId: 5, children: [6]),
+            SetChildren(nodeId: 5, children: [61]),
+            SetChildren(nodeId: 61, children: [6]),
             SetRoot(1),
           ],
         ),
@@ -451,7 +458,7 @@ void main() {
     expect(center.heightFactor, 1.5);
     expect(
       tester
-          .widget<SingleChildScrollView>(find.byType(SingleChildScrollView))
+          .widget<CustomScrollView>(find.byType(CustomScrollView))
           .scrollDirection,
       Axis.vertical,
     );
@@ -771,8 +778,14 @@ void main() {
     final operations = <FrameOperation>[
       const CreateNode(
         nodeId: 1,
-        kind: NodeKind.listView,
-        props: ListViewProps(axis: ScrollAxis.vertical, reverse: false),
+        kind: NodeKind.scrollView,
+        props: ScrollViewProps(axis: ScrollAxis.vertical, reverse: false),
+        eventBindings: [],
+      ),
+      const CreateNode(
+        nodeId: 50,
+        kind: NodeKind.sliverList,
+        props: EmptyProps(),
         eventBindings: [],
       ),
       const CreateNode(
@@ -793,7 +806,8 @@ void main() {
         eventBindings: [],
       ),
     ];
-    final rootChildren = <int>[2, 3];
+    final rootChildren = <int>[50];
+    final sliverChildren = <int>[2, 3];
     var nextId = 4;
     void addUnary(NodeKind kind, UiProps props) {
       final wrapperId = nextId++;
@@ -816,7 +830,7 @@ void main() {
           ),
         )
         ..add(SetChildren(nodeId: wrapperId, children: [textId]));
-      rootChildren.add(wrapperId);
+      sliverChildren.add(wrapperId);
     }
 
     addUnary(NodeKind.align, const AlignProps(AlignmentValue.bottomEnd));
@@ -853,6 +867,7 @@ void main() {
     addUnary(NodeKind.environmentBoundary, const EnvironmentBoundaryProps());
     operations
       ..add(SetChildren(nodeId: 1, children: rootChildren))
+      ..add(SetChildren(nodeId: 50, children: sliverChildren))
       ..add(const SetRoot(1));
     final store = NodeStore()
       ..apply(
@@ -868,7 +883,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: BonsaiFlutterView(store: store)));
 
     expect(find.text('Rich text', findRichText: true), findsOneWidget);
-    expect(find.byType(ListView), findsOneWidget);
+    expect(find.byType(CustomScrollView), findsOneWidget);
     expect(find.byType(Align), findsOneWidget);
     expect(find.byType(ConstrainedBox), findsWidgets);
     expect(find.byType(DecoratedBox), findsOneWidget);
