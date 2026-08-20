@@ -361,7 +361,7 @@ let view model handlers =
     Ui.Widget.Scroll_view.vertical
       ~key:(Ui.Key.string "gallery-scroll")
       ~on_scroll:handlers.scroll
-      body
+      [ Ui.Widget.Sliver.box body ]
       ()
     |> Ui.Widget.Viewport.Vertical.padding
          ~insets:(Ui.Layout.Edge_insets.symmetric ~horizontal:24. ~vertical:16. ())

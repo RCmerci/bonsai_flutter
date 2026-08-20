@@ -107,13 +107,7 @@ module Sparse_extent_transition : sig
     | Ease_out_cubic
     | Ease_in_out_cubic
 
-  type t =
-    { enabled : bool
-    ; expand_duration_ms : int
-    ; collapse_duration_ms : int
-    ; expand_curve : curve
-    ; collapse_curve : curve
-    }
+  type t
 
   val create
     :  ?enabled:bool
@@ -123,6 +117,12 @@ module Sparse_extent_transition : sig
     -> ?collapse_curve:curve
     -> unit
     -> t
+
+  val enabled : t -> bool
+  val expand_duration_ms : t -> int
+  val collapse_duration_ms : t -> int
+  val expand_curve : t -> curve
+  val collapse_curve : t -> curve
 end
 
 (** A sliver is scroll-axis content that lives only inside a [Scroll_view].
@@ -130,6 +130,22 @@ end
 module Sliver : sig
   type widget = t
   type t
+
+  module Window : sig
+    type t =
+      { first_index : int
+      ; last_exclusive : int
+      }
+
+    (** [create] expands a painted logical range by [overscan] on both sides
+        and clamps the result to [0, total_count). *)
+    val create
+      :  total_count:int
+      -> overscan:int
+      -> visible_first_index:int
+      -> visible_last_exclusive:int
+      -> t
+  end
 
   val with_test_id : Test_id.t -> t -> t
 
@@ -142,7 +158,11 @@ module Sliver : sig
   (** Fills the remaining viewport extent. *)
   val fill : ?key:Key.t -> widget -> t
 
-  (** Fixed-extent virtual list. Replaces [Native_widget.Virtual_list]. *)
+  (** Fixed-extent virtual list over [total_count] logical items. [first_index]
+      and [items] are the keyed materialized window owned by the application.
+      [overscan] guides both [Window.create] and viewport cache derivation; it
+      does not fetch or create widgets. [on_visible_range] receives only the
+      painted half-open logical range. *)
   val fixed_extent
     :  ?key:Key.t
     -> total_count:int
@@ -154,8 +174,9 @@ module Sliver : sig
     -> unit
     -> t
 
-  (** Varied-extent virtual list with sparse overrides.
-      Replaces [Native_widget.Sparse_extent_list]. *)
+  (** Varied-extent virtual list with sparse overrides. Window ownership and
+      painted-range semantics match [fixed_extent]. Extents are known values;
+      Flutter does not measure arbitrary row heights for the application. *)
   val varied_extent
     :  ?key:Key.t
     -> total_count:int
@@ -172,7 +193,11 @@ module Sliver : sig
   (** SliverPadding wrapper. *)
   val padding : ?key:Key.t -> insets:Layout.Edge_insets.t -> t -> t
 
-  (** Collapsible app bar. *)
+  (** Collapsible app bar. Heights and elevation must be finite and
+      non-negative, [toolbar_height] is strictly positive,
+      [collapsed_height] is at least the toolbar and no greater than
+      [expanded_height], and [snap] requires [floating]. [bottom] must be a
+      [preferred_size] widget. *)
   val app_bar
     :  ?key:Key.t
     -> ?pinned:bool
@@ -200,9 +225,10 @@ module Sliver : sig
 end
 
 (** [Scroll_view] builds a [CustomScrollView]. Its children are [Sliver.t], not
-    ordinary widgets. It still returns [Viewport.Vertical.t] /
-    [Viewport.Horizontal.t] so the existing [Body.fill] /
-    [Viewport.with_height] embedding paths are unchanged. *)
+    ordinary widgets. It returns an axis-specific viewport. [cache_extent],
+    when explicit or derived from virtual slivers, must be finite and
+    non-negative. One scroll-view-owned coordinator arbitrates implicit initial
+    anchors across all virtual children. *)
 module Scroll_view : sig
   val vertical
     :  ?key:Key.t

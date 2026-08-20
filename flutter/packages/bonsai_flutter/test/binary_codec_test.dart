@@ -779,6 +779,262 @@ void main() {
       }
     });
 
+    test('enforces sliver u32 boundaries during encoding', () {
+      Frame frame(UiProps props, NodeKind kind) => Frame(
+        runtimeEpoch: 9,
+        baseRevision: 0,
+        targetRevision: 1,
+        kind: FrameKind.fullSnapshot,
+        operations: [
+          CreateNode(
+            nodeId: 1,
+            kind: kind,
+            props: props,
+            eventBindings: const [],
+          ),
+          const SetRoot(1),
+        ],
+      );
+
+      for (final boundary in const [0, 0xffffffff]) {
+        expect(
+          FrameCodec.decode(
+            FrameCodec.encode(
+              frame(
+                SliverFixedExtentProps(
+                  totalCount: 1,
+                  firstIndex: 0,
+                  itemExtent: 48,
+                  overscan: boundary,
+                ),
+                NodeKind.sliverFixedExtent,
+              ),
+            ),
+          ),
+          isA<Frame>(),
+        );
+        expect(
+          FrameCodec.decode(
+            FrameCodec.encode(
+              frame(
+                SliverVariedExtentProps(
+                  totalCount: 1,
+                  firstIndex: 0,
+                  defaultItemExtent: 48,
+                  overscan: boundary,
+                  extentOverrides: const [],
+                  transition: SparseExtentTransition(
+                    enabled: true,
+                    expandDurationMs: boundary,
+                    collapseDurationMs: boundary,
+                    expandCurve: SparseExtentCurve.linear,
+                    collapseCurve: SparseExtentCurve.linear,
+                  ),
+                ),
+                NodeKind.sliverVariedExtent,
+              ),
+            ),
+          ),
+          isA<Frame>(),
+        );
+      }
+
+      for (final invalid in const [-1, 0x100000000]) {
+        expect(
+          () => FrameCodec.encode(
+            frame(
+              SliverFixedExtentProps(
+                totalCount: 1,
+                firstIndex: 0,
+                itemExtent: 48,
+                overscan: invalid,
+              ),
+              NodeKind.sliverFixedExtent,
+            ),
+          ),
+          throwsProtocolCode(ProtocolErrorCode.invalidProps),
+        );
+        expect(
+          () => FrameCodec.encode(
+            frame(
+              SliverVariedExtentProps(
+                totalCount: 1,
+                firstIndex: 0,
+                defaultItemExtent: 48,
+                overscan: invalid,
+                extentOverrides: const [],
+              ),
+              NodeKind.sliverVariedExtent,
+            ),
+          ),
+          throwsProtocolCode(ProtocolErrorCode.invalidProps),
+        );
+        expect(
+          () => FrameCodec.encode(
+            frame(
+              SliverVariedExtentProps(
+                totalCount: 1,
+                firstIndex: 0,
+                defaultItemExtent: 48,
+                overscan: 0,
+                extentOverrides: const [],
+                transition: SparseExtentTransition(
+                  enabled: true,
+                  expandDurationMs: invalid,
+                  collapseDurationMs: invalid,
+                  expandCurve: SparseExtentCurve.linear,
+                  collapseCurve: SparseExtentCurve.linear,
+                ),
+              ),
+              NodeKind.sliverVariedExtent,
+            ),
+          ),
+          throwsProtocolCode(ProtocolErrorCode.invalidProps),
+        );
+      }
+    });
+
+    test('rejects invalid scroll cache extents in both codec directions', () {
+      Frame frame(double cacheExtent) => Frame(
+        runtimeEpoch: 9,
+        baseRevision: 0,
+        targetRevision: 1,
+        kind: FrameKind.fullSnapshot,
+        operations: [
+          CreateNode(
+            nodeId: 1,
+            kind: NodeKind.scrollView,
+            props: ScrollViewProps(
+              axis: ScrollAxis.vertical,
+              reverse: false,
+              cacheExtent: cacheExtent,
+            ),
+            eventBindings: const [],
+          ),
+          const SetRoot(1),
+        ],
+      );
+
+      expect(
+        (FrameCodec.decode(FrameCodec.encode(frame(0))).operations.first
+                as CreateNode)
+            .props,
+        const ScrollViewProps(
+          axis: ScrollAxis.vertical,
+          reverse: false,
+          cacheExtent: 0,
+        ),
+      );
+      for (final invalid in const [
+        -1.0,
+        double.nan,
+        double.infinity,
+        double.negativeInfinity,
+      ]) {
+        expect(
+          () => FrameCodec.encode(frame(invalid)),
+          throwsProtocolCode(ProtocolErrorCode.invalidProps),
+        );
+      }
+      final valid = FrameCodec.encode(frame(123.25));
+      for (final invalid in const [
+        -1.0,
+        double.nan,
+        double.infinity,
+        double.negativeInfinity,
+      ]) {
+        expectDecodeError(
+          replaceFloat64(valid, 123.25, invalid),
+          ProtocolErrorCode.invalidProps,
+        );
+      }
+    });
+
+    test(
+      'enforces every sliver app bar invariant in both codec directions',
+      () {
+        Frame frame(SliverAppBarProps props) => Frame(
+          runtimeEpoch: 9,
+          baseRevision: 0,
+          targetRevision: 1,
+          kind: FrameKind.fullSnapshot,
+          operations: [
+            CreateNode(
+              nodeId: 1,
+              kind: NodeKind.sliverAppBar,
+              props: props,
+              eventBindings: const [],
+            ),
+            const SetRoot(1),
+          ],
+        );
+
+        const validProps = SliverAppBarProps(
+          pinned: true,
+          expandedHeight: 200,
+          collapsedHeight: 100,
+          floating: true,
+          snap: true,
+          toolbarHeight: 56,
+          elevation: 4,
+        );
+        expect(
+          (FrameCodec.decode(
+                    FrameCodec.encode(frame(validProps)),
+                  ).operations.first
+                  as CreateNode)
+              .props,
+          validProps,
+        );
+
+        for (final props in const [
+          SliverAppBarProps(pinned: false, toolbarHeight: 0),
+          SliverAppBarProps(pinned: false, toolbarHeight: -1),
+          SliverAppBarProps(pinned: false, toolbarHeight: double.nan),
+          SliverAppBarProps(pinned: false, toolbarHeight: double.infinity),
+          SliverAppBarProps(pinned: false, expandedHeight: -1),
+          SliverAppBarProps(pinned: false, collapsedHeight: -1),
+          SliverAppBarProps(
+            pinned: false,
+            expandedHeight: 100,
+            collapsedHeight: 120,
+          ),
+          SliverAppBarProps(pinned: false, collapsedHeight: 40),
+          SliverAppBarProps(pinned: false, snap: true),
+          SliverAppBarProps(pinned: false, elevation: -1),
+          SliverAppBarProps(pinned: false, elevation: double.nan),
+          SliverAppBarProps(pinned: false, elevation: double.infinity),
+        ]) {
+          expect(
+            () => FrameCodec.encode(frame(props)),
+            throwsProtocolCode(ProtocolErrorCode.invalidProps),
+            reason: 'invalid props were encoded: $props',
+          );
+        }
+
+        final valid = FrameCodec.encode(frame(validProps));
+        final expandedOffset = findFloat64(valid, 200);
+        for (final malformed in [
+          replaceFloat64At(valid, expandedOffset, -1),
+          replaceFloat64At(valid, expandedOffset, double.nan),
+          replaceFloat64At(valid, expandedOffset, double.infinity),
+          replaceFloat64(valid, 100, -1),
+          replaceFloat64At(valid, expandedOffset, 50),
+          replaceFloat64(valid, 100, 40),
+          replaceFloat64(valid, 56, 0),
+          replaceFloat64(valid, 4, -1),
+          replaceFloat64(valid, 4, double.nan),
+          replaceFloat64(valid, 4, double.infinity),
+        ]) {
+          expectDecodeError(malformed, ProtocolErrorCode.invalidProps);
+        }
+        expectDecodeError(
+          mutate(valid, expandedOffset + 17, 0),
+          ProtocolErrorCode.invalidProps,
+        );
+      },
+    );
+
     test('round trips revisioned UTF-16 text input properties', () {
       const props = TextInputProps(
         sessionId: 7,
@@ -1095,3 +1351,27 @@ int readUint64(Uint8List bytes, int offset) =>
 
 void writeUint32(Uint8List bytes, int offset, int value) =>
     ByteData.sublistView(bytes).setUint32(offset, value, Endian.little);
+
+int findFloat64(Uint8List bytes, double value) {
+  final expected = ByteData(8)..setFloat64(0, value, Endian.little);
+  for (var offset = 0; offset <= bytes.length - 8; offset += 1) {
+    var matches = true;
+    for (var index = 0; index < 8; index += 1) {
+      if (bytes[offset + index] != expected.getUint8(index)) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) return offset;
+  }
+  throw StateError('float64 value $value was not found');
+}
+
+Uint8List replaceFloat64(Uint8List source, double before, double after) =>
+    replaceFloat64At(source, findFloat64(source, before), after);
+
+Uint8List replaceFloat64At(Uint8List source, int offset, double value) {
+  final result = Uint8List.fromList(source);
+  ByteData.sublistView(result).setFloat64(offset, value, Endian.little);
+  return result;
+}

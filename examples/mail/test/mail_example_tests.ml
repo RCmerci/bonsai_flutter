@@ -537,6 +537,14 @@ let sliver_varied_extent_node handle =
   | [] -> fail "mail scroll view has no sliver_varied_extent child"
 ;;
 
+let sliver_first_index handle =
+  let sliver = sliver_varied_extent_node handle in
+  let Av view = Ui.Widget.Private.view sliver.widget in
+  match view.node with
+  | Ui.Widget.Private.Sliver_varied_extent { first_index; _ } -> first_index
+  | _ -> fail "mail virtual list has non-sliver-varied-extent node"
+;;
+
 let test_initial_virtual_inbox_has_twenty_unique_pressable_rows () =
   with_handle (fun handle ->
     require
@@ -572,6 +580,9 @@ let test_three_sequential_pages_load_once_and_preserve_overlap_identity () =
         "overlap row is missing before pagination"
     in
     native_visible_range handle ~first_index:12 ~last_exclusive:20;
+    require
+      (sliver_first_index handle = 8)
+      "visible range did not expand through the shared overscan window policy";
     require_present
       handle
       (Test.Query.test_id "mail-loading-more")

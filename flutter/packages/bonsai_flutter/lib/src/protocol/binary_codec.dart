@@ -507,6 +507,7 @@ abstract final class FrameCodec {
             'Horizontal scroll view cannot be primary',
           );
         }
+        _validateCacheExtent(cacheExtent);
         writer
           ..uint8(axis == ScrollAxis.horizontal ? 0 : 1)
           ..uint8(reverse ? 1 : 0)
@@ -2459,32 +2460,14 @@ void _writeSliverAppBar(
   required int? foregroundColor,
   required double? elevation,
 }) {
-  if (expandedHeight case final e when e != null && (!e.isFinite || e < 0)) {
-    _fail(
-      ProtocolErrorCode.invalidProps,
-      'expanded_height must be non-negative and finite',
-    );
-  }
-  if (collapsedHeight case final c when c != null && (!c.isFinite || c < 0)) {
-    _fail(
-      ProtocolErrorCode.invalidProps,
-      'collapsed_height must be non-negative and finite',
-    );
-  }
-  if (expandedHeight != null &&
-      collapsedHeight != null &&
-      collapsedHeight > expandedHeight) {
-    _fail(
-      ProtocolErrorCode.invalidProps,
-      'collapsed_height must not exceed expanded_height',
-    );
-  }
-  if (toolbarHeight <= 0 || !toolbarHeight.isFinite) {
-    _fail(
-      ProtocolErrorCode.invalidProps,
-      'toolbar_height must be positive and finite',
-    );
-  }
+  _validateSliverAppBarValues(
+    expandedHeight: expandedHeight,
+    collapsedHeight: collapsedHeight,
+    floating: floating,
+    snap: snap,
+    toolbarHeight: toolbarHeight,
+    elevation: elevation,
+  );
   writer
     ..uint8(pinned ? 1 : 0)
     ..optionalFloat64(expandedHeight)
@@ -2614,9 +2597,6 @@ SliverAppBarProps _readSliverAppBarProps(_Reader reader) {
   final snap = reader.boolean();
   final stretch = reader.boolean();
   final toolbarHeight = reader.finiteFloat64();
-  if (toolbarHeight <= 0) {
-    _fail(ProtocolErrorCode.invalidProps, 'toolbar_height must be positive');
-  }
   final hasLeading = reader.boolean();
   final hasFlexibleSpace = reader.boolean();
   final hasBottom = reader.boolean();
@@ -2627,26 +2607,14 @@ SliverAppBarProps _readSliverAppBarProps(_Reader reader) {
   final backgroundColor = _readOptionalArgb32(reader);
   final foregroundColor = _readOptionalArgb32(reader);
   final elevation = reader.optionalFloat64();
-  if (expandedHeight case final e when e != null && (!e.isFinite || e < 0)) {
-    _fail(
-      ProtocolErrorCode.invalidProps,
-      'expanded_height must be non-negative and finite',
-    );
-  }
-  if (collapsedHeight case final c when c != null && (!c.isFinite || c < 0)) {
-    _fail(
-      ProtocolErrorCode.invalidProps,
-      'collapsed_height must be non-negative and finite',
-    );
-  }
-  if (expandedHeight != null &&
-      collapsedHeight != null &&
-      collapsedHeight > expandedHeight) {
-    _fail(
-      ProtocolErrorCode.invalidProps,
-      'collapsed_height must not exceed expanded_height',
-    );
-  }
+  _validateSliverAppBarValues(
+    expandedHeight: expandedHeight,
+    collapsedHeight: collapsedHeight,
+    floating: floating,
+    snap: snap,
+    toolbarHeight: toolbarHeight,
+    elevation: elevation,
+  );
   return SliverAppBarProps(
     pinned: pinned,
     expandedHeight: expandedHeight,
@@ -2678,12 +2646,68 @@ ScrollViewProps _readScrollViewProps(_Reader reader) {
       'Horizontal scroll view cannot be primary',
     );
   }
+  final cacheExtent = reader.optionalFloat64();
+  _validateCacheExtent(cacheExtent);
   return ScrollViewProps(
     axis: axis,
     reverse: reverse,
     primary: primary,
-    cacheExtent: reader.optionalFloat64(),
+    cacheExtent: cacheExtent,
   );
+}
+
+void _validateCacheExtent(double? cacheExtent) {
+  if (cacheExtent != null && (!cacheExtent.isFinite || cacheExtent < 0)) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'cache_extent must be finite and non-negative',
+    );
+  }
+}
+
+void _validateSliverAppBarValues({
+  required double? expandedHeight,
+  required double? collapsedHeight,
+  required bool floating,
+  required bool snap,
+  required double toolbarHeight,
+  required double? elevation,
+}) {
+  void finiteNonNegative(String name, double? value) {
+    if (value != null && (!value.isFinite || value < 0)) {
+      _fail(
+        ProtocolErrorCode.invalidProps,
+        '$name must be non-negative and finite',
+      );
+    }
+  }
+
+  if (!toolbarHeight.isFinite || toolbarHeight <= 0) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'toolbar_height must be positive and finite',
+    );
+  }
+  finiteNonNegative('expanded_height', expandedHeight);
+  finiteNonNegative('collapsed_height', collapsedHeight);
+  finiteNonNegative('elevation', elevation);
+  if (expandedHeight != null &&
+      collapsedHeight != null &&
+      collapsedHeight > expandedHeight) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'collapsed_height must not exceed expanded_height',
+    );
+  }
+  if (collapsedHeight != null && collapsedHeight < toolbarHeight) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'collapsed_height must be at least toolbar_height',
+    );
+  }
+  if (snap && !floating) {
+    _fail(ProtocolErrorCode.invalidProps, 'sliver snap requires floating');
+  }
 }
 
 PreferredSizeProps _readPreferredSizeProps(_Reader reader) {
@@ -3060,6 +3084,9 @@ final class _Writer {
   }
 
   void uint32(int value) {
+    if (value < 0 || value > 0xffffffff) {
+      _fail(ProtocolErrorCode.invalidProps, 'u32 value is outside u32');
+    }
     final data = ByteData(4)..setUint32(0, value, Endian.little);
     _builder.add(data.buffer.asUint8List());
   }

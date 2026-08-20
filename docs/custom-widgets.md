@@ -111,29 +111,26 @@ typed extension decoder runs. Revision-scoped handler rules still reject stale
 or replaced handlers.
 
 The Gallery contains the complete custom card example and its real FFI test.
-The built-in fixed virtual list, sparse-extent list, navigation shell, and swipe
-action use the same extension boundary. Pressable is a core protocol node
-described below.
+Navigation shell, swipe action, and morphing surface use the extension
+boundary. Pressable and the virtual sliver family are core protocol nodes.
 
-## Built-in sparse-extent list
+## Built-in varied-extent sliver
 
 `Widget.Sliver.varied_extent` is core sliver kind `36`. It supports a
 default item extent with sorted logical-index overrides and an optional
-transition with expand/collapse durations and curves. Its Stateful, Resource,
-Semantics, and Virtualized capabilities match the fixed virtual list, while
-its payload carries a default item extent and sorted
-`(logical index, extent)` overrides. Both versions reuse native event `1` and
-the 16-byte visible-range payload.
+transition with expand/collapse durations and curves. Its core payload carries
+a default item extent and sorted `(logical index, extent)` overrides. Painted
+range changes use core event tag `14` and the standard 16-byte range payload.
 
-Flutter realizes the contract with `ListView.builder.itemExtentBuilder` and a
-retained `ScrollController`. Sparse leading-offset math supports exact initial
-offsets, visible ranges before and inside tall items, bounded OCaml child
-windows, and logical anchor preservation when overrides change. This is a
-known-extent contract, not arbitrary child measurement. Version `2` owns
+Flutter realizes the contract with `SliverVariedExtentList` and the controller
+owned by its enclosing `Scroll_view`. Sparse leading-offset math supports exact
+initial anchors, painted ranges before and inside tall items, bounded OCaml
+materialized windows, and logical anchor preservation when overrides change.
+This is a known-extent contract, not arbitrary child measurement. Flutter owns
 interpolation, anchor correction, interruption, settled-range reporting, and
-reduced-motion resolution in Flutter. `MorphingSurfaceHost` consumes the same
-per-item progress for generic surface and content transitions without emitting
-frame events over FFI.
+reduced-motion resolution. `MorphingSurfaceHost` consumes the same per-item
+progress for generic surface and content transitions without emitting frame
+events over FFI. See [Virtual lists](virtual-lists.md) for window ownership.
 
 ## Built-in morphing surface
 

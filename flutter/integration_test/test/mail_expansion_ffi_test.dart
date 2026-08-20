@@ -178,6 +178,62 @@ void main() {
     semantics.dispose();
     harness.acknowledge();
   });
+
+  registerMailContinuationFfiTest();
+}
+
+void registerMailContinuationFfiTest() {
+  testWidgets(
+    'mail continuation loads from the initial range without a gesture',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final client = await tester.runAsync(
+        () => _bounded(
+          RuntimeClient.start(config: Uint8List.fromList(utf8.encode('mail'))),
+          'RuntimeClient.start',
+        ),
+      );
+      expect(client, isNotNull);
+      final harness = RuntimeHarness(client!);
+      addTearDown(() => _bounded(harness.dispose(), 'RuntimeHarness.dispose'));
+      final initialCycle = await tester.runAsync(
+        () => _bounded(harness.grant(), 'initial continuation grant'),
+      );
+      final initial = FrameCodec.decode(initialCycle!.bytes);
+      final store = NodeStore()..apply(initial);
+      final queue = EventBatchQueue(
+        runtimeEpoch: initial.runtimeEpoch,
+        displayedRevision: () => store.revision,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: BonsaiFlutterView(store: store, onEvent: queue.enqueue),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        queue.pendingCount,
+        greaterThan(0),
+        reason: 'initial layout did not publish the tail painted range',
+      );
+
+      await _advance(tester, harness, store, queue, 'initial tail range');
+      expect(_hasLoadingMoreSemantics(store), isTrue);
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 800)),
+      );
+      await _advance(tester, harness, store, queue, 'automatic continuation');
+
+      expect(_hasLoadingMoreSemantics(store), isFalse);
+      expect(_hasTextContaining(store, 'Field Dispatch 21'), isTrue);
+      harness.acknowledge();
+    },
+  );
 }
 
 bool _hasLoadingMoreSemantics(NodeStore store) => store.nodes.values.any(
@@ -186,17 +242,11 @@ bool _hasLoadingMoreSemantics(NodeStore store) => store.nodes.values.any(
       (node.props as SemanticsProps).label == 'Loading more messages',
 );
 
-SparseExtentListProps _sparseProps(NodeStore store) {
+SliverVariedExtentProps _sparseProps(NodeStore store) {
   final node = store.nodes.values.singleWhere(
-    (node) =>
-        node.props is NativeWidgetProps &&
-        (node.props as NativeWidgetProps).kindId ==
-            NativeWidgetKind.sparseExtentList,
+    (node) => node.props is SliverVariedExtentProps,
   );
-  expect((node.props as NativeWidgetProps).version, 2);
-  return SparseExtentListProps.decode(
-    (node.props as NativeWidgetProps).payload,
-  );
+  return node.props as SliverVariedExtentProps;
 }
 
 bool _hasTextContaining(NodeStore store, String value) =>

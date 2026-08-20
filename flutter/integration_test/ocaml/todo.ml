@@ -258,7 +258,8 @@ let component handlers graph =
     in
     let list =
       Ui.Widget.column rows
-      |> fun content -> Ui.Widget.Scroll_view.vertical ~on_scroll:scroll content ()
+      |> fun content ->
+      Ui.Widget.Scroll_view.vertical ~on_scroll:scroll [ Ui.Widget.Sliver.box content ] ()
     in
     Ui.Material.scaffold
       ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Todo") ())

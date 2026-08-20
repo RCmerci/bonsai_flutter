@@ -157,6 +157,11 @@ module Sparse_extent_override = struct
     }
 end
 
+let validate_u32 ~context ~label value =
+  if value < 0 || Int64.of_int value > 0xffff_ffffL
+  then invalid_arg (Printf.sprintf "%s: %s must be a valid u32" context label)
+;;
+
 module Sparse_extent_transition = struct
   type curve =
     | Linear
@@ -175,10 +180,7 @@ module Sparse_extent_transition = struct
     }
 
   let validate_duration label duration =
-    if duration < 0 || Int64.of_int duration > 0xffff_ffffL
-    then
-      invalid_arg
-        (Printf.sprintf "Widget.Sparse_extent_transition: %s must be a valid u32" label)
+    validate_u32 ~context:"Widget.Sparse_extent_transition" ~label duration
   ;;
 
   let create
@@ -193,6 +195,12 @@ module Sparse_extent_transition = struct
     validate_duration "collapse_duration_ms" collapse_duration_ms;
     { enabled; expand_duration_ms; collapse_duration_ms; expand_curve; collapse_curve }
   ;;
+
+  let enabled t = t.enabled
+  let expand_duration_ms t = t.expand_duration_ms
+  let collapse_duration_ms t = t.collapse_duration_ms
+  let expand_curve t = t.expand_curve
+  let collapse_curve t = t.collapse_curve
 end
 
 module Private_types = struct
@@ -1049,9 +1057,8 @@ let transform ?key ~transform child =
     ~children:(plain_children [ child ])
 ;;
 
-(* Plan B (docs/sliver-fix-plan.md D1): the viewport-level [cache_extent] is
-   derived from the virtualized child slivers so Flutter pre-renders the
-   [overscan] window instead of falling back to its ~250px default. Each
+(* The viewport-level [cache_extent] is derived from virtualized child slivers
+   so Flutter pre-renders the application-owned [overscan] window. Each
    [Sliver_fixed_extent] / [Sliver_varied_extent] contributes
    [overscan * extent]; [Sliver_padding] transparently wraps a single inner
    sliver, so we recurse to find the virtualized descendant. *)
@@ -1079,6 +1086,11 @@ let scroll_view_widget
       children
       ()
   =
+  let validate_cache_extent value =
+    if (not (Float.is_finite value)) || Float.compare value 0. < 0
+    then invalid_arg "Widget.Scroll_view: cache_extent must be finite and non-negative"
+  in
+  Option.iter validate_cache_extent cache_extent;
   let cache_extent =
     match cache_extent with
     | Some _ as explicit -> explicit
@@ -1088,6 +1100,7 @@ let scroll_view_widget
        | [] -> None
        | _ -> Some (List.fold_left max 0. candidates))
   in
+  Option.iter validate_cache_extent cache_extent;
   create_typed
     ~key
     ~node:(Scroll_view { axis; reverse; primary; cache_extent })
@@ -1157,7 +1170,10 @@ let sliver_app_bar_widget
       invalid_arg
         (Printf.sprintf "Widget.Sliver.app_bar: %s must be finite and non-negative" label)
   in
-  finite_nonnegative "toolbar_height" toolbar_height;
+  if (not (Float.is_finite toolbar_height)) || Float.compare toolbar_height 0. <= 0
+  then
+    invalid_arg
+      "Widget.Sliver.app_bar: toolbar_height must be finite and strictly positive";
   Option.iter (finite_nonnegative "expanded_height") expanded_height;
   Option.iter (finite_nonnegative "collapsed_height") collapsed_height;
   Option.iter (finite_nonnegative "elevation") elevation;
@@ -1169,6 +1185,10 @@ let sliver_app_bar_widget
          invalid_arg
            "Widget.Sliver.app_bar: collapsed_height must be at least toolbar_height")
     collapsed_height;
+  (match expanded_height, collapsed_height with
+   | Some expanded, Some collapsed when Float.compare collapsed expanded > 0 ->
+     invalid_arg "Widget.Sliver.app_bar: collapsed_height must not exceed expanded_height"
+   | _ -> ());
   Option.iter
     (fun (T view) ->
        match view.node with
@@ -1241,8 +1261,7 @@ let sliver_fixed_extent_widget
   =
   validate_sliver_window "fixed_extent" ~total_count ~first_index (List.length items);
   validate_sliver_extent "fixed_extent" item_extent;
-  if overscan < 0
-  then invalid_arg "Widget.Sliver.fixed_extent: overscan must be non-negative";
+  validate_u32 ~context:"Widget.Sliver.fixed_extent" ~label:"overscan" overscan;
   create_typed
     ~key
     ~node:(Sliver_fixed_extent { total_count; first_index; item_extent; overscan })
@@ -1288,8 +1307,18 @@ let sliver_varied_extent_widget
   =
   validate_sliver_window "varied_extent" ~total_count ~first_index (List.length items);
   validate_sliver_extent "varied_extent" default_item_extent;
-  if overscan < 0
-  then invalid_arg "Widget.Sliver.varied_extent: overscan must be non-negative";
+  validate_u32 ~context:"Widget.Sliver.varied_extent" ~label:"overscan" overscan;
+  Option.iter
+    (fun transition ->
+       validate_u32
+         ~context:"Widget.Sliver.varied_extent"
+         ~label:"expand_duration_ms"
+         (Sparse_extent_transition.expand_duration_ms transition);
+       validate_u32
+         ~context:"Widget.Sliver.varied_extent"
+         ~label:"collapse_duration_ms"
+         (Sparse_extent_transition.collapse_duration_ms transition))
+    transition;
   validate_extent_overrides "varied_extent" ~total_count extent_overrides;
   create_typed
     ~key
@@ -1822,6 +1851,34 @@ module Sliver = struct
   type widget = t
   type sliver = Sliver of t
   type t = sliver
+
+  module Window = struct
+    type t =
+      { first_index : int
+      ; last_exclusive : int
+      }
+
+    let create ~total_count ~overscan ~visible_first_index ~visible_last_exclusive =
+      if total_count < 0
+      then invalid_arg "Widget.Sliver.Window.create: total_count must be non-negative";
+      validate_u32 ~context:"Widget.Sliver.Window.create" ~label:"overscan" overscan;
+      if
+        visible_first_index < 0
+        || visible_last_exclusive < visible_first_index
+        || visible_last_exclusive > total_count
+      then
+        invalid_arg
+          "Widget.Sliver.Window.create: visible range must be bounded and ordered";
+      let first_index = max 0 (visible_first_index - overscan) in
+      let trailing_capacity = total_count - visible_last_exclusive in
+      let last_exclusive =
+        if overscan >= trailing_capacity
+        then total_count
+        else visible_last_exclusive + overscan
+      in
+      { first_index; last_exclusive }
+    ;;
+  end
 
   let with_test_id test_id (Sliver widget) = Sliver (with_test_id test_id widget)
   let box ?key child = Sliver (sliver_box_widget ?key child ())

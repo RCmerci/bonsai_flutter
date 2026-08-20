@@ -75,7 +75,8 @@ type state =
   ; next_cursor : int
   ; next_generation : int
   ; load_state : load_state
-  ; window_first : int
+  ; painted_first_index : int
+  ; painted_last_exclusive : int
   }
 
 let message
@@ -369,7 +370,8 @@ let initial =
   ; next_cursor = 1
   ; next_generation = 0
   ; load_state = Idle
-  ; window_first = 0
+  ; painted_first_index = 0
+  ; painted_last_exclusive = 20
   }
 ;;
 
@@ -1175,6 +1177,16 @@ let loading_more_row =
          (Ui.Semantics.create ~label:"Loading more messages" ~live_region:true ())
 ;;
 
+let materialized_window state ~total_count =
+  let visible_last_exclusive = min state.painted_last_exclusive total_count in
+  let visible_first_index = min state.painted_first_index visible_last_exclusive in
+  Ui.Widget.Sliver.Window.create
+    ~total_count
+    ~overscan:4
+    ~visible_first_index
+    ~visible_last_exclusive
+;;
+
 let render_mail_body ~state ~rows ~open_menu ~on_visible_range =
   match state.selected_mail_destination with
   | Settings_view -> Ui.Widget.Body.static (placeholder "Settings")
@@ -1185,14 +1197,7 @@ let render_mail_body ~state ~rows ~open_menu ~on_visible_range =
       | `Duplicate_key message_id ->
         invalid_arg (Printf.sprintf "Mail: duplicate message ID %d" message_id)
     in
-    let rows =
-      match state.load_state, destination with
-      | Loading_more _, Inbox_view -> rows @ [ loading_more_row ]
-      | Idle, Inbox_view -> rows
-      | (Idle | Loading_more _), (Starred_view | Archived_view | Trash_view) -> rows
-      | _, Settings_view -> assert false
-    in
-    let total_count =
+    let message_count =
       let messages =
         List.filter
           (fun message ->
@@ -1205,19 +1210,27 @@ let render_mail_body ~state ~rows ~open_menu ~on_visible_range =
           state.messages
       in
       List.length messages
-      +
+    in
+    let has_loading_row =
       match state.load_state, destination with
-      | Loading_more _, Inbox_view -> 1
-      | Idle, Inbox_view -> 0
-      | (Idle | Loading_more _), (Starred_view | Archived_view | Trash_view) -> 0
-      | _, Settings_view -> 0
+      | Loading_more _, Inbox_view -> true
+      | Idle, Inbox_view -> false
+      | (Idle | Loading_more _), (Starred_view | Archived_view | Trash_view) -> false
+      | _, Settings_view -> false
+    in
+    let total_count = message_count + if has_loading_row then 1 else 0 in
+    let window = materialized_window state ~total_count in
+    let rows =
+      if has_loading_row && window.last_exclusive > message_count
+      then rows @ [ loading_more_row ]
+      else rows
     in
     let list =
       Ui.Widget.Scroll_view.vertical
         ~on_scroll:(Ui.Event.Handler.create (fun _ -> ()))
         [ Ui.Widget.Sliver.varied_extent
             ~total_count
-            ~first_index:state.window_first
+            ~first_index:window.first_index
             ~default_item_extent:compact_mail_extent
             ~extent_overrides:(expanded_extent_override state)
             ~overscan:4
@@ -1699,10 +1712,6 @@ let detail_page handlers set_state message_id detail _graph =
         message)
 ;;
 
-let clamp_window_first state message_count =
-  min state.window_first (max 0 (message_count - 1))
-;;
-
 let rec drop count values =
   if count <= 0
   then values
@@ -1723,15 +1732,19 @@ let rec take count values =
 
 let window_messages state =
   let messages = messages_for_destination state in
-  let first_index = clamp_window_first state (List.length messages) in
-  let capacity =
+  let message_count = List.length messages in
+  let has_loading_row =
     match state.load_state, state.selected_mail_destination with
-    | Loading_more _, Inbox_view -> 23
-    | Idle, Inbox_view -> 24
+    | Loading_more _, Inbox_view -> true
+    | Idle, Inbox_view -> false
     | (Idle | Loading_more _), (Starred_view | Archived_view | Trash_view | Settings_view)
-      -> 24
+      -> false
   in
-  messages |> drop first_index |> take capacity
+  let total_count = message_count + if has_loading_row then 1 else 0 in
+  let window = materialized_window state ~total_count in
+  messages
+  |> drop window.first_index
+  |> take (min message_count window.last_exclusive - window.first_index)
 ;;
 
 let selected_app_index = function
@@ -1830,7 +1843,6 @@ let component handlers graph =
           let bounded value = Int64.to_int (Int64.min value (Int64.of_int count)) in
           let first_index = bounded first_index in
           let last_exclusive = bounded last_exclusive in
-          let window_first = min (max 0 (first_index - 12)) (max 0 (count - 1)) in
           let should_load =
             snapshot.selected_mail_destination = Inbox_view
             && snapshot.load_state = Idle
@@ -1848,7 +1860,8 @@ let component handlers graph =
                     && Int.equal state.next_cursor cursor
                   then
                     { state with
-                      window_first
+                      painted_first_index = first_index
+                    ; painted_last_exclusive = last_exclusive
                     ; load_state = Loading_more { generation; cursor }
                     ; next_generation = generation + 1
                     }
@@ -1868,7 +1881,12 @@ let component handlers graph =
                         }
                       | Idle | Loading_more _ -> state))
               ])
-          else set_state (fun state -> { state with window_first }))
+          else
+            set_state (fun state ->
+              { state with
+                painted_first_index = first_index
+              ; painted_last_exclusive = last_exclusive
+              }))
   in
   let open_menu =
     Driver.Handler.create
@@ -1913,7 +1931,8 @@ let component handlers graph =
         ; drawer_open = false
         ; expanded_id = None
         ; card_notice = None
-        ; window_first = 0
+        ; painted_first_index = 0
+        ; painted_last_exclusive = 20
         ; next_generation
         ; load_state
         }))

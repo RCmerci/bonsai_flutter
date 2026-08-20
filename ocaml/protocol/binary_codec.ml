@@ -329,6 +329,41 @@ let write_sliver_varied_extent_payload
     write_optional_sparse_extent_curve writer (Some collapse_curve)
 ;;
 
+let validate_cache_extent = function
+  | Some value when (not (Float.is_finite value)) || Float.compare value 0. < 0 ->
+    fail Invalid_props "scroll cache_extent must be finite and non-negative"
+  | None | Some _ -> ()
+;;
+
+let validate_sliver_app_bar
+      ~expanded_height
+      ~collapsed_height
+      ~floating
+      ~snap
+      ~toolbar_height
+      ~elevation
+  =
+  let optional_nonnegative label = function
+    | Some value when (not (Float.is_finite value)) || Float.compare value 0. < 0 ->
+      fail Invalid_props "%s must be non-negative and finite" label
+    | None | Some _ -> ()
+  in
+  if (not (Float.is_finite toolbar_height)) || Float.compare toolbar_height 0. <= 0
+  then fail Invalid_props "sliver toolbar_height must be positive and finite";
+  optional_nonnegative "expanded_height" expanded_height;
+  optional_nonnegative "collapsed_height" collapsed_height;
+  optional_nonnegative "elevation" elevation;
+  (match expanded_height, collapsed_height with
+   | Some expanded, Some collapsed when Float.compare collapsed expanded > 0 ->
+     fail Invalid_props "collapsed_height must not exceed expanded_height"
+   | _ -> ());
+  (match collapsed_height with
+   | Some collapsed when Float.compare collapsed toolbar_height < 0 ->
+     fail Invalid_props "collapsed_height must be at least toolbar_height"
+   | None | Some _ -> ());
+  if snap && not floating then fail Invalid_props "sliver snap requires floating"
+;;
+
 let semantics_role_id = function
   | Wire_frame.Generic -> 0
   | Semantics_button -> 1
@@ -650,6 +685,7 @@ let write_props writer kind props =
     then fail Invalid_props "transform matrix must contain 16 values";
     Array.iter (Writer.f64 writer) matrix4
   | Scroll_view, Scroll_view_props { axis; reverse; primary; cache_extent } ->
+    validate_cache_extent cache_extent;
     Writer.u8
       writer
       (match axis with
@@ -711,6 +747,13 @@ let write_props writer kind props =
         ; foreground_color
         ; elevation
         } ) ->
+    validate_sliver_app_bar
+      ~expanded_height
+      ~collapsed_height
+      ~floating
+      ~snap
+      ~toolbar_height
+      ~elevation;
     write_bool writer pinned;
     write_optional_f64 writer expanded_height;
     write_optional_f64 writer collapsed_height;
@@ -1301,6 +1344,7 @@ let write_update_props writer props =
     then fail Invalid_props "transform matrix must contain 16 values";
     Array.iter (Writer.f64 writer) matrix4
   | Scroll_view_props { axis; reverse; primary; cache_extent } ->
+    validate_cache_extent cache_extent;
     Writer.u8
       writer
       (match axis with
@@ -1357,6 +1401,13 @@ let write_update_props writer props =
       ; foreground_color
       ; elevation
       } ->
+    validate_sliver_app_bar
+      ~expanded_height
+      ~collapsed_height
+      ~floating
+      ~snap
+      ~toolbar_height
+      ~elevation;
     write_bool writer pinned;
     write_optional_f64 writer expanded_height;
     write_optional_f64 writer collapsed_height;
@@ -2475,7 +2526,9 @@ let read_props reader kind ~protocol_minor =
     let primary = read_bool reader in
     if axis = Horizontal && primary
     then fail Invalid_props "horizontal scroll view cannot be primary";
-    Scroll_view_props { axis; reverse; primary; cache_extent = read_optional_f64 reader }
+    let cache_extent = read_optional_f64 reader in
+    validate_cache_extent cache_extent;
+    Scroll_view_props { axis; reverse; primary; cache_extent }
   | Sliver_fill -> Sliver_fill_props
   | Sliver_fixed_extent ->
     let total_count64 = Reader.u64 reader in
@@ -2532,8 +2585,6 @@ let read_props reader kind ~protocol_minor =
     let snap = read_bool reader in
     let stretch = read_bool reader in
     let toolbar_height = read_finite_f64 reader in
-    if Float.compare toolbar_height 0. <= 0
-    then fail Invalid_props "sliver toolbar_height must be positive";
     let has_leading = read_bool reader in
     let has_flexible_space = read_bool reader in
     let has_bottom = read_bool reader in
@@ -2544,18 +2595,13 @@ let read_props reader kind ~protocol_minor =
     let background_color = read_optional_argb32 reader in
     let foreground_color = read_optional_argb32 reader in
     let elevation = read_optional_f64 reader in
-    (match expanded_height with
-     | Some e when (not (Float.is_finite e)) || Float.compare e 0. < 0 ->
-       fail Invalid_props "expanded_height must be non-negative and finite"
-     | _ -> ());
-    (match collapsed_height with
-     | Some c when (not (Float.is_finite c)) || Float.compare c 0. < 0 ->
-       fail Invalid_props "collapsed_height must be non-negative and finite"
-     | _ -> ());
-    (match expanded_height, collapsed_height with
-     | Some e, Some c when Float.compare c e > 0 ->
-       fail Invalid_props "collapsed_height must not exceed expanded_height"
-     | _ -> ());
+    validate_sliver_app_bar
+      ~expanded_height
+      ~collapsed_height
+      ~floating
+      ~snap
+      ~toolbar_height
+      ~elevation;
     Sliver_app_bar_props
       { pinned
       ; expanded_height

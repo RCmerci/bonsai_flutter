@@ -31,7 +31,9 @@ let feed =
         ~default_item_extent
         ~extent_overrides
         ~items
-    ~on_visible_range
+        ~on_visible_range
+        ()
+    ]
     ()
 in
 let body =
@@ -71,6 +73,20 @@ the axis-specific viewport type.
 `shrinkWrap` is not a substitute for a bounded virtualized viewport. It changes
 layout and virtualization behavior rather than proving that the viewport has a
 finite scroll-axis extent.
+
+## Cache and shared scroll ownership
+
+`Scroll_view` owns the controller used by all of its slivers. It also owns the
+single implicit initial-anchor decision, so multiple virtual slivers cannot
+race to change the global offset. The earliest virtual sliver in layout order
+is authoritative; a previously established non-zero controller offset disables
+implicit anchoring.
+
+An explicit `cache_extent` must be finite and non-negative. When it is omitted,
+OCaml derives one from the maximum virtual child overscan times its fixed or
+default item extent. This cache is viewport-level Flutter geometry. The
+application still owns the logical materialized range described in
+[Virtual lists](virtual-lists.md).
 
 ## Runtime guard
 

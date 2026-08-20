@@ -172,13 +172,12 @@ Frame _visibleFrame(int count) => Frame(
 );
 
 Frame _virtualFrame() {
-  final props = const VirtualListProps(
+  const props = SliverFixedExtentProps(
     totalCount: 10000,
     firstIndex: 0,
     itemExtent: 24,
     overscan: 4,
-    axis: ScrollAxis.vertical,
-  ).toNativeWidgetProps();
+  );
   return Frame(
     runtimeEpoch: 2,
     baseRevision: 0,
@@ -187,7 +186,7 @@ Frame _virtualFrame() {
     operations: [
       CreateNode(
         nodeId: 1,
-        kind: NodeKind.nativeWidget,
+        kind: NodeKind.sliverFixedExtent,
         props: props,
         eventBindings: const [],
       ),

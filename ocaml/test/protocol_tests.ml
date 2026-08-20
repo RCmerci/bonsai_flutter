@@ -1309,6 +1309,202 @@ let test_application_response_error_and_event_round_trip () =
   | Error error -> fail "application event decode failed: %s" error.message
 ;;
 
+let props_frame props =
+  Wire_frame.
+    { runtime_epoch = epoch 90L
+    ; base_revision = revision 1L
+    ; target_revision = revision 2L
+    ; kind = Incremental_frame
+    ; operations = [ Update_props { node_id = node 1L; props } ]
+    }
+;;
+
+let expect_invalid_props_encode label frame =
+  match Binary_codec.encode frame with
+  | Error { code = Invalid_props; _ } -> ()
+  | Error error -> fail "%s produced the wrong encode error: %s" label error.message
+  | Ok _ -> fail "%s unexpectedly encoded" label
+;;
+
+let find_float64 bytes value =
+  let needle = Bytes.create 8 in
+  Bytes.set_int64_le needle 0 (Int64.bits_of_float value);
+  let rec search offset =
+    if offset + Bytes.length needle > Bytes.length bytes
+    then fail "float64 value %g was not found" value
+    else (
+      let rec matches index =
+        index = Bytes.length needle
+        || (Char.equal (Bytes.get bytes (offset + index)) (Bytes.get needle index)
+            && matches (index + 1))
+      in
+      if matches 0 then offset else search (offset + 1))
+  in
+  search 0
+;;
+
+let replace_float64_at bytes offset value =
+  let result = Bytes.copy bytes in
+  Bytes.set_int64_le result offset (Int64.bits_of_float value);
+  result
+;;
+
+let replace_float64 bytes before after =
+  replace_float64_at bytes (find_float64 bytes before) after
+;;
+
+let expect_invalid_props_decode label bytes =
+  match Binary_codec.decode bytes with
+  | Error { code = Invalid_props; _ } -> ()
+  | Error error -> fail "%s produced the wrong decode error: %s" label error.message
+  | Ok _ -> fail "%s unexpectedly decoded" label
+;;
+
+let test_sliver_wire_boundaries () =
+  let fixed overscan =
+    Wire_frame.Sliver_fixed_extent_props
+      { total_count = 1; first_index = 0; item_extent = 48.; overscan }
+  in
+  let transition duration =
+    Wire_frame.
+      { enabled = true
+      ; expand_duration_ms = duration
+      ; collapse_duration_ms = duration
+      ; expand_curve = Se_linear
+      ; collapse_curve = Se_linear
+      }
+  in
+  let varied overscan transition =
+    Wire_frame.Sliver_varied_extent_props
+      { total_count = 1
+      ; first_index = 0
+      ; default_item_extent = 48.
+      ; overscan
+      ; extent_overrides = []
+      ; transition
+      }
+  in
+  List.iter
+    (fun boundary ->
+       expect_frame_round_trip "fixed sliver u32 boundary" (props_frame (fixed boundary));
+       expect_frame_round_trip
+         "varied sliver u32 boundary"
+         (props_frame (varied boundary (Some (transition boundary)))))
+    [ 0; 0xffff_ffff ];
+  List.iter
+    (fun invalid ->
+       expect_invalid_props_encode
+         "fixed sliver invalid overscan"
+         (props_frame (fixed invalid));
+       expect_invalid_props_encode
+         "varied sliver invalid overscan"
+         (props_frame (varied invalid None));
+       expect_invalid_props_encode
+         "varied sliver invalid transition"
+         (props_frame (varied 0 (Some (transition invalid)))))
+    [ -1; 0x1_0000_0000 ]
+;;
+
+let test_scroll_view_cache_extent_validation () =
+  let props cache_extent =
+    Wire_frame.Scroll_view_props
+      { axis = Vertical; reverse = false; primary = false; cache_extent }
+  in
+  expect_frame_round_trip "zero scroll cache extent" (props_frame (props (Some 0.)));
+  List.iter
+    (fun invalid ->
+       expect_invalid_props_encode
+         "invalid scroll cache extent"
+         (props_frame (props (Some invalid))))
+    [ -1.; Float.nan; Float.infinity; Float.neg_infinity ];
+  let encoded =
+    match Binary_codec.encode (props_frame (props (Some 123.25))) with
+    | Ok bytes -> bytes
+    | Error error -> fail "valid scroll cache extent failed to encode: %s" error.message
+  in
+  List.iter
+    (fun invalid ->
+       expect_invalid_props_decode
+         "invalid decoded scroll cache extent"
+         (replace_float64 encoded 123.25 invalid))
+    [ -1.; Float.nan; Float.infinity; Float.neg_infinity ]
+;;
+
+let test_sliver_app_bar_codec_validation () =
+  let props
+        ?(pinned = true)
+        ?(expanded_height = Some 200.)
+        ?(collapsed_height = Some 100.)
+        ?(floating = true)
+        ?(snap = true)
+        ?(toolbar_height = 56.)
+        ?(elevation = Some 4.)
+        ()
+    =
+    Wire_frame.Sliver_app_bar_props
+      { pinned
+      ; expanded_height
+      ; collapsed_height
+      ; floating
+      ; snap
+      ; stretch = false
+      ; toolbar_height
+      ; has_leading = false
+      ; has_flexible_space = false
+      ; has_bottom = false
+      ; has_actions = false
+      ; force_elevated = false
+      ; automatically_imply_leading = true
+      ; center_title = None
+      ; background_color = None
+      ; foreground_color = None
+      ; elevation
+      }
+  in
+  expect_frame_round_trip "valid sliver app bar" (props_frame (props ()));
+  List.iter
+    (fun (label, invalid) -> expect_invalid_props_encode label (props_frame invalid))
+    [ "zero toolbar height", props ~toolbar_height:0. ()
+    ; "negative toolbar height", props ~toolbar_height:(-1.) ()
+    ; "NaN toolbar height", props ~toolbar_height:Float.nan ()
+    ; "infinite toolbar height", props ~toolbar_height:Float.infinity ()
+    ; "negative expanded height", props ~expanded_height:(Some (-1.)) ()
+    ; "negative collapsed height", props ~collapsed_height:(Some (-1.)) ()
+    ; ( "collapsed height above expanded height"
+      , props ~expanded_height:(Some 100.) ~collapsed_height:(Some 120.) () )
+    ; "collapsed height below toolbar", props ~collapsed_height:(Some 40.) ()
+    ; "snap without floating", props ~floating:false ~snap:true ()
+    ; "negative elevation", props ~elevation:(Some (-1.)) ()
+    ; "NaN elevation", props ~elevation:(Some Float.nan) ()
+    ; "infinite elevation", props ~elevation:(Some Float.infinity) ()
+    ];
+  let encoded =
+    match Binary_codec.encode (props_frame (props ())) with
+    | Ok bytes -> bytes
+    | Error error -> fail "valid sliver app bar failed to encode: %s" error.message
+  in
+  let expanded_offset = find_float64 encoded 200. in
+  List.iter
+    (fun (label, invalid) -> expect_invalid_props_decode label invalid)
+    [ "decoded negative expanded height", replace_float64_at encoded expanded_offset (-1.)
+    ; "decoded NaN expanded height", replace_float64_at encoded expanded_offset Float.nan
+    ; ( "decoded infinite expanded height"
+      , replace_float64_at encoded expanded_offset Float.infinity )
+    ; "decoded negative collapsed height", replace_float64 encoded 100. (-1.)
+    ; ( "decoded collapsed height above expanded height"
+      , replace_float64_at encoded expanded_offset 50. )
+    ; "decoded collapsed height below toolbar", replace_float64 encoded 100. 40.
+    ; "decoded zero toolbar height", replace_float64 encoded 56. 0.
+    ; "decoded negative elevation", replace_float64 encoded 4. (-1.)
+    ; "decoded NaN elevation", replace_float64 encoded 4. Float.nan
+    ; "decoded infinite elevation", replace_float64 encoded 4. Float.infinity
+    ; ( "decoded snap without floating"
+      , let value = Bytes.copy encoded in
+        Bytes.set value (expanded_offset + 17) '\000';
+        value )
+    ]
+;;
+
 let () =
   test_golden_fixture ();
   test_round_trip ();
@@ -1341,5 +1537,8 @@ let () =
   test_runtime_stats_backpatch_variants ();
   test_application_request_round_trip_and_bounds ();
   test_application_response_error_and_event_round_trip ();
+  test_sliver_wire_boundaries ();
+  test_scroll_view_cache_extent_validation ();
+  test_sliver_app_bar_codec_validation ();
   print_endline "protocol tests passed"
 ;;

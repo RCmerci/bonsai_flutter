@@ -419,11 +419,11 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
              | Ease_in_out_cubic -> Se_ease_in_out_cubic
            in
            Protocol.Wire_frame.
-             { enabled = transition.enabled
-             ; expand_duration_ms = transition.expand_duration_ms
-             ; collapse_duration_ms = transition.collapse_duration_ms
-             ; expand_curve = wire_curve transition.expand_curve
-             ; collapse_curve = wire_curve transition.collapse_curve
+             { enabled = enabled transition
+             ; expand_duration_ms = expand_duration_ms transition
+             ; collapse_duration_ms = collapse_duration_ms transition
+             ; expand_curve = wire_curve (expand_curve transition)
+             ; collapse_curve = wire_curve (collapse_curve transition)
              })
         transition
     in

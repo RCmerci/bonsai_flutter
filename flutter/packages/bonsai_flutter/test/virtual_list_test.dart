@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
+import 'package:bonsai_flutter/src/renderer/sliver_virtual_host.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -532,6 +533,176 @@ void main() {
     });
   }
 
+  for (final firstKind in _VirtualSliverKind.values) {
+    for (final secondKind in _VirtualSliverKind.values) {
+      testWidgets(
+        '${firstKind.label} before ${secondKind.label} owns the initial anchor',
+        (tester) async {
+          await _setViewport(tester, const Size(400, 200));
+          final store = _twoVirtualSliverStore(
+            firstKind: firstKind,
+            secondKind: secondKind,
+            firstIndex: 10,
+            secondIndex: 15,
+          );
+
+          await tester.pumpWidget(_virtualSliverView(store));
+          await tester.pump();
+
+          expect(tester.takeException(), isNull);
+          expect(_scrollPosition(tester).pixels, closeTo(500, 0.01));
+        },
+      );
+    }
+  }
+
+  testWidgets(
+    'an earliest zero-index virtual sliver prevents a later implicit anchor',
+    (tester) async {
+      await _setViewport(tester, const Size(400, 200));
+      final store = _twoVirtualSliverStore(
+        firstKind: _VirtualSliverKind.fixed,
+        secondKind: _VirtualSliverKind.varied,
+        firstIndex: 0,
+        secondIndex: 15,
+      );
+
+      await tester.pumpWidget(_virtualSliverView(store));
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(_scrollPosition(tester).pixels, 0);
+    },
+  );
+
+  testWidgets(
+    'an established non-zero scroll offset prevents implicit anchors',
+    (tester) async {
+      await _setViewport(tester, const Size(400, 200));
+      final controller = ScrollController(initialScrollOffset: 125);
+      addTearDown(controller.dispose);
+      final store = _twoVirtualSliverStore(
+        firstKind: _VirtualSliverKind.fixed,
+        secondKind: _VirtualSliverKind.varied,
+        firstIndex: 10,
+        secondIndex: 15,
+        primary: true,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PrimaryScrollController(
+            controller: controller,
+            child: SizedBox(
+              width: 400,
+              height: 200,
+              child: BonsaiFlutterView(store: store),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(controller.offset, closeTo(125, 0.01));
+    },
+  );
+
+  for (final kind in _VirtualSliverKind.values) {
+    testWidgets(
+      '${kind.label} publishes its initial range after zero paint becomes usable',
+      (tester) async {
+        await _setViewport(tester, const Size(400, 200));
+        final store = _virtualSliverStore(
+          kind: kind,
+          totalCount: 20,
+          firstIndex: 0,
+          itemExtent: 50,
+          childCount: 20,
+          headerExtent: 400,
+          bindVisibleRange: true,
+        );
+        final events = <RendererEvent>[];
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: SizedBox(
+              width: 400,
+              height: 200,
+              child: BonsaiFlutterView(store: store, onEvent: events.add),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(tester.takeException(), isNull);
+        expect(_visibleRangeEvents(events), isEmpty);
+        final hostState = tester.state(_hostFinder(kind));
+
+        store.apply(
+          const Frame(
+            runtimeEpoch: 1,
+            baseRevision: 1,
+            targetRevision: 2,
+            kind: FrameKind.incremental,
+            operations: [
+              UpdateProps(
+                nodeId: 3,
+                props: SizedBoxProps(width: null, height: 0),
+              ),
+            ],
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        expect(tester.takeException(), isNull);
+        expect(identical(tester.state(_hostFinder(kind)), hostState), isTrue);
+        final ranges = _visibleRangeEvents(events);
+        expect(ranges, hasLength(1));
+        expect(ranges.single.firstIndex, 0);
+        expect(ranges.single.lastExclusive, 4);
+
+        await tester.pump();
+        await tester.pump();
+        expect(_visibleRangeEvents(events), hasLength(1));
+        expect(tester.binding.hasScheduledFrame, isFalse);
+      },
+    );
+
+    testWidgets('${kind.label} does not create a frame loop at zero paint', (
+      tester,
+    ) async {
+      await _setViewport(tester, const Size(400, 200));
+      final events = <RendererEvent>[];
+      final store = _virtualSliverStore(
+        kind: kind,
+        totalCount: 20,
+        firstIndex: 0,
+        itemExtent: 50,
+        childCount: 20,
+        headerExtent: 400,
+        bindVisibleRange: true,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 400,
+            height: 200,
+            child: BonsaiFlutterView(store: store, onEvent: events.add),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(_visibleRangeEvents(events), isEmpty);
+      expect(tester.binding.hasScheduledFrame, isFalse);
+    });
+  }
+
   testWidgets('sliver varied extent anchors a firstIndex update', (
     tester,
   ) async {
@@ -726,10 +897,9 @@ void main() {
     },
   );
 
-  // Plan B (docs/sliver-fix-plan.md D1): the OCaml side derives the viewport
-  // cache_extent = max(child overscan * extent) and sends it down on the
-  // Scroll_view node. The Dart renderer must forward it to CustomScrollView so
-  // Flutter pre-renders the overscan window instead of its ~250px default.
+  // The OCaml side derives the viewport cache_extent as the maximum child
+  // overscan times item extent. The renderer forwards that value so Flutter's
+  // cache and the application-owned materialized windows use one policy.
   testWidgets('scroll view forwards cache_extent to CustomScrollView', (
     tester,
   ) async {
@@ -849,6 +1019,69 @@ void main() {
     );
     expect(scrollView.scrollCacheExtent, isNull);
   });
+
+  testWidgets('scroll view rejects invalid cache extents at render time', (
+    tester,
+  ) async {
+    final store = NodeStore()
+      ..apply(
+        const Frame(
+          runtimeEpoch: 1,
+          baseRevision: 0,
+          targetRevision: 1,
+          kind: FrameKind.fullSnapshot,
+          operations: [
+            CreateNode(
+              nodeId: 99,
+              kind: NodeKind.text,
+              props: TextProps('root'),
+              eventBindings: [],
+            ),
+            SetRoot(99),
+          ],
+        ),
+      );
+    final resources = RendererResourceStore()..synchronize(store);
+    addTearDown(resources.dispose);
+    late BuildContext context;
+    await tester.pumpWidget(
+      RendererResourceScope(
+        resources: resources,
+        child: Builder(
+          builder: (builderContext) {
+            context = builderContext;
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+    final registry = WidgetRegistry.standard();
+
+    for (final invalid in const [-1.0, double.nan, double.infinity]) {
+      expect(
+        () => registry.build(
+          context,
+          UiNode(
+            id: 1,
+            kind: NodeKind.scrollView,
+            props: ScrollViewProps(
+              axis: ScrollAxis.vertical,
+              reverse: false,
+              cacheExtent: invalid,
+            ),
+            eventBindings: const [],
+            parentData: const NoParentData(),
+            children: const [],
+            localRevision: 1,
+          ),
+          const [],
+          null,
+        ),
+        throwsA(isA<RendererBuildException>()),
+        reason: 'invalid cache extent was accepted: $invalid',
+      );
+    }
+  });
 }
 
 const _virtualNodeId = 100;
@@ -904,6 +1137,7 @@ NodeStore _virtualSliverStore({
   double headerExtent = 0,
   List<SparseExtentOverride> extentOverrides = const [],
   SparseExtentTransition? transition,
+  bool bindVisibleRange = false,
 }) {
   final childNodes = [
     for (var index = 0; index < childCount; index += 1)
@@ -962,7 +1196,14 @@ NodeStore _virtualSliverStore({
           ? NodeKind.sliverFixedExtent
           : NodeKind.sliverVariedExtent,
       props: virtualProps,
-      eventBindings: const [],
+      eventBindings: bindVisibleRange
+          ? const [
+              EventBinding(
+                eventTag: EventTagId.visibleRangeChanged,
+                handlerId: 1,
+              ),
+            ]
+          : const [],
     ),
     ...childNodes,
     if (headerExtent > 0) ...[
@@ -977,6 +1218,110 @@ NodeStore _virtualSliverStore({
         ],
       ),
     SetChildren(nodeId: 1, children: [if (headerExtent > 0) 2, _virtualNodeId]),
+    const SetRoot(1),
+  ];
+  return NodeStore()..apply(
+    Frame(
+      runtimeEpoch: 1,
+      baseRevision: 0,
+      targetRevision: 1,
+      kind: FrameKind.fullSnapshot,
+      operations: operations,
+    ),
+  );
+}
+
+Finder _hostFinder(_VirtualSliverKind kind) => switch (kind) {
+  _VirtualSliverKind.fixed => find.byType(
+    SliverFixedExtentHost,
+    skipOffstage: false,
+  ),
+  _VirtualSliverKind.varied => find.byType(
+    SliverVariedExtentHost,
+    skipOffstage: false,
+  ),
+};
+
+List<VisibleRangeEventPayload> _visibleRangeEvents(
+  List<RendererEvent> events,
+) => [
+  for (final event in events)
+    if (event.payload case final VisibleRangeEventPayload payload) payload,
+];
+
+NodeStore _twoVirtualSliverStore({
+  required _VirtualSliverKind firstKind,
+  required _VirtualSliverKind secondKind,
+  required int firstIndex,
+  required int secondIndex,
+  bool primary = false,
+}) {
+  const totalCount = 30;
+  const itemExtent = 50.0;
+  UiProps props(_VirtualSliverKind kind, int firstIndex) => switch (kind) {
+    _VirtualSliverKind.fixed => SliverFixedExtentProps(
+      totalCount: totalCount,
+      firstIndex: firstIndex,
+      itemExtent: itemExtent,
+      overscan: 0,
+    ),
+    _VirtualSliverKind.varied => _variedProps(
+      totalCount: totalCount,
+      firstIndex: firstIndex,
+      itemExtent: itemExtent,
+    ),
+  };
+
+  final operations = <FrameOperation>[
+    CreateNode(
+      nodeId: 1,
+      kind: NodeKind.scrollView,
+      props: ScrollViewProps(
+        axis: ScrollAxis.vertical,
+        reverse: false,
+        primary: primary,
+      ),
+      eventBindings: const [],
+    ),
+    CreateNode(
+      nodeId: 100,
+      kind: firstKind == _VirtualSliverKind.fixed
+          ? NodeKind.sliverFixedExtent
+          : NodeKind.sliverVariedExtent,
+      props: props(firstKind, firstIndex),
+      eventBindings: const [],
+    ),
+    CreateNode(
+      nodeId: 200,
+      kind: secondKind == _VirtualSliverKind.fixed
+          ? NodeKind.sliverFixedExtent
+          : NodeKind.sliverVariedExtent,
+      props: props(secondKind, secondIndex),
+      eventBindings: const [],
+    ),
+    for (var index = 0; index < 10; index += 1)
+      CreateNode(
+        nodeId: 1000 + index,
+        kind: NodeKind.text,
+        props: TextProps('First ${firstIndex + index}'),
+        eventBindings: const [],
+      ),
+    for (var index = 0; index < 10; index += 1)
+      CreateNode(
+        nodeId: 2000 + index,
+        kind: NodeKind.text,
+        props: TextProps('Second ${secondIndex + index}'),
+        eventBindings: const [],
+      ),
+    SetChildren(
+      nodeId: 100,
+      children: [for (var index = 0; index < 10; index += 1) 1000 + index],
+    ),
+    SetChildren(
+      nodeId: 200,
+      children: [for (var index = 0; index < 10; index += 1) 2000 + index],
+    ),
+    const SetChildren(nodeId: 1, children: [100, 200]),
     const SetRoot(1),
   ];
   return NodeStore()..apply(

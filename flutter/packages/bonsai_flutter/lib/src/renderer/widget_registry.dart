@@ -511,19 +511,71 @@ class ScrollViewScope extends InheritedWidget {
   const ScrollViewScope({
     required this.controller,
     required this.axis,
+    required this.anchorCoordinator,
     required super.child,
     super.key,
   });
 
   final ScrollController controller;
   final Axis axis;
+  final InitialSliverAnchorCoordinator anchorCoordinator;
 
   static ScrollViewScope? of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<ScrollViewScope>();
 
   @override
   bool updateShouldNotify(ScrollViewScope old) =>
-      controller != old.controller || axis != old.axis;
+      controller != old.controller ||
+      axis != old.axis ||
+      anchorCoordinator != old.anchorCoordinator;
+}
+
+final class _ScrollViewScopeHost extends StatefulWidget {
+  const _ScrollViewScopeHost({
+    required this.controller,
+    required this.axis,
+    required this.child,
+  });
+
+  final ScrollController controller;
+  final Axis axis;
+  final Widget child;
+
+  @override
+  State<_ScrollViewScopeHost> createState() => _ScrollViewScopeHostState();
+}
+
+final class _ScrollViewScopeHostState extends State<_ScrollViewScopeHost> {
+  late InitialSliverAnchorCoordinator _anchorCoordinator;
+
+  @override
+  void initState() {
+    super.initState();
+    _anchorCoordinator = InitialSliverAnchorCoordinator(widget.controller);
+  }
+
+  @override
+  void didUpdateWidget(_ScrollViewScopeHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.controller, widget.controller)) {
+      _anchorCoordinator.dispose();
+      _anchorCoordinator = InitialSliverAnchorCoordinator(widget.controller);
+    }
+  }
+
+  @override
+  void dispose() {
+    _anchorCoordinator.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ScrollViewScope(
+    controller: widget.controller,
+    axis: widget.axis,
+    anchorCoordinator: _anchorCoordinator,
+    child: widget.child,
+  );
 }
 
 Widget _buildScrollView(
@@ -533,6 +585,13 @@ Widget _buildScrollView(
   RendererEventCallback? onEvent,
 ) {
   final props = _expectProps<ScrollViewProps>(node);
+  final cacheExtent = props.cacheExtent;
+  if (cacheExtent != null && (!cacheExtent.isFinite || cacheExtent < 0)) {
+    throw RendererBuildException(
+      'Node ${node.id} of kind ${node.kind} requires cacheExtent to be finite '
+      'and non-negative',
+    );
+  }
   final binding = _binding(node, EventTagId.scrollNotification);
   final resources = RendererResourceScope.of(context);
   final controller = props.primary
@@ -556,13 +615,13 @@ Widget _buildScrollView(
       controller: controller,
       scrollDirection: scrollAxis,
       reverse: props.reverse,
-      scrollCacheExtent: props.cacheExtent != null
-          ? ScrollCacheExtent.pixels(props.cacheExtent!)
+      scrollCacheExtent: cacheExtent != null
+          ? ScrollCacheExtent.pixels(cacheExtent)
           : null,
       slivers: children,
     ),
   );
-  final scoped = ScrollViewScope(
+  final scoped = _ScrollViewScopeHost(
     controller: controller,
     axis: scrollAxis,
     child: viewport,
@@ -627,6 +686,7 @@ Widget _buildSliverFixedExtent(
     localRevision: node.localRevision,
     props: props,
     controller: scope.controller,
+    anchorCoordinator: scope.anchorCoordinator,
     binding: _binding(node, EventTagId.visibleRangeChanged),
     onEvent: onEvent,
     children: children,
@@ -651,6 +711,7 @@ Widget _buildSliverVariedExtent(
     localRevision: node.localRevision,
     props: props,
     controller: scope.controller,
+    anchorCoordinator: scope.anchorCoordinator,
     binding: _binding(node, EventTagId.visibleRangeChanged),
     onEvent: onEvent,
     children: children,
@@ -745,7 +806,12 @@ void _validateSliverAppBarProps(UiNode node, SliverAppBarProps props) {
     }
   }
 
-  finiteNonNegative('toolbarHeight', props.toolbarHeight);
+  if (!props.toolbarHeight.isFinite || props.toolbarHeight <= 0) {
+    throw RendererBuildException(
+      'Node ${node.id} of kind ${node.kind} requires toolbarHeight to be '
+      'finite and strictly positive',
+    );
+  }
   finiteNonNegative('expandedHeight', props.expandedHeight);
   finiteNonNegative('collapsedHeight', props.collapsedHeight);
   finiteNonNegative('elevation', props.elevation);
@@ -759,6 +825,15 @@ void _validateSliverAppBarProps(UiNode node, SliverAppBarProps props) {
     throw RendererBuildException(
       'Node ${node.id} of kind ${node.kind} requires collapsedHeight to be '
       'at least toolbarHeight',
+    );
+  }
+  final expandedHeight = props.expandedHeight;
+  if (collapsedHeight != null &&
+      expandedHeight != null &&
+      collapsedHeight > expandedHeight) {
+    throw RendererBuildException(
+      'Node ${node.id} of kind ${node.kind} requires collapsedHeight not to '
+      'exceed expandedHeight',
     );
   }
 }

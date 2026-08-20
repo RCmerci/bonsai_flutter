@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show precisionErrorTolerance;
@@ -46,18 +47,105 @@ double? _sliverLeadingScrollOffset(BuildContext context) {
   return offset.isFinite ? offset : null;
 }
 
-double? _initialScrollTarget({
-  required BuildContext context,
-  required ScrollController controller,
-  required double localOffset,
-}) {
-  final sliverLeadingOffset = _sliverLeadingScrollOffset(context);
-  if (sliverLeadingOffset == null) return null;
-  final position = controller.position;
-  return (sliverLeadingOffset + localOffset).clamp(
-    position.minScrollExtent,
-    position.maxScrollExtent,
-  );
+final class _InitialAnchorCandidate {
+  const _InitialAnchorCandidate({
+    required this.leadingOffset,
+    required this.target,
+    required this.shouldJump,
+  });
+
+  final double leadingOffset;
+  final double target;
+  final bool shouldJump;
+}
+
+/// Arbitrates the one implicit initial anchor owned by a scroll view.
+final class InitialSliverAnchorCoordinator {
+  InitialSliverAnchorCoordinator(this.controller) {
+    controller.addListener(_handleControllerChange);
+  }
+
+  final ScrollController controller;
+  final Map<Object, _InitialAnchorCandidate> _candidates = {};
+  bool _commitScheduled = false;
+  bool _committed = false;
+  bool _disposed = false;
+  bool _externalOffsetEstablished = false;
+  Object? _owner;
+
+  void _handleControllerChange() {
+    if (!_committed && controller.hasClients && controller.offset != 0) {
+      _externalOffsetEstablished = true;
+    }
+  }
+
+  void register({
+    required Object owner,
+    required BuildContext context,
+    required double localOffset,
+    required bool shouldJump,
+  }) {
+    if (_disposed || _committed || !controller.hasClients) return;
+    if (_owner != null && !identical(_owner, owner)) return;
+    final leadingOffset = _sliverLeadingScrollOffset(context);
+    if (leadingOffset == null) return;
+    final position = controller.position;
+    _candidates[owner] = _InitialAnchorCandidate(
+      leadingOffset: leadingOffset,
+      target: (leadingOffset + localOffset).clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      ),
+      shouldJump: shouldJump,
+    );
+    _scheduleCommit();
+  }
+
+  void unregister(Object owner) {
+    _candidates.remove(owner);
+    if (identical(_owner, owner)) {
+      _committed = true;
+      _owner = null;
+    }
+  }
+
+  void _scheduleCommit() {
+    if (_commitScheduled) return;
+    _commitScheduled = true;
+    scheduleMicrotask(() {
+      _commitScheduled = false;
+      _commit();
+    });
+  }
+
+  void _commit() {
+    if (_disposed || _committed || _candidates.isEmpty) return;
+    if (!controller.hasClients ||
+        _externalOffsetEstablished ||
+        controller.offset != 0) {
+      _committed = true;
+      _candidates.clear();
+      return;
+    }
+    final earliest = _candidates.values.reduce(
+      (left, right) => left.leadingOffset <= right.leadingOffset ? left : right,
+    );
+    _owner ??= _candidates.entries
+        .firstWhere((entry) => identical(entry.value, earliest))
+        .key;
+    _candidates.clear();
+    if (earliest.shouldJump && earliest.target != 0) {
+      _committed = true;
+      controller.jumpTo(earliest.target);
+    }
+  }
+
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    controller.removeListener(_handleControllerChange);
+    _candidates.clear();
+  }
 }
 
 /// Binary-search geometry for sparse-extent lists.
@@ -177,6 +265,7 @@ final class SliverFixedExtentHost extends StatefulWidget {
     required this.props,
     required this.children,
     required this.controller,
+    required this.anchorCoordinator,
     required this.binding,
     required this.onEvent,
     super.key,
@@ -187,6 +276,7 @@ final class SliverFixedExtentHost extends StatefulWidget {
   final SliverFixedExtentProps props;
   final List<Widget> children;
   final ScrollController controller;
+  final InitialSliverAnchorCoordinator anchorCoordinator;
   final EventBinding? binding;
   final RendererEventCallback? onEvent;
 
@@ -216,7 +306,15 @@ final class _SliverFixedExtentHostState extends State<SliverFixedExtentHost> {
       oldWidget.controller.removeListener(_scheduleRangeReport);
       widget.controller.addListener(_scheduleRangeReport);
     }
+    final coordinatorChanged = !identical(
+      oldWidget.anchorCoordinator,
+      widget.anchorCoordinator,
+    );
+    if (coordinatorChanged) {
+      oldWidget.anchorCoordinator.unregister(this);
+    }
     if (controllerChanged ||
+        coordinatorChanged ||
         oldWidget.props.firstIndex != widget.props.firstIndex) {
       _scheduleInitialAnchor();
     }
@@ -224,24 +322,21 @@ final class _SliverFixedExtentHostState extends State<SliverFixedExtentHost> {
   }
 
   void _scheduleInitialAnchor() {
-    if (widget.props.firstIndex > 0) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !widget.controller.hasClients) return;
-        final target = _initialScrollTarget(
-          context: context,
-          controller: widget.controller,
-          localOffset: widget.props.firstIndex * widget.props.itemExtent,
-        );
-        if (widget.controller.offset == 0 && target != null) {
-          widget.controller.jumpTo(target);
-        }
-      });
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.controller.hasClients) return;
+      widget.anchorCoordinator.register(
+        owner: this,
+        context: context,
+        localOffset: widget.props.firstIndex * widget.props.itemExtent,
+        shouldJump: widget.props.firstIndex > 0,
+      );
+    });
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_scheduleRangeReport);
+    widget.anchorCoordinator.unregister(this);
     super.dispose();
   }
 
@@ -292,27 +387,31 @@ final class _SliverFixedExtentHostState extends State<SliverFixedExtentHost> {
 
   @override
   Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) => _reportVisibleRange());
-    return SliverFixedExtentList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          final windowIndex = index - widget.props.firstIndex;
-          if (windowIndex >= 0 && windowIndex < widget.children.length) {
-            return widget.children[windowIndex];
-          }
-          return const SizedBox.shrink();
-        },
-        childCount: widget.props.totalCount,
-        findChildIndexCallback: (key) {
-          for (var i = 0; i < widget.children.length; i += 1) {
-            if (widget.children[i].key == key) {
-              return widget.props.firstIndex + i;
-            }
-          }
-          return null;
-        },
-      ),
-      itemExtent: widget.props.itemExtent,
+    return SliverLayoutBuilder(
+      builder: (context, constraints) {
+        _scheduleRangeReport();
+        return SliverFixedExtentList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              final windowIndex = index - widget.props.firstIndex;
+              if (windowIndex >= 0 && windowIndex < widget.children.length) {
+                return widget.children[windowIndex];
+              }
+              return const SizedBox.shrink();
+            },
+            childCount: widget.props.totalCount,
+            findChildIndexCallback: (key) {
+              for (var i = 0; i < widget.children.length; i += 1) {
+                if (widget.children[i].key == key) {
+                  return widget.props.firstIndex + i;
+                }
+              }
+              return null;
+            },
+          ),
+          itemExtent: widget.props.itemExtent,
+        );
+      },
     );
   }
 }
@@ -326,6 +425,7 @@ final class SliverVariedExtentHost extends StatefulWidget {
     required this.props,
     required this.children,
     required this.controller,
+    required this.anchorCoordinator,
     required this.binding,
     required this.onEvent,
     super.key,
@@ -336,6 +436,7 @@ final class SliverVariedExtentHost extends StatefulWidget {
   final SliverVariedExtentProps props;
   final List<Widget> children;
   final ScrollController controller;
+  final InitialSliverAnchorCoordinator anchorCoordinator;
   final EventBinding? binding;
   final RendererEventCallback? onEvent;
 
@@ -395,7 +496,15 @@ final class _SliverVariedExtentHostState extends State<SliverVariedExtentHost>
       oldWidget.controller.removeListener(_scheduleRangeReport);
       widget.controller.addListener(_scheduleRangeReport);
     }
+    final coordinatorChanged = !identical(
+      oldWidget.anchorCoordinator,
+      widget.anchorCoordinator,
+    );
+    if (coordinatorChanged) {
+      oldWidget.anchorCoordinator.unregister(this);
+    }
     if (controllerChanged ||
+        coordinatorChanged ||
         oldWidget.props.firstIndex != widget.props.firstIndex) {
       _scheduleInitialAnchor();
     }
@@ -606,19 +715,17 @@ final class _SliverVariedExtentHostState extends State<SliverVariedExtentHost>
   }
 
   void _scheduleInitialAnchor() {
-    if (widget.props.firstIndex > 0 && !_initialAnchorScheduled) {
+    if (!_initialAnchorScheduled) {
       _initialAnchorScheduled = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _initialAnchorScheduled = false;
         if (!mounted || !widget.controller.hasClients) return;
-        final target = _initialScrollTarget(
+        widget.anchorCoordinator.register(
+          owner: this,
           context: context,
-          controller: widget.controller,
           localOffset: _geometry.leadingOffset(widget.props.firstIndex),
+          shouldJump: widget.props.firstIndex > 0,
         );
-        if (widget.controller.offset == 0 && target != null) {
-          widget.controller.jumpTo(target);
-        }
       });
     }
   }
@@ -666,6 +773,7 @@ final class _SliverVariedExtentHostState extends State<SliverVariedExtentHost>
   @override
   void dispose() {
     widget.controller.removeListener(_scheduleRangeReport);
+    widget.anchorCoordinator.unregister(this);
     _animation.dispose();
     super.dispose();
   }
@@ -712,28 +820,32 @@ final class _SliverVariedExtentHostState extends State<SliverVariedExtentHost>
     if (_animating && _reduceMotion) {
       _settleImmediately();
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) => _reportVisibleRange());
     final geometry = _geometry;
-    return SliverVariedExtentList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          final windowIndex = index - widget.props.firstIndex;
-          if (windowIndex >= 0 && windowIndex < widget.children.length) {
-            return widget.children[windowIndex];
-          }
-          return const SizedBox.shrink();
-        },
-        childCount: widget.props.totalCount,
-        findChildIndexCallback: (key) {
-          for (var i = 0; i < widget.children.length; i += 1) {
-            if (widget.children[i].key == key) {
-              return widget.props.firstIndex + i;
-            }
-          }
-          return null;
-        },
-      ),
-      itemExtentBuilder: (index, _) => geometry.itemExtent(index),
+    return SliverLayoutBuilder(
+      builder: (context, constraints) {
+        _scheduleRangeReport();
+        return SliverVariedExtentList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              final windowIndex = index - widget.props.firstIndex;
+              if (windowIndex >= 0 && windowIndex < widget.children.length) {
+                return widget.children[windowIndex];
+              }
+              return const SizedBox.shrink();
+            },
+            childCount: widget.props.totalCount,
+            findChildIndexCallback: (key) {
+              for (var i = 0; i < widget.children.length; i += 1) {
+                if (widget.children[i].key == key) {
+                  return widget.props.firstIndex + i;
+                }
+              }
+              return null;
+            },
+          ),
+          itemExtentBuilder: (index, _) => geometry.itemExtent(index),
+        );
+      },
     );
   }
 }

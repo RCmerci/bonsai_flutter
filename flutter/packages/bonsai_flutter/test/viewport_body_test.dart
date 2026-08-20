@@ -39,9 +39,12 @@ void main() {
       expect(find.bySemanticsLabel('Capture'), findsOneWidget);
       expect(find.bySemanticsLabel('Row 0'), findsOneWidget);
 
-      // The sliver varied-extent host does not yet emit visible-range
-      // events (the state machine is deferred to a follow-up). Dragging
-      // should still keep the viewport stable without exceptions.
+      // The real varied-extent host publishes a bounded painted range before
+      // interaction and remains stable when the shared viewport scrolls.
+      final initialRanges = events
+          .where((event) => event.payload is VisibleRangeEventPayload)
+          .toList();
+      expect(initialRanges, isNotEmpty);
       await tester.drag(find.byType(Scrollable), const Offset(0, -144));
       await tester.pump();
       expect(tester.takeException(), isNull);

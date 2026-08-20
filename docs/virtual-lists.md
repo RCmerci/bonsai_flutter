@@ -1,109 +1,148 @@
 # Virtual lists
 
-`Widget.Sliver.fixed_extent` represents a large logical collection without
-mounting every row in the OCaml tree or creating a `NodeHost` per logical
-item. OCaml supplies only a keyed, prefetched item window:
+`Widget.Sliver.fixed_extent` and `Widget.Sliver.varied_extent` represent large
+logical collections without mounting every row in the OCaml tree. Their
+contract separates three ranges:
+
+- The logical collection is `[0, total_count)`.
+- The painted range is the half-open range reported by
+  `visible_range_changed` after Flutter lays out the sliver.
+- The materialized range is `[first_index, first_index + List.length items)`;
+  OCaml owns it and supplies keyed widgets for it.
+
+Flutter never requests an individual row synchronously across FFI. A logical
+index outside the materialized range renders as an empty placeholder until the
+application catches up. The `overscan` property affects viewport cache pixels,
+but it does not fetch, retain, or create OCaml widgets.
+
+## Window policy
+
+`Widget.Sliver.Window.create` expands a valid painted range by a logical
+overscan count and clamps the result to the collection. It is pure and uses no
+renderer or protocol types:
 
 ```ocaml
-let viewport =
-  Widget.Scroll_view.vertical
-    ~on_scroll:scroll_handler
-    [ Widget.Sliver.fixed_extent
-        ~total_count:50_000
-        ~first_index:100
-        ~item_extent:48.
-        ~overscan:4
-        ~items:twenty_keyed_rows
-        ~on_visible_range
-        ()
-    ]
-    ()
+let materialized =
+  Widget.Sliver.Window.create
+    ~total_count
+    ~overscan:4
+    ~visible_first_index:painted.first_index
+    ~visible_last_exclusive:painted.last_exclusive
 in
-Body.Vertical.create [ Body.Vertical.fill viewport ]
+let items =
+  all_rows
+  |> drop materialized.first_index
+  |> take (materialized.last_exclusive - materialized.first_index)
+in
+Widget.Sliver.fixed_extent
+  ~total_count
+  ~first_index:materialized.first_index
+  ~item_extent:48.
+  ~overscan:4
+  ~items
+  ~on_visible_range
+  ()
 ```
 
-The sliver props contain the logical count, window origin, fixed item
-extent, and overscan count. Flutter uses `SliverFixedExtentList` and
-maps logical indexes into the supplied child window. It never requests an
-individual row synchronously across FFI.
+Applications must provide a useful initial materialized window before the
+first event. A common policy stores an initial painted range such as `[0, 20)`,
+derives the first materialized window from it, and replaces the stored painted
+range whenever `visible_range_changed` arrives. Later events are catch-up
+requests, not synchronous row callbacks.
 
-Visible-range changes are emitted as a core event (tag 14,
-`visible_range_changed`). Applications use that range to advance or
-prefetch a window in OCaml. The reported logical range is bounded by
-`total_count`, not by the currently supplied child window. This lets a
-fast scroll request a catch-up window instead of becoming pinned to stale
-supplied indexes.
+The callback payload is decoded through
+`Widget.Sliver.visible_range_of_payload`. It remains a pure painted range: it
+does not include overscan. Both ends are bounded by `total_count`, independent
+of the currently supplied item window.
 
-Applications attach a driver-managed `Event.Handler.t` and validate raw
-input through `Widget.Sliver.visible_range_of_payload`. A typical append
-feed keeps one cursor and one load generation in OCaml, ignores repeated
-range events while loading, supplies an overlapping keyed window, and
-schedules completion through Bonsai logical time. Flutter retains the
-controller and exact offset while props and children advance.
+The renderer keeps initial publication pending while a mounted sliver has no
+usable paint geometry. A later layout transition to a positive painted extent
+publishes exactly one current range without requiring controller movement.
+Unchanged ranges are deduplicated, and a permanently zero-paint sliver does not
+schedule a frame loop.
 
-`Sliver.fixed_extent` remains a fixed-`item_extent` contract. Arbitrary
-self-measuring rows, two-dimensional virtualization, graph canvases, and
-virtualized tree editors belong in separate extensions.
+## Fixed and varied extents
 
-## Sparse known extents
-
-`Widget.Sliver.varied_extent` is a core sliver kind
-(`sliver_varied_extent`, kind 36). It supports a default item extent with
-sorted logical-index overrides and an optional transition:
+The fixed form uses `SliverFixedExtentList` and one positive finite
+`item_extent`. The varied form uses `SliverVariedExtentList`, one positive
+finite `default_item_extent`, and sorted sparse overrides:
 
 ```ocaml
-let viewport =
-  Widget.Scroll_view.vertical
-    ~on_scroll:scroll_handler
-    [ Widget.Sliver.varied_extent
-        ~total_count:50_000
-        ~first_index:100
-        ~default_item_extent:48.
-        ~extent_overrides:[ { Widget.Sparse_extent_override.index = 104; extent = 312. } ]
-        ~transition:
-          (Widget.Sparse_extent_transition.create
-             ~expand_duration_ms:240
-             ~collapse_duration_ms:190
-             ())
-        ~overscan:4
-        ~items:twenty_keyed_rows
-        ~on_visible_range
-        ()
-    ]
-    ()
+let materialized =
+  Widget.Sliver.Window.create
+    ~total_count
+    ~overscan:4
+    ~visible_first_index:painted.first_index
+    ~visible_last_exclusive:painted.last_exclusive
 in
-Body.Vertical.create [ Body.Vertical.fill viewport ]
+Widget.Sliver.varied_extent
+  ~total_count
+  ~first_index:materialized.first_index
+  ~default_item_extent:48.
+  ~extent_overrides:
+    [ { Widget.Sparse_extent_override.index = 104; extent = 312. } ]
+  ~transition:
+    (Widget.Sparse_extent_transition.create
+       ~expand_duration_ms:240
+       ~collapse_duration_ms:190
+       ())
+  ~overscan:4
+  ~items:keyed_materialized_rows
+  ~on_visible_range
+  ()
 ```
 
-The props validate exact length, safe indexes, sorted uniqueness, and finite
-positive extents on both sides. Flutter uses `SliverVariedExtentList`; it
-does not measure arbitrary child heights. Leading offsets and visible ranges
-come from the default extent plus sparse prefix deltas, so an override may
-remain correct even when its logical item is outside the supplied OCaml
+Sparse extents are known geometry, not arbitrary self-measurement. Leading
+offsets and painted ranges come from the default extent plus sparse prefix
+deltas, so an override remains meaningful outside the current materialized
 window.
 
-The optional transition captures current effective extents, interpolates all
-changed indexes on one Flutter-owned timeline, and retargets from the current
-geometry when interrupted. Accordion removal and addition animate
-concurrently. Extent updates preserve a logical anchor and its intra-item
-offset; a newly expanded visible override is preferred, otherwise the old
-first visible item is retained. Direct scrolling releases the animation
-anchor. Visible-range emission is suppressed until the target settles, and
-reduced motion applies the final geometry immediately. No per-frame values
-cross FFI.
+The optional transition interpolates changed extents on one Flutter-owned
+timeline. It preserves a logical anchor and its intra-item offset, suppresses
+painted-range publication during correction, and emits the settled range once.
+Reduced motion applies final geometry immediately. No per-frame animation
+values cross FFI.
 
-The same per-index progress drives `MorphingSurfaceHost`, which clips and
-interpolates generic compact/expanded surface geometry while retaining
-outgoing visuals. Only committed target content participates in hit testing
-and semantics. The controller, bounded mounts, keyed child identity, and fast
-catch-up behavior remain retained across window updates.
+## Cache and initial anchors
 
-OCaml composes the two endpoint trees with
-`Native_widget.Morphing_surface.create`. The wrapper is placed inside the
-single keyed row or swipe host, so list identity and gesture arbitration
-remain unchanged while both endpoint visuals are available to Flutter.
+`Scroll_view` derives its viewport cache extent from the maximum
+`overscan * item_extent` among nested virtual slivers unless an explicit
+`cache_extent` is supplied. Explicit and derived values must be finite and
+non-negative. Logical overscan is exact for the OCaml materialized range; its
+conversion to cache pixels is approximate for varied extents.
 
-Both virtual-list slivers are children of a `Scroll_view` which returns
+One coordinator owned by the enclosing `Scroll_view` arbitrates implicit
+initial anchors. The earliest virtual sliver in layout order owns the decision:
+
+- `first_index = 0` keeps the normal leading scroll offset;
+- a positive `first_index` targets that sliver's global leading offset plus its
+  local logical offset, clamped to the controller extent;
+- later virtual slivers cannot move the shared controller;
+- a user or external non-zero offset disables implicit anchoring.
+
+This preserves preceding box or app-bar geometry while preventing callback
+order from deciding global scroll position.
+
+## Pagination and identity
+
+A continuation row is part of `total_count` while loading. Recompute the
+materialized range whenever either the painted range or `total_count` changes,
+then include the continuation widget only when its logical index lies inside
+that range. After an append, the same stored painted range expands against the
+new count, so newly loaded rows can enter the window without a gesture.
+
+Rows must use stable keys. Overlap between the old and new materialized ranges
+then preserves element and OCaml node identity while pagination advances. The
+mail example implements this policy and ignores repeated tail notifications
+for an in-flight load generation.
+
+## Limits
+
+Consumers still own state, effects, pagination, asymmetric or velocity-aware
+prefetching, and timely window updates. Self-measuring rows, two-dimensional
+virtualization, graph canvases, and virtualized tree editors require separate
+extensions.
+
+Both virtual-list slivers live inside a `Scroll_view`, which returns
 `Viewport.Vertical.t` or `Viewport.Horizontal.t`, not `Widget.t`. See
-[Viewport layout](viewport-layout.md) for bounded body and explicit extent
-embedding.
+[Viewport layout](viewport-layout.md) for embedding rules.

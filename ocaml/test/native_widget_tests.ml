@@ -96,6 +96,101 @@ let test_sliver_fixed_extent_contract () =
   | None -> failwith "visible range callback"
 ;;
 
+let test_sliver_window_materialization_ranges () =
+  let check_range
+        ~label
+        ~total_count
+        ~overscan
+        ~visible_first_index
+        ~visible_last_exclusive
+        ~expected_first_index
+        ~expected_last_exclusive
+    =
+    let range =
+      Ui.Widget.Sliver.Window.create
+        ~total_count
+        ~overscan
+        ~visible_first_index
+        ~visible_last_exclusive
+    in
+    check
+      (range.first_index = expected_first_index
+       && range.last_exclusive = expected_last_exclusive)
+      label
+  in
+  check_range
+    ~label:"empty collection window"
+    ~total_count:0
+    ~overscan:4
+    ~visible_first_index:0
+    ~visible_last_exclusive:0
+    ~expected_first_index:0
+    ~expected_last_exclusive:0;
+  check_range
+    ~label:"leading window clamp"
+    ~total_count:100
+    ~overscan:4
+    ~visible_first_index:1
+    ~visible_last_exclusive:8
+    ~expected_first_index:0
+    ~expected_last_exclusive:12;
+  check_range
+    ~label:"middle window expansion"
+    ~total_count:100
+    ~overscan:4
+    ~visible_first_index:20
+    ~visible_last_exclusive:28
+    ~expected_first_index:16
+    ~expected_last_exclusive:32;
+  check_range
+    ~label:"trailing window clamp"
+    ~total_count:100
+    ~overscan:4
+    ~visible_first_index:95
+    ~visible_last_exclusive:100
+    ~expected_first_index:91
+    ~expected_last_exclusive:100;
+  check_range
+    ~label:"overscan larger than collection"
+    ~total_count:5
+    ~overscan:100
+    ~visible_first_index:2
+    ~visible_last_exclusive:3
+    ~expected_first_index:0
+    ~expected_last_exclusive:5;
+  List.iter
+    (fun build -> expect_invalid_argument build "invalid materialization range accepted")
+    [ (fun () ->
+        ignore
+          (Ui.Widget.Sliver.Window.create
+             ~total_count:(-1)
+             ~overscan:0
+             ~visible_first_index:0
+             ~visible_last_exclusive:0))
+    ; (fun () ->
+        ignore
+          (Ui.Widget.Sliver.Window.create
+             ~total_count:10
+             ~overscan:(-1)
+             ~visible_first_index:0
+             ~visible_last_exclusive:1))
+    ; (fun () ->
+        ignore
+          (Ui.Widget.Sliver.Window.create
+             ~total_count:10
+             ~overscan:0
+             ~visible_first_index:5
+             ~visible_last_exclusive:4))
+    ; (fun () ->
+        ignore
+          (Ui.Widget.Sliver.Window.create
+             ~total_count:10
+             ~overscan:0
+             ~visible_first_index:0
+             ~visible_last_exclusive:11))
+    ]
+;;
+
 let test_sliver_varied_extent_contract () =
   let received = ref None in
   let items = List.init 6 (fun i -> Ui.Widget.text (string_of_int (40 + i))) in
@@ -175,11 +270,11 @@ let test_sliver_varied_extent_transition () =
   match vv.node with
   | Ui.Widget.Private.Sliver_varied_extent { transition = Some decoded; _ } ->
     let open Ui.Widget.Sparse_extent_transition in
-    check decoded.enabled "transition enabled";
-    check (decoded.expand_duration_ms = 240) "expand duration";
-    check (decoded.collapse_duration_ms = 190) "collapse duration";
-    check (decoded.expand_curve = Ease_out_cubic) "expand curve";
-    check (decoded.collapse_curve = Ease_in_out_cubic) "collapse curve"
+    check (enabled decoded) "transition enabled";
+    check (expand_duration_ms decoded = 240) "expand duration";
+    check (collapse_duration_ms decoded = 190) "collapse duration";
+    check (expand_curve decoded = Ease_out_cubic) "expand curve";
+    check (collapse_curve decoded = Ease_in_out_cubic) "collapse curve"
   | _ -> failwith "varied extent transition node"
 ;;
 
@@ -217,6 +312,7 @@ let test_sliver_varied_extent_validation () =
     ; ( (fun () -> create ~default_item_extent:0. ())
       , "sliver accepted a non-positive default extent" )
     ; (fun () -> create ~overscan:(-1) ()), "sliver accepted negative overscan"
+    ; (fun () -> create ~overscan:0x1_0000_0000 ()), "sliver accepted overscan above u32"
     ; ( (fun () -> create ~extent_overrides:[ sliver_override (-1) 80. ] ())
       , "sliver accepted a negative override index" )
     ; ( (fun () -> create ~extent_overrides:[ sliver_override 10 80. ] ())
@@ -239,6 +335,44 @@ let test_sliver_varied_extent_validation () =
             ())
       , "sliver accepted a child window beyond total_count" )
     ]
+;;
+
+let test_sliver_fixed_extent_wire_validation () =
+  let create overscan =
+    Ui.Widget.Sliver.fixed_extent
+      ~total_count:1
+      ~first_index:0
+      ~item_extent:48.
+      ~overscan
+      ~items:[]
+      ~on_visible_range:(sliver_range_handler (fun _ -> ()))
+      ()
+  in
+  ignore (create 0);
+  ignore (create 0xffff_ffff);
+  expect_invalid_argument
+    (fun () -> ignore (create (-1)))
+    "fixed sliver accepted negative overscan";
+  expect_invalid_argument
+    (fun () -> ignore (create 0x1_0000_0000))
+    "fixed sliver accepted overscan above u32"
+;;
+
+let test_sparse_extent_transition_wire_validation () =
+  let create duration =
+    Ui.Widget.Sparse_extent_transition.create
+      ~expand_duration_ms:duration
+      ~collapse_duration_ms:duration
+      ()
+  in
+  ignore (create 0);
+  ignore (create 0xffff_ffff);
+  expect_invalid_argument
+    (fun () -> ignore (create (-1)))
+    "transition accepted a negative duration";
+  expect_invalid_argument
+    (fun () -> ignore (create 0x1_0000_0000))
+    "transition accepted a duration above u32"
 ;;
 
 let test_sliver_fill_and_padding () =
@@ -338,16 +472,26 @@ let test_sliver_app_bar_validation () =
   List.iter
     (fun (build, message) -> expect_invalid_argument build message)
     [ (fun () -> create ~snap:true ()), "sliver app bar accepted snap without floating"
+    ; ( (fun () -> create ~toolbar_height:0. ())
+      , "sliver app bar accepted a zero toolbar height" )
     ; ( (fun () -> create ~toolbar_height:(-1.) ())
       , "sliver app bar accepted a negative toolbar height" )
     ; ( (fun () -> create ~toolbar_height:Float.nan ())
       , "sliver app bar accepted a non-finite toolbar height" )
+    ; ( (fun () -> create ~toolbar_height:Float.infinity ())
+      , "sliver app bar accepted an infinite toolbar height" )
     ; ( (fun () -> create ~expanded_height:(-1.) ())
       , "sliver app bar accepted a negative expanded height" )
+    ; ( (fun () -> create ~expanded_height:100. ~collapsed_height:120. ())
+      , "sliver app bar accepted collapsed height above expanded height" )
     ; ( (fun () -> create ~collapsed_height:40. ())
       , "sliver app bar accepted collapsed height below toolbar height" )
     ; ( (fun () -> create ~elevation:(-1.) ())
       , "sliver app bar accepted a negative elevation" )
+    ; ( (fun () -> create ~elevation:Float.nan ())
+      , "sliver app bar accepted a NaN elevation" )
+    ; ( (fun () -> create ~elevation:Float.infinity ())
+      , "sliver app bar accepted an infinite elevation" )
     ; ( (fun () -> create ~bottom:(Ui.Widget.text "Bottom") ())
       , "sliver app bar accepted a bottom without preferred size" )
     ]
@@ -548,6 +692,61 @@ let test_scroll_view_cache_extent_horizontal () =
   | Some ce ->
     check (Float.equal ce 150.) "horizontal overscan*extent cache extent (3*50)"
   | None -> failwith "expected auto cache extent for horizontal fixed sliver"
+;;
+
+let test_scroll_view_cache_extent_wire_validation () =
+  let vertical cache_extent =
+    Ui.Widget.Scroll_view.vertical ~cache_extent ~on_scroll:no_scroll [] ()
+  in
+  let horizontal cache_extent =
+    Ui.Widget.Scroll_view.horizontal ~cache_extent ~on_scroll:no_scroll [] ()
+  in
+  ignore (vertical 0.);
+  ignore (horizontal 0.);
+  List.iter
+    (fun cache_extent ->
+       expect_invalid_argument
+         (fun () -> ignore (vertical cache_extent))
+         "vertical scroll view accepted invalid cache extent";
+       expect_invalid_argument
+         (fun () -> ignore (horizontal cache_extent))
+         "horizontal scroll view accepted invalid cache extent")
+    [ -1.; Float.nan; Float.infinity; Float.neg_infinity ];
+  let max_u32 = 0xffff_ffff in
+  let finite =
+    Ui.Widget.Scroll_view.vertical
+      ~on_scroll:no_scroll
+      [ Ui.Widget.Sliver.fixed_extent
+          ~total_count:1
+          ~first_index:0
+          ~item_extent:Float.max_float
+          ~overscan:1
+          ~items:[]
+          ~on_visible_range:no_range
+          ()
+      ]
+      ()
+  in
+  (match scroll_view_cache_extent finite with
+   | Some extent ->
+     check (Float.is_finite extent) "largest derived cache extent is finite"
+   | None -> failwith "largest finite derived cache extent was omitted");
+  expect_invalid_argument
+    (fun () ->
+       ignore
+         (Ui.Widget.Scroll_view.vertical
+            ~on_scroll:no_scroll
+            [ Ui.Widget.Sliver.fixed_extent
+                ~total_count:1
+                ~first_index:0
+                ~item_extent:Float.max_float
+                ~overscan:max_u32
+                ~items:[]
+                ~on_visible_range:no_range
+                ()
+            ]
+            ()))
+    "derived cache extent overflow was accepted"
 ;;
 
 type dial_event = Changed of int
@@ -1069,9 +1268,12 @@ let () =
   test_typed_native_widget ();
   test_sliver_box_and_scroll_view ();
   test_sliver_fixed_extent_contract ();
+  test_sliver_window_materialization_ranges ();
   test_sliver_varied_extent_contract ();
   test_sliver_varied_extent_transition ();
   test_sliver_varied_extent_validation ();
+  test_sliver_fixed_extent_wire_validation ();
+  test_sparse_extent_transition_wire_validation ();
   test_sliver_fill_and_padding ();
   test_sliver_app_bar_contract ();
   test_sliver_app_bar_validation ();
@@ -1083,6 +1285,7 @@ let () =
   test_scroll_view_cache_extent_padding_recurse ();
   test_scroll_view_cache_extent_default_overscan ();
   test_scroll_view_cache_extent_horizontal ();
+  test_scroll_view_cache_extent_wire_validation ();
   test_morphing_surface_contract ();
   test_swipe_action_props_contract ();
   test_swipe_action_omitted_direction_and_validation ();

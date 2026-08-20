@@ -78,11 +78,20 @@ void main() {
   ) async {
     final invalidProps = <SliverAppBarProps>[
       const SliverAppBarProps(pinned: false, snap: true),
+      const SliverAppBarProps(pinned: false, toolbarHeight: 0),
       const SliverAppBarProps(pinned: false, toolbarHeight: -1),
       const SliverAppBarProps(pinned: false, toolbarHeight: double.nan),
+      const SliverAppBarProps(pinned: false, toolbarHeight: double.infinity),
       const SliverAppBarProps(pinned: false, expandedHeight: -1),
+      const SliverAppBarProps(
+        pinned: false,
+        expandedHeight: 100,
+        collapsedHeight: 120,
+      ),
       const SliverAppBarProps(pinned: false, collapsedHeight: 40),
       const SliverAppBarProps(pinned: false, elevation: -1),
+      const SliverAppBarProps(pinned: false, elevation: double.nan),
+      const SliverAppBarProps(pinned: false, elevation: double.infinity),
     ];
     final registry = WidgetRegistry.standard();
     late BuildContext context;
