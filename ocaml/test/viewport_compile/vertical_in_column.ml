@@ -10,7 +10,8 @@ let viewport =
         ~first_index:0
         ~default_item_extent:48.
         ~extent_overrides:[]
-        ~items:[ Ui.Widget.text "Row" ]
+        ~items:
+          [ Ui.Widget.Keyed.create ~key:(Ui.Key.string "row") (Ui.Widget.text "Row") ]
         ~on_visible_range:handler
         ()
     ]

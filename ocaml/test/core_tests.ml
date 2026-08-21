@@ -421,6 +421,99 @@ let test_keyed_insert_and_delete_are_incremental () =
   apply_and_compare ~old_snapshot:(Some first_snapshot) second
 ;;
 
+let test_virtual_window_shift_preserves_keyed_overlap () =
+  let reconciler = Reconciler.create ~runtime_epoch:451L in
+  let on_scroll = Event.Handler.create (fun _ -> ()) in
+  let on_visible_range = Event.Handler.create (fun _ -> ()) in
+  let item key label = Widget.Keyed.create ~key:(Key.string key) (Widget.text label) in
+  let window ~first_index items =
+    Widget.Scroll_view.vertical
+      ~on_scroll
+      [ Widget.Sliver.fixed_extent
+          ~total_count:3
+          ~first_index
+          ~item_extent:48.
+          ~items
+          ~on_visible_range
+          ()
+      ]
+      ()
+    |> Widget.Viewport.Vertical.with_height ~height:96.
+  in
+  let first =
+    reconcile_exn
+      reconciler
+      ~base_revision:0L
+      ~target_revision:1L
+      ~old:None
+      (window ~first_index:0 [ item "a" "A"; item "b" "B" ])
+  in
+  let first_snapshot = Mounted_tree.snapshot first.mounted_tree in
+  let a_before = (node_by_key first_snapshot (Key.string "a")).node_id in
+  let b_before = (node_by_key first_snapshot (Key.string "b")).node_id in
+  let second =
+    reconcile_exn
+      reconciler
+      ~base_revision:1L
+      ~target_revision:2L
+      ~old:(Some first.mounted_tree)
+      (window ~first_index:1 [ item "b" "B"; item "c" "C" ])
+  in
+  let second_snapshot = Mounted_tree.snapshot second.mounted_tree in
+  let b_after = (node_by_key second_snapshot (Key.string "b")).node_id in
+  let c_after = (node_by_key second_snapshot (Key.string "c")).node_id in
+  check
+    (Runtime.Node_id.equal b_before b_after)
+    "overlapping virtual item changed node identity";
+  check
+    (Option.is_none (Mounted_tree.Snapshot.find_by_key second_snapshot (Key.string "a")))
+    "departed virtual item remained mounted";
+  check
+    (not (Runtime.Node_id.equal a_before c_after))
+    "new virtual item reused the departed node ID";
+  check_int ~expected:1 ~actual:(count_operations second.frame_patch is_create) "creates";
+  check_int ~expected:1 ~actual:(count_operations second.frame_patch is_drop) "drops";
+  apply_and_compare ~old_snapshot:(Some first_snapshot) second
+;;
+
+let test_virtual_list_duplicate_item_keys_are_rejected () =
+  let reconciler = Reconciler.create ~runtime_epoch:452L in
+  let duplicate = Key.string "duplicate-virtual-item" in
+  let item label = Widget.Keyed.create ~key:duplicate (Widget.text label) in
+  let widget =
+    Widget.Scroll_view.vertical
+      ~on_scroll:(Event.Handler.create (fun _ -> ()))
+      [ Widget.Sliver.varied_extent
+          ~total_count:2
+          ~first_index:0
+          ~default_item_extent:48.
+          ~extent_overrides:[]
+          ~items:[ item "One"; item "Two" ]
+          ~on_visible_range:(Event.Handler.create (fun _ -> ()))
+          ()
+      ]
+      ()
+    |> Widget.Viewport.Vertical.with_height ~height:96.
+  in
+  match
+    Reconciler.reconcile
+      reconciler
+      ~base_revision:0L
+      ~target_revision:1L
+      ~old:None
+      ~base_handler_frame:None
+      widget
+  with
+  | Error (Runtime_error.Duplicate_key { key; side; _ }) ->
+    check (Key.equal key duplicate) "virtual list reported the wrong duplicate key";
+    check
+      (side = Runtime_error.Candidate)
+      "virtual list reported the wrong duplicate side"
+  | Error error ->
+    fail "unexpected virtual-list duplicate error: %s" (Runtime_error.to_string error)
+  | Ok _ -> fail "duplicate virtual-list item keys were accepted"
+;;
+
 let test_kind_replacement_remounts () =
   let reconciler = Reconciler.create ~runtime_epoch:46L in
   let key = Key.string "root" in
@@ -1713,6 +1806,10 @@ let tests =
   ; "keyed reorder preserves identity", test_keyed_reorder_preserves_identity
   ; ( "keyed insert and delete are incremental"
     , test_keyed_insert_and_delete_are_incremental )
+  ; ( "virtual window shift preserves keyed overlap"
+    , test_virtual_window_shift_preserves_keyed_overlap )
+  ; ( "virtual list duplicate item keys are rejected"
+    , test_virtual_list_duplicate_item_keys_are_rejected )
   ; "kind replacement remounts", test_kind_replacement_remounts
   ; ( "duplicate keys fail without consuming IDs"
     , test_duplicate_keys_fail_without_consuming_ids )

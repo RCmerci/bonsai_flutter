@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added abstract `Widget.Keyed.t` evidence for materialized virtual-list items.
+  `Sliver.fixed_extent` and `Sliver.varied_extent` now require explicitly keyed
+  item roots, while the non-virtualized `Sliver.list` remains unchanged.
 - Updated the immutable iPhoneOS SDK source binding to include configurable
   Swipe Action and host clip border radii, and published the refreshed SDK
   meta-package as `0.1.0~dev.3` without changing the native ABI or build recipe.

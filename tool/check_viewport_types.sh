@@ -43,3 +43,24 @@ do
     exit 1
   fi
 done
+
+for source_file in \
+  "$fixtures/virtual_sliver_unkeyed_items.ml" \
+  "$fixtures/virtual_sliver_direct_key_items.ml"
+do
+  diagnostic="$temporary_directory/$(basename "$source_file").stderr"
+  if compile "$source_file" 2>"$diagnostic"; then
+    echo "Expected OCaml type checking to reject $source_file" >&2
+    exit 1
+  fi
+  if grep -q "Unbound" "$diagnostic"; then
+    echo "Compile-fail fixture used a missing API instead of proving a type mismatch: $source_file" >&2
+    cat "$diagnostic" >&2
+    exit 1
+  fi
+  if ! grep -q "Keyed.t" "$diagnostic"; then
+    echo "Compile-fail fixture did not fail with a keyed-item type mismatch: $source_file" >&2
+    cat "$diagnostic" >&2
+    exit 1
+  fi
+done

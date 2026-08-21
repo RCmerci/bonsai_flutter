@@ -30,7 +30,7 @@ let feed =
         ~first_index
         ~default_item_extent
         ~extent_overrides
-        ~items
+        ~items:keyed_items
         ~on_visible_range
         ()
     ]

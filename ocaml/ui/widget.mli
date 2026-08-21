@@ -5,6 +5,16 @@
 
 type t
 
+(** Compile-time evidence that a widget root has an application key. *)
+module Keyed : sig
+  type widget = t
+  type t
+
+  (** [create ~key widget] returns [widget] with [key] on its existing root.
+      Any previous root key is replaced; no wrapper node is added. *)
+  val create : key:Key.t -> widget -> t
+end
+
 val with_test_id : Test_id.t -> t -> t
 val empty : ?key:Key.t -> unit -> t
 
@@ -169,7 +179,7 @@ module Sliver : sig
     -> first_index:int
     -> item_extent:float
     -> ?overscan:int
-    -> items:widget list
+    -> items:Keyed.t list
     -> on_visible_range:Event.Handler.t
     -> unit
     -> t
@@ -185,7 +195,7 @@ module Sliver : sig
     -> extent_overrides:Sparse_extent_override.t list
     -> ?overscan:int
     -> ?transition:Sparse_extent_transition.t
-    -> items:widget list
+    -> items:Keyed.t list
     -> on_visible_range:Event.Handler.t
     -> unit
     -> t

@@ -2,6 +2,7 @@ module Ui = Bonsai_flutter_ui
 
 let handler = Ui.Event.Handler.create (fun _ -> ())
 let row = Ui.Widget.text "Row"
+let keyed_row = Ui.Widget.Keyed.create ~key:(Ui.Key.string "row") row
 
 let vertical =
   Ui.Widget.Scroll_view.vertical ~on_scroll:handler [ Ui.Widget.Sliver.list [ row ] ] ()
@@ -17,6 +18,28 @@ let horizontal =
   Ui.Widget.Scroll_view.horizontal ~on_scroll:handler [ Ui.Widget.Sliver.list [ row ] ] ()
 ;;
 
+let keyed_virtual_lists =
+  Ui.Widget.Scroll_view.vertical
+    ~on_scroll:handler
+    [ Ui.Widget.Sliver.fixed_extent
+        ~total_count:1
+        ~first_index:0
+        ~item_extent:48.
+        ~items:[ keyed_row ]
+        ~on_visible_range:handler
+        ()
+    ; Ui.Widget.Sliver.varied_extent
+        ~total_count:1
+        ~first_index:0
+        ~default_item_extent:48.
+        ~extent_overrides:[]
+        ~items:[ keyed_row ]
+        ~on_visible_range:handler
+        ()
+    ]
+    ()
+;;
+
 let (_ : Ui.Widget.Body.t) =
   Ui.Widget.Body.Vertical.create
     [ Ui.Widget.Body.Vertical.fixed (Ui.Widget.text "Search")
@@ -25,6 +48,10 @@ let (_ : Ui.Widget.Body.t) =
 ;;
 
 let (_ : Ui.Widget.t) = Ui.Widget.Viewport.Horizontal.with_width ~width:240. horizontal
+
+let (_ : Ui.Widget.t) =
+  Ui.Widget.Viewport.Vertical.with_height ~height:240. keyed_virtual_lists
+;;
 
 let (_ : Ui.Widget.Body.t) =
   Ui.Widget.Body.Horizontal.create

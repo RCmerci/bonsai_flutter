@@ -33,6 +33,8 @@ let items =
   all_rows
   |> drop materialized.first_index
   |> take (materialized.last_exclusive - materialized.first_index)
+  |> List.map (fun row ->
+    Widget.Keyed.create ~key:(Key.string row.id) (render_row row))
 in
 Widget.Sliver.fixed_extent
   ~total_count

@@ -31,6 +31,56 @@ let scroll_view_child viewport =
   view.children.(0).widget
 ;;
 
+let keyed ~key widget = Ui.Widget.Keyed.create ~key widget
+
+let test_keyed_widget_root_evidence () =
+  let old_key = Ui.Key.string "old-root" in
+  let new_key = Ui.Key.string "new-root" in
+  let test_id = Ui.Test_id.string "keyed-root" in
+  let original =
+    Ui.Widget.text ~key:old_key "Keyed row" |> Ui.Widget.with_test_id test_id
+  in
+  let canonical =
+    Ui.Widget.text ~key:new_key "Keyed row" |> Ui.Widget.with_test_id test_id
+  in
+  let viewport =
+    Ui.Widget.Scroll_view.vertical
+      ~on_scroll:(Ui.Event.Handler.create (fun _ -> ()))
+      [ Ui.Widget.Sliver.fixed_extent
+          ~total_count:1
+          ~first_index:0
+          ~item_extent:48.
+          ~items:[ keyed ~key:new_key original ]
+          ~on_visible_range:(sliver_range_handler (fun _ -> ()))
+          ()
+      ]
+      ()
+  in
+  let (Av original_view) = Ui.Widget.Private.view original in
+  let (Av canonical_view) = Ui.Widget.Private.view canonical in
+  let (Av sliver_view) = Ui.Widget.Private.view (scroll_view_child viewport) in
+  check (Array.length sliver_view.children = 1) "keyed item added a wrapper node";
+  let (Av keyed_view) = Ui.Widget.Private.view sliver_view.children.(0).widget in
+  check
+    (Ui.Widget.Private.kind_tag_equal
+       (Ui.Widget.Private.node_kind_tag keyed_view.node)
+       Ui.Widget.Private.K_text)
+    "keyed item changed the root widget kind";
+  check (Array.length keyed_view.children = 0) "keyed item changed root children";
+  check
+    (Option.equal Ui.Key.equal original_view.key (Some old_key))
+    "keyed construction mutated the input widget";
+  check
+    (Option.equal Ui.Key.equal keyed_view.key (Some new_key))
+    "keyed construction did not replace the root key";
+  check
+    (Option.equal Ui.Test_id.equal keyed_view.test_id (Some test_id))
+    "keyed construction lost the root test ID";
+  check
+    (Int64.equal keyed_view.fingerprint canonical_view.fingerprint)
+    "keyed construction did not recompute the canonical root fingerprint"
+;;
+
 let test_sliver_box_and_scroll_view () =
   let viewport =
     Ui.Widget.Scroll_view.vertical
@@ -56,7 +106,11 @@ let test_sliver_box_and_scroll_view () =
 
 let test_sliver_fixed_extent_contract () =
   let received = ref None in
-  let items = List.init 20 (fun i -> Ui.Widget.text (string_of_int (100 + i))) in
+  let items =
+    List.init 20 (fun i ->
+      let logical_index = 100 + i in
+      keyed ~key:(Ui.Key.int logical_index) (Ui.Widget.text (string_of_int logical_index)))
+  in
   let viewport =
     Ui.Widget.Scroll_view.vertical
       ~on_scroll:(Ui.Event.Handler.create (fun _ -> ()))
@@ -74,6 +128,13 @@ let test_sliver_fixed_extent_contract () =
   in
   let (Av fv) = Ui.Widget.Private.view (scroll_view_child viewport) in
   check (Array.length fv.children = 20) "only the supplied window is mounted";
+  Array.iteri
+    (fun index (child : Ui.Widget.Private.child) ->
+       let (Av child_view) = Ui.Widget.Private.view child.widget in
+       check
+         (Option.equal Ui.Key.equal child_view.key (Some (Ui.Key.int (100 + index))))
+         "fixed extent lost a keyed item root")
+    fv.children;
   (match fv.node with
    | Ui.Widget.Private.Sliver_fixed_extent
        { total_count; first_index; item_extent; overscan } ->
@@ -193,7 +254,11 @@ let test_sliver_window_materialization_ranges () =
 
 let test_sliver_varied_extent_contract () =
   let received = ref None in
-  let items = List.init 6 (fun i -> Ui.Widget.text (string_of_int (40 + i))) in
+  let items =
+    List.init 6 (fun i ->
+      let logical_index = 40 + i in
+      keyed ~key:(Ui.Key.int logical_index) (Ui.Widget.text (string_of_int logical_index)))
+  in
   let viewport =
     Ui.Widget.Scroll_view.vertical
       ~on_scroll:(Ui.Event.Handler.create (fun _ -> ()))
@@ -212,6 +277,13 @@ let test_sliver_varied_extent_contract () =
   in
   let (Av vv) = Ui.Widget.Private.view (scroll_view_child viewport) in
   check (Array.length vv.children = 6) "varied extent mounted window";
+  Array.iteri
+    (fun index (child : Ui.Widget.Private.child) ->
+       let (Av child_view) = Ui.Widget.Private.view child.widget in
+       check
+         (Option.equal Ui.Key.equal child_view.key (Some (Ui.Key.int (40 + index))))
+         "varied extent lost a keyed item root")
+    vv.children;
   (match vv.node with
    | Ui.Widget.Private.Sliver_varied_extent
        { total_count
@@ -260,7 +332,7 @@ let test_sliver_varied_extent_transition () =
           ~extent_overrides:[ sliver_override 6 320. ]
           ~overscan:4
           ~transition
-          ~items:[ Ui.Widget.empty () ]
+          ~items:[ keyed ~key:(Ui.Key.string "transition-item") (Ui.Widget.empty ()) ]
           ~on_visible_range:(sliver_range_handler (fun _ -> ()))
           ()
       ]
@@ -331,7 +403,10 @@ let test_sliver_varied_extent_validation () =
           create
             ~total_count:2
             ~first_index:1
-            ~items:[ Ui.Widget.empty (); Ui.Widget.empty () ]
+            ~items:
+              [ keyed ~key:(Ui.Key.string "first") (Ui.Widget.empty ())
+              ; keyed ~key:(Ui.Key.string "second") (Ui.Widget.empty ())
+              ]
             ())
       , "sliver accepted a child window beyond total_count" )
     ]
@@ -1267,6 +1342,7 @@ let test_message_composer_validation_and_event_filtering () =
 let () =
   test_typed_native_widget ();
   test_sliver_box_and_scroll_view ();
+  test_keyed_widget_root_evidence ();
   test_sliver_fixed_extent_contract ();
   test_sliver_window_materialization_ranges ();
   test_sliver_varied_extent_contract ();

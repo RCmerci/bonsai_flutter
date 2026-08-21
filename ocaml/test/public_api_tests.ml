@@ -78,6 +78,38 @@ let (_ : Ui.Viewport.Vertical.t) =
     ()
 ;;
 
+let (_ : Ui.Viewport.Vertical.t) =
+  let fixed_item =
+    Ui.Widget.Keyed.create
+      ~key:(Bonsai_flutter_ui.Key.string "public-fixed-row")
+      (Ui.Widget.text "Public fixed row")
+  in
+  let varied_item =
+    Ui.Widget.Keyed.create
+      ~key:(Bonsai_flutter_ui.Key.string "public-varied-row")
+      (Ui.Widget.text "Public varied row")
+  in
+  Ui.Widget.Scroll_view.vertical
+    ~on_scroll:viewport_handler
+    [ Ui.Widget.Sliver.fixed_extent
+        ~total_count:1
+        ~first_index:0
+        ~item_extent:48.
+        ~items:[ fixed_item ]
+        ~on_visible_range:viewport_handler
+        ()
+    ; Ui.Widget.Sliver.varied_extent
+        ~total_count:1
+        ~first_index:0
+        ~default_item_extent:48.
+        ~extent_overrides:[]
+        ~items:[ varied_item ]
+        ~on_visible_range:viewport_handler
+        ()
+    ]
+    ()
+;;
+
 let (_ : Ui.Body.t) =
   Ui.Body.Vertical.create
     [ Ui.Body.Vertical.fixed (Ui.Widget.text "Search")

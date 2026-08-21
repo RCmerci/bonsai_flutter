@@ -949,7 +949,6 @@ let with_swipe_host ~swipe_action message content =
       ()
   in
   Ui.Native_widget.Swipe_action.create_with_handler
-    ~key:(Ui.Key.int message.id)
     ~start_action
     ~end_action
     ~content
@@ -985,6 +984,7 @@ let render_mail_row
       ()
   in
   with_swipe_host ~swipe_action message content
+  |> Ui.Widget.Keyed.create ~key:(Ui.Key.int message.id)
 ;;
 
 let mail_row handlers set_state message_id row_data _graph =
@@ -1175,6 +1175,7 @@ let loading_more_row =
   |> Ui.Widget.semantics
        ~properties:
          (Ui.Semantics.create ~label:"Loading more messages" ~live_region:true ())
+  |> Ui.Widget.Keyed.create ~key:(Ui.Key.string "mail-loading-more")
 ;;
 
 let materialized_window state ~total_count =

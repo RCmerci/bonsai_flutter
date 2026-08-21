@@ -489,6 +489,139 @@ void main() {
 
   for (final kind in _VirtualSliverKind.values) {
     testWidgets(
+      '${kind.label} retains the keyed overlap across a materialized window shift',
+      (tester) async {
+        await _setViewport(tester, const Size(400, 150));
+        final initialProps = switch (kind) {
+          _VirtualSliverKind.fixed => const SliverFixedExtentProps(
+            totalCount: 3,
+            firstIndex: 0,
+            itemExtent: 50,
+            overscan: 0,
+          ),
+          _VirtualSliverKind.varied => _variedProps(
+            totalCount: 3,
+            firstIndex: 0,
+            itemExtent: 50,
+          ),
+        };
+        final store = NodeStore()
+          ..apply(
+            Frame(
+              runtimeEpoch: 1,
+              baseRevision: 0,
+              targetRevision: 1,
+              kind: FrameKind.fullSnapshot,
+              operations: [
+                CreateNode(
+                  nodeId: 1,
+                  kind: NodeKind.scrollView,
+                  props: const ScrollViewProps(
+                    axis: ScrollAxis.vertical,
+                    reverse: false,
+                  ),
+                  eventBindings: const [],
+                ),
+                CreateNode(
+                  nodeId: _virtualNodeId,
+                  kind: kind == _VirtualSliverKind.fixed
+                      ? NodeKind.sliverFixedExtent
+                      : NodeKind.sliverVariedExtent,
+                  props: initialProps,
+                  eventBindings: const [],
+                ),
+                const CreateNode(
+                  nodeId: 1000,
+                  kind: NodeKind.text,
+                  props: TextProps('A'),
+                  eventBindings: [],
+                ),
+                const CreateNode(
+                  nodeId: 1001,
+                  kind: NodeKind.text,
+                  props: TextProps('B'),
+                  eventBindings: [],
+                ),
+                const SetChildren(
+                  nodeId: _virtualNodeId,
+                  children: [1000, 1001],
+                ),
+                const SetChildren(nodeId: 1, children: [_virtualNodeId]),
+                const SetRoot(1),
+              ],
+            ),
+          );
+
+        await tester.pumpWidget(_virtualSliverView(store));
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+
+        final aFinder = find.byKey(
+          const ValueKey<int>(1000),
+          skipOffstage: false,
+        );
+        final bFinder = find.byKey(
+          const ValueKey<int>(1001),
+          skipOffstage: false,
+        );
+        final cFinder = find.byKey(
+          const ValueKey<int>(1002),
+          skipOffstage: false,
+        );
+        expect(aFinder, findsOneWidget);
+        expect(bFinder, findsOneWidget);
+        expect(cFinder, findsNothing);
+        final aElementBefore = tester.element(aFinder);
+        final bElementBefore = tester.element(bFinder);
+
+        final shiftedProps = switch (kind) {
+          _VirtualSliverKind.fixed => const SliverFixedExtentProps(
+            totalCount: 3,
+            firstIndex: 1,
+            itemExtent: 50,
+            overscan: 0,
+          ),
+          _VirtualSliverKind.varied => _variedProps(
+            totalCount: 3,
+            firstIndex: 1,
+            itemExtent: 50,
+          ),
+        };
+        store.apply(
+          Frame(
+            runtimeEpoch: 1,
+            baseRevision: 1,
+            targetRevision: 2,
+            kind: FrameKind.incremental,
+            operations: [
+              const CreateNode(
+                nodeId: 1002,
+                kind: NodeKind.text,
+                props: TextProps('C'),
+                eventBindings: [],
+              ),
+              UpdateProps(nodeId: _virtualNodeId, props: shiftedProps),
+              const SetChildren(nodeId: _virtualNodeId, children: [1001, 1002]),
+              const DropNode(1000),
+            ],
+          ),
+        );
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+
+        expect(aFinder, findsNothing);
+        expect(aElementBefore.mounted, isFalse);
+        expect(bFinder, findsOneWidget);
+        expect(identical(tester.element(bFinder), bElementBefore), isTrue);
+        expect(store.node(1001).id, 1001);
+        expect(cFinder, findsOneWidget);
+        expect(identical(tester.element(cFinder), bElementBefore), isFalse);
+      },
+    );
+  }
+
+  for (final kind in _VirtualSliverKind.values) {
+    testWidgets(
       '${kind.label} initial anchor includes preceding sliver extent',
       (tester) async {
         await _setViewport(tester, const Size(400, 200));

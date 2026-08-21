@@ -828,12 +828,34 @@ let with_test_id test_id widget =
   T { view with test_id = Some test_id; fingerprint }
 ;;
 
+let with_application_key key (T view) =
+  let key = Some key in
+  let fingerprint =
+    fingerprint
+      ~key
+      ~test_id:view.test_id
+      ~node:view.node
+      ~event_bindings:view.event_bindings
+      ~children:view.children
+  in
+  T { view with key; fingerprint }
+;;
+
+module Keyed = struct
+  type nonrec widget = t
+  type t = widget
+
+  let create ~key widget = with_application_key key widget
+  let to_widget item = item
+end
+
 let plain_children widgets =
   widgets
   |> List.map (fun widget -> { widget; parent_data = No_parent_data })
   |> Array.of_list
 ;;
 
+let keyed_children items = items |> List.map Keyed.to_widget |> plain_children
 let empty ?key () = create_typed ~key ~node:Empty ~event_bindings:[||] ~children:[||]
 
 let text
@@ -1267,7 +1289,7 @@ let sliver_fixed_extent_widget
     ~node:(Sliver_fixed_extent { total_count; first_index; item_extent; overscan })
     ~event_bindings:
       [| { tag = Event.Tag.Visible_range_changed; handler = on_visible_range } |]
-    ~children:(plain_children items)
+    ~children:(keyed_children items)
 ;;
 
 let validate_extent_overrides label ~total_count overrides =
@@ -1333,7 +1355,7 @@ let sliver_varied_extent_widget
          })
     ~event_bindings:
       [| { tag = Event.Tag.Visible_range_changed; handler = on_visible_range } |]
-    ~children:(plain_children items)
+    ~children:(keyed_children items)
 ;;
 
 let preferred_size ?key ~height child =
