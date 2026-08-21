@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
+import '../gesture/bonsai_gesture_detector.dart';
 import '../native_widget/native_widget_registry.dart';
 import 'sliver_virtual_host.dart';
 import '../native_widget/morphing_surface.dart';
@@ -990,7 +991,7 @@ Widget _buildGesture(
     onPointerUp: pointerUp == null
         ? null
         : (event) => emit(pointerUp, _pointerPayload(event)),
-    child: GestureDetector(
+    child: BonsaiGestureDetector(
       onTapUp: tap == null
           ? null
           : (details) => emit(tap, _tapPayload(details)),

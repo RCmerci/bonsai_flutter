@@ -1,3 +1,5 @@
+import 'dart:ui' show PointerDeviceKind;
+
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -46,6 +48,45 @@ void main() {
       expect(_pressedOverlay, findsNothing);
       expect(_activationEvents(fixture.events), isEmpty);
     }
+  });
+
+  testWidgets('decisive touch intent cancels feedback at six pixels', (
+    tester,
+  ) async {
+    final fixture = await _pumpPressable(tester);
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('Pressable item')),
+      kind: PointerDeviceKind.touch,
+    );
+    await tester.pump();
+    expect(_pressedOverlay, findsOneWidget);
+
+    await gesture.moveBy(const Offset(4, -6));
+    await tester.pump();
+
+    expect(_pressedOverlay, findsNothing);
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(_activationEvents(fixture.events), isEmpty);
+  });
+
+  testWidgets('stylus movement retains the existing tap tolerance', (
+    tester,
+  ) async {
+    final fixture = await _pumpPressable(tester);
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('Pressable item')),
+      kind: PointerDeviceKind.stylus,
+    );
+    await tester.pump();
+
+    await gesture.moveBy(const Offset(4, -6));
+    await tester.pump();
+    expect(_pressedOverlay, findsOneWidget);
+
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(_activationEvents(fixture.events), hasLength(1));
   });
 
   testWidgets('nested action wins without activating the host', (tester) async {

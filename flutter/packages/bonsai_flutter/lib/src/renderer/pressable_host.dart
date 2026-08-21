@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../gesture/bonsai_gesture_detector.dart';
 import '../protocol/frame.dart';
 
 final class PressableHost extends StatefulWidget {
@@ -84,7 +85,7 @@ final class _PressableHostState extends State<PressableHost> {
   Widget build(BuildContext context) => Semantics(
     button: true,
     onTap: _handleSemanticTap,
-    child: GestureDetector(
+    child: BonsaiGestureDetector(
       behavior: HitTestBehavior.opaque,
       excludeFromSemantics: true,
       onTapDown: _handleTapDown,

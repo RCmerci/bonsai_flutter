@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../gesture/bonsai_gesture_detector.dart';
 import '../protocol/frame.dart';
 import 'native_widget_registry.dart';
 
@@ -512,7 +513,7 @@ final class _MessageComposerState extends State<MessageComposer> {
     );
     final actions = _actions();
 
-    return GestureDetector(
+    return BonsaiGestureDetector(
       behavior: HitTestBehavior.translucent,
       onVerticalDragStart: _handleVerticalDragStart,
       onVerticalDragUpdate: _handleVerticalDragUpdate,

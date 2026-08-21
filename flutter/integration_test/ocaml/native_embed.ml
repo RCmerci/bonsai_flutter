@@ -16,5 +16,8 @@ let () =
   Native_backend.embed ~name:(entrypoint_name "sqlite_worker") Sqlite_worker_example.app;
   Native_backend.embed
     ~name:(entrypoint_name "autonomous_pump")
-    (App.create Autonomous_pump_fixture.component)
+    (App.create Autonomous_pump_fixture.component);
+  Native_backend.embed
+    ~name:(entrypoint_name "patch_size_profile")
+    (App.create Autonomous_pump_fixture.patch_size_component)
 ;;

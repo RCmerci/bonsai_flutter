@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui' show PointerDeviceKind;
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:flutter/material.dart';
@@ -299,7 +300,127 @@ void main() {
     await gesture.up();
   });
 
-  testWidgets('vertical scrolling wins over ambiguous row drag', (
+  testWidgets('decisive vertical touch drag yields before touch slop', (
+    tester,
+  ) async {
+    final fixture = await _pumpSwipeFixture(
+      tester,
+      inScrollableList: true,
+      contentTappable: false,
+    );
+    final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('Message')),
+      kind: PointerDeviceKind.touch,
+    );
+
+    await gesture.moveBy(const Offset(4, -6));
+    await tester.pump();
+    expect(scrollable.position.pixels, 0);
+
+    await gesture.moveBy(const Offset(0, -1));
+    await tester.pump();
+    expect(scrollable.position.pixels, greaterThan(0));
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(_contentOffset(tester), closeTo(0, 1));
+    expect(fixture.events, isEmpty);
+  });
+
+  testWidgets('touch movement below six pixels remains undecided', (
+    tester,
+  ) async {
+    final fixture = await _pumpSwipeFixture(tester, inScrollableList: true);
+    final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('Message')),
+      kind: PointerDeviceKind.touch,
+    );
+
+    await gesture.moveBy(const Offset(0, -5));
+    await tester.pump();
+    await gesture.moveBy(const Offset(40, 0));
+    await tester.pump();
+
+    expect(scrollable.position.pixels, 0);
+    expect(_contentOffset(tester), greaterThan(30));
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(fixture.events, isEmpty);
+  });
+
+  testWidgets('near-diagonal touch drag remains eligible to swipe', (
+    tester,
+  ) async {
+    final fixture = await _pumpSwipeFixture(tester, inScrollableList: true);
+    final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('Message')),
+      kind: PointerDeviceKind.touch,
+    );
+
+    await gesture.moveBy(const Offset(4.1, -6));
+    await tester.pump();
+    await gesture.moveBy(const Offset(40, 0));
+    await tester.pump();
+
+    expect(scrollable.position.pixels, 0);
+    expect(_contentOffset(tester), greaterThan(30));
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(fixture.events, isEmpty);
+  });
+
+  for (final kind in [
+    PointerDeviceKind.stylus,
+    PointerDeviceKind.invertedStylus,
+    PointerDeviceKind.unknown,
+  ]) {
+    testWidgets('$kind keeps the existing ambiguous-drag behavior', (
+      tester,
+    ) async {
+      final fixture = await _pumpSwipeFixture(tester, inScrollableList: true);
+      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('Message')),
+        kind: kind,
+      );
+
+      await gesture.moveBy(const Offset(4, -6));
+      await tester.pump();
+      await gesture.moveBy(const Offset(40, 0));
+      await tester.pump();
+
+      expect(scrollable.position.pixels, 0);
+      expect(_contentOffset(tester), greaterThan(30));
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(fixture.events, isEmpty);
+    });
+  }
+
+  for (final kind in [PointerDeviceKind.mouse, PointerDeviceKind.trackpad]) {
+    testWidgets('$kind keeps horizontal swipe behavior', (tester) async {
+      final fixture = await _pumpSwipeFixture(tester);
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('Message')),
+        kind: kind,
+      );
+
+      await gesture.moveBy(const Offset(120, 0));
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(_nativeDirections(fixture.events), [0]);
+    });
+  }
+
+  testWidgets('vertical scrolling still wins after touch intent is clear', (
     tester,
   ) async {
     final fixture = await _pumpSwipeFixture(tester, inScrollableList: true);
@@ -531,6 +652,7 @@ Future<_SwipeFixture> _pumpSwipeFixture(
   bool startEnabled = true,
   bool endEnabled = true,
   bool inScrollableList = false,
+  bool contentTappable = true,
   bool disableAnimations = false,
   TextDirection textDirection = TextDirection.ltr,
   double startBorderRadius = 999,
@@ -547,6 +669,7 @@ Future<_SwipeFixture> _pumpSwipeFixture(
         startEnabled: startEnabled,
         endEnabled: endEnabled,
         inScrollableList: inScrollableList,
+        contentTappable: contentTappable,
         startBorderRadius: startBorderRadius,
         endBorderRadius: endBorderRadius,
         clipBorderRadius: clipBorderRadius,
@@ -617,6 +740,7 @@ Frame _swipeFrame({
   required bool startEnabled,
   required bool endEnabled,
   required bool inScrollableList,
+  bool contentTappable = true,
   double startBorderRadius = 999,
   double endBorderRadius = 999,
   double clipBorderRadius = 0,
@@ -637,11 +761,13 @@ Frame _swipeFrame({
         EventBinding(eventTag: EventTagId.nativeEvent, handlerId: 900),
       ],
     ),
-    const CreateNode(
+    CreateNode(
       nodeId: 2,
       kind: NodeKind.gesture,
-      props: GestureProps(),
-      eventBindings: [EventBinding(eventTag: EventTagId.tap, handlerId: 901)],
+      props: const GestureProps(),
+      eventBindings: contentTappable
+          ? const [EventBinding(eventTag: EventTagId.tap, handlerId: 901)]
+          : const [],
     ),
     const CreateNode(
       nodeId: 3,

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui' show PointerDeviceKind;
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:flutter/material.dart';
@@ -152,6 +153,81 @@ void main() {
 
     await tester.drag(find.byType(MessageComposer), const Offset(0, 10));
     await tester.pumpAndSettle();
+    expect(
+      tester.getSize(find.byKey(const ValueKey('composer'))).height,
+      expandedHeight,
+    );
+    expect(focusNode.hasFocus, isTrue);
+  });
+
+  testWidgets('decisive horizontal touch intent cancels composer dragging', (
+    tester,
+  ) async {
+    final focusNode = FocusNode();
+    addTearDown(focusNode.dispose);
+    await tester.pumpWidget(
+      _TestApp(
+        child: MessageComposer(
+          key: const ValueKey('composer'),
+          focusNode: focusNode,
+          buttons: const [],
+        ),
+      ),
+    );
+    await tester.tap(find.byType(TextField));
+    await tester.enterText(find.byType(TextField), 'draft\nwith two lines');
+    await tester.pumpAndSettle();
+    final expandedHeight = tester
+        .getSize(find.byKey(const ValueKey('composer')))
+        .height;
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(MessageComposer)),
+      kind: PointerDeviceKind.touch,
+    );
+
+    await gesture.moveBy(const Offset(6, 4));
+    await tester.pump();
+    await gesture.moveBy(const Offset(0, 80));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey('composer'))).height,
+      expandedHeight,
+    );
+    expect(focusNode.hasFocus, isTrue);
+  });
+
+  testWidgets('stylus keeps the existing composer drag behavior', (
+    tester,
+  ) async {
+    final focusNode = FocusNode();
+    addTearDown(focusNode.dispose);
+    await tester.pumpWidget(
+      _TestApp(
+        child: MessageComposer(
+          key: const ValueKey('composer'),
+          focusNode: focusNode,
+          buttons: const [],
+        ),
+      ),
+    );
+    await tester.tap(find.byType(TextField));
+    await tester.enterText(find.byType(TextField), 'draft\nwith two lines');
+    await tester.pumpAndSettle();
+    final expandedHeight = tester
+        .getSize(find.byKey(const ValueKey('composer')))
+        .height;
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(MessageComposer)),
+      kind: PointerDeviceKind.stylus,
+    );
+
+    await gesture.moveBy(const Offset(6, 4));
+    await gesture.moveBy(const Offset(0, 80));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
     expect(
       tester.getSize(find.byKey(const ValueKey('composer'))).height,
       expandedHeight,

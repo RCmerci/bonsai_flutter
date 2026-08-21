@@ -3,6 +3,7 @@ import 'dart:ui' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../gesture/bonsai_gesture_detector.dart';
 import '../protocol/frame.dart';
 
 final class DetentedModalSheetHost extends StatefulWidget {
@@ -187,7 +188,7 @@ final class DetentedModalSheetHostState extends State<DetentedModalSheetHost> {
           onPointerUp: (event) {
             if (event.kind == PointerDeviceKind.mouse) _endHandleDragWith(0);
           },
-          child: GestureDetector(
+          child: BonsaiGestureDetector(
             behavior: HitTestBehavior.opaque,
             excludeFromSemantics: true,
             supportedDevices: const {

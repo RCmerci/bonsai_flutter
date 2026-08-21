@@ -1382,6 +1382,39 @@ void main() {
       expect(_sheetHeight(tester), closeTo(600, 2));
     });
 
+    testWidgets('horizontal touch intent cancels detent-handle dragging', (
+      tester,
+    ) async {
+      await _pumpDetentedFixture(tester);
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.bySemanticsLabel('Adjust sheet height')),
+        kind: PointerDeviceKind.touch,
+      );
+
+      await gesture.moveBy(const Offset(6, 4));
+      await tester.pump();
+      await gesture.moveBy(const Offset(0, -220));
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(_sheetHeight(tester), closeTo(300, 2));
+    });
+
+    testWidgets('stylus keeps detent-handle drag behavior', (tester) async {
+      await _pumpDetentedFixture(tester);
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.bySemanticsLabel('Adjust sheet height')),
+        kind: PointerDeviceKind.stylus,
+      );
+
+      await gesture.moveBy(const Offset(6, 4));
+      await gesture.moveBy(const Offset(0, -220));
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(_sheetHeight(tester), closeTo(300, 2));
+    });
+
     testWidgets('detent handle accepts mouse drag and snaps to large', (
       tester,
     ) async {

@@ -1,3 +1,5 @@
+import 'dart:ui' show PointerDeviceKind;
+
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:flutter/material.dart';
@@ -253,7 +255,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byType(GestureDetector), findsOneWidget);
+    expect(find.byType(RawGestureDetector), findsWidgets);
     expect(find.byType(FocusScope), findsWidgets);
     expect(find.byType(MouseRegion), findsWidgets);
     expect(find.byType(Focus), findsWidgets);
@@ -290,6 +292,63 @@ void main() {
       ),
       isTrue,
     );
+  });
+
+  testWidgets('generic gesture rejects decisive touch movement', (
+    tester,
+  ) async {
+    final store = NodeStore()
+      ..apply(
+        const Frame(
+          runtimeEpoch: 26,
+          baseRevision: 0,
+          targetRevision: 1,
+          kind: FrameKind.fullSnapshot,
+          operations: [
+            CreateNode(
+              nodeId: 1,
+              kind: NodeKind.gesture,
+              props: GestureProps(),
+              eventBindings: [
+                EventBinding(eventTag: EventTagId.tap, handlerId: 201),
+              ],
+            ),
+            CreateNode(
+              nodeId: 2,
+              kind: NodeKind.sizedBox,
+              props: SizedBoxProps(width: 200, height: 100),
+              eventBindings: [],
+            ),
+            CreateNode(
+              nodeId: 3,
+              kind: NodeKind.text,
+              props: TextProps('Touch target'),
+              eventBindings: [],
+            ),
+            SetChildren(nodeId: 1, children: [2]),
+            SetChildren(nodeId: 2, children: [3]),
+            SetRoot(1),
+          ],
+        ),
+      );
+    final events = <RendererEvent>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: BonsaiFlutterView(store: store, onEvent: events.add),
+        ),
+      ),
+    );
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('Touch target')),
+      kind: PointerDeviceKind.touch,
+    );
+
+    await gesture.moveBy(const Offset(4, -6));
+    await gesture.up();
+    await tester.pump();
+
+    expect(events, isEmpty);
   });
 
   testWidgets('button press flows into the canonical encoded event batch', (

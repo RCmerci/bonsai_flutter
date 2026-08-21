@@ -1,3 +1,6 @@
+// This probe intentionally imports the staged transitive native package.
+// ignore_for_file: depend_on_referenced_packages
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';

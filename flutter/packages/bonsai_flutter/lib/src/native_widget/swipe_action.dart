@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
+import '../gesture/bonsai_gesture_detector.dart';
 import 'native_widget_registry.dart';
 
 enum SwipeActionDirection { startToEnd, endToStart }
@@ -427,7 +428,7 @@ final class _SwipeActionHostState extends State<_SwipeActionHost>
       return Semantics(
         key: const ValueKey<String>('bonsai-swipe-action-host'),
         customSemanticsActions: _semanticsActions(),
-        child: GestureDetector(
+        child: BonsaiGestureDetector(
           behavior: HitTestBehavior.opaque,
           dragStartBehavior: DragStartBehavior.start,
           onHorizontalDragDown: _commitInProgress ? null : _onDragDown,
