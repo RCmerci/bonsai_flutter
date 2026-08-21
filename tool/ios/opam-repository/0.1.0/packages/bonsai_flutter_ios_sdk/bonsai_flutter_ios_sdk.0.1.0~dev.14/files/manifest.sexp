@@ -2,9 +2,9 @@
  (format_version 1)
  (bonsai_flutter_version 0.1.0~dev)
  (bonsai_flutter_source
-  095ac5e0e533dcb2ee73c17f5f4b083faf0fefd1
+  43b239c40c0e96caf1329edea0ccbccfd785b046
   sha256
-  8c4e9f50496d14e21781dbe0456ca8abc9f487285a68b7e1c5855d064b65e013)
+  cea3239836ea9eadcf0366b731a1353eaa8cebbd67d150ecf984adbc28d369c6)
  (abi_version 2)
  (ocaml_version 5.1.1)
  (dune_version_range 3.17 4.0)
@@ -13,7 +13,7 @@
  (architecture arm64)
  (platform iphoneos)
  (minimum_deployment_target 15.0)
- (package_universe_digest c409054d63e9399e9d81b1248094b36e3e49513fd03ddf27469f4e65ec9055cb)
+ (package_universe_digest a45aa2dbe7dae33e9c5a957373c23b1f555eadb4d11e4c87f428e485291236e6)
  (target_components_digest 5199659ed658a91ec0e5417e1728249a2017cfc7b22d0e93119eb30f0a382d98)
  (required_frameworks Foundation Security)
  (required_system_libraries sqlite3)
