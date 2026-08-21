@@ -1405,6 +1405,52 @@ let test_sliver_wire_boundaries () =
     [ -1; 0x1_0000_0000 ]
 ;;
 
+let test_virtual_sliver_invariant_validation () =
+  let fixed ~total_count ~first_index =
+    Wire_frame.Sliver_fixed_extent_props
+      { total_count; first_index; item_extent = 48.; overscan = 0 }
+  in
+  let varied ~total_count ~first_index ~extent_overrides =
+    Wire_frame.Sliver_varied_extent_props
+      { total_count
+      ; first_index
+      ; default_item_extent = 48.
+      ; overscan = 0
+      ; extent_overrides
+      ; transition = None
+      }
+  in
+  expect_invalid_props_encode
+    "fixed first_index above total_count"
+    (props_frame (fixed ~total_count:10 ~first_index:11));
+  expect_invalid_props_encode
+    "varied first_index above total_count"
+    (props_frame (varied ~total_count:10 ~first_index:11 ~extent_overrides:[]));
+  List.iter
+    (fun (label, extent_overrides) ->
+       expect_invalid_props_encode
+         label
+         (props_frame (varied ~total_count:10 ~first_index:0 ~extent_overrides)))
+    [ ( "descending sliver overrides"
+      , [ Wire_frame.{ index = 4; extent = 60. }; Wire_frame.{ index = 3; extent = 70. } ]
+      )
+    ; ( "duplicate sliver overrides"
+      , [ Wire_frame.{ index = 3; extent = 60. }; Wire_frame.{ index = 3; extent = 70. } ]
+      )
+    ; "out-of-range sliver override", [ Wire_frame.{ index = 10; extent = 60. } ]
+    ];
+  expect_frame_round_trip
+    "empty fixed sliver boundary"
+    (props_frame (fixed ~total_count:0 ~first_index:0));
+  expect_frame_round_trip
+    "varied final override boundary"
+    (props_frame
+       (varied
+          ~total_count:10
+          ~first_index:10
+          ~extent_overrides:[ Wire_frame.{ index = 9; extent = 60. } ]))
+;;
+
 let test_scroll_view_cache_extent_validation () =
   let props cache_extent =
     Wire_frame.Scroll_view_props
@@ -1538,6 +1584,7 @@ let () =
   test_application_request_round_trip_and_bounds ();
   test_application_response_error_and_event_round_trip ();
   test_sliver_wire_boundaries ();
+  test_virtual_sliver_invariant_validation ();
   test_scroll_view_cache_extent_validation ();
   test_sliver_app_bar_codec_validation ();
   print_endline "protocol tests passed"

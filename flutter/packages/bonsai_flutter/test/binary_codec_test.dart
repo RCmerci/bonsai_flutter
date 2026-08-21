@@ -894,6 +894,166 @@ void main() {
       }
     });
 
+    test(
+      'enforces virtual sliver window invariants in both codec directions',
+      () {
+        Frame frame(UiProps props, NodeKind kind) => Frame(
+          runtimeEpoch: 9,
+          baseRevision: 0,
+          targetRevision: 1,
+          kind: FrameKind.fullSnapshot,
+          operations: [
+            CreateNode(
+              nodeId: 1,
+              kind: kind,
+              props: props,
+              eventBindings: const [],
+            ),
+            const SetRoot(1),
+          ],
+        );
+
+        for (final entry in <(NodeKind, UiProps)>[
+          (
+            NodeKind.sliverFixedExtent,
+            const SliverFixedExtentProps(
+              totalCount: 10,
+              firstIndex: 11,
+              itemExtent: 48,
+              overscan: 0,
+            ),
+          ),
+          (
+            NodeKind.sliverVariedExtent,
+            const SliverVariedExtentProps(
+              totalCount: 10,
+              firstIndex: 11,
+              defaultItemExtent: 48,
+              overscan: 0,
+              extentOverrides: [],
+            ),
+          ),
+          (
+            NodeKind.sliverVariedExtent,
+            const SliverVariedExtentProps(
+              totalCount: 10,
+              firstIndex: 0,
+              defaultItemExtent: 48,
+              overscan: 0,
+              extentOverrides: [
+                SparseExtentOverride(index: 4, extent: 60),
+                SparseExtentOverride(index: 3, extent: 70),
+              ],
+            ),
+          ),
+          (
+            NodeKind.sliverVariedExtent,
+            const SliverVariedExtentProps(
+              totalCount: 10,
+              firstIndex: 0,
+              defaultItemExtent: 48,
+              overscan: 0,
+              extentOverrides: [
+                SparseExtentOverride(index: 3, extent: 60),
+                SparseExtentOverride(index: 3, extent: 70),
+              ],
+            ),
+          ),
+          (
+            NodeKind.sliverVariedExtent,
+            const SliverVariedExtentProps(
+              totalCount: 10,
+              firstIndex: 0,
+              defaultItemExtent: 48,
+              overscan: 0,
+              extentOverrides: [SparseExtentOverride(index: 10, extent: 60)],
+            ),
+          ),
+        ]) {
+          expect(
+            () => FrameCodec.encode(frame(entry.$2, entry.$1)),
+            throwsProtocolCode(ProtocolErrorCode.invalidProps),
+            reason: 'invalid virtual sliver props were encoded: ${entry.$2}',
+          );
+        }
+
+        final fixed = FrameCodec.encode(
+          frame(
+            const SliverFixedExtentProps(
+              totalCount: 1001,
+              firstIndex: 1000,
+              itemExtent: 48,
+              overscan: 0,
+            ),
+            NodeKind.sliverFixedExtent,
+          ),
+        );
+        final invalidFirstIndex = Uint8List.fromList(fixed);
+        writeUint64(
+          invalidFirstIndex,
+          findUint64(invalidFirstIndex, 1000),
+          1002,
+        );
+        expectDecodeError(invalidFirstIndex, ProtocolErrorCode.invalidProps);
+
+        final varied = FrameCodec.encode(
+          frame(
+            const SliverVariedExtentProps(
+              totalCount: 1000,
+              firstIndex: 0,
+              defaultItemExtent: 48,
+              overscan: 0,
+              extentOverrides: [
+                SparseExtentOverride(index: 101, extent: 60),
+                SparseExtentOverride(index: 202, extent: 70),
+              ],
+            ),
+            NodeKind.sliverVariedExtent,
+          ),
+        );
+        final secondOverrideOffset = findUint64(varied, 202);
+        for (final invalidIndex in const [101, 100, 1000]) {
+          final malformed = Uint8List.fromList(varied);
+          writeUint64(malformed, secondOverrideOffset, invalidIndex);
+          expectDecodeError(malformed, ProtocolErrorCode.invalidProps);
+        }
+
+        for (final entry in <(NodeKind, UiProps)>[
+          (
+            NodeKind.sliverFixedExtent,
+            const SliverFixedExtentProps(
+              totalCount: 0,
+              firstIndex: 0,
+              itemExtent: 48,
+              overscan: 0xffffffff,
+            ),
+          ),
+          (
+            NodeKind.sliverVariedExtent,
+            const SliverVariedExtentProps(
+              totalCount: 10,
+              firstIndex: 10,
+              defaultItemExtent: 48,
+              overscan: 0xffffffff,
+              extentOverrides: [SparseExtentOverride(index: 9, extent: 60)],
+              transition: SparseExtentTransition(
+                enabled: true,
+                expandDurationMs: 0xffffffff,
+                collapseDurationMs: 0xffffffff,
+                expandCurve: SparseExtentCurve.linear,
+                collapseCurve: SparseExtentCurve.linear,
+              ),
+            ),
+          ),
+        ]) {
+          expect(
+            FrameCodec.decode(FrameCodec.encode(frame(entry.$2, entry.$1))),
+            isA<Frame>(),
+          );
+        }
+      },
+    );
+
     test('rejects invalid scroll cache extents in both codec directions', () {
       Frame frame(double cacheExtent) => Frame(
         runtimeEpoch: 9,
@@ -1351,6 +1511,16 @@ int readUint64(Uint8List bytes, int offset) =>
 
 void writeUint32(Uint8List bytes, int offset, int value) =>
     ByteData.sublistView(bytes).setUint32(offset, value, Endian.little);
+
+void writeUint64(Uint8List bytes, int offset, int value) =>
+    ByteData.sublistView(bytes).setUint64(offset, value, Endian.little);
+
+int findUint64(Uint8List bytes, int value) {
+  for (var offset = 0; offset <= bytes.length - 8; offset += 1) {
+    if (readUint64(bytes, offset) == value) return offset;
+  }
+  throw StateError('uint64 value $value was not found');
+}
 
 int findFloat64(Uint8List bytes, double value) {
   final expected = ByteData(8)..setFloat64(0, value, Endian.little);

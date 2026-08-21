@@ -19,7 +19,7 @@ then wait indefinitely for the initial range that the renderer believes it has
 already published to the previous runtime. Changing an event sink from absent
 to present has the same state-publication requirement.
 
-## Proposal
+## Decision
 
 Treat visible-range deduplication as scoped to one delivery identity, not only
 to one range value.
@@ -63,7 +63,7 @@ The current range is state required to bootstrap window ownership and
 pagination. User interaction cannot be required to deliver it to a new
 receiver.
 
-## Acceptance criteria
+## Consequences
 
 - Fixed- and varied-extent widget tests replace the visible-range handler while
   keeping geometry unchanged and observe exactly one current-range event with
@@ -79,7 +79,7 @@ receiver.
 - A receiver change during a varied-extent transition emits only the settled
   range after suppression ends.
 
-## Risks
+### Operational risks
 
 - Exposing a runtime or delivery generation to renderer hosts adds plumbing
   across `NodeHost`, `WidgetRegistry`, and the virtual-sliver widgets.

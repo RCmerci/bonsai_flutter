@@ -18,7 +18,7 @@ unchanged failed local revision returns the same incompatible box fallback.
 This defeats the renderer boundary for every core sliver kind and can prevent
 the containing viewport from rendering otherwise valid siblings.
 
-## Proposal
+## Decision
 
 Make renderer error fallbacks preserve the parent render protocol expected by
 the failed node.
@@ -59,7 +59,7 @@ Returning one box-shaped error for the entire scroll view would preserve render
 types, but it discards valid sibling slivers and moves error ownership away from
 the failing node.
 
-## Acceptance criteria
+## Consequences
 
 - Mounting an invalid `SliverAppBar` inside a `Scroll_view` reports exactly one
   `RendererBoundaryError` and no `RenderViewport` child-type error.
@@ -74,7 +74,7 @@ the failing node.
 - Tests cover all currently registered core sliver kinds or an exhaustive
   shared sliver-kind classifier.
 
-## Risks
+### Operational risks
 
 - A sliver error surface contributes scroll extent and can change the viewport
   layout while the node is invalid; containment is preferred over preserving

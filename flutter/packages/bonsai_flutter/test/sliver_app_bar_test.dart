@@ -1,5 +1,6 @@
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -118,6 +119,7 @@ void main() {
             parentData: const NoParentData(),
             children: const [2],
             localRevision: 1,
+            deliveryGeneration: 1,
           ),
           const [Text('Title')],
           null,
@@ -126,6 +128,51 @@ void main() {
         reason: 'invalid props were accepted: $props',
       );
     }
+  });
+
+  testWidgets('sliver renderer errors preserve the viewport child shape', (
+    tester,
+  ) async {
+    final store = _sliverAppBarStore(
+      props: const SliverAppBarProps(pinned: false, snap: true),
+      slotChildren: const [2],
+      extraOperations: const [],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(height: 240, child: BonsaiFlutterView(store: store)),
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.takeException(), isA<RendererBoundaryError>());
+    expect(tester.takeException(), isNull);
+    expect(find.byType(SliverToBoxAdapter), findsOneWidget);
+    expect(
+      tester.renderObject(find.byType(SliverToBoxAdapter)),
+      isA<RenderSliver>(),
+    );
+
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+
+    store.apply(
+      const Frame(
+        runtimeEpoch: 1,
+        baseRevision: 1,
+        targetRevision: 2,
+        kind: FrameKind.incremental,
+        operations: [
+          UpdateProps(nodeId: 10, props: SliverAppBarProps(pinned: true)),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(SliverToBoxAdapter), findsNothing);
+    expect(find.byType(SliverAppBar), findsOneWidget);
   });
 }
 

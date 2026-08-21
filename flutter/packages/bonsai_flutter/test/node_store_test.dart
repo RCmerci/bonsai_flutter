@@ -337,4 +337,113 @@ void main() {
     expect(store.node(2).props, const TextProps('committed before failure'));
     expect(() => store.commit(prepared), throwsStateError);
   });
+
+  test('virtual sliver props and materialized windows reject atomically', () {
+    for (final kind in [
+      NodeKind.sliverFixedExtent,
+      NodeKind.sliverVariedExtent,
+    ]) {
+      UiProps props({required int totalCount, required int firstIndex}) =>
+          kind == NodeKind.sliverFixedExtent
+          ? SliverFixedExtentProps(
+              totalCount: totalCount,
+              firstIndex: firstIndex,
+              itemExtent: 48,
+              overscan: 0,
+            )
+          : SliverVariedExtentProps(
+              totalCount: totalCount,
+              firstIndex: firstIndex,
+              defaultItemExtent: 48,
+              overscan: 0,
+              extentOverrides: const [],
+            );
+
+      expect(
+        () => NodeStore().apply(
+          Frame(
+            runtimeEpoch: 1,
+            baseRevision: 0,
+            targetRevision: 1,
+            kind: FrameKind.fullSnapshot,
+            operations: [
+              CreateNode(
+                nodeId: 1,
+                kind: kind,
+                props: props(totalCount: 1, firstIndex: 2),
+                eventBindings: const [],
+              ),
+              const SetRoot(1),
+            ],
+          ),
+        ),
+        throwsA(
+          isA<FrameApplyException>().having(
+            (error) => error.code,
+            'code',
+            FrameErrorCode.invalidProps,
+          ),
+        ),
+      );
+
+      final store = NodeStore()
+        ..apply(
+          Frame(
+            runtimeEpoch: 1,
+            baseRevision: 0,
+            targetRevision: 1,
+            kind: FrameKind.fullSnapshot,
+            operations: [
+              CreateNode(
+                nodeId: 1,
+                kind: kind,
+                props: props(totalCount: 2, firstIndex: 0),
+                eventBindings: const [],
+              ),
+              const CreateNode(
+                nodeId: 2,
+                kind: NodeKind.text,
+                props: TextProps('A'),
+                eventBindings: [],
+              ),
+              const CreateNode(
+                nodeId: 3,
+                kind: NodeKind.text,
+                props: TextProps('B'),
+                eventBindings: [],
+              ),
+              const SetChildren(nodeId: 1, children: [2, 3]),
+              const SetRoot(1),
+            ],
+          ),
+        );
+      final nodesBefore = store.nodes;
+
+      expect(
+        () => store.apply(
+          Frame(
+            runtimeEpoch: 1,
+            baseRevision: 1,
+            targetRevision: 2,
+            kind: FrameKind.incremental,
+            operations: [
+              UpdateProps(
+                nodeId: 1,
+                props: props(totalCount: 2, firstIndex: 1),
+              ),
+            ],
+          ),
+        ),
+        throwsA(
+          isA<FrameApplyException>().having(
+            (error) => error.code,
+            'code',
+            FrameErrorCode.invalidProps,
+          ),
+        ),
+      );
+      expect(identical(store.nodes, nodesBefore), isTrue);
+      expect(store.revision, 1);
+    }
+  });
 }

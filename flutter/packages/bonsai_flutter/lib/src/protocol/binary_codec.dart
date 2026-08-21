@@ -2384,12 +2384,14 @@ void _writeSliverFixedExtent(
   required double itemExtent,
   required int overscan,
 }) {
-  if (!itemExtent.isFinite || itemExtent <= 0) {
-    _fail(
-      ProtocolErrorCode.invalidProps,
-      'Sliver item_extent must be finite and positive',
-    );
-  }
+  _validateVirtualSliverProps(
+    SliverFixedExtentProps(
+      totalCount: totalCount,
+      firstIndex: firstIndex,
+      itemExtent: itemExtent,
+      overscan: overscan,
+    ),
+  );
   writer
     ..uint64(totalCount)
     ..uint64(firstIndex)
@@ -2406,12 +2408,16 @@ void _writeSliverVariedExtent(
   required List<SparseExtentOverride> extentOverrides,
   required SparseExtentTransition? transition,
 }) {
-  if (!defaultItemExtent.isFinite || defaultItemExtent <= 0) {
-    _fail(
-      ProtocolErrorCode.invalidProps,
-      'Sliver default_item_extent must be finite and positive',
-    );
-  }
+  _validateVirtualSliverProps(
+    SliverVariedExtentProps(
+      totalCount: totalCount,
+      firstIndex: firstIndex,
+      defaultItemExtent: defaultItemExtent,
+      overscan: overscan,
+      extentOverrides: extentOverrides,
+      transition: transition,
+    ),
+  );
   writer
     ..uint64(totalCount)
     ..uint64(firstIndex)
@@ -2503,12 +2509,14 @@ SliverFixedExtentProps _readSliverFixedExtentProps(_Reader reader) {
     );
   }
   final overscan = reader.uint32();
-  return SliverFixedExtentProps(
+  final props = SliverFixedExtentProps(
     totalCount: totalCount,
     firstIndex: firstIndex,
     itemExtent: itemExtent,
     overscan: overscan,
   );
+  _validateVirtualSliverProps(props);
+  return props;
 }
 
 SliverVariedExtentProps _readSliverVariedExtentProps(_Reader reader) {
@@ -2523,6 +2531,12 @@ SliverVariedExtentProps _readSliverVariedExtentProps(_Reader reader) {
   }
   final overscan = reader.uint32();
   final overrideCount = reader.uint32();
+  if (overrideCount > totalCount) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Sliver override count is outside the logical list',
+    );
+  }
   final overrides = <SparseExtentOverride>[];
   for (var i = 0; i < overrideCount; i++) {
     final index = reader.uint64();
@@ -2536,7 +2550,7 @@ SliverVariedExtentProps _readSliverVariedExtentProps(_Reader reader) {
     overrides.add(SparseExtentOverride(index: index, extent: extent));
   }
   final transition = _readSliverTransition(reader);
-  return SliverVariedExtentProps(
+  final props = SliverVariedExtentProps(
     totalCount: totalCount,
     firstIndex: firstIndex,
     defaultItemExtent: defaultItemExtent,
@@ -2544,6 +2558,13 @@ SliverVariedExtentProps _readSliverVariedExtentProps(_Reader reader) {
     extentOverrides: overrides,
     transition: transition,
   );
+  _validateVirtualSliverProps(props);
+  return props;
+}
+
+void _validateVirtualSliverProps(UiProps props) {
+  final error = virtualSliverPropsError(props);
+  if (error != null) _fail(ProtocolErrorCode.invalidProps, error);
 }
 
 SparseExtentTransition? _readSliverTransition(_Reader reader) {

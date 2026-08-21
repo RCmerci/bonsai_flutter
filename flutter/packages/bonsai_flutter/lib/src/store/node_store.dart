@@ -37,6 +37,7 @@ final class UiNode {
     required this.parentData,
     required this.children,
     required this.localRevision,
+    required this.deliveryGeneration,
   });
 
   final int id;
@@ -46,6 +47,7 @@ final class UiNode {
   final ParentDataValue parentData;
   final List<int> children;
   final int localRevision;
+  final int deliveryGeneration;
 
   UiNode copyWith({
     UiProps? props,
@@ -59,6 +61,7 @@ final class UiNode {
     parentData: parentData,
     children: children ?? this.children,
     localRevision: localRevision + 1,
+    deliveryGeneration: deliveryGeneration,
   );
 }
 
@@ -183,6 +186,9 @@ final class NodeStore {
             parentData: operation.parentData,
             children: const [],
             localRevision: 0,
+            deliveryGeneration: isFullSnapshot
+                ? _resourceGeneration + 1
+                : _resourceGeneration,
           );
           dirty.add(operation.nodeId);
         case UpdateProps():
@@ -330,6 +336,21 @@ final class NodeStore {
 
     final parentCounts = {for (final id in nodes.keys) id: 0};
     for (final node in nodes.values) {
+      final availableChildren = switch (node.props) {
+        SliverFixedExtentProps(:final totalCount, :final firstIndex) ||
+        SliverVariedExtentProps(
+          :final totalCount,
+          :final firstIndex,
+        ) => totalCount - firstIndex,
+        _ => null,
+      };
+      if (availableChildren != null &&
+          node.children.length > availableChildren) {
+        _fail(
+          FrameErrorCode.invalidProps,
+          'Virtual sliver node ${node.id} has more children than its logical window',
+        );
+      }
       for (final childId in node.children) {
         if (!nodes.containsKey(childId)) {
           _fail(
@@ -463,6 +484,10 @@ final class NodeStore {
         FrameErrorCode.invalidProps,
         'Props ${props.runtimeType} are invalid for $kind',
       );
+    }
+    final propsError = virtualSliverPropsError(props);
+    if (propsError != null) {
+      _fail(FrameErrorCode.invalidProps, propsError);
     }
   }
 

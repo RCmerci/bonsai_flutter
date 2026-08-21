@@ -1030,6 +1030,315 @@ void main() {
     },
   );
 
+  for (final kind in _VirtualSliverKind.values) {
+    testWidgets('${kind.label} republishes to a replacement binding', (
+      tester,
+    ) async {
+      await _setViewport(tester, const Size(400, 200));
+      final events = <RendererEvent>[];
+      final store = _virtualSliverStore(
+        kind: kind,
+        totalCount: 20,
+        firstIndex: 0,
+        itemExtent: 50,
+        childCount: 20,
+        bindVisibleRange: true,
+      );
+      await tester.pumpWidget(_virtualSliverViewWithEvents(store, events.add));
+      await tester.pump();
+      await tester.pump();
+      events.clear();
+
+      store.apply(
+        const Frame(
+          runtimeEpoch: 1,
+          baseRevision: 1,
+          targetRevision: 2,
+          kind: FrameKind.incremental,
+          operations: [
+            UpdateEventBindings(
+              nodeId: _virtualNodeId,
+              eventBindings: [
+                EventBinding(
+                  eventTag: EventTagId.visibleRangeChanged,
+                  handlerId: 2,
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      final rangeEvents = events
+          .where((event) => event.payload is VisibleRangeEventPayload)
+          .toList();
+      expect(rangeEvents, hasLength(1));
+      expect(rangeEvents.single.handlerId, 2);
+      await tester.pump();
+      expect(
+        events.where((event) => event.payload is VisibleRangeEventPayload),
+        hasLength(1),
+      );
+    });
+
+    testWidgets('${kind.label} republishes after a full runtime snapshot', (
+      tester,
+    ) async {
+      await _setViewport(tester, const Size(400, 200));
+      final events = <RendererEvent>[];
+      final store = _virtualSliverStore(
+        kind: kind,
+        totalCount: 20,
+        firstIndex: 0,
+        itemExtent: 50,
+        childCount: 20,
+        bindVisibleRange: true,
+      );
+      await tester.pumpWidget(_virtualSliverViewWithEvents(store, events.add));
+      await tester.pump();
+      await tester.pump();
+      events.clear();
+
+      store.apply(
+        _virtualSliverFrame(
+          kind: kind,
+          totalCount: 20,
+          firstIndex: 0,
+          itemExtent: 50,
+          childCount: 20,
+          bindVisibleRange: true,
+          runtimeEpoch: 2,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      final rangeEvents = events
+          .where((event) => event.payload is VisibleRangeEventPayload)
+          .toList();
+      expect(rangeEvents, hasLength(1));
+      expect(rangeEvents.single.handlerId, 1);
+    });
+
+    testWidgets(
+      '${kind.label} publishes when an event sink becomes available',
+      (tester) async {
+        await _setViewport(tester, const Size(400, 200));
+        final events = <RendererEvent>[];
+        final store = _virtualSliverStore(
+          kind: kind,
+          totalCount: 20,
+          firstIndex: 0,
+          itemExtent: 50,
+          childCount: 20,
+          bindVisibleRange: true,
+        );
+        await tester.pumpWidget(_virtualSliverView(store));
+        await tester.pump();
+        await tester.pump();
+
+        await tester.pumpWidget(
+          _virtualSliverViewWithEvents(store, events.add),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        expect(_visibleRangeEvents(events), hasLength(1));
+        await tester.pump();
+        expect(_visibleRangeEvents(events), hasLength(1));
+      },
+    );
+
+    testWidgets('${kind.label} uses a precomputed key-index lookup', (
+      tester,
+    ) async {
+      await _setViewport(tester, const Size(400, 200));
+      final controller = ScrollController();
+      final coordinator = InitialSliverAnchorCoordinator(controller);
+      addTearDown(controller.dispose);
+      addTearDown(coordinator.dispose);
+      final children = _CountingWidgetList([
+        for (var index = 0; index < 100; index += 1)
+          SizedBox(key: ValueKey<int>(index), height: 50),
+      ]);
+      final host = switch (kind) {
+        _VirtualSliverKind.fixed => SliverFixedExtentHost(
+          nodeId: 1,
+          deliveryGeneration: 1,
+          props: const SliverFixedExtentProps(
+            totalCount: 100,
+            firstIndex: 0,
+            itemExtent: 50,
+            overscan: 0,
+          ),
+          children: children,
+          controller: controller,
+          anchorCoordinator: coordinator,
+          binding: null,
+          onEvent: null,
+        ),
+        _VirtualSliverKind.varied => SliverVariedExtentHost(
+          nodeId: 1,
+          deliveryGeneration: 1,
+          props: const SliverVariedExtentProps(
+            totalCount: 100,
+            firstIndex: 0,
+            defaultItemExtent: 50,
+            overscan: 0,
+            extentOverrides: [],
+          ),
+          children: children,
+          controller: controller,
+          anchorCoordinator: coordinator,
+          binding: null,
+          onEvent: null,
+        ),
+      };
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 400,
+            height: 200,
+            child: CustomScrollView(controller: controller, slivers: [host]),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final delegate =
+          switch (kind) {
+                _VirtualSliverKind.fixed =>
+                  tester
+                      .widget<SliverFixedExtentList>(
+                        find.byType(SliverFixedExtentList),
+                      )
+                      .delegate,
+                _VirtualSliverKind.varied =>
+                  tester
+                      .widget<SliverVariedExtentList>(
+                        find.byType(SliverVariedExtentList),
+                      )
+                      .delegate,
+              }
+              as SliverChildBuilderDelegate;
+      children.readCount = 0;
+      for (var index = 0; index < 100; index += 1) {
+        expect(delegate.findChildIndexCallback!(ValueKey<int>(index)), index);
+      }
+      expect(children.readCount, 0);
+      expect(
+        delegate.findChildIndexCallback!(const ValueKey<int>(1000)),
+        isNull,
+      );
+    });
+  }
+
+  testWidgets('virtual slivers reject duplicate non-null child keys', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(400, 200));
+    final controller = ScrollController();
+    final coordinator = InitialSliverAnchorCoordinator(controller);
+    addTearDown(controller.dispose);
+    addTearDown(coordinator.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 400,
+          height: 200,
+          child: CustomScrollView(
+            controller: controller,
+            slivers: [
+              SliverFixedExtentHost(
+                nodeId: 1,
+                deliveryGeneration: 1,
+                props: const SliverFixedExtentProps(
+                  totalCount: 2,
+                  firstIndex: 0,
+                  itemExtent: 50,
+                  overscan: 0,
+                ),
+                controller: controller,
+                anchorCoordinator: coordinator,
+                binding: null,
+                onEvent: null,
+                children: const [
+                  SizedBox(key: ValueKey<int>(1)),
+                  SizedBox(key: ValueKey<int>(1)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    expect(tester.takeException(), isA<RendererBuildException>());
+  });
+
+  testWidgets('direct virtual sliver rendering rejects malformed props', (
+    tester,
+  ) async {
+    // The semantic validator is shared by the codec, store, and renderer. This
+    // direct entry point ensures malformed in-memory props cannot reach Flutter.
+    late BuildContext context;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (builderContext) {
+            context = builderContext;
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+    final registry = WidgetRegistry.standard();
+    for (final props in const <UiProps>[
+      SliverFixedExtentProps(
+        totalCount: 1,
+        firstIndex: 2,
+        itemExtent: 48,
+        overscan: 0,
+      ),
+      SliverVariedExtentProps(
+        totalCount: 1,
+        firstIndex: 0,
+        defaultItemExtent: 48,
+        overscan: 0,
+        extentOverrides: [SparseExtentOverride(index: 1, extent: 60)],
+      ),
+    ]) {
+      expect(
+        () => registry.build(
+          context,
+          UiNode(
+            id: 1,
+            kind: props is SliverFixedExtentProps
+                ? NodeKind.sliverFixedExtent
+                : NodeKind.sliverVariedExtent,
+            props: props,
+            eventBindings: const [],
+            parentData: const NoParentData(),
+            children: const [],
+            localRevision: 0,
+            deliveryGeneration: 1,
+          ),
+          const [],
+          null,
+        ),
+        throwsA(
+          isA<RendererBuildException>().having(
+            (error) => error.message,
+            'message',
+            contains('logical list'),
+          ),
+        ),
+      );
+    }
+  });
+
   // The OCaml side derives the viewport cache_extent as the maximum child
   // overscan times item extent. The renderer forwards that value so Flutter's
   // cache and the application-owned materialized windows use one policy.
@@ -1206,6 +1515,7 @@ void main() {
             parentData: const NoParentData(),
             children: const [],
             localRevision: 1,
+            deliveryGeneration: 1,
           ),
           const [],
           null,
@@ -1243,6 +1553,17 @@ Widget _virtualSliverView(NodeStore store) => MaterialApp(
   ),
 );
 
+Widget _virtualSliverViewWithEvents(
+  NodeStore store,
+  RendererEventCallback onEvent,
+) => MaterialApp(
+  home: SizedBox(
+    width: 400,
+    height: 200,
+    child: BonsaiFlutterView(store: store, onEvent: onEvent),
+  ),
+);
+
 ScrollPosition _scrollPosition(WidgetTester tester) =>
     tester.state<ScrollableState>(find.byType(Scrollable)).position;
 
@@ -1271,6 +1592,32 @@ NodeStore _virtualSliverStore({
   List<SparseExtentOverride> extentOverrides = const [],
   SparseExtentTransition? transition,
   bool bindVisibleRange = false,
+}) => NodeStore()
+  ..apply(
+    _virtualSliverFrame(
+      kind: kind,
+      totalCount: totalCount,
+      firstIndex: firstIndex,
+      itemExtent: itemExtent,
+      childCount: childCount,
+      headerExtent: headerExtent,
+      extentOverrides: extentOverrides,
+      transition: transition,
+      bindVisibleRange: bindVisibleRange,
+    ),
+  );
+
+Frame _virtualSliverFrame({
+  required _VirtualSliverKind kind,
+  required int totalCount,
+  required int firstIndex,
+  required double itemExtent,
+  required int childCount,
+  double headerExtent = 0,
+  List<SparseExtentOverride> extentOverrides = const [],
+  SparseExtentTransition? transition,
+  bool bindVisibleRange = false,
+  int runtimeEpoch = 1,
 }) {
   final childNodes = [
     for (var index = 0; index < childCount; index += 1)
@@ -1353,14 +1700,12 @@ NodeStore _virtualSliverStore({
     SetChildren(nodeId: 1, children: [if (headerExtent > 0) 2, _virtualNodeId]),
     const SetRoot(1),
   ];
-  return NodeStore()..apply(
-    Frame(
-      runtimeEpoch: 1,
-      baseRevision: 0,
-      targetRevision: 1,
-      kind: FrameKind.fullSnapshot,
-      operations: operations,
-    ),
+  return Frame(
+    runtimeEpoch: runtimeEpoch,
+    baseRevision: 0,
+    targetRevision: 1,
+    kind: FrameKind.fullSnapshot,
+    operations: operations,
   );
 }
 
@@ -1488,5 +1833,28 @@ final class _CountingOverrideList extends ListBase<SparseExtentOverride> {
 
   @override
   void operator []=(int index, SparseExtentOverride value) =>
+      throw UnsupportedError('immutable');
+}
+
+final class _CountingWidgetList extends ListBase<Widget> {
+  _CountingWidgetList(this._values);
+
+  final List<Widget> _values;
+  int readCount = 0;
+
+  @override
+  int get length => _values.length;
+
+  @override
+  set length(int value) => throw UnsupportedError('immutable');
+
+  @override
+  Widget operator [](int index) {
+    readCount += 1;
+    return _values[index];
+  }
+
+  @override
+  void operator []=(int index, Widget value) =>
       throw UnsupportedError('immutable');
 }

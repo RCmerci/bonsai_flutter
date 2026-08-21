@@ -23,19 +23,12 @@ import 'animated_opacity_host.dart';
 import 'node_host.dart';
 import 'pressable_host.dart';
 import 'renderer_event.dart';
+import 'renderer_error.dart';
 import 'renderer_resource_store.dart';
 import 'viewport_constraint_guard.dart';
 
 export 'renderer_event.dart';
-
-final class RendererBuildException implements Exception {
-  const RendererBuildException(this.message);
-
-  final String message;
-
-  @override
-  String toString() => 'RendererBuildException($message)';
-}
+export 'renderer_error.dart';
 
 typedef NodeWidgetFactory =
     Widget Function(
@@ -676,6 +669,7 @@ Widget _buildSliverFixedExtent(
   RendererEventCallback? onEvent,
 ) {
   final props = _expectProps<SliverFixedExtentProps>(node);
+  _validateVirtualSliverRendererProps(props);
   final scope = ScrollViewScope.of(context);
   if (scope == null) {
     throw RendererBuildException(
@@ -684,7 +678,7 @@ Widget _buildSliverFixedExtent(
   }
   return SliverFixedExtentHost(
     nodeId: node.id,
-    localRevision: node.localRevision,
+    deliveryGeneration: node.deliveryGeneration,
     props: props,
     controller: scope.controller,
     anchorCoordinator: scope.anchorCoordinator,
@@ -701,6 +695,7 @@ Widget _buildSliverVariedExtent(
   RendererEventCallback? onEvent,
 ) {
   final props = _expectProps<SliverVariedExtentProps>(node);
+  _validateVirtualSliverRendererProps(props);
   final scope = ScrollViewScope.of(context);
   if (scope == null) {
     throw RendererBuildException(
@@ -709,7 +704,7 @@ Widget _buildSliverVariedExtent(
   }
   return SliverVariedExtentHost(
     nodeId: node.id,
-    localRevision: node.localRevision,
+    deliveryGeneration: node.deliveryGeneration,
     props: props,
     controller: scope.controller,
     anchorCoordinator: scope.anchorCoordinator,
@@ -717,6 +712,11 @@ Widget _buildSliverVariedExtent(
     onEvent: onEvent,
     children: children,
   );
+}
+
+void _validateVirtualSliverRendererProps(UiProps props) {
+  final error = virtualSliverPropsError(props);
+  if (error != null) throw RendererBuildException(error);
 }
 
 Widget _buildSliverPadding(

@@ -228,7 +228,7 @@ final class _NodeHostState extends State<NodeHost> {
     _synchronizeNavigationPageSubscriptions(node);
     final sourceRevision = widget.store.revision;
     if (_failedLocalRevision == node.localRevision && _buildError != null) {
-      return BonsaiRendererErrorWidget(error: _buildError!);
+      return _errorFallback(node.kind, _buildError!);
     }
     _buildError = null;
     _failedLocalRevision = null;
@@ -305,7 +305,7 @@ final class _NodeHostState extends State<NodeHost> {
           ),
         ),
       );
-      return BonsaiRendererErrorWidget(error: error);
+      return _errorFallback(node.kind, error);
     }
   }
 
@@ -354,6 +354,70 @@ final class _NodeHostState extends State<NodeHost> {
     _navigationPageUnsubscribes.clear();
   }
 }
+
+Widget _errorFallback(NodeKind kind, RendererBoundaryError error) {
+  final surface = BonsaiRendererErrorWidget(error: error);
+  return _isCoreSliverKind(kind) ? SliverToBoxAdapter(child: surface) : surface;
+}
+
+bool _isCoreSliverKind(NodeKind kind) => switch (kind) {
+  NodeKind.sliverBox ||
+  NodeKind.sliverList ||
+  NodeKind.sliverFill ||
+  NodeKind.sliverFixedExtent ||
+  NodeKind.sliverVariedExtent ||
+  NodeKind.sliverPadding ||
+  NodeKind.sliverAppBar => true,
+  NodeKind.empty ||
+  NodeKind.environmentBoundary ||
+  NodeKind.text ||
+  NodeKind.richText ||
+  NodeKind.icon ||
+  NodeKind.image ||
+  NodeKind.row ||
+  NodeKind.column ||
+  NodeKind.stack ||
+  NodeKind.button ||
+  NodeKind.padding ||
+  NodeKind.align ||
+  NodeKind.center ||
+  NodeKind.sizedBox ||
+  NodeKind.constrainedBox ||
+  NodeKind.decoratedBox ||
+  NodeKind.clip ||
+  NodeKind.opacity ||
+  NodeKind.animatedOpacity ||
+  NodeKind.transform ||
+  NodeKind.scrollView ||
+  NodeKind.preferredSize ||
+  NodeKind.gesture ||
+  NodeKind.focusScope ||
+  NodeKind.mouseRegion ||
+  NodeKind.keyboardListener ||
+  NodeKind.pressable ||
+  NodeKind.semantics ||
+  NodeKind.theme ||
+  NodeKind.materialScaffold ||
+  NodeKind.materialAppBar ||
+  NodeKind.materialElevatedButton ||
+  NodeKind.materialTextButton ||
+  NodeKind.materialIconButton ||
+  NodeKind.materialCheckbox ||
+  NodeKind.materialSwitch ||
+  NodeKind.materialListTile ||
+  NodeKind.materialDivider ||
+  NodeKind.materialCard ||
+  NodeKind.materialCircularProgressIndicator ||
+  NodeKind.cupertinoButton ||
+  NodeKind.cupertinoSwitch ||
+  NodeKind.textInput ||
+  NodeKind.overlay ||
+  NodeKind.navigator ||
+  NodeKind.page ||
+  NodeKind.safeArea ||
+  NodeKind.materialDialog ||
+  NodeKind.nativeWidget => false,
+};
 
 final class _PreferredSizeNodeHost extends StatelessWidget
     implements PreferredSizeWidget {

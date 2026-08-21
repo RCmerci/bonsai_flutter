@@ -262,6 +262,31 @@ let write_optional_duration_ms writer = function
     Writer.u32 writer value
 ;;
 
+let validate_sliver_window ~total_count ~first_index =
+  if total_count < 0 then fail Invalid_props "sliver total_count must be non-negative";
+  if first_index < 0 || first_index > total_count
+  then fail Invalid_props "sliver first_index is outside the logical list"
+;;
+
+let validate_sliver_extent_overrides ~total_count overrides =
+  if List.length overrides > total_count
+  then fail Invalid_props "sliver override count is out of range";
+  ignore
+    (List.fold_left
+       (fun previous { Wire_frame.index; extent } ->
+          if index < 0 || index >= total_count
+          then fail Invalid_props "sliver override index is outside the logical list";
+          (match previous with
+           | Some previous when index <= previous ->
+             fail Invalid_props "sliver override indexes must be sorted and unique"
+           | _ -> ());
+          if (not (Float.is_finite extent)) || Float.compare extent 0. <= 0
+          then fail Invalid_props "sliver override extent must be finite and positive";
+          Some index)
+       None
+       overrides)
+;;
+
 let write_sliver_extent_overrides writer overrides =
   check_u32 "sliver override count" (List.length overrides);
   Writer.u32 writer (List.length overrides);
@@ -280,6 +305,7 @@ let write_sliver_fixed_extent_payload
       ~item_extent
       ~overscan
   =
+  validate_sliver_window ~total_count ~first_index;
   check_u64 "sliver total_count" (Int64.of_int total_count);
   check_u64 "sliver first_index" (Int64.of_int first_index);
   if (not (Float.is_finite item_extent)) || Float.compare item_extent 0. <= 0
@@ -300,6 +326,8 @@ let write_sliver_varied_extent_payload
       ~extent_overrides
       ~(transition : Wire_frame.sparse_extent_transition option)
   =
+  validate_sliver_window ~total_count ~first_index;
+  validate_sliver_extent_overrides ~total_count extent_overrides;
   check_u64 "sliver total_count" (Int64.of_int total_count);
   check_u64 "sliver first_index" (Int64.of_int first_index);
   if
@@ -2270,7 +2298,7 @@ let read_sliver_extent_overrides reader ~total_count =
   let count = Reader.u32 reader in
   if count < 0 || count > total_count
   then fail Invalid_props "sliver override count is out of range";
-  let rec read remaining previous =
+  let rec read remaining =
     if remaining = 0
     then []
     else (
@@ -2280,18 +2308,12 @@ let read_sliver_extent_overrides reader ~total_count =
       if Int64.compare index64 (Int64.of_int max_int) > 0
       then fail Invalid_props "sliver override index exceeds OCaml int";
       let index = Int64.to_int index64 in
-      (match previous with
-       | Some previous when index <= previous ->
-         fail Invalid_props "sliver override indexes must be sorted and unique"
-       | _ -> ());
-      if index >= total_count
-      then fail Invalid_props "sliver override index is outside the logical list";
       let extent = read_finite_f64 reader in
-      if Float.compare extent 0. <= 0
-      then fail Invalid_props "sliver override extent must be finite and positive";
-      { Wire_frame.index; extent } :: read (remaining - 1) (Some index))
+      { Wire_frame.index; extent } :: read (remaining - 1))
   in
-  read count None
+  let overrides = read count in
+  validate_sliver_extent_overrides ~total_count overrides;
+  overrides
 ;;
 
 let read_sliver_varied_extent_transition reader =
@@ -2543,8 +2565,7 @@ let read_props reader kind ~protocol_minor =
     if Float.compare item_extent 0. <= 0
     then fail Invalid_props "sliver item_extent must be finite and positive";
     let overscan = Reader.u32 reader in
-    if first_index < 0 || first_index > total_count
-    then fail Invalid_props "sliver first_index is outside the logical list";
+    validate_sliver_window ~total_count ~first_index;
     Sliver_fixed_extent_props { total_count; first_index; item_extent; overscan }
   | Sliver_varied_extent ->
     let total_count64 = Reader.u64 reader in
@@ -2561,8 +2582,7 @@ let read_props reader kind ~protocol_minor =
     let overscan = Reader.u32 reader in
     let extent_overrides = read_sliver_extent_overrides reader ~total_count in
     let transition = read_sliver_varied_extent_transition reader in
-    if first_index < 0 || first_index > total_count
-    then fail Invalid_props "sliver first_index is outside the logical list";
+    validate_sliver_window ~total_count ~first_index;
     Sliver_varied_extent_props
       { total_count
       ; first_index

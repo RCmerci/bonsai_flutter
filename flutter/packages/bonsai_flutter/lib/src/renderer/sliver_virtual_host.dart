@@ -9,6 +9,43 @@ import 'package:flutter/widgets.dart';
 import '../protocol/event_batch.dart';
 import '../protocol/frame.dart';
 import 'renderer_event.dart';
+import 'renderer_error.dart';
+
+Map<Key, int> _buildChildIndexLookup(List<Widget> children, int firstIndex) {
+  final result = <Key, int>{};
+  for (var index = 0; index < children.length; index += 1) {
+    final key = children[index].key;
+    if (key == null) continue;
+    if (result.containsKey(key)) {
+      throw RendererBuildException(
+        'Virtual sliver children contain duplicate key $key',
+      );
+    }
+    result[key] = firstIndex + index;
+  }
+  return Map.unmodifiable(result);
+}
+
+bool _sameChildKeys(List<Widget> left, List<Widget> right) {
+  if (left.length != right.length) return false;
+  for (var index = 0; index < left.length; index += 1) {
+    if (left[index].key != right[index].key) return false;
+  }
+  return true;
+}
+
+bool _sameDelivery({
+  required EventBinding? oldBinding,
+  required EventBinding? binding,
+  required int oldGeneration,
+  required int generation,
+  required RendererEventCallback? oldSink,
+  required RendererEventCallback? sink,
+}) =>
+    oldBinding?.eventTag == binding?.eventTag &&
+    oldBinding?.handlerId == binding?.handlerId &&
+    oldGeneration == generation &&
+    (oldSink == null) == (sink == null);
 
 /// The visible window of a virtualized sliver expressed in the sliver's own
 /// content coordinates.
@@ -261,7 +298,7 @@ final class SparseExtentGeometry {
 final class SliverFixedExtentHost extends StatefulWidget {
   const SliverFixedExtentHost({
     required this.nodeId,
-    required this.localRevision,
+    required this.deliveryGeneration,
     required this.props,
     required this.children,
     required this.controller,
@@ -272,7 +309,7 @@ final class SliverFixedExtentHost extends StatefulWidget {
   });
 
   final int nodeId;
-  final int localRevision;
+  final int deliveryGeneration;
   final SliverFixedExtentProps props;
   final List<Widget> children;
   final ScrollController controller;
@@ -287,10 +324,15 @@ final class SliverFixedExtentHost extends StatefulWidget {
 final class _SliverFixedExtentHostState extends State<SliverFixedExtentHost> {
   ({int firstIndex, int lastExclusive})? _lastRange;
   bool _rangeReportScheduled = false;
+  late Map<Key, int> _childIndexes;
 
   @override
   void initState() {
     super.initState();
+    _childIndexes = _buildChildIndexLookup(
+      widget.children,
+      widget.props.firstIndex,
+    );
     widget.controller.addListener(_scheduleRangeReport);
     _scheduleInitialAnchor();
   }
@@ -298,6 +340,23 @@ final class _SliverFixedExtentHostState extends State<SliverFixedExtentHost> {
   @override
   void didUpdateWidget(SliverFixedExtentHost oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.props.firstIndex != widget.props.firstIndex ||
+        !_sameChildKeys(oldWidget.children, widget.children)) {
+      _childIndexes = _buildChildIndexLookup(
+        widget.children,
+        widget.props.firstIndex,
+      );
+    }
+    if (!_sameDelivery(
+      oldBinding: oldWidget.binding,
+      binding: widget.binding,
+      oldGeneration: oldWidget.deliveryGeneration,
+      generation: widget.deliveryGeneration,
+      oldSink: oldWidget.onEvent,
+      sink: widget.onEvent,
+    )) {
+      _lastRange = null;
+    }
     final controllerChanged = !identical(
       oldWidget.controller,
       widget.controller,
@@ -371,7 +430,6 @@ final class _SliverFixedExtentHostState extends State<SliverFixedExtentHost> {
       lastExclusive: logicalLast.clamp(0, totalCount),
     );
     if (range == _lastRange) return;
-    _lastRange = range;
     onEvent(
       RendererEvent(
         nodeId: widget.nodeId,
@@ -383,6 +441,7 @@ final class _SliverFixedExtentHostState extends State<SliverFixedExtentHost> {
         ),
       ),
     );
+    _lastRange = range;
   }
 
   @override
@@ -400,14 +459,7 @@ final class _SliverFixedExtentHostState extends State<SliverFixedExtentHost> {
               return const SizedBox.shrink();
             },
             childCount: widget.props.totalCount,
-            findChildIndexCallback: (key) {
-              for (var i = 0; i < widget.children.length; i += 1) {
-                if (widget.children[i].key == key) {
-                  return widget.props.firstIndex + i;
-                }
-              }
-              return null;
-            },
+            findChildIndexCallback: (key) => _childIndexes[key],
           ),
           itemExtent: widget.props.itemExtent,
         );
@@ -421,7 +473,7 @@ final class _SliverFixedExtentHostState extends State<SliverFixedExtentHost> {
 final class SliverVariedExtentHost extends StatefulWidget {
   const SliverVariedExtentHost({
     required this.nodeId,
-    required this.localRevision,
+    required this.deliveryGeneration,
     required this.props,
     required this.children,
     required this.controller,
@@ -432,7 +484,7 @@ final class SliverVariedExtentHost extends StatefulWidget {
   });
 
   final int nodeId;
-  final int localRevision;
+  final int deliveryGeneration;
   final SliverVariedExtentProps props;
   final List<Widget> children;
   final ScrollController controller;
@@ -458,6 +510,7 @@ final class _SliverVariedExtentHostState extends State<SliverVariedExtentHost>
   ({int index, double viewportOffset})? _anchor;
   bool _animating = false;
   bool _settleAfterAnchorCorrection = false;
+  late Map<Key, int> _childIndexes;
 
   SparseExtentGeometry get _geometry =>
       _geometryFor(widget.props, _overrideExtents);
@@ -465,6 +518,10 @@ final class _SliverVariedExtentHostState extends State<SliverVariedExtentHost>
   @override
   void initState() {
     super.initState();
+    _childIndexes = _buildChildIndexLookup(
+      widget.children,
+      widget.props.firstIndex,
+    );
     _overrideExtents = _overrideByIndex(widget.props);
     _animation = AnimationController(vsync: this)
       ..addListener(() {
@@ -488,6 +545,23 @@ final class _SliverVariedExtentHostState extends State<SliverVariedExtentHost>
   @override
   void didUpdateWidget(SliverVariedExtentHost oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.props.firstIndex != widget.props.firstIndex ||
+        !_sameChildKeys(oldWidget.children, widget.children)) {
+      _childIndexes = _buildChildIndexLookup(
+        widget.children,
+        widget.props.firstIndex,
+      );
+    }
+    if (!_sameDelivery(
+      oldBinding: oldWidget.binding,
+      binding: widget.binding,
+      oldGeneration: oldWidget.deliveryGeneration,
+      generation: widget.deliveryGeneration,
+      oldSink: oldWidget.onEvent,
+      sink: widget.onEvent,
+    )) {
+      _lastRange = null;
+    }
     final controllerChanged = !identical(
       oldWidget.controller,
       widget.controller,
@@ -801,7 +875,6 @@ final class _SliverVariedExtentHostState extends State<SliverVariedExtentHost>
       viewportExtent: viewport.paintExtent,
     );
     if (range == _lastRange) return;
-    _lastRange = range;
     onEvent(
       RendererEvent(
         nodeId: widget.nodeId,
@@ -813,6 +886,7 @@ final class _SliverVariedExtentHostState extends State<SliverVariedExtentHost>
         ),
       ),
     );
+    _lastRange = range;
   }
 
   @override
@@ -834,14 +908,7 @@ final class _SliverVariedExtentHostState extends State<SliverVariedExtentHost>
               return const SizedBox.shrink();
             },
             childCount: widget.props.totalCount,
-            findChildIndexCallback: (key) {
-              for (var i = 0; i < widget.children.length; i += 1) {
-                if (widget.children[i].key == key) {
-                  return widget.props.firstIndex + i;
-                }
-              }
-              return null;
-            },
+            findChildIndexCallback: (key) => _childIndexes[key],
           ),
           itemExtentBuilder: (index, _) => geometry.itemExtent(index),
         );

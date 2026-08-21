@@ -15,7 +15,7 @@ thread during element reconciliation and can cause frame-time spikes for large
 overscan windows. Fixed- and varied-extent hosts duplicate the same linear
 implementation.
 
-## Proposal
+## Decision
 
 Build one immutable `Map<Key, int>` from each host's current materialized
 children to their logical indexes, then make `findChildIndexCallback` a constant
@@ -52,7 +52,7 @@ The callback contract accepts opaque Flutter keys, and coupling virtual slivers
 to the current `NodeHost` key representation would make future keyed wrappers
 or custom renderer children incorrect.
 
-## Acceptance criteria
+## Consequences
 
 - Fixed- and varied-extent hosts use one shared key-index lookup implementation
   with constant-time callback lookup after `O(W)` construction.
@@ -67,7 +67,7 @@ or custom renderer children incorrect.
   window construction plus active lookups, rather than multiplying active
   children by window size.
 
-## Risks
+### Operational risks
 
 - The lookup allocates `O(W)` additional map storage for each effective window;
   this trades modest memory and one linear construction pass for predictable

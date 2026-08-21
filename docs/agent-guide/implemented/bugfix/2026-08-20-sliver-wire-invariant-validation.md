@@ -21,7 +21,7 @@ instead of rejecting the frame atomically. Separately, the materialized child
 window can contain more children than `totalCount - firstIndex`; that invariant
 is only known once frame operations form the final tree.
 
-## Proposal
+## Decision
 
 Define one virtual-sliver invariant set and enforce it at every boundary that
 constructs, encodes, decodes, stores, or renders such values.
@@ -73,7 +73,7 @@ Normalization hides producer bugs and changes the requested geometry. The same
 bytes would also have different meaning across hosts unless every
 implementation duplicated the normalization exactly.
 
-## Acceptance criteria
+## Consequences
 
 - OCaml and Dart codec tests reject `firstIndex > totalCount` in both encode and
   decode directions for fixed and varied slivers.
@@ -90,7 +90,7 @@ implementation duplicated the normalization exactly.
   geometry.
 - Public OCaml constructor tests and wire tests assert the same invariant table.
 
-## Risks
+### Operational risks
 
 - Repeating validation across languages and layers creates maintenance cost;
   shared per-language helpers and a mirrored test matrix are required to keep

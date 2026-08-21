@@ -810,6 +810,86 @@ final class SliverVariedExtentProps extends UiProps {
   );
 }
 
+String? virtualSliverPropsError(UiProps props) {
+  const maxUint32 = 0xffffffff;
+
+  String? validateWindow({
+    required int totalCount,
+    required int firstIndex,
+    required double itemExtent,
+    required int overscan,
+  }) {
+    if (totalCount < 0) return 'Sliver total_count must be non-negative';
+    if (firstIndex < 0 || firstIndex > totalCount) {
+      return 'Sliver first_index is outside the logical list';
+    }
+    if (!itemExtent.isFinite || itemExtent <= 0) {
+      return 'Sliver item extent must be finite and positive';
+    }
+    if (overscan < 0 || overscan > maxUint32) {
+      return 'Sliver overscan is outside u32';
+    }
+    return null;
+  }
+
+  switch (props) {
+    case SliverFixedExtentProps(
+      :final totalCount,
+      :final firstIndex,
+      :final itemExtent,
+      :final overscan,
+    ):
+      return validateWindow(
+        totalCount: totalCount,
+        firstIndex: firstIndex,
+        itemExtent: itemExtent,
+        overscan: overscan,
+      );
+    case SliverVariedExtentProps(
+      :final totalCount,
+      :final firstIndex,
+      :final defaultItemExtent,
+      :final overscan,
+      :final extentOverrides,
+      :final transition,
+    ):
+      final windowError = validateWindow(
+        totalCount: totalCount,
+        firstIndex: firstIndex,
+        itemExtent: defaultItemExtent,
+        overscan: overscan,
+      );
+      if (windowError != null) return windowError;
+      if (extentOverrides.length > totalCount ||
+          extentOverrides.length > maxUint32) {
+        return 'Sliver override count is outside the logical list';
+      }
+      int? previousIndex;
+      for (final override in extentOverrides) {
+        if (override.index < 0 || override.index >= totalCount) {
+          return 'Sliver override index is outside the logical list';
+        }
+        if (previousIndex != null && override.index <= previousIndex) {
+          return 'Sliver override indexes must be strictly increasing and unique';
+        }
+        if (!override.extent.isFinite || override.extent <= 0) {
+          return 'Sliver override extent must be finite and positive';
+        }
+        previousIndex = override.index;
+      }
+      if (transition != null &&
+          (transition.expandDurationMs < 0 ||
+              transition.expandDurationMs > maxUint32 ||
+              transition.collapseDurationMs < 0 ||
+              transition.collapseDurationMs > maxUint32)) {
+        return 'Sliver transition duration is outside u32';
+      }
+      return null;
+    case _:
+      return null;
+  }
+}
+
 final class SliverPaddingProps extends UiProps {
   const SliverPaddingProps(this.insets);
 
