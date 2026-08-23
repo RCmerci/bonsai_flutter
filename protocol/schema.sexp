@@ -1,7 +1,7 @@
 ((protocol
   (name bonsai_flutter)
   (major 1)
-  (minor 19)
+  (minor 21)
   (endianness little)
   (header_bytes 48)
   (max_frame_bytes 16777216)
@@ -28,7 +28,8 @@
    (host_request 8)
    (runtime_notification 9)
    (end_frame 10)
-   (application_request 11)))
+   (application_request 11)
+   (set_application_theme 12)))
 
  (node_kinds
   ((empty 1)
@@ -85,10 +86,23 @@
    (material_list_tile 104)
    (material_divider 105)
    (material_card 106)
-   (material_dialog 107)
+   (reserved_node_kind_107 107)
    (material_circular_progress_indicator 108)
+   (material_filled_button 109)
+   (material_filled_tonal_button 110)
+   (material_outlined_button 111)
    (cupertino_button 112)
    (cupertino_switch 113)
+   (material_floating_action_button 114)
+   (material_navigation_bar 115)
+   (material_radio_group 116)
+   (material_slider 117)
+   (material_range_slider 118)
+   (material_action_chip 119)
+   (material_filter_chip 120)
+   (material_choice_chip 121)
+   (material_input_chip 122)
+   (material_alert_dialog 123)
    (native_widget 128)))
 
  (common_props
@@ -223,10 +237,13 @@
      (sort_key 12 optional_f64)
      (actions 13 u32)))
    (theme
-    ((brightness 1 brightness)
-     (color_seed 2 argb32)))
+    ((data 1 theme_data)))
    (material_scaffold
-    ((has_app_bar 1 bool)))
+    ((has_app_bar 1 bool)
+     (has_floating_action_button 2 bool)
+     (floating_action_button_location 3 material_floating_action_button_location)
+     (has_bottom_navigation_bar 4 bool)
+     (has_bottom_sheet 5 bool)))
    (material_app_bar
     ((center_title 1 bool)))
    (material_elevated_button
@@ -238,6 +255,81 @@
    (material_icon_button
     ((enabled 1 bool)
      (autofocus 2 bool)))
+   (material_filled_button
+    ((enabled 1 bool)
+     (autofocus 2 bool)))
+   (material_filled_tonal_button
+    ((enabled 1 bool)
+     (autofocus 2 bool)))
+   (material_outlined_button
+    ((enabled 1 bool)
+     (autofocus 2 bool)))
+   (material_floating_action_button
+    ((variant 1 material_floating_action_button_variant)
+     (enabled 2 bool)
+     (autofocus 3 bool)
+     (has_icon 4 bool)))
+   (material_navigation_bar
+    ((selected_index 1 u32)
+     (destinations 2 material_navigation_destinations)))
+   (material_radio_group
+    ((selected_id 1 optional_i64)
+     (options 2 material_radio_options)))
+   (material_slider
+    ((value 1 f64)
+     (min 2 f64)
+     (max 3 f64)
+     (divisions 4 optional_u32)
+     (label 5 optional_string)
+     (enabled 6 bool)
+     (has_on_change 7 bool)))
+   (material_range_slider
+    ((start 1 f64)
+     (end_value 2 f64)
+     (min 3 f64)
+     (max 4 f64)
+     (divisions 5 optional_u32)
+     (label_start 6 optional_string)
+     (label_end 7 optional_string)
+     (enabled 8 bool)
+     (has_on_change 9 bool)))
+   (material_action_chip
+    ((enabled 1 bool)
+     (selected 2 bool)
+     (has_avatar 3 bool)
+     (has_delete_icon 4 bool)
+     (has_on_press 5 bool)
+     (has_on_selected 6 bool)
+     (has_on_delete 7 bool)))
+   (material_filter_chip
+    ((enabled 1 bool)
+     (selected 2 bool)
+     (has_avatar 3 bool)
+     (has_delete_icon 4 bool)
+     (has_on_press 5 bool)
+     (has_on_selected 6 bool)
+     (has_on_delete 7 bool)))
+   (material_choice_chip
+    ((enabled 1 bool)
+     (selected 2 bool)
+     (has_avatar 3 bool)
+     (has_delete_icon 4 bool)
+     (has_on_press 5 bool)
+     (has_on_selected 6 bool)
+     (has_on_delete 7 bool)))
+   (material_input_chip
+    ((enabled 1 bool)
+     (selected 2 bool)
+     (has_avatar 3 bool)
+     (has_delete_icon 4 bool)
+     (has_on_press 5 bool)
+     (has_on_selected 6 bool)
+     (has_on_delete 7 bool)))
+   (material_alert_dialog
+    ((has_icon 1 bool)
+     (has_title 2 bool)
+     (has_content 3 bool)
+     (action_count 4 u32)))
    (material_checkbox
     ((value 1 bool)
      (enabled 2 bool)))
@@ -298,15 +390,20 @@
      (modal_dismiss_on_drag 17 bool)
      (modal_handle_semantics_label 18 optional_string)
      (modal_medium_semantics_value 19 optional_string)
-     (modal_large_semantics_value 20 optional_string)))
+     (modal_large_semantics_value 20 optional_string)
+     (dialog_barrier_dismissible 21 bool)
+     (dialog_barrier_color 22 optional_argb32)
+     (dialog_barrier_label 23 optional_string)
+     (dialog_use_safe_area 24 bool)
+     (dialog_request_focus 25 bool)
+     (dialog_transition_duration_ms 26 u32)
+     (dialog_reverse_transition_duration_ms 27 u32)))
    (safe_area
     ((left 1 bool)
      (top 2 bool)
      (right 3 bool)
      (bottom 4 bool)
      (minimum 5 edge_insets)))
-   (material_dialog
-    ((barrier_dismissible 1 bool)))
    (pressable
     ((overlay_color 1 argb32)
      (release_delay_ms 2 u16)))
@@ -343,7 +440,14 @@
    (text_limit_reached 24 unit)
    (application_response 25 application_response)
    (application_request_error 26 application_request_error)
-   (application_event 27 application_event)))
+   (application_event 27 application_event)
+   (navigation_destination_selected 28 i64)
+   (radio_selected 29 i64)
+   (slider_changed 30 f64)
+   (slider_change_end 31 f64)
+   (range_slider_changed 32 f64_range)
+   (range_slider_change_end 33 f64_range)
+   (delete 34 unit)))
 
  (host_requests
   ((clipboard_read 1 unit string_result)
@@ -359,7 +463,8 @@
    (show_native_menu 11 native_menu menu_result)
    (haptic_feedback 12 haptic_kind unit_result)
    (platform_information 13 unit platform_information_result)
-   (measure_layout 14 node_id layout_result)))
+   (measure_layout 14 node_id layout_result)
+   (show_snack_bar 15 snack_bar_options snack_bar_close_reason_result)))
 
  (runtime_errors
   ((protocol_error 1)

@@ -42,12 +42,9 @@ final class GalleryApp extends StatelessWidget {
             },
           ),
         );
-    return MaterialApp(
-      title: 'Bonsai Flutter Gallery',
-      home: BonsaiFlutterRoot(
-        config: Uint8List.fromList(utf8.encode('gallery')),
-        registry: WidgetRegistry.standard(nativeWidgets: nativeWidgets),
-      ),
+    return BonsaiFlutterRoot(
+      config: Uint8List.fromList(utf8.encode('gallery')),
+      registry: WidgetRegistry.standard(nativeWidgets: nativeWidgets),
     );
   }
 }

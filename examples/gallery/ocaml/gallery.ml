@@ -258,9 +258,36 @@ let core_section handlers =
 ;;
 
 let material_section model handlers =
+  let icon code_point = Ui.Widget.icon ~font_family:"MaterialIcons" ~code_point () in
+  let destinations =
+    [ Ui.Material.Navigation_destination.create
+        ~icon:(icon 0xe88a)
+        ~selected_icon:(icon 0xe88a)
+        ~label:"Home"
+        ()
+    ; Ui.Material.Navigation_destination.create ~icon:(icon 0xe8b8) ~label:"Settings" ()
+    ]
+  in
+  let radio_options =
+    [ Ui.Material.Radio_group.option ~id:1L ~label:(Ui.Widget.text "First") ()
+    ; Ui.Material.Radio_group.option ~id:2L ~label:(Ui.Widget.text "Second") ()
+    ]
+  in
   section
     "Material"
-    [ Ui.Material.elevated_button
+    [ Ui.Material.filled_button
+        ~on_press:handlers.press
+        ~child:(Ui.Widget.text "Filled button")
+        ()
+    ; Ui.Material.filled_tonal_button
+        ~on_press:handlers.press
+        ~child:(Ui.Widget.text "Filled tonal button")
+        ()
+    ; Ui.Material.outlined_button
+        ~on_press:handlers.press
+        ~child:(Ui.Widget.text "Outlined button")
+        ()
+    ; Ui.Material.elevated_button
         ~on_press:handlers.press
         ~child:(Ui.Widget.text (Printf.sprintf "Pressed %d times" model.press_count))
         ()
@@ -271,6 +298,90 @@ let material_section model handlers =
     ; Ui.Material.icon_button
         ~on_press:handlers.press
         ~icon:(Ui.Widget.icon ~font_family:"MaterialIcons" ~code_point:0xe87d ())
+        ()
+    ; Ui.Widget.row
+        [ Ui.Material.Floating_action_button.icon
+            ~size:Ui.Material.Floating_action_button.Small
+            ~on_press:handlers.press
+            ~icon:(icon 0xe145)
+            ()
+        ; Ui.Material.Floating_action_button.icon
+            ~on_press:handlers.press
+            ~icon:(icon 0xe145)
+            ()
+        ; Ui.Material.Floating_action_button.icon
+            ~size:Ui.Material.Floating_action_button.Large
+            ~on_press:handlers.press
+            ~icon:(icon 0xe145)
+            ()
+        ; Ui.Material.Floating_action_button.extended
+            ~on_press:handlers.press
+            ~icon:(icon 0xe145)
+            ~label:(Ui.Widget.text "Create")
+            ()
+        ]
+    ; Ui.Material.navigation_bar
+        ~selected_index:0
+        ~on_select:handlers.press
+        destinations
+        ()
+    ; Ui.Material.Radio_group.create
+        ~selected_id:(Some 1L)
+        ~on_select:handlers.press
+        radio_options
+        ()
+    ; Ui.Material.slider
+        ~value:0.35
+        ~divisions:10
+        ~label:"Single value"
+        ~on_change:handlers.press
+        ~on_change_end:handlers.press
+        ()
+    ; Ui.Material.range_slider
+        ~value:(Ui.Material.Range.create ~start:0.2 ~end_:0.8)
+        ~divisions:10
+        ~label_start:"Low"
+        ~label_end:"High"
+        ~on_change:handlers.press
+        ~on_change_end:handlers.press
+        ()
+    ; Ui.Widget.row
+        [ Ui.Material.action_chip
+            ~on_press:handlers.press
+            ~label:(Ui.Widget.text "Action")
+            ()
+        ; Ui.Material.filter_chip
+            ~selected:model.checked
+            ~on_selected:handlers.toggle
+            ~label:(Ui.Widget.text "Filter")
+            ()
+        ; Ui.Material.choice_chip
+            ~selected:(not model.checked)
+            ~on_selected:handlers.toggle
+            ~label:(Ui.Widget.text "Choice")
+            ()
+        ; Ui.Material.input_chip
+            ~selected:model.checked
+            ~on_press:handlers.press
+            ~on_selected:handlers.toggle
+            ~on_delete:handlers.press
+            ~label:(Ui.Widget.text "Input")
+            ()
+        ]
+    ; Ui.Material.alert_dialog
+        ~icon:(icon 0xe002)
+        ~title:(Ui.Widget.text "AlertDialog")
+        ~content:(Ui.Widget.text "Declarative dialog content")
+        ~actions:
+          [ Ui.Material.text_button
+              ~on_press:handlers.press
+              ~child:(Ui.Widget.text "Cancel")
+              ()
+          ; Ui.Material.filled_button
+              ~on_press:handlers.press
+              ~child:(Ui.Widget.text "Confirm")
+              ()
+          ]
         ()
     ; Ui.Widget.row
         [ Ui.Material.checkbox ~value:model.checked ~on_changed:handlers.toggle ()
@@ -347,6 +458,17 @@ let native_section model handlers =
 ;;
 
 let view model handlers =
+  let bottom_destinations =
+    [ Ui.Material.Navigation_destination.create
+        ~icon:(Ui.Widget.icon ~font_family:"MaterialIcons" ~code_point:0xe88a ())
+        ~label:"Home"
+        ()
+    ; Ui.Material.Navigation_destination.create
+        ~icon:(Ui.Widget.icon ~font_family:"MaterialIcons" ~code_point:0xe8b8 ())
+        ~label:"Settings"
+        ()
+    ]
+  in
   let body =
     Ui.Widget.column
       [ Ui.Widget.text "OCaml owns every value and handler on this page"
@@ -375,16 +497,26 @@ let view model handlers =
               ())
   in
   let body = Ui.Widget.Body.Vertical.create [ Ui.Widget.Body.Vertical.fill viewport ] in
-  Ui.Widget.theme
-    ~data:
-      (Ui.Theme.material
-         ~brightness:Ui.Style.Brightness.Dark
-         ~color_seed:(Ui.Style.Color.rgb ~red:32 ~green:96 ~blue:160)
+  Ui.Material.scaffold
+    ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Bonsai Flutter Gallery") ())
+    ~floating_action_button:
+      (Ui.Material.Floating_action_button.extended
+         ~on_press:handlers.press
+         ~label:(Ui.Widget.text "New")
          ())
-    (Ui.Material.scaffold
-       ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Bonsai Flutter Gallery") ())
-       ~body
-       ())
+    ~floating_action_button_location:Ui.Material.End_docked
+    ~bottom_navigation_bar:
+      (Ui.Material.navigation_bar
+         ~selected_index:0
+         ~on_select:handlers.press
+         bottom_destinations
+         ())
+    ~bottom_sheet:
+      (Ui.Widget.sized_box
+         ~height:24.
+         (Ui.Widget.center (Ui.Widget.text "Persistent bottom sheet")))
+    ~body
+    ()
 ;;
 
 let component registry graph =

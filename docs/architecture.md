@@ -329,24 +329,42 @@ finite floats, optional values, ARGB colors, multi-field masks, and
 ValueChanged events. Version 1.2 adds revisioned TextInput properties and
 UTF-16-indexed TextEdit events while retaining earlier-minor decode
 compatibility. Version 1.3 adds typed host request/cancel/response operations,
-dynamic environment snapshots, and Navigator/Page/Overlay/MaterialDialog
+dynamic environment snapshots, and Navigator/Page/Overlay layouts with
+declarative modal presentations
 layouts. Version 1.4 adds the NativeWidget envelope, capability declarations,
 opaque typed properties, and typed native events. Later compatible minors
 extend the typed surface; current producers and consumers report protocol
-1.14. The Dart decoder's output is accepted by the same atomic `NodeStore`.
+1.21. The Dart decoder's output is accepted by the same atomic `NodeStore`.
 Checksum negotiation, the remaining widget families, and supported-platform
 packaging remain later vertical slices.
 
 The Flutter renderer implements a typed `WidgetRegistry` and per-node
 `NodeHost` for Empty, Text, Row, Column, Button, Padding, Center, ScrollView,
-Semantics, Theme, MaterialCheckbox, TextInput, Navigator, Page, Overlay, and
-MaterialDialog. Every host uses a
+Semantics, Theme, Material components, TextInput, Navigator, Page, and Overlay.
+Every host uses a
 `ValueKey<NodeId>` and subscribes only to its node. A store-level subscription
 is used only to detect root replacement. Widget tests verify that a text-only
 patch preserves unaffected ancestor elements and that Button dispatch sends
 the bound handler identity with no application logic in Dart. Semantics maps
-to Flutter's accessibility tree, Theme builds a Material `ThemeData`, scroll
-notifications remain typed, and Checkbox emits a typed bool value.
+to Flutter's accessibility tree, local Theme nodes decode the same complete
+`Theme.data` used by the application shell, scroll notifications remain typed,
+and Checkbox emits a typed bool value.
+
+Every application render result is an `App.View.t` containing one reactive
+`Theme.application` and one logical body. The OCaml driver serializes the
+application title and theme in every full snapshot and only when changed in an
+incremental frame. Dart validates that value in the same `NodeStore.prepare`
+transaction as the logical tree and publishes both in one commit.
+
+After the first valid full snapshot, `BonsaiFlutterRoot` owns the only
+framework application shell. It decodes the OCaml-supplied light, dark, and
+optional high-contrast variants into one stable `MaterialApp`, with
+`useMaterial3: true`. Missing high-contrast variants reuse the corresponding
+decoded normal variant by identity. Flutter selects among those supplied
+variants immediately for system brightness and accessibility changes; it does
+not synthesize an application theme. Before the first commit, startup and
+pre-frame errors use a minimal non-Material `Directionality` shell. Runtime
+replacement clears the previous epoch's theme before starting the new runtime.
 
 Native widgets are resolved by an application-supplied
 `NativeWidgetRegistry`. The registry validates schema ranges and declared

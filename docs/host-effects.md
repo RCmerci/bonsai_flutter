@@ -12,11 +12,15 @@ continuation.
 
 The API covers clipboard read/write, URL opening, file picking and saving,
 focus, scrolling, window title and size, native menus, haptics, platform
-information, and layout measurement. Implementations that require platform
+information, layout measurement, and snack bars. Implementations that require platform
 plugins are injected at `BonsaiFlutterRoot`; deterministic and headless tests
 do not load plugins. The built-in implementation handles Flutter-core
 clipboard, request-focus, clear-focus, scroll-to, haptic, and
-platform-information requests.
+platform-information requests. `Host_effect.show_snack_bar` is also built in:
+it waits for an attached `ScaffoldMessenger`, presents typed text with an
+optional action and duration, and completes with `Action`, `Dismiss`, `Swipe`,
+`Hide`, `Remove`, or `Timeout`. Cancelling the effect closes the matching snack
+bar without affecting unrelated requests.
 
 `BonsaiFlutterRoot` owns the `RendererResourceStore` used by both rendering and
 the built-in host implementation. `RequestFocus(node_id)` resolves the

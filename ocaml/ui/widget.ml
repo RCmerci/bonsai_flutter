@@ -43,6 +43,19 @@ type kind_tag =
   | K_material_elevated_button
   | K_material_text_button
   | K_material_icon_button
+  | K_material_filled_button
+  | K_material_filled_tonal_button
+  | K_material_outlined_button
+  | K_material_floating_action_button
+  | K_material_navigation_bar
+  | K_material_radio_group
+  | K_material_slider
+  | K_material_range_slider
+  | K_material_action_chip
+  | K_material_filter_chip
+  | K_material_choice_chip
+  | K_material_input_chip
+  | K_material_alert_dialog
   | K_material_checkbox
   | K_material_switch
   | K_material_list_tile
@@ -57,7 +70,6 @@ type kind_tag =
   | K_page
   | K_safe_area
   | K_environment_boundary
-  | K_material_dialog
   | K_native_widget
 
 let kind_tag_compare left right = Stdlib.compare left right
@@ -106,6 +118,19 @@ let kind_tag_to_string = function
   | K_material_elevated_button -> "Material_elevated_button"
   | K_material_text_button -> "Material_text_button"
   | K_material_icon_button -> "Material_icon_button"
+  | K_material_filled_button -> "Material_filled_button"
+  | K_material_filled_tonal_button -> "Material_filled_tonal_button"
+  | K_material_outlined_button -> "Material_outlined_button"
+  | K_material_floating_action_button -> "Material_floating_action_button"
+  | K_material_navigation_bar -> "Material_navigation_bar"
+  | K_material_radio_group -> "Material_radio_group"
+  | K_material_slider -> "Material_slider"
+  | K_material_range_slider -> "Material_range_slider"
+  | K_material_action_chip -> "Material_action_chip"
+  | K_material_filter_chip -> "Material_filter_chip"
+  | K_material_choice_chip -> "Material_choice_chip"
+  | K_material_input_chip -> "Material_input_chip"
+  | K_material_alert_dialog -> "Material_alert_dialog"
   | K_material_checkbox -> "Material_checkbox"
   | K_material_switch -> "Material_switch"
   | K_material_list_tile -> "Material_list_tile"
@@ -120,7 +145,6 @@ let kind_tag_to_string = function
   | K_page -> "Page"
   | K_safe_area -> "Safe_area"
   | K_environment_boundary -> "Environment_boundary"
-  | K_material_dialog -> "Material_dialog"
   | K_native_widget -> "Native_widget"
 ;;
 
@@ -146,9 +170,44 @@ type child_parent_data =
   | Stack_position of position
 
 type material_button_variant =
+  | Filled
+  | Filled_tonal
+  | Outlined
   | Elevated
   | Text_button
   | Icon_button
+
+type material_floating_action_button_location =
+  | Start_float
+  | Center_float
+  | End_float
+  | Start_docked
+  | Center_docked
+  | End_docked
+
+type material_floating_action_button_variant =
+  | Small
+  | Standard
+  | Large
+  | Extended
+
+type material_navigation_destination =
+  { label : string
+  ; enabled : bool
+  ; has_selected_icon : bool
+  }
+
+type material_radio_option =
+  { option_id : int64
+  ; enabled : bool
+  ; has_label : bool
+  }
+
+type material_chip_variant =
+  | Action
+  | Filter
+  | Choice
+  | Input
 
 module Sparse_extent_override = struct
   type t =
@@ -356,12 +415,15 @@ module Private_types = struct
         ; actions : Semantics.Action.t list
         }
         -> [ `Semantics ] node
-    | Theme :
-        { brightness : Style.Brightness.t
-        ; color_seed : int32
+    | Theme : Theme.Private.data_view -> [ `Theme ] node
+    | Material_scaffold :
+        { has_app_bar : bool
+        ; has_floating_action_button : bool
+        ; floating_action_button_location : material_floating_action_button_location
+        ; has_bottom_navigation_bar : bool
+        ; has_bottom_sheet : bool
         }
-        -> [ `Theme ] node
-    | Material_scaffold : { has_app_bar : bool } -> [ `Material_scaffold ] node
+        -> [ `Material_scaffold ] node
     | Material_app_bar : { center_title : bool } -> [ `Material_app_bar ] node
     | Material_elevated_button :
         { variant : material_button_variant
@@ -381,6 +443,114 @@ module Private_types = struct
         ; autofocus : bool
         }
         -> [ `Material_icon_button ] node
+    | Material_filled_button :
+        { variant : material_button_variant
+        ; enabled : bool
+        ; autofocus : bool
+        }
+        -> [ `Material_filled_button ] node
+    | Material_filled_tonal_button :
+        { variant : material_button_variant
+        ; enabled : bool
+        ; autofocus : bool
+        }
+        -> [ `Material_filled_tonal_button ] node
+    | Material_outlined_button :
+        { variant : material_button_variant
+        ; enabled : bool
+        ; autofocus : bool
+        }
+        -> [ `Material_outlined_button ] node
+    | Material_floating_action_button :
+        { variant : material_floating_action_button_variant
+        ; enabled : bool
+        ; autofocus : bool
+        ; has_icon : bool
+        }
+        -> [ `Material_floating_action_button ] node
+    | Material_navigation_bar :
+        { selected_index : int
+        ; destinations : material_navigation_destination list
+        }
+        -> [ `Material_navigation_bar ] node
+    | Material_radio_group :
+        { selected_id : int64 option
+        ; options : material_radio_option list
+        }
+        -> [ `Material_radio_group ] node
+    | Material_slider :
+        { value : float
+        ; min : float
+        ; max : float
+        ; divisions : int option
+        ; label : string option
+        ; enabled : bool
+        ; has_on_change : bool
+        }
+        -> [ `Material_slider ] node
+    | Material_range_slider :
+        { start : float
+        ; end_ : float
+        ; min : float
+        ; max : float
+        ; divisions : int option
+        ; label_start : string option
+        ; label_end : string option
+        ; enabled : bool
+        ; has_on_change : bool
+        }
+        -> [ `Material_range_slider ] node
+    | Material_action_chip :
+        { variant : material_chip_variant
+        ; enabled : bool
+        ; selected : bool
+        ; has_avatar : bool
+        ; has_delete_icon : bool
+        ; has_on_press : bool
+        ; has_on_selected : bool
+        ; has_on_delete : bool
+        }
+        -> [ `Material_action_chip ] node
+    | Material_filter_chip :
+        { variant : material_chip_variant
+        ; enabled : bool
+        ; selected : bool
+        ; has_avatar : bool
+        ; has_delete_icon : bool
+        ; has_on_press : bool
+        ; has_on_selected : bool
+        ; has_on_delete : bool
+        }
+        -> [ `Material_filter_chip ] node
+    | Material_choice_chip :
+        { variant : material_chip_variant
+        ; enabled : bool
+        ; selected : bool
+        ; has_avatar : bool
+        ; has_delete_icon : bool
+        ; has_on_press : bool
+        ; has_on_selected : bool
+        ; has_on_delete : bool
+        }
+        -> [ `Material_choice_chip ] node
+    | Material_input_chip :
+        { variant : material_chip_variant
+        ; enabled : bool
+        ; selected : bool
+        ; has_avatar : bool
+        ; has_delete_icon : bool
+        ; has_on_press : bool
+        ; has_on_selected : bool
+        ; has_on_delete : bool
+        }
+        -> [ `Material_input_chip ] node
+    | Material_alert_dialog :
+        { has_icon : bool
+        ; has_title : bool
+        ; has_content : bool
+        ; action_count : int
+        }
+        -> [ `Material_alert_dialog ] node
     | Material_checkbox :
         { value : bool
         ; enabled : bool
@@ -452,7 +622,6 @@ module Private_types = struct
         }
         -> [ `Safe_area ] node
     | Environment_boundary : [ `Environment_boundary ] node
-    | Material_dialog : { barrier_dismissible : bool } -> [ `Material_dialog ] node
     | Native_widget :
         { kind_id : ID.Native_widget.kind_id
         ; version : int
@@ -539,6 +708,19 @@ let node_kind_tag (type k) (n : k node) : kind_tag =
   | Material_elevated_button _ -> K_material_elevated_button
   | Material_text_button _ -> K_material_text_button
   | Material_icon_button _ -> K_material_icon_button
+  | Material_filled_button _ -> K_material_filled_button
+  | Material_filled_tonal_button _ -> K_material_filled_tonal_button
+  | Material_outlined_button _ -> K_material_outlined_button
+  | Material_floating_action_button _ -> K_material_floating_action_button
+  | Material_navigation_bar _ -> K_material_navigation_bar
+  | Material_radio_group _ -> K_material_radio_group
+  | Material_slider _ -> K_material_slider
+  | Material_range_slider _ -> K_material_range_slider
+  | Material_action_chip _ -> K_material_action_chip
+  | Material_filter_chip _ -> K_material_filter_chip
+  | Material_choice_chip _ -> K_material_choice_chip
+  | Material_input_chip _ -> K_material_input_chip
+  | Material_alert_dialog _ -> K_material_alert_dialog
   | Material_checkbox _ -> K_material_checkbox
   | Material_switch _ -> K_material_switch
   | Material_list_tile _ -> K_material_list_tile
@@ -553,7 +735,6 @@ let node_kind_tag (type k) (n : k node) : kind_tag =
   | Page _ -> K_page
   | Safe_area _ -> K_safe_area
   | Environment_boundary -> K_environment_boundary
-  | Material_dialog _ -> K_material_dialog
   | Native_widget _ -> K_native_widget
 ;;
 
@@ -691,9 +872,13 @@ let node_equal (type k1 k2) (a : k1 node) (b : k2 node) : bool =
     && Option.equal Int.equal x.heading_level y.heading_level
     && Option.equal Float.equal x.sort_key y.sort_key
     && List.equal Semantics.Action.equal x.actions y.actions
-  | Theme x, Theme y ->
-    x.brightness = y.brightness && Int32.equal x.color_seed y.color_seed
-  | Material_scaffold x, Material_scaffold y -> Bool.equal x.has_app_bar y.has_app_bar
+  | Theme x, Theme y -> x = y
+  | Material_scaffold x, Material_scaffold y ->
+    Bool.equal x.has_app_bar y.has_app_bar
+    && Bool.equal x.has_floating_action_button y.has_floating_action_button
+    && x.floating_action_button_location = y.floating_action_button_location
+    && Bool.equal x.has_bottom_navigation_bar y.has_bottom_navigation_bar
+    && Bool.equal x.has_bottom_sheet y.has_bottom_sheet
   | Material_app_bar x, Material_app_bar y -> Bool.equal x.center_title y.center_title
   | Material_elevated_button x, Material_elevated_button y ->
     x.variant = y.variant
@@ -707,6 +892,100 @@ let node_equal (type k1 k2) (a : k1 node) (b : k2 node) : bool =
     x.variant = y.variant
     && Bool.equal x.enabled y.enabled
     && Bool.equal x.autofocus y.autofocus
+  | Material_filled_button x, Material_filled_button y ->
+    x.variant = y.variant
+    && Bool.equal x.enabled y.enabled
+    && Bool.equal x.autofocus y.autofocus
+  | Material_filled_tonal_button x, Material_filled_tonal_button y ->
+    x.variant = y.variant
+    && Bool.equal x.enabled y.enabled
+    && Bool.equal x.autofocus y.autofocus
+  | Material_outlined_button x, Material_outlined_button y ->
+    x.variant = y.variant
+    && Bool.equal x.enabled y.enabled
+    && Bool.equal x.autofocus y.autofocus
+  | Material_floating_action_button x, Material_floating_action_button y ->
+    x.variant = y.variant
+    && Bool.equal x.enabled y.enabled
+    && Bool.equal x.autofocus y.autofocus
+    && Bool.equal x.has_icon y.has_icon
+  | Material_navigation_bar x, Material_navigation_bar y ->
+    Int.equal x.selected_index y.selected_index
+    && List.equal
+         (fun left right ->
+            String.equal left.label right.label
+            && Bool.equal left.enabled right.enabled
+            && Bool.equal left.has_selected_icon right.has_selected_icon)
+         x.destinations
+         y.destinations
+  | Material_radio_group x, Material_radio_group y ->
+    Option.equal Int64.equal x.selected_id y.selected_id
+    && List.equal
+         (fun left right ->
+            Int64.equal left.option_id right.option_id
+            && Bool.equal left.enabled right.enabled
+            && Bool.equal left.has_label right.has_label)
+         x.options
+         y.options
+  | Material_slider x, Material_slider y ->
+    Float.equal x.value y.value
+    && Float.equal x.min y.min
+    && Float.equal x.max y.max
+    && Option.equal Int.equal x.divisions y.divisions
+    && Option.equal String.equal x.label y.label
+    && Bool.equal x.enabled y.enabled
+    && Bool.equal x.has_on_change y.has_on_change
+  | Material_range_slider x, Material_range_slider y ->
+    Float.equal x.start y.start
+    && Float.equal x.end_ y.end_
+    && Float.equal x.min y.min
+    && Float.equal x.max y.max
+    && Option.equal Int.equal x.divisions y.divisions
+    && Option.equal String.equal x.label_start y.label_start
+    && Option.equal String.equal x.label_end y.label_end
+    && Bool.equal x.enabled y.enabled
+    && Bool.equal x.has_on_change y.has_on_change
+  | Material_action_chip x, Material_action_chip y ->
+    x.variant = y.variant
+    && Bool.equal x.enabled y.enabled
+    && Bool.equal x.selected y.selected
+    && Bool.equal x.has_avatar y.has_avatar
+    && Bool.equal x.has_delete_icon y.has_delete_icon
+    && Bool.equal x.has_on_press y.has_on_press
+    && Bool.equal x.has_on_selected y.has_on_selected
+    && Bool.equal x.has_on_delete y.has_on_delete
+  | Material_filter_chip x, Material_filter_chip y ->
+    x.variant = y.variant
+    && Bool.equal x.enabled y.enabled
+    && Bool.equal x.selected y.selected
+    && Bool.equal x.has_avatar y.has_avatar
+    && Bool.equal x.has_delete_icon y.has_delete_icon
+    && Bool.equal x.has_on_press y.has_on_press
+    && Bool.equal x.has_on_selected y.has_on_selected
+    && Bool.equal x.has_on_delete y.has_on_delete
+  | Material_choice_chip x, Material_choice_chip y ->
+    x.variant = y.variant
+    && Bool.equal x.enabled y.enabled
+    && Bool.equal x.selected y.selected
+    && Bool.equal x.has_avatar y.has_avatar
+    && Bool.equal x.has_delete_icon y.has_delete_icon
+    && Bool.equal x.has_on_press y.has_on_press
+    && Bool.equal x.has_on_selected y.has_on_selected
+    && Bool.equal x.has_on_delete y.has_on_delete
+  | Material_input_chip x, Material_input_chip y ->
+    x.variant = y.variant
+    && Bool.equal x.enabled y.enabled
+    && Bool.equal x.selected y.selected
+    && Bool.equal x.has_avatar y.has_avatar
+    && Bool.equal x.has_delete_icon y.has_delete_icon
+    && Bool.equal x.has_on_press y.has_on_press
+    && Bool.equal x.has_on_selected y.has_on_selected
+    && Bool.equal x.has_on_delete y.has_on_delete
+  | Material_alert_dialog x, Material_alert_dialog y ->
+    Bool.equal x.has_icon y.has_icon
+    && Bool.equal x.has_title y.has_title
+    && Bool.equal x.has_content y.has_content
+    && Int.equal x.action_count y.action_count
   | Material_checkbox x, Material_checkbox y ->
     Bool.equal x.value y.value && Bool.equal x.enabled y.enabled
   | Material_switch x, Material_switch y ->
@@ -760,8 +1039,6 @@ let node_equal (type k1 k2) (a : k1 node) (b : k2 node) : bool =
     && Float.equal x.minimum_top y.minimum_top
     && Float.equal x.minimum_right y.minimum_right
     && Float.equal x.minimum_bottom y.minimum_bottom
-  | Material_dialog x, Material_dialog y ->
-    Bool.equal x.barrier_dismissible y.barrier_dismissible
   | Native_widget x, Native_widget y ->
     x.kind_id = y.kind_id
     && x.version = y.version
@@ -1500,10 +1777,9 @@ let semantics ?key ?on_action ~properties child =
 ;;
 
 let theme ?key ~data child =
-  let data = Theme.Private.view data in
   create_typed
     ~key
-    ~node:(Theme { brightness = data.brightness; color_seed = data.color_seed })
+    ~node:(Theme (Theme.Private.view_data data))
     ~event_bindings:[||]
     ~children:(plain_children [ child ])
 ;;
@@ -1541,14 +1817,6 @@ let overlay ?key ?(alignment = Navigation.Center) ?(dismissible = false) childre
     ~children:(plain_children children)
 ;;
 
-let material_dialog ?key ?(barrier_dismissible = true) child =
-  create_typed
-    ~key
-    ~node:(Material_dialog { barrier_dismissible })
-    ~event_bindings:[||]
-    ~children:(plain_children [ child ])
-;;
-
 let native_widget ?key ~kind_id ~version ~capabilities ~payload ~on_event ~children () =
   create_typed
     ~key
@@ -1565,12 +1833,34 @@ let material_checkbox ?key ?(enabled = true) ~value ~on_changed () =
     ~children:[||]
 ;;
 
-let material_scaffold_widget ?key ?app_bar ~body () =
+let material_scaffold_widget
+      ?key
+      ?app_bar
+      ?floating_action_button
+      ?(floating_action_button_location = End_float)
+      ?bottom_navigation_bar
+      ?bottom_sheet
+      ~body
+      ()
+  =
   create_typed
     ~key
-    ~node:(Material_scaffold { has_app_bar = Option.is_some app_bar })
+    ~node:
+      (Material_scaffold
+         { has_app_bar = Option.is_some app_bar
+         ; has_floating_action_button = Option.is_some floating_action_button
+         ; floating_action_button_location
+         ; has_bottom_navigation_bar = Option.is_some bottom_navigation_bar
+         ; has_bottom_sheet = Option.is_some bottom_sheet
+         })
     ~event_bindings:[||]
-    ~children:(plain_children (Option.to_list app_bar @ [ body ]))
+    ~children:
+      (plain_children
+         (Option.to_list app_bar
+          @ Option.to_list floating_action_button
+          @ Option.to_list bottom_navigation_bar
+          @ Option.to_list bottom_sheet
+          @ [ body ]))
 ;;
 
 let material_app_bar ?key ?(center_title = false) ~title () =
@@ -1593,6 +1883,24 @@ let material_button
   let event_bindings = [| { tag = Event.Tag.Press; handler = on_press } |] in
   let children = plain_children [ child ] in
   match variant with
+  | Filled ->
+    create_typed
+      ~key
+      ~node:(Material_filled_button { variant; enabled; autofocus })
+      ~event_bindings
+      ~children
+  | Filled_tonal ->
+    create_typed
+      ~key
+      ~node:(Material_filled_tonal_button { variant; enabled; autofocus })
+      ~event_bindings
+      ~children
+  | Outlined ->
+    create_typed
+      ~key
+      ~node:(Material_outlined_button { variant; enabled; autofocus })
+      ~event_bindings
+      ~children
   | Elevated ->
     create_typed
       ~key
@@ -1611,6 +1919,238 @@ let material_button
       ~node:(Material_icon_button { variant; enabled; autofocus })
       ~event_bindings
       ~children
+;;
+
+let material_floating_action_button
+      ?key
+      ?(enabled = true)
+      ?(autofocus = false)
+      ~variant
+      ~on_press
+      ?icon
+      ~label
+      ()
+  =
+  if variant <> Extended && Option.is_none icon
+  then invalid_arg "Material.Floating_action_button.icon: icon is required";
+  let children =
+    if variant = Extended then Option.to_list icon @ [ label ] else Option.to_list icon
+  in
+  create_typed
+    ~key
+    ~node:
+      (Material_floating_action_button
+         { variant; enabled; autofocus; has_icon = Option.is_some icon })
+    ~event_bindings:[| { tag = Event.Tag.Press; handler = on_press } |]
+    ~children:(plain_children children)
+;;
+
+let material_navigation_bar ?key ~selected_index ~destinations ~children ~on_select () =
+  create_typed
+    ~key
+    ~node:(Material_navigation_bar { selected_index; destinations })
+    ~event_bindings:
+      [| { tag = Event.Tag.Navigation_destination_selected; handler = on_select } |]
+    ~children:(plain_children children)
+;;
+
+let material_radio_group ?key ~selected_id ~options ~children ~on_select () =
+  create_typed
+    ~key
+    ~node:(Material_radio_group { selected_id; options })
+    ~event_bindings:[| { tag = Event.Tag.Radio_selected; handler = on_select } |]
+    ~children:(plain_children children)
+;;
+
+let material_slider
+      ?key
+      ~value
+      ~min
+      ~max
+      ~divisions
+      ~label
+      ~enabled
+      ~on_change
+      ~on_change_end
+      ()
+  =
+  let event_bindings =
+    Array.of_list
+      (Option.to_list
+         (Option.map
+            (fun handler -> { tag = Event.Tag.Slider_changed; handler })
+            on_change)
+       @ [ { tag = Event.Tag.Slider_change_end; handler = on_change_end } ])
+  in
+  create_typed
+    ~key
+    ~node:
+      (Material_slider
+         { value
+         ; min
+         ; max
+         ; divisions
+         ; label
+         ; enabled
+         ; has_on_change = Option.is_some on_change
+         })
+    ~event_bindings
+    ~children:[||]
+;;
+
+let material_range_slider
+      ?key
+      ~start
+      ~end_
+      ~min
+      ~max
+      ~divisions
+      ~label_start
+      ~label_end
+      ~enabled
+      ~on_change
+      ~on_change_end
+      ()
+  =
+  let event_bindings =
+    Array.of_list
+      (Option.to_list
+         (Option.map
+            (fun handler -> { tag = Event.Tag.Range_slider_changed; handler })
+            on_change)
+       @ [ { tag = Event.Tag.Range_slider_change_end; handler = on_change_end } ])
+  in
+  create_typed
+    ~key
+    ~node:
+      (Material_range_slider
+         { start
+         ; end_
+         ; min
+         ; max
+         ; divisions
+         ; label_start
+         ; label_end
+         ; enabled
+         ; has_on_change = Option.is_some on_change
+         })
+    ~event_bindings
+    ~children:[||]
+;;
+
+let material_chip
+      ?key
+      ~variant
+      ~enabled
+      ~selected
+      ?avatar
+      ?delete_icon
+      ?on_press
+      ?on_selected
+      ?on_delete
+      ~label
+      ()
+  =
+  let has_avatar = Option.is_some avatar in
+  let has_delete_icon = Option.is_some delete_icon in
+  let has_on_press = Option.is_some on_press in
+  let has_on_selected = Option.is_some on_selected in
+  let has_on_delete = Option.is_some on_delete in
+  let event_bindings =
+    Array.of_list
+      (Option.to_list
+         (Option.map (fun handler -> { tag = Event.Tag.Press; handler }) on_press)
+       @ Option.to_list
+           (Option.map
+              (fun handler -> { tag = Event.Tag.Value_changed; handler })
+              on_selected)
+       @ Option.to_list
+           (Option.map (fun handler -> { tag = Event.Tag.Delete; handler }) on_delete))
+  in
+  let children =
+    plain_children (Option.to_list avatar @ [ label ] @ Option.to_list delete_icon)
+  in
+  match variant with
+  | Action ->
+    create_typed
+      ~key
+      ~node:
+        (Material_action_chip
+           { variant
+           ; enabled
+           ; selected
+           ; has_avatar
+           ; has_delete_icon
+           ; has_on_press
+           ; has_on_selected
+           ; has_on_delete
+           })
+      ~event_bindings
+      ~children
+  | Filter ->
+    create_typed
+      ~key
+      ~node:
+        (Material_filter_chip
+           { variant
+           ; enabled
+           ; selected
+           ; has_avatar
+           ; has_delete_icon
+           ; has_on_press
+           ; has_on_selected
+           ; has_on_delete
+           })
+      ~event_bindings
+      ~children
+  | Choice ->
+    create_typed
+      ~key
+      ~node:
+        (Material_choice_chip
+           { variant
+           ; enabled
+           ; selected
+           ; has_avatar
+           ; has_delete_icon
+           ; has_on_press
+           ; has_on_selected
+           ; has_on_delete
+           })
+      ~event_bindings
+      ~children
+  | Input ->
+    create_typed
+      ~key
+      ~node:
+        (Material_input_chip
+           { variant
+           ; enabled
+           ; selected
+           ; has_avatar
+           ; has_delete_icon
+           ; has_on_press
+           ; has_on_selected
+           ; has_on_delete
+           })
+      ~event_bindings
+      ~children
+;;
+
+let material_alert_dialog ?key ?icon ?title ?content ~actions () =
+  create_typed
+    ~key
+    ~node:
+      (Material_alert_dialog
+         { has_icon = Option.is_some icon
+         ; has_title = Option.is_some title
+         ; has_content = Option.is_some content
+         ; action_count = List.length actions
+         })
+    ~event_bindings:[||]
+    ~children:
+      (plain_children
+         (Option.to_list icon @ Option.to_list title @ Option.to_list content @ actions))
 ;;
 
 let material_switch ?key ?(enabled = true) ~value ~on_changed () =
@@ -2129,8 +2669,25 @@ module Body = struct
   end
 end
 
-let material_scaffold ?key ?app_bar ~body () =
-  material_scaffold_widget ?key ?app_bar ~body:(Body.Private.to_widget body) ()
+let material_scaffold
+      ?key
+      ?app_bar
+      ?floating_action_button
+      ?floating_action_button_location
+      ?bottom_navigation_bar
+      ?bottom_sheet
+      ~body
+      ()
+  =
+  material_scaffold_widget
+    ?key
+    ?app_bar
+    ?floating_action_button
+    ?floating_action_button_location
+    ?bottom_navigation_bar
+    ?bottom_sheet
+    ~body:(Body.Private.to_widget body)
+    ()
 ;;
 
 module For_testing = struct
@@ -2206,6 +2763,19 @@ module Private = struct
     | K_material_elevated_button
     | K_material_text_button
     | K_material_icon_button
+    | K_material_filled_button
+    | K_material_filled_tonal_button
+    | K_material_outlined_button
+    | K_material_floating_action_button
+    | K_material_navigation_bar
+    | K_material_radio_group
+    | K_material_slider
+    | K_material_range_slider
+    | K_material_action_chip
+    | K_material_filter_chip
+    | K_material_choice_chip
+    | K_material_input_chip
+    | K_material_alert_dialog
     | K_material_checkbox
     | K_material_switch
     | K_material_list_tile
@@ -2220,7 +2790,6 @@ module Private = struct
     | K_page
     | K_safe_area
     | K_environment_boundary
-    | K_material_dialog
     | K_native_widget
 
   let kind_tag_compare = kind_tag_compare
@@ -2249,9 +2818,46 @@ module Private = struct
     | Stack_position of position
 
   type nonrec material_button_variant = material_button_variant =
+    | Filled
+    | Filled_tonal
+    | Outlined
     | Elevated
     | Text_button
     | Icon_button
+
+  type nonrec material_floating_action_button_location =
+        material_floating_action_button_location =
+    | Start_float
+    | Center_float
+    | End_float
+    | Start_docked
+    | Center_docked
+    | End_docked
+
+  type nonrec material_floating_action_button_variant =
+        material_floating_action_button_variant =
+    | Small
+    | Standard
+    | Large
+    | Extended
+
+  type nonrec material_navigation_destination = material_navigation_destination =
+    { label : string
+    ; enabled : bool
+    ; has_selected_icon : bool
+    }
+
+  type nonrec material_radio_option = material_radio_option =
+    { option_id : int64
+    ; enabled : bool
+    ; has_label : bool
+    }
+
+  type nonrec material_chip_variant = material_chip_variant =
+    | Action
+    | Filter
+    | Choice
+    | Input
 
   include Private_types
 
@@ -2280,6 +2886,13 @@ module Private = struct
   let material_scaffold = material_scaffold
   let material_app_bar = material_app_bar
   let material_button = material_button
+  let material_floating_action_button = material_floating_action_button
+  let material_navigation_bar = material_navigation_bar
+  let material_radio_group = material_radio_group
+  let material_slider = material_slider
+  let material_range_slider = material_range_slider
+  let material_chip = material_chip
+  let material_alert_dialog = material_alert_dialog
   let material_switch = material_switch
   let material_list_tile = material_list_tile
   let material_divider = material_divider

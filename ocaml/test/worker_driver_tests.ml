@@ -112,7 +112,7 @@ let make_component client log =
 
 let create_driver ~runtime_epoch client log =
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
-  Driver.create
+  Driver.For_testing.create_widget_component
     ~runtime_epoch
     ~time_source
     ~before_flush:(fun ~schedule ->

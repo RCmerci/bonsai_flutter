@@ -156,9 +156,67 @@ module Modal_bottom_sheet = struct
   end
 end
 
+module Modal_dialog = struct
+  type t =
+    { barrier_dismissible : bool
+    ; barrier_color : Style.Color.t option
+    ; barrier_label : string option
+    ; use_safe_area : bool
+    ; request_focus : bool
+    ; transition_duration_ms : int
+    ; reverse_transition_duration_ms : int
+    }
+
+  let validate_duration label value =
+    if value < 0 || Int64.compare (Int64.of_int value) 0xffff_ffffL > 0
+    then
+      invalid_arg
+        (Printf.sprintf
+           "Navigation.Modal_dialog.create: %s must fit an unsigned 32-bit integer"
+           label)
+  ;;
+
+  let create
+        ?(barrier_dismissible = true)
+        ?barrier_color
+        ?barrier_label
+        ?(use_safe_area = true)
+        ?(request_focus = true)
+        ?(transition_duration_ms = 150)
+        ?(reverse_transition_duration_ms = 75)
+        ()
+    =
+    validate_duration "transition_duration_ms" transition_duration_ms;
+    validate_duration "reverse_transition_duration_ms" reverse_transition_duration_ms;
+    { barrier_dismissible
+    ; barrier_color
+    ; barrier_label
+    ; use_safe_area
+    ; request_focus
+    ; transition_duration_ms
+    ; reverse_transition_duration_ms
+    }
+  ;;
+
+  module Private = struct
+    type view = t =
+      { barrier_dismissible : bool
+      ; barrier_color : Style.Color.t option
+      ; barrier_label : string option
+      ; use_safe_area : bool
+      ; request_focus : bool
+      ; transition_duration_ms : int
+      ; reverse_transition_duration_ms : int
+      }
+
+    let view t = t
+  end
+end
+
 type page_presentation =
   | Standard of page_transition
   | Modal_bottom_sheet of Modal_bottom_sheet.t
+  | Modal_dialog of Modal_dialog.t
 
 type overlay_alignment =
   | Top_start

@@ -1,3 +1,4 @@
+import 'fixture.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' show PointerDeviceKind;
@@ -319,6 +320,10 @@ void main() {
           targetRevision: 1,
           kind: FrameKind.fullSnapshot,
           operations: [
+            const SetApplicationTheme(
+              title: 'Test',
+              theme: testApplicationTheme,
+            ),
             CreateNode(
               nodeId: 1,
               kind: NodeKind.nativeWidget,
@@ -471,6 +476,10 @@ void main() {
           targetRevision: 1,
           kind: FrameKind.fullSnapshot,
           operations: [
+            const SetApplicationTheme(
+              title: 'Test',
+              theme: testApplicationTheme,
+            ),
             CreateNode(
               nodeId: 1,
               kind: NodeKind.nativeWidget,

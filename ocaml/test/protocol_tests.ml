@@ -53,6 +53,80 @@ let fixture_named name =
 
 let fixture () = fixture_named "counter_full.hex"
 
+let counter_theme_data
+      brightness
+      variant
+      contrast_level
+      typography
+      shape
+      visual_density
+      tap_target_size
+  : Wire_frame.theme_data
+  =
+  { brightness
+  ; color_scheme = { seed_argb = 0xff6750a4l; variant; contrast_level }
+  ; typography
+  ; shape
+  ; visual_density
+  ; tap_target_size
+  }
+;;
+
+let empty_theme_typography : Wire_frame.theme_typography =
+  { font_family = None
+  ; font_family_fallback = []
+  ; display_large = None
+  ; display_medium = None
+  ; display_small = None
+  ; headline_large = None
+  ; headline_medium = None
+  ; headline_small = None
+  ; title_large = None
+  ; title_medium = None
+  ; title_small = None
+  ; body_large = None
+  ; body_medium = None
+  ; body_small = None
+  ; label_large = None
+  ; label_medium = None
+  ; label_small = None
+  }
+;;
+
+let counter_theme_operation =
+  let light =
+    counter_theme_data
+      Light
+      Tonal_spot
+      0.
+      empty_theme_typography
+      { extra_small = 4.; small = 8.; medium = 12.; large = 16.; extra_large = 28. }
+      Adaptive
+      Padded
+  in
+  let dark_typography = { empty_theme_typography with font_family = Some "Inter" } in
+  let dark =
+    counter_theme_data
+      Dark
+      Fidelity
+      0.5
+      dark_typography
+      { extra_small = 2.; small = 6.; medium = 10.; large = 14.; extra_large = 24. }
+      Compact
+      Shrink_wrap
+  in
+  Wire_frame.Set_application_theme
+    { title = Some "Counter"
+    ; theme =
+        { mode = System
+        ; light
+        ; dark
+        ; high_contrast_light = None
+        ; high_contrast_dark = None
+        }
+    }
+;;
+
 let counter_frame =
   Wire_frame.
     { runtime_epoch = epoch 7L
@@ -60,7 +134,8 @@ let counter_frame =
     ; target_revision = revision 1L
     ; kind = Full_snapshot
     ; operations =
-        [ Create_node
+        [ counter_theme_operation
+        ; Create_node
             { node_id = node 1L
             ; kind = Column
             ; props = Linear_props
@@ -85,6 +160,150 @@ let counter_frame =
         ; Set_root (node 1L)
         ]
     }
+;;
+
+let theme_text_style ?font_size ?font_weight ?line_height ?color ()
+  : Wire_frame.theme_text_style
+  =
+  { font_size; font_weight; line_height; color }
+;;
+
+let theme_data ~brightness ~variant ~contrast_level : Wire_frame.theme_data =
+  { brightness
+  ; color_scheme = { seed_argb = 0xff6750a4l; variant; contrast_level }
+  ; typography =
+      { font_family = Some "Inter"
+      ; font_family_fallback = [ "Noto Sans"; "sans-serif" ]
+      ; display_large = Some (theme_text_style ~font_size:57. ~line_height:1.12 ())
+      ; display_medium = None
+      ; display_small = None
+      ; headline_large = None
+      ; headline_medium = Some (theme_text_style ~font_size:28. ())
+      ; headline_small = None
+      ; title_large = None
+      ; title_medium = None
+      ; title_small = Some (theme_text_style ~font_weight:Semi_bold ())
+      ; body_large = Some (theme_text_style ~font_size:16. ())
+      ; body_medium = None
+      ; body_small = None
+      ; label_large = None
+      ; label_medium = None
+      ; label_small = Some (theme_text_style ~font_size:11. ())
+      }
+  ; shape = { extra_small = 4.; small = 8.; medium = 12.; large = 16.; extra_large = 28. }
+  ; visual_density = Adaptive
+  ; tap_target_size = Padded
+  }
+;;
+
+let test_application_theme_round_trip () =
+  let light = theme_data ~brightness:Light ~variant:Tonal_spot ~contrast_level:0. in
+  let dark = theme_data ~brightness:Dark ~variant:Fidelity ~contrast_level:0.5 in
+  let application_theme : Wire_frame.application_theme =
+    { mode = System
+    ; light
+    ; dark
+    ; high_contrast_light = Some light
+    ; high_contrast_dark = Some dark
+    }
+  in
+  let frame =
+    Wire_frame.
+      { runtime_epoch = epoch 91L
+      ; base_revision = revision 0L
+      ; target_revision = revision 1L
+      ; kind = Full_snapshot
+      ; operations =
+          [ Set_application_theme { title = Some "Theme test"; theme = application_theme }
+          ; Create_node
+              { node_id = node 1L
+              ; kind = Text
+              ; props =
+                  Text_props
+                    { value = "body"
+                    ; style = None
+                    ; text_align = Start
+                    ; max_lines = None
+                    ; overflow = Clip_text
+                    }
+              ; event_bindings = []
+              ; parent_data = No_parent_data
+              }
+          ; Set_root (node 1L)
+          ]
+      }
+  in
+  match Binary_codec.encode frame with
+  | Error error -> fail "application theme encode failed: %s" error.message
+  | Ok encoded ->
+    (match Binary_codec.decode encoded with
+     | Error error -> fail "application theme decode failed: %s" error.message
+     | Ok decoded ->
+       if decoded <> frame
+       then (
+         match decoded.operations with
+         | Set_application_theme decoded_theme :: _ ->
+           let expect_data
+                 label
+                 (decoded : Wire_frame.theme_data)
+                 (expected : Wire_frame.theme_data)
+             =
+             expect
+               (decoded.brightness = expected.brightness)
+               "%s brightness changed"
+               label;
+             expect
+               (decoded.color_scheme.seed_argb = expected.color_scheme.seed_argb)
+               "%s seed changed: expected %lx, got %lx"
+               label
+               expected.color_scheme.seed_argb
+               decoded.color_scheme.seed_argb;
+             expect
+               (decoded.color_scheme.variant = expected.color_scheme.variant)
+               "%s variant changed"
+               label;
+             expect
+               (decoded.color_scheme.contrast_level = expected.color_scheme.contrast_level)
+               "%s contrast changed"
+               label;
+             expect
+               (decoded.typography = expected.typography)
+               "%s typography changed"
+               label;
+             expect (decoded.shape = expected.shape) "%s shape changed" label;
+             expect
+               (decoded.visual_density = expected.visual_density)
+               "%s visual density changed"
+               label;
+             expect
+               (decoded.tap_target_size = expected.tap_target_size)
+               "%s tap target size changed"
+               label
+           in
+           expect
+             (decoded_theme.title = Some "Theme test")
+             "application theme title changed";
+           expect
+             (decoded_theme.theme.mode = application_theme.mode)
+             "application theme mode changed";
+           expect_data
+             "application light theme"
+             decoded_theme.theme.light
+             application_theme.light;
+           expect_data
+             "application dark theme"
+             decoded_theme.theme.dark
+             application_theme.dark;
+           expect
+             (decoded_theme.theme.high_contrast_light
+              = application_theme.high_contrast_light)
+             "application high contrast light theme changed";
+           expect
+             (decoded_theme.theme.high_contrast_dark
+              = application_theme.high_contrast_dark)
+             "application high contrast dark theme changed";
+           fail "application theme frame structure changed"
+         | _ -> fail "application theme operation changed"))
 ;;
 
 let test_golden_fixture () =
@@ -162,7 +381,16 @@ let test_styled_text_props_round_trip () =
 let test_legacy_text_props_layout () =
   match Binary_codec.decode (fixture_named "legacy_1_12_counter_full.hex") with
   | Error error -> fail "legacy text frame decode failed: %s" error.message
-  | Ok decoded -> expect (decoded = counter_frame) "legacy text frame changed on decode"
+  | Ok decoded ->
+    let expected =
+      { counter_frame with
+        operations =
+          (match counter_frame.operations with
+           | Set_application_theme _ :: operations -> operations
+           | _ -> fail "current Counter frame is missing its application theme")
+      }
+    in
+    expect (decoded = expected) "legacy text frame changed on decode"
 ;;
 
 let test_animation_props_round_trip () =
@@ -456,7 +684,7 @@ let test_layout_material_and_semantics_props_round_trip () =
               ; kind = Theme
               ; props =
                   Theme_props
-                    { brightness = Dark; color_seed = Int32.of_string "0xff2060a0" }
+                    (theme_data ~brightness:Dark ~variant:Fidelity ~contrast_level:0.)
               ; event_bindings = []
               ; parent_data = No_parent_data
               }
@@ -1551,8 +1779,165 @@ let test_sliver_app_bar_codec_validation () =
     ]
 ;;
 
+let test_complete_material_protocol_round_trip () =
+  let open Wire_frame in
+  let modal_dialog =
+    Page_props
+      { page_key = ID.Navigation.Page_key.of_string "confirm"
+      ; presentation =
+          Modal_dialog
+            { barrier_dismissible = false
+            ; barrier_color_argb = Some 0x7f000000l
+            ; barrier_label = Some "Close confirmation"
+            ; use_safe_area = true
+            ; request_focus = true
+            ; transition_duration_ms = 180
+            ; reverse_transition_duration_ms = 120
+            }
+      ; can_pop = true
+      ; restoration_id = Some (ID.Navigation.Restoration_id.of_string "confirm-dialog")
+      }
+  in
+  let props =
+    [ Material_scaffold_props
+        { has_app_bar = true
+        ; has_floating_action_button = true
+        ; floating_action_button_location = End_docked
+        ; has_bottom_navigation_bar = true
+        ; has_bottom_sheet = true
+        }
+    ; Material_button_props { variant = Filled_tonal; enabled = true; autofocus = false }
+    ; Material_floating_action_button_props
+        { variant = Extended; enabled = true; autofocus = false; has_icon = true }
+    ; Material_navigation_bar_props
+        { selected_index = 0
+        ; destinations =
+            [ { label = "Home"; enabled = true; has_selected_icon = true }
+            ; { label = "Settings"; enabled = false; has_selected_icon = false }
+            ]
+        }
+    ; Material_alert_dialog_props
+        { has_icon = true; has_title = true; has_content = true; action_count = 2 }
+    ; Material_radio_group_props
+        { selected_id = Some (-7L)
+        ; options =
+            [ { option_id = -7L; enabled = true; has_label = true }
+            ; { option_id = 9L; enabled = false; has_label = false }
+            ]
+        }
+    ; Material_slider_props
+        { value = 0.25
+        ; min = 0.
+        ; max = 1.
+        ; divisions = Some 4
+        ; label = Some "Quarter"
+        ; enabled = true
+        ; has_on_change = true
+        }
+    ; Material_range_slider_props
+        { start = 0.2
+        ; end_ = 0.8
+        ; min = 0.
+        ; max = 1.
+        ; divisions = None
+        ; label_start = None
+        ; label_end = None
+        ; enabled = true
+        ; has_on_change = false
+        }
+    ; Material_chip_props
+        { variant = Input_chip
+        ; enabled = true
+        ; selected = true
+        ; has_avatar = true
+        ; has_delete_icon = true
+        ; has_on_press = true
+        ; has_on_selected = true
+        ; has_on_delete = true
+        }
+    ; modal_dialog
+    ]
+  in
+  let operations =
+    List.mapi
+      (fun index props ->
+         Update_props { node_id = node (Int64.of_int (index + 1)); props })
+      props
+    @ [ Host_request
+          { request_id = request 91L
+          ; payload =
+              Show_snack_bar
+                { message = "Saved"; action_label = Some "Undo"; duration_ms = 1500 }
+          }
+      ]
+  in
+  List.iteri
+    (fun index props ->
+       expect_frame_round_trip
+         (Printf.sprintf "complete Material props %d" index)
+         { runtime_epoch = epoch 77L
+         ; base_revision = revision 1L
+         ; target_revision = revision 2L
+         ; kind = Incremental_frame
+         ; operations = [ Update_props { node_id = node 1L; props } ]
+         })
+    props;
+  let frame =
+    { runtime_epoch = epoch 77L
+    ; base_revision = revision 1L
+    ; target_revision = revision 2L
+    ; kind = Incremental_frame
+    ; operations
+    }
+  in
+  match Binary_codec.encode frame with
+  | Error error -> fail "complete Material encode failed: %s" error.message
+  | Ok encoded ->
+    (match Binary_codec.decode encoded with
+     | Error error -> fail "complete Material decode failed: %s" error.message
+     | Ok decoded ->
+       expect (decoded = frame) "complete Material protocol round trip changed")
+;;
+
+let test_material_typed_event_payload_round_trip () =
+  let open Inbound_event in
+  let events =
+    [ Generated_protocol.Event_tag.navigation_destination_selected, Int64 2L
+    ; Generated_protocol.Event_tag.radio_selected, Int64 (-9L)
+    ; Generated_protocol.Event_tag.slider_changed, Float 0.25
+    ; Generated_protocol.Event_tag.slider_change_end, Float 0.75
+    ; ( Generated_protocol.Event_tag.range_slider_changed
+      , Float_range { start = 0.1; end_ = 0.9 } )
+    ; ( Generated_protocol.Event_tag.range_slider_change_end
+      , Float_range { start = 0.2; end_ = 0.8 } )
+    ]
+  in
+  let batch =
+    { runtime_epoch = epoch 77L
+    ; events =
+        List.mapi
+          (fun index (event_tag, payload) ->
+             { sequence = sequence (Int64.of_int (index + 1))
+             ; displayed_revision = revision 2L
+             ; node_id = node 1L
+             ; handler_id = handler (Int64.of_int (index + 10))
+             ; event_tag
+             ; payload
+             })
+          events
+    }
+  in
+  match Event_batch_codec.encode batch with
+  | Error error -> fail "Material event encode failed: %s" error.message
+  | Ok encoded ->
+    (match Event_batch_codec.decode encoded with
+     | Error error -> fail "Material event decode failed: %s" error.message
+     | Ok decoded -> expect (decoded = batch) "Material typed event round trip changed")
+;;
+
 let () =
   test_golden_fixture ();
+  test_application_theme_round_trip ();
   test_round_trip ();
   test_styled_text_props_round_trip ();
   test_legacy_text_props_layout ();
@@ -1587,5 +1972,7 @@ let () =
   test_virtual_sliver_invariant_validation ();
   test_scroll_view_cache_extent_validation ();
   test_sliver_app_bar_codec_validation ();
+  test_complete_material_protocol_round_trip ();
+  test_material_typed_event_payload_round_trip ();
   print_endline "protocol tests passed"
 ;;

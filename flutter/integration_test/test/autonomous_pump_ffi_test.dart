@@ -43,11 +43,9 @@ Future<RuntimeClient> _mountAutonomousFixture(WidgetTester tester) async {
   );
   if (runtime == null) throw StateError('runtime startup returned null');
   await tester.pumpWidget(
-    MaterialApp(
-      home: BonsaiFlutterRoot(
-        config: Uint8List.fromList(utf8.encode('autonomous_pump')),
-        runtimeStarter: (_) async => runtime,
-      ),
+    BonsaiFlutterRoot(
+      config: Uint8List.fromList(utf8.encode('autonomous_pump')),
+      runtimeStarter: (_) async => runtime,
     ),
   );
   return runtime;

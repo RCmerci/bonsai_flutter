@@ -79,6 +79,71 @@ void main() {
       expect(decoded.events[2].payload, batch.events[2].payload);
     });
 
+    test('round trips typed Material selection and slider payloads', () {
+      const payloads = <(int, EventPayload)>[
+        (EventTagId.navigationDestinationSelected, Int64EventPayload(2)),
+        (EventTagId.radioSelected, Int64EventPayload(-9)),
+        (EventTagId.sliderChanged, FloatEventPayload(0.25)),
+        (EventTagId.sliderChangeEnd, FloatEventPayload(0.75)),
+        (
+          EventTagId.rangeSliderChanged,
+          FloatRangeEventPayload(start: 0.1, end: 0.9),
+        ),
+        (
+          EventTagId.rangeSliderChangeEnd,
+          FloatRangeEventPayload(start: 0.2, end: 0.8),
+        ),
+      ];
+      final batch = EventBatch(
+        runtimeEpoch: 21,
+        events: [
+          for (var index = 0; index < payloads.length; index += 1)
+            UiEvent(
+              sequence: index + 1,
+              displayedRevision: 4,
+              nodeId: 8,
+              handlerId: index + 20,
+              eventTag: payloads[index].$1,
+              payload: payloads[index].$2,
+            ),
+        ],
+      );
+
+      final decoded = EventBatchCodec.decode(EventBatchCodec.encode(batch));
+
+      expect(
+        decoded.events.map((event) => event.payload),
+        payloads.map((item) => item.$2),
+      );
+    });
+
+    test('rejects non-finite Material slider payloads', () {
+      final batch = EventBatch(
+        runtimeEpoch: 21,
+        events: const [
+          UiEvent(
+            sequence: 1,
+            displayedRevision: 4,
+            nodeId: 8,
+            handlerId: 20,
+            eventTag: EventTagId.sliderChanged,
+            payload: FloatEventPayload(double.nan),
+          ),
+        ],
+      );
+
+      expect(
+        () => EventBatchCodec.encode(batch),
+        throwsA(
+          isA<ProtocolException>().having(
+            (error) => error.code,
+            'code',
+            ProtocolErrorCode.invalidProps,
+          ),
+        ),
+      );
+    });
+
     test('matches the shared Counter press fixture byte for byte', () {
       final batch = EventBatch(
         runtimeEpoch: 21,

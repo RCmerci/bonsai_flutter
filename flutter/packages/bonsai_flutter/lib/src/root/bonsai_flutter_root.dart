@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' show FrameTiming;
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 import '../application_platform/application_platform.dart';
 import '../application_platform/application_platform_dispatcher.dart';
@@ -12,6 +12,7 @@ import '../host_effects/host_effect_dispatcher.dart';
 import '../protocol/binary_codec.dart';
 import '../protocol/frame.dart';
 import '../renderer/node_host.dart';
+import '../renderer/application_theme.dart';
 import '../renderer/renderer_resource_store.dart';
 import '../renderer/widget_registry.dart';
 import '../runtime/event_batch_queue.dart';
@@ -64,6 +65,25 @@ final class _PendingPresentation {
   bool postFrameArmed = false;
 }
 
+final class _DecodedApplicationTheme {
+  _DecodedApplicationTheme(ApplicationThemeValue source)
+    : source = source,
+      light = decodeThemeData(source.light),
+      dark = decodeThemeData(source.dark),
+      highContrastLight = source.highContrastLight == null
+          ? null
+          : decodeThemeData(source.highContrastLight!),
+      highContrastDark = source.highContrastDark == null
+          ? null
+          : decodeThemeData(source.highContrastDark!);
+
+  final ApplicationThemeValue source;
+  final ThemeData light;
+  final ThemeData dark;
+  final ThemeData? highContrastLight;
+  final ThemeData? highContrastDark;
+}
+
 final class _BonsaiFlutterRootState extends State<BonsaiFlutterRoot> {
   RuntimeSession? _runtime;
   StreamSubscription<RuntimeUpdate>? _runtimeUpdates;
@@ -72,19 +92,30 @@ final class _BonsaiFlutterRootState extends State<BonsaiFlutterRoot> {
   EventBatchQueue? _events;
   HostEffectDispatcher? _hostEffects;
   ApplicationPlatformDispatcher? _applicationPlatform;
-  final RendererResourceStore _resources = RendererResourceStore();
+  RendererResourceStore _resources = RendererResourceStore();
   CycleReady? _heldCycle;
   _PendingPresentation? _pendingPresentation;
   Object? _error;
   bool _eligible = true;
   bool _disposed = false;
   int _displayedRevision = 0;
+  int _runtimeGeneration = 0;
+  _DecodedApplicationTheme? _decodedApplicationTheme;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addTimingsCallback(_recordFrameTimings);
     unawaited(_start());
+  }
+
+  @override
+  void didUpdateWidget(covariant BonsaiFlutterRoot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_bytesEqual(widget.config, oldWidget.config) ||
+        !identical(widget.runtimeStarter, oldWidget.runtimeStarter)) {
+      unawaited(_replaceRuntime());
+    }
   }
 
   @override
@@ -103,11 +134,12 @@ final class _BonsaiFlutterRootState extends State<BonsaiFlutterRoot> {
     super.dispose();
   }
 
-  Future<void> _start() async {
+  Future<void> _start({int? generation}) async {
+    final expectedGeneration = generation ?? _runtimeGeneration;
     RuntimeSession? runtime;
     try {
       runtime = await widget.runtimeStarter(Uint8List.fromList(widget.config));
-      if (_disposed) {
+      if (_disposed || expectedGeneration != _runtimeGeneration) {
         await runtime.dispose();
         return;
       }
@@ -152,6 +184,38 @@ final class _BonsaiFlutterRootState extends State<BonsaiFlutterRoot> {
       }
       _reportError(error, stackTrace);
     }
+  }
+
+  Future<void> _replaceRuntime() async {
+    final generation = ++_runtimeGeneration;
+    final runtimeUpdates = _runtimeUpdates;
+    final runtime = _runtime;
+    final hostEffects = _hostEffects;
+    final applicationPlatform = _applicationPlatform;
+    final resources = _resources;
+    _frameLoop?.dispose();
+    _frameLoop = null;
+    _runtimeUpdates = null;
+    _runtime = null;
+    _hostEffects = null;
+    _applicationPlatform = null;
+    _store = null;
+    _events = null;
+    _heldCycle = null;
+    _pendingPresentation = null;
+    _error = null;
+    _displayedRevision = 0;
+    _eligible = true;
+    _decodedApplicationTheme = null;
+    _resources = RendererResourceStore();
+    if (mounted) setState(() {});
+    unawaited(_start(generation: generation));
+    final runtimeDisposal = runtime?.dispose();
+    await runtimeUpdates?.cancel();
+    if (runtimeDisposal != null) await runtimeDisposal;
+    if (hostEffects != null) await hostEffects.dispose();
+    if (applicationPlatform != null) await applicationPlatform.dispose();
+    resources.dispose();
   }
 
   void _onBeginFrame(int generation, Duration _) {
@@ -385,22 +449,54 @@ final class _BonsaiFlutterRootState extends State<BonsaiFlutterRoot> {
   @override
   Widget build(BuildContext context) {
     final error = _error;
-    if (error != null) {
-      return widget.errorBuilder?.call(context, error) ??
-          Text('Bonsai runtime error: $error');
-    }
     final store = _store;
     if (store == null) {
-      return widget.loading ?? const SizedBox.shrink();
+      final child = error == null
+          ? widget.loading ?? const SizedBox.shrink()
+          : widget.errorBuilder?.call(context, error) ??
+                Text('Bonsai runtime error: $error');
+      return Directionality(textDirection: TextDirection.ltr, child: child);
     }
-    return EnvironmentReporter(
-      onEvent: _onEvent,
-      child: BonsaiFlutterView(
-        store: store,
-        registry: widget.registry,
-        onEvent: _onEvent,
-        resourceStore: _resources,
-      ),
+    final applicationTheme = store.applicationTheme!;
+    var decodedApplicationTheme = _decodedApplicationTheme;
+    if (decodedApplicationTheme == null ||
+        decodedApplicationTheme.source != applicationTheme) {
+      decodedApplicationTheme = _DecodedApplicationTheme(applicationTheme);
+      _decodedApplicationTheme = decodedApplicationTheme;
+    }
+    final light = decodedApplicationTheme.light;
+    final dark = decodedApplicationTheme.dark;
+    final highContrastLight =
+        decodedApplicationTheme.highContrastLight ?? light;
+    final highContrastDark = decodedApplicationTheme.highContrastDark ?? dark;
+    final home = error == null
+        ? EnvironmentReporter(
+            onEvent: _onEvent,
+            child: BonsaiFlutterView(
+              store: store,
+              registry: widget.registry,
+              onEvent: _onEvent,
+              resourceStore: _resources,
+            ),
+          )
+        : widget.errorBuilder?.call(context, error) ??
+              Text('Bonsai runtime error: $error');
+    return MaterialApp(
+      title: store.applicationTitle ?? '',
+      theme: light,
+      darkTheme: dark,
+      highContrastTheme: highContrastLight,
+      highContrastDarkTheme: highContrastDark,
+      themeMode: decodeApplicationThemeMode(applicationTheme.mode),
+      home: home,
     );
   }
+}
+
+bool _bytesEqual(Uint8List left, Uint8List right) {
+  if (left.length != right.length) return false;
+  for (var index = 0; index < left.length; index += 1) {
+    if (left[index] != right[index]) return false;
+  }
+  return true;
 }

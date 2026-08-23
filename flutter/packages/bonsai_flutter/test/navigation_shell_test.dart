@@ -1,3 +1,4 @@
+import 'fixture.dart';
 import 'dart:typed_data';
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
@@ -456,6 +457,10 @@ final class _ShellFixture {
           targetRevision: 1,
           kind: FrameKind.fullSnapshot,
           operations: [
+            const SetApplicationTheme(
+              title: 'Test',
+              theme: testApplicationTheme,
+            ),
             CreateNode(
               nodeId: 1,
               kind: NodeKind.nativeWidget,

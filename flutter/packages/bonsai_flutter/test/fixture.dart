@@ -3,12 +3,57 @@ import 'dart:typed_data';
 
 import 'package:bonsai_flutter/src/protocol/frame.dart';
 
+const testLightThemeData = ThemeDataValue(
+  brightness: ThemeBrightness.light,
+  colorScheme: ThemeColorSchemeValue(
+    seedArgb: 0xff6750a4,
+    variant: ThemeDynamicVariant.tonalSpot,
+    contrastLevel: 0,
+  ),
+  typography: ThemeTypographyValue(),
+  shape: ThemeShapeValue(
+    extraSmall: 4,
+    small: 8,
+    medium: 12,
+    large: 16,
+    extraLarge: 28,
+  ),
+  visualDensity: ThemeVisualDensity.adaptive,
+  tapTargetSize: ThemeTapTargetSize.padded,
+);
+
+const testDarkThemeData = ThemeDataValue(
+  brightness: ThemeBrightness.dark,
+  colorScheme: ThemeColorSchemeValue(
+    seedArgb: 0xff6750a4,
+    variant: ThemeDynamicVariant.fidelity,
+    contrastLevel: 0.5,
+  ),
+  typography: ThemeTypographyValue(fontFamily: 'Inter'),
+  shape: ThemeShapeValue(
+    extraSmall: 2,
+    small: 6,
+    medium: 10,
+    large: 14,
+    extraLarge: 24,
+  ),
+  visualDensity: ThemeVisualDensity.compact,
+  tapTargetSize: ThemeTapTargetSize.shrinkWrap,
+);
+
+const testApplicationTheme = ApplicationThemeValue(
+  mode: ApplicationThemeMode.system,
+  light: testLightThemeData,
+  dark: testDarkThemeData,
+);
+
 Frame counterSnapshot({required String text}) => Frame(
   runtimeEpoch: 7,
   baseRevision: 0,
   targetRevision: 1,
   kind: FrameKind.fullSnapshot,
   operations: [
+    const SetApplicationTheme(title: 'Counter', theme: testApplicationTheme),
     const CreateNode(
       nodeId: 1,
       kind: NodeKind.column,

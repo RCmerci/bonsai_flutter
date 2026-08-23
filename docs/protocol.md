@@ -91,6 +91,7 @@ The implemented widget slice uses these bodies:
 | `Set_children` | `node_id:u64`, count `u32`, child IDs |
 | `Set_root`, `Drop_node` | `node_id:u64` |
 | `Host_request` | `request_id:u64`, request kind `u16`, typed request body |
+| `Set_application_theme` | optional application title plus one structured application-theme value |
 
 Request kind zero inside `Host_request` is `CancelHostRequest` and carries no
 body after the request ID. Other request kinds use generated constants.
@@ -109,19 +110,31 @@ implemented kind-specific property layouts are:
 | Center | `width_factor:optional f64`, `height_factor:optional f64` |
 | ScrollView | `axis:u8`, `reverse:bool` |
 | Semantics | `label:optional string`, `button:bool`, `enabled:optional bool`, `checked:optional bool` |
-| Theme | `brightness:u8`, `color_seed:u32 ARGB` |
+| Theme | one structured `theme_data` value used only as a subtree override |
 | MaterialCheckbox | `value:bool`, `enabled:bool` |
 | TextInput | `session_id:u64`, `document_revision:u64`, editing value, three bool flags, keyboard type, input action, `accepted_local_revision:u64`, update mode, `autofocus:bool` |
 | Overlay | `alignment:u8`, `dismissible:bool` |
 | Navigator | `restoration_scope_id:optional string` |
 | Page | `page_key:string`, standard transition `u8`, `can_pop:bool`, `restoration_id:optional string`, presentation `u8`, typed modal flags and values |
-| MaterialDialog | `barrier_dismissible:bool` |
+| Material controls | Typed Scaffold slots, button/FAB variants, navigation and radio metadata, slider values, chip roles, and AlertDialog child-presence fields |
 | Pressable | `overlay_color:u32 ARGB`, `release_delay_ms:u16` |
 
 `Update_props` carries the exact generated field mask expected for its full
 typed property value. Empty and linear values use mask zero; multi-property
 values set each implemented field bit. Future fields extend the
 kind-specific generated layout rather than inserting a dynamic property map.
+Protocol 1.21 adds `Set_application_theme`. Every current-protocol full
+snapshot contains exactly one such operation; an incremental frame contains
+one only when the logical application theme or title changes. Its bounded
+payload contains theme mode, required light and dark `theme_data`, and optional
+high-contrast light and dark values. Each `theme_data` contains brightness, a
+seed ARGB color, dynamic-scheme variant, contrast level, all fifteen optional
+Material typography roles, an optional font family and at most sixteen
+fallback names, five shape radii, visual density, and tap-target policy.
+Decoders reject unknown enums, non-finite or out-of-range contrast, non-finite
+or negative radii, invalid font names, oversized fallback collections, and
+inconsistent light/dark brightness before commit. The local Theme node reuses
+the identical `theme_data` codec.
 Protocol 1.18 includes the Page presentation discriminator, optional modal
 barrier ARGB and label, barrier/focus/safe-area flags, two `u32` motion
 durations, typed modal sizing and detent fields, required detent-handle

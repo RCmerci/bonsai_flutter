@@ -17,11 +17,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      MaterialApp(
-        home: BonsaiFlutterRoot(
-          config: Uint8List.fromList(utf8.encode('mail')),
-        ),
-      ),
+      BonsaiFlutterRoot(config: Uint8List.fromList(utf8.encode('mail'))),
     );
     await _waitForPresent(tester, find.text('Juniper Works'));
     await tester.pumpAndSettle();

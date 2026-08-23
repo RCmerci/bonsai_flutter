@@ -1,3 +1,4 @@
+import 'fixture.dart';
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,6 +15,7 @@ void main() {
           targetRevision: 1,
           kind: FrameKind.fullSnapshot,
           operations: [
+            SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
             CreateNode(
               nodeId: 1,
               kind: NodeKind.column,
@@ -49,6 +51,7 @@ void main() {
       targetRevision: 1,
       kind: FrameKind.fullSnapshot,
       operations: [
+        SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
         CreateNode(
           nodeId: 1,
           kind: NodeKind.text,
@@ -123,6 +126,7 @@ void main() {
       targetRevision: 1,
       kind: FrameKind.fullSnapshot,
       operations: [
+        SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
         CreateNode(
           nodeId: 1,
           kind: NodeKind.empty,

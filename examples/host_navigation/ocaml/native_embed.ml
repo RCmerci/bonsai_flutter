@@ -1,5 +1,26 @@
+module Ui = Bonsai_flutter_ui
+
+let application_theme =
+  let color_scheme =
+    Ui.Theme.Color_scheme.from_seed
+      ~color:(Ui.Style.Color.rgb ~red:0 ~green:121 ~blue:107)
+      ()
+  in
+  let data brightness = Ui.Theme.material ~brightness ~color_scheme () in
+  Ui.Theme.application
+    ~mode:Ui.Theme.System
+    ~light:(data Ui.Style.Brightness.Light)
+    ~dark:(data Ui.Style.Brightness.Dark)
+    ()
+;;
+
+let application_component handlers graph =
+  Bonsai.Cont.map (Host_navigation.component handlers graph) ~f:(fun body ->
+    App.View.create ~theme:application_theme ~body)
+;;
+
 let () =
   Native_backend.embed
     ~name:(Bonsai_flutter_spec.Id.Application.Entrypoint_name.of_string "host_navigation")
-    (App.create Host_navigation.component)
+    (App.create ~name:"Host Navigation" application_component)
 ;;

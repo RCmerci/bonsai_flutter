@@ -258,7 +258,8 @@ let component handlers graph =
     in
     let list =
       Ui.Widget.column rows
-      |> fun content -> Ui.Widget.Scroll_view.vertical ~on_scroll:scroll [ Ui.Widget.Sliver.box content ] ()
+      |> fun content ->
+      Ui.Widget.Scroll_view.vertical ~on_scroll:scroll [ Ui.Widget.Sliver.box content ] ()
     in
     Ui.Material.scaffold
       ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Todo") ())
@@ -282,4 +283,23 @@ let component handlers graph =
       ())
 ;;
 
-let app = App.create ~name:"Todo" component
+let application_theme =
+  let color_scheme =
+    Ui.Theme.Color_scheme.from_seed
+      ~color:(Ui.Style.Color.rgb ~red:0 ~green:105 ~blue:92)
+      ()
+  in
+  let data brightness = Ui.Theme.material ~brightness ~color_scheme () in
+  Ui.Theme.application
+    ~mode:Ui.Theme.System
+    ~light:(data Ui.Style.Brightness.Light)
+    ~dark:(data Ui.Style.Brightness.Dark)
+    ()
+;;
+
+let application_component handlers graph =
+  Bonsai.Cont.map (component handlers graph) ~f:(fun body ->
+    App.View.create ~theme:application_theme ~body)
+;;
+
+let app = App.create ~name:"Todo" application_component

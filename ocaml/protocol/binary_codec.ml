@@ -173,6 +173,127 @@ let write_text_style writer = function
     write_optional_argb32 writer style.color
 ;;
 
+let require_theme_font_name label value =
+  if String.length (String.trim value) = 0 || String.contains value '\000'
+  then fail Invalid_props "%s must be non-empty and contain no NUL" label
+;;
+
+let theme_variant_id = function
+  | Wire_frame.Tonal_spot -> 0
+  | Fidelity -> 1
+  | Content -> 2
+  | Monochrome -> 3
+  | Neutral -> 4
+  | Vibrant -> 5
+  | Expressive -> 6
+;;
+
+let write_theme_typography writer (typography : Wire_frame.theme_typography) =
+  Option.iter (require_theme_font_name "theme font family") typography.font_family;
+  write_optional_string writer typography.font_family;
+  if List.length typography.font_family_fallback > 16
+  then fail Invalid_props "theme supports at most 16 fallback font families";
+  Writer.u8 writer (List.length typography.font_family_fallback);
+  List.iter
+    (fun name ->
+       require_theme_font_name "theme fallback font family" name;
+       write_string writer name)
+    typography.font_family_fallback;
+  List.iter
+    (write_text_style writer)
+    [ typography.display_large
+    ; typography.display_medium
+    ; typography.display_small
+    ; typography.headline_large
+    ; typography.headline_medium
+    ; typography.headline_small
+    ; typography.title_large
+    ; typography.title_medium
+    ; typography.title_small
+    ; typography.body_large
+    ; typography.body_medium
+    ; typography.body_small
+    ; typography.label_large
+    ; typography.label_medium
+    ; typography.label_small
+    ]
+;;
+
+let validate_theme_data (data : Wire_frame.theme_data) =
+  let contrast = data.color_scheme.contrast_level in
+  if (not (Float.is_finite contrast)) || contrast < -1. || contrast > 1.
+  then fail Invalid_props "theme contrast level must be finite and between -1 and 1";
+  let shape = data.shape in
+  List.iter
+    (fun radius ->
+       if (not (Float.is_finite radius)) || radius < 0.
+       then fail Invalid_props "theme shape radii must be finite and non-negative")
+    [ shape.extra_small; shape.small; shape.medium; shape.large; shape.extra_large ]
+;;
+
+let write_theme_data writer (data : Wire_frame.theme_data) =
+  validate_theme_data data;
+  Writer.u8
+    writer
+    (match data.brightness with
+     | Light -> 0
+     | Dark -> 1);
+  Writer.u32 writer (Int32.to_int data.color_scheme.seed_argb);
+  Writer.u8 writer (theme_variant_id data.color_scheme.variant);
+  Writer.f64 writer data.color_scheme.contrast_level;
+  write_theme_typography writer data.typography;
+  Writer.f64 writer data.shape.extra_small;
+  Writer.f64 writer data.shape.small;
+  Writer.f64 writer data.shape.medium;
+  Writer.f64 writer data.shape.large;
+  Writer.f64 writer data.shape.extra_large;
+  Writer.u8
+    writer
+    (match data.visual_density with
+     | Adaptive -> 0
+     | Standard -> 1
+     | Comfortable -> 2
+     | Compact -> 3);
+  Writer.u8
+    writer
+    (match data.tap_target_size with
+     | Padded -> 0
+     | Shrink_wrap -> 1)
+;;
+
+let write_application_theme writer (theme : Wire_frame.application_theme) =
+  if theme.light.brightness <> Light || theme.dark.brightness <> Dark
+  then fail Invalid_props "application light and dark themes have inconsistent brightness";
+  Option.iter
+    (fun data ->
+       if data.brightness <> Light
+       then fail Invalid_props "high contrast light theme has dark brightness")
+    theme.high_contrast_light;
+  Option.iter
+    (fun data ->
+       if data.brightness <> Dark
+       then fail Invalid_props "high contrast dark theme has light brightness")
+    theme.high_contrast_dark;
+  Writer.u8
+    writer
+    (match theme.mode with
+     | System -> 0
+     | Light -> 1
+     | Dark -> 2);
+  write_theme_data writer theme.light;
+  write_theme_data writer theme.dark;
+  (match theme.high_contrast_light with
+   | None -> Writer.u8 writer 0
+   | Some data ->
+     Writer.u8 writer 1;
+     write_theme_data writer data);
+  match theme.high_contrast_dark with
+  | None -> Writer.u8 writer 0
+  | Some data ->
+    Writer.u8 writer 1;
+    write_theme_data writer data
+;;
+
 let write_optional_u32 writer label = function
   | None -> Writer.u8 writer 0
   | Some value ->
@@ -474,7 +595,14 @@ let write_page_presentation writer = function
     write_bool writer false;
     write_optional_string writer None;
     write_optional_string writer None;
-    write_optional_string writer None
+    write_optional_string writer None;
+    write_bool writer false;
+    write_optional_argb32 writer None;
+    write_optional_string writer None;
+    write_bool writer false;
+    write_bool writer false;
+    Writer.u32 writer 0;
+    Writer.u32 writer 0
   | Modal_bottom_sheet
       { barrier_dismissible
       ; barrier_color_argb
@@ -532,7 +660,47 @@ let write_page_presentation writer = function
     in
     write_optional_string writer label;
     write_optional_string writer medium_value;
-    write_optional_string writer large_value
+    write_optional_string writer large_value;
+    write_bool writer false;
+    write_optional_argb32 writer None;
+    write_optional_string writer None;
+    write_bool writer false;
+    write_bool writer false;
+    Writer.u32 writer 0;
+    Writer.u32 writer 0
+  | Modal_dialog
+      { barrier_dismissible
+      ; barrier_color_argb
+      ; barrier_label
+      ; use_safe_area
+      ; request_focus
+      ; transition_duration_ms
+      ; reverse_transition_duration_ms
+      } ->
+    check_u32 "dialog transition duration" transition_duration_ms;
+    check_u32 "dialog reverse transition duration" reverse_transition_duration_ms;
+    Writer.u8 writer 2;
+    write_bool writer false;
+    write_optional_argb32 writer None;
+    write_optional_string writer None;
+    Writer.u8 writer 0;
+    write_bool writer false;
+    write_bool writer false;
+    Writer.u32 writer 0;
+    Writer.u32 writer 0;
+    Writer.u8 writer 0;
+    Writer.u8 writer 0;
+    write_bool writer false;
+    write_optional_string writer None;
+    write_optional_string writer None;
+    write_optional_string writer None;
+    write_bool writer barrier_dismissible;
+    write_optional_argb32 writer barrier_color_argb;
+    write_optional_string writer barrier_label;
+    write_bool writer use_safe_area;
+    write_bool writer request_focus;
+    Writer.u32 writer transition_duration_ms;
+    Writer.u32 writer reverse_transition_duration_ms
 ;;
 
 let overlay_alignment_id = function
@@ -545,6 +713,67 @@ let overlay_alignment_id = function
   | Bottom_start -> 6
   | Bottom_center -> 7
   | Bottom_end -> 8
+;;
+
+let material_fab_location_id = function
+  | Wire_frame.Start_float -> 0
+  | Center_float -> 1
+  | End_float -> 2
+  | Start_docked -> 3
+  | Center_docked -> 4
+  | End_docked -> 5
+;;
+
+let material_fab_variant_id = function
+  | Wire_frame.Small -> 0
+  | Standard -> 1
+  | Large -> 2
+  | Extended -> 3
+;;
+
+let material_chip_variant_id = function
+  | Wire_frame.Action_chip -> 0
+  | Filter_chip -> 1
+  | Choice_chip -> 2
+  | Input_chip -> 3
+;;
+
+let validate_slider ~value ~min ~max ~divisions =
+  if not (Float.is_finite value && Float.is_finite min && Float.is_finite max)
+  then fail Invalid_props "slider values must be finite";
+  if Float.compare min max >= 0 then fail Invalid_props "slider min must be below max";
+  if Float.compare value min < 0 || Float.compare value max > 0
+  then fail Invalid_props "slider value must be within its domain";
+  match divisions with
+  | Some divisions when divisions <= 0 ->
+    fail Invalid_props "slider divisions must be positive"
+  | None | Some _ -> ()
+;;
+
+let validate_navigation ~selected_index destinations =
+  if List.length destinations < 2
+  then fail Invalid_props "navigation bar requires at least two destinations";
+  if selected_index < 0 || selected_index >= List.length destinations
+  then fail Invalid_props "navigation selected index is outside destinations";
+  List.iter
+    (fun (destination : Wire_frame.material_navigation_destination) ->
+       if String.length (String.trim destination.label) = 0
+       then fail Invalid_props "navigation destination label must not be empty")
+    destinations
+;;
+
+let validate_radio_group ~selected_id options =
+  let ids = Hashtbl.create (List.length options) in
+  List.iter
+    (fun (option : Wire_frame.material_radio_option) ->
+       if Hashtbl.mem ids option.option_id
+       then fail Invalid_props "radio option IDs must be unique";
+       Hashtbl.add ids option.option_id ())
+    options;
+  match selected_id with
+  | Some selected_id when not (Hashtbl.mem ids selected_id) ->
+    fail Invalid_props "selected radio ID must be present in options"
+  | None | Some _ -> ()
 ;;
 
 let is_utf16_boundary text target =
@@ -636,6 +865,21 @@ let node_kind_id = function
   | Material_elevated_button -> Generated_protocol.Node_kind.material_elevated_button
   | Material_text_button -> Generated_protocol.Node_kind.material_text_button
   | Material_icon_button -> Generated_protocol.Node_kind.material_icon_button
+  | Material_filled_button -> Generated_protocol.Node_kind.material_filled_button
+  | Material_filled_tonal_button ->
+    Generated_protocol.Node_kind.material_filled_tonal_button
+  | Material_outlined_button -> Generated_protocol.Node_kind.material_outlined_button
+  | Material_floating_action_button ->
+    Generated_protocol.Node_kind.material_floating_action_button
+  | Material_navigation_bar -> Generated_protocol.Node_kind.material_navigation_bar
+  | Material_radio_group -> Generated_protocol.Node_kind.material_radio_group
+  | Material_slider -> Generated_protocol.Node_kind.material_slider
+  | Material_range_slider -> Generated_protocol.Node_kind.material_range_slider
+  | Material_action_chip -> Generated_protocol.Node_kind.material_action_chip
+  | Material_filter_chip -> Generated_protocol.Node_kind.material_filter_chip
+  | Material_choice_chip -> Generated_protocol.Node_kind.material_choice_chip
+  | Material_input_chip -> Generated_protocol.Node_kind.material_input_chip
+  | Material_alert_dialog -> Generated_protocol.Node_kind.material_alert_dialog
   | Material_checkbox -> Generated_protocol.Node_kind.material_checkbox
   | Material_switch -> Generated_protocol.Node_kind.material_switch
   | Material_list_tile -> Generated_protocol.Node_kind.material_list_tile
@@ -651,7 +895,6 @@ let node_kind_id = function
   | Page -> Generated_protocol.Node_kind.page
   | Safe_area -> Generated_protocol.Node_kind.safe_area
   | Environment_boundary -> Generated_protocol.Node_kind.environment_boundary
-  | Material_dialog -> Generated_protocol.Node_kind.material_dialog
   | Native_widget -> Generated_protocol.Node_kind.native_widget
 ;;
 
@@ -840,21 +1083,130 @@ let write_props writer kind props =
     write_optional_f64 writer sort_key;
     check_u32 "semantics actions" actions;
     Writer.u32 writer actions
-  | Theme, Theme_props { brightness; color_seed } ->
-    Writer.u8
-      writer
-      (match brightness with
-       | Light -> 0
-       | Dark -> 1);
-    Writer.u32 writer (Int32.to_int color_seed)
-  | Material_scaffold, Material_scaffold_props { has_app_bar } ->
-    write_bool writer has_app_bar
+  | Theme, Theme_props data -> write_theme_data writer data
+  | ( Material_scaffold
+    , Material_scaffold_props
+        { has_app_bar
+        ; has_floating_action_button
+        ; floating_action_button_location
+        ; has_bottom_navigation_bar
+        ; has_bottom_sheet
+        } ) ->
+    write_bool writer has_app_bar;
+    write_bool writer has_floating_action_button;
+    Writer.u8 writer (material_fab_location_id floating_action_button_location);
+    write_bool writer has_bottom_navigation_bar;
+    write_bool writer has_bottom_sheet
   | Material_app_bar, Material_app_bar_props { center_title } ->
     write_bool writer center_title
-  | ( (Material_elevated_button | Material_text_button | Material_icon_button)
+  | ( ( Material_elevated_button
+      | Material_text_button
+      | Material_icon_button
+      | Material_filled_button
+      | Material_filled_tonal_button
+      | Material_outlined_button )
     , Material_button_props { enabled; autofocus; _ } ) ->
     write_bool writer enabled;
     write_bool writer autofocus
+  | ( Material_floating_action_button
+    , Material_floating_action_button_props { variant; enabled; autofocus; has_icon } ) ->
+    Writer.u8 writer (material_fab_variant_id variant);
+    write_bool writer enabled;
+    write_bool writer autofocus;
+    write_bool writer has_icon
+  | ( Material_navigation_bar
+    , Material_navigation_bar_props { selected_index; destinations } ) ->
+    validate_navigation ~selected_index destinations;
+    check_u32 "navigation selected index" selected_index;
+    check_u16 "navigation destination count" (List.length destinations);
+    Writer.u32 writer selected_index;
+    Writer.u16 writer (List.length destinations);
+    List.iter
+      (fun (destination : Wire_frame.material_navigation_destination) ->
+         write_string writer destination.label;
+         write_bool writer destination.enabled;
+         write_bool writer destination.has_selected_icon)
+      destinations
+  | Material_radio_group, Material_radio_group_props { selected_id; options } ->
+    validate_radio_group ~selected_id options;
+    (match selected_id with
+     | None -> Writer.u8 writer 0
+     | Some selected_id ->
+       Writer.u8 writer 1;
+       Writer.u64 writer selected_id);
+    check_u16 "radio option count" (List.length options);
+    Writer.u16 writer (List.length options);
+    List.iter
+      (fun (option : Wire_frame.material_radio_option) ->
+         Writer.u64 writer option.option_id;
+         write_bool writer option.enabled;
+         write_bool writer option.has_label)
+      options
+  | ( Material_slider
+    , Material_slider_props { value; min; max; divisions; label; enabled; has_on_change }
+    ) ->
+    validate_slider ~value ~min ~max ~divisions;
+    Writer.f64 writer value;
+    Writer.f64 writer min;
+    Writer.f64 writer max;
+    write_optional_u32 writer "slider divisions" divisions;
+    write_optional_string writer label;
+    write_bool writer enabled;
+    write_bool writer has_on_change
+  | ( Material_range_slider
+    , Material_range_slider_props
+        { start
+        ; end_
+        ; min
+        ; max
+        ; divisions
+        ; label_start
+        ; label_end
+        ; enabled
+        ; has_on_change
+        } ) ->
+    validate_slider ~value:start ~min ~max ~divisions;
+    validate_slider ~value:end_ ~min ~max ~divisions;
+    if Float.compare start end_ > 0
+    then fail Invalid_props "range slider selection is reversed";
+    Writer.f64 writer start;
+    Writer.f64 writer end_;
+    Writer.f64 writer min;
+    Writer.f64 writer max;
+    write_optional_u32 writer "range slider divisions" divisions;
+    write_optional_string writer label_start;
+    write_optional_string writer label_end;
+    write_bool writer enabled;
+    write_bool writer has_on_change
+  | ( ( Material_action_chip
+      | Material_filter_chip
+      | Material_choice_chip
+      | Material_input_chip )
+    , Material_chip_props
+        { variant
+        ; enabled
+        ; selected
+        ; has_avatar
+        ; has_delete_icon
+        ; has_on_press
+        ; has_on_selected
+        ; has_on_delete
+        } ) ->
+    ignore (material_chip_variant_id variant);
+    write_bool writer enabled;
+    write_bool writer selected;
+    write_bool writer has_avatar;
+    write_bool writer has_delete_icon;
+    write_bool writer has_on_press;
+    write_bool writer has_on_selected;
+    write_bool writer has_on_delete
+  | ( Material_alert_dialog
+    , Material_alert_dialog_props { has_icon; has_title; has_content; action_count } ) ->
+    check_u32 "alert dialog action count" action_count;
+    write_bool writer has_icon;
+    write_bool writer has_title;
+    write_bool writer has_content;
+    Writer.u32 writer action_count
   | Material_checkbox, Material_checkbox_props { value; enabled } ->
     write_bool writer value;
     write_bool writer enabled
@@ -930,7 +1282,7 @@ let write_props writer kind props =
       (page_transition_id
          (match presentation with
           | Wire_frame.Standard_page transition -> transition
-          | Modal_bottom_sheet _ -> No_transition));
+          | Modal_bottom_sheet _ | Modal_dialog _ -> No_transition));
     write_bool writer can_pop;
     write_optional_string
       writer
@@ -955,8 +1307,6 @@ let write_props writer kind props =
     Writer.f64 writer minimum_top;
     Writer.f64 writer minimum_right;
     Writer.f64 writer minimum_bottom
-  | Material_dialog, Material_dialog_props { barrier_dismissible } ->
-    write_bool writer barrier_dismissible
   | Native_widget, Native_widget_props { kind_id; version; capabilities; payload } ->
     let kind_id = ID.Native_widget.Kind_id.to_int kind_id in
     check_u32 "native widget kind ID" kind_id;
@@ -1008,9 +1358,26 @@ let props_kind_id = function
   | Material_app_bar_props _ -> Generated_protocol.Node_kind.material_app_bar
   | Material_button_props { variant; _ } ->
     (match variant with
+     | Filled -> Generated_protocol.Node_kind.material_filled_button
+     | Filled_tonal -> Generated_protocol.Node_kind.material_filled_tonal_button
+     | Outlined -> Generated_protocol.Node_kind.material_outlined_button
      | Elevated -> Generated_protocol.Node_kind.material_elevated_button
      | Text_button -> Generated_protocol.Node_kind.material_text_button
      | Icon_button -> Generated_protocol.Node_kind.material_icon_button)
+  | Material_floating_action_button_props _ ->
+    Generated_protocol.Node_kind.material_floating_action_button
+  | Material_navigation_bar_props _ ->
+    Generated_protocol.Node_kind.material_navigation_bar
+  | Material_radio_group_props _ -> Generated_protocol.Node_kind.material_radio_group
+  | Material_slider_props _ -> Generated_protocol.Node_kind.material_slider
+  | Material_range_slider_props _ -> Generated_protocol.Node_kind.material_range_slider
+  | Material_chip_props { variant; _ } ->
+    (match variant with
+     | Action_chip -> Generated_protocol.Node_kind.material_action_chip
+     | Filter_chip -> Generated_protocol.Node_kind.material_filter_chip
+     | Choice_chip -> Generated_protocol.Node_kind.material_choice_chip
+     | Input_chip -> Generated_protocol.Node_kind.material_input_chip)
+  | Material_alert_dialog_props _ -> Generated_protocol.Node_kind.material_alert_dialog
   | Material_checkbox_props _ -> Generated_protocol.Node_kind.material_checkbox
   | Material_switch_props _ -> Generated_protocol.Node_kind.material_switch
   | Material_list_tile_props _ -> Generated_protocol.Node_kind.material_list_tile
@@ -1026,7 +1393,6 @@ let props_kind_id = function
   | Page_props _ -> Generated_protocol.Node_kind.page
   | Safe_area_props _ -> Generated_protocol.Node_kind.safe_area
   | Environment_boundary_props -> Generated_protocol.Node_kind.environment_boundary
-  | Material_dialog_props _ -> Generated_protocol.Node_kind.material_dialog
   | Native_widget_props _ -> Generated_protocol.Node_kind.native_widget
 ;;
 
@@ -1191,17 +1557,32 @@ let changed_fields = function
       ; field_mask Generated_protocol.Semantics_prop.sort_key
       ; field_mask Generated_protocol.Semantics_prop.actions
       ]
-  | Theme_props _ ->
-    Int64.logor
-      (field_mask Generated_protocol.Theme_prop.brightness)
-      (field_mask Generated_protocol.Theme_prop.color_seed)
+  | Theme_props _ -> field_mask Generated_protocol.Theme_prop.data
   | Material_scaffold_props _ ->
-    field_mask Generated_protocol.Material_scaffold_prop.has_app_bar
+    List.fold_left
+      Int64.logor
+      0L
+      [ field_mask Generated_protocol.Material_scaffold_prop.has_app_bar
+      ; field_mask Generated_protocol.Material_scaffold_prop.has_floating_action_button
+      ; field_mask
+          Generated_protocol.Material_scaffold_prop.floating_action_button_location
+      ; field_mask Generated_protocol.Material_scaffold_prop.has_bottom_navigation_bar
+      ; field_mask Generated_protocol.Material_scaffold_prop.has_bottom_sheet
+      ]
   | Material_app_bar_props _ ->
     field_mask Generated_protocol.Material_app_bar_prop.center_title
   | Material_button_props { variant; _ } ->
     let enabled, autofocus =
       match variant with
+      | Filled ->
+        ( Generated_protocol.Material_filled_button_prop.enabled
+        , Generated_protocol.Material_filled_button_prop.autofocus )
+      | Filled_tonal ->
+        ( Generated_protocol.Material_filled_tonal_button_prop.enabled
+        , Generated_protocol.Material_filled_tonal_button_prop.autofocus )
+      | Outlined ->
+        ( Generated_protocol.Material_outlined_button_prop.enabled
+        , Generated_protocol.Material_outlined_button_prop.autofocus )
       | Elevated ->
         ( Generated_protocol.Material_elevated_button_prop.enabled
         , Generated_protocol.Material_elevated_button_prop.autofocus )
@@ -1213,6 +1594,104 @@ let changed_fields = function
         , Generated_protocol.Material_icon_button_prop.autofocus )
     in
     Int64.logor (field_mask enabled) (field_mask autofocus)
+  | Material_floating_action_button_props _ ->
+    List.fold_left
+      Int64.logor
+      0L
+      [ field_mask Generated_protocol.Material_floating_action_button_prop.variant
+      ; field_mask Generated_protocol.Material_floating_action_button_prop.enabled
+      ; field_mask Generated_protocol.Material_floating_action_button_prop.autofocus
+      ; field_mask Generated_protocol.Material_floating_action_button_prop.has_icon
+      ]
+  | Material_navigation_bar_props _ ->
+    Int64.logor
+      (field_mask Generated_protocol.Material_navigation_bar_prop.selected_index)
+      (field_mask Generated_protocol.Material_navigation_bar_prop.destinations)
+  | Material_radio_group_props _ ->
+    Int64.logor
+      (field_mask Generated_protocol.Material_radio_group_prop.selected_id)
+      (field_mask Generated_protocol.Material_radio_group_prop.options)
+  | Material_slider_props _ ->
+    List.fold_left
+      Int64.logor
+      0L
+      [ field_mask Generated_protocol.Material_slider_prop.value
+      ; field_mask Generated_protocol.Material_slider_prop.min
+      ; field_mask Generated_protocol.Material_slider_prop.max
+      ; field_mask Generated_protocol.Material_slider_prop.divisions
+      ; field_mask Generated_protocol.Material_slider_prop.label
+      ; field_mask Generated_protocol.Material_slider_prop.enabled
+      ; field_mask Generated_protocol.Material_slider_prop.has_on_change
+      ]
+  | Material_range_slider_props _ ->
+    List.fold_left
+      Int64.logor
+      0L
+      [ field_mask Generated_protocol.Material_range_slider_prop.start
+      ; field_mask Generated_protocol.Material_range_slider_prop.end_value
+      ; field_mask Generated_protocol.Material_range_slider_prop.min
+      ; field_mask Generated_protocol.Material_range_slider_prop.max
+      ; field_mask Generated_protocol.Material_range_slider_prop.divisions
+      ; field_mask Generated_protocol.Material_range_slider_prop.label_start
+      ; field_mask Generated_protocol.Material_range_slider_prop.label_end
+      ; field_mask Generated_protocol.Material_range_slider_prop.enabled
+      ; field_mask Generated_protocol.Material_range_slider_prop.has_on_change
+      ]
+  | Material_chip_props { variant; _ } ->
+    let enabled, selected, avatar, delete_icon, press, on_selected, on_delete =
+      match variant with
+      | Action_chip ->
+        let module P = Generated_protocol.Material_action_chip_prop in
+        ( P.enabled
+        , P.selected
+        , P.has_avatar
+        , P.has_delete_icon
+        , P.has_on_press
+        , P.has_on_selected
+        , P.has_on_delete )
+      | Filter_chip ->
+        let module P = Generated_protocol.Material_filter_chip_prop in
+        ( P.enabled
+        , P.selected
+        , P.has_avatar
+        , P.has_delete_icon
+        , P.has_on_press
+        , P.has_on_selected
+        , P.has_on_delete )
+      | Choice_chip ->
+        let module P = Generated_protocol.Material_choice_chip_prop in
+        ( P.enabled
+        , P.selected
+        , P.has_avatar
+        , P.has_delete_icon
+        , P.has_on_press
+        , P.has_on_selected
+        , P.has_on_delete )
+      | Input_chip ->
+        let module P = Generated_protocol.Material_input_chip_prop in
+        ( P.enabled
+        , P.selected
+        , P.has_avatar
+        , P.has_delete_icon
+        , P.has_on_press
+        , P.has_on_selected
+        , P.has_on_delete )
+    in
+    List.fold_left
+      Int64.logor
+      0L
+      (List.map
+         field_mask
+         [ enabled; selected; avatar; delete_icon; press; on_selected; on_delete ])
+  | Material_alert_dialog_props _ ->
+    List.fold_left
+      Int64.logor
+      0L
+      [ field_mask Generated_protocol.Material_alert_dialog_prop.has_icon
+      ; field_mask Generated_protocol.Material_alert_dialog_prop.has_title
+      ; field_mask Generated_protocol.Material_alert_dialog_prop.has_content
+      ; field_mask Generated_protocol.Material_alert_dialog_prop.action_count
+      ]
   | Material_checkbox_props _ ->
     Int64.logor
       (field_mask Generated_protocol.Material_checkbox_prop.value)
@@ -1287,6 +1766,13 @@ let changed_fields = function
       ; field_mask Generated_protocol.Page_prop.modal_handle_semantics_label
       ; field_mask Generated_protocol.Page_prop.modal_medium_semantics_value
       ; field_mask Generated_protocol.Page_prop.modal_large_semantics_value
+      ; field_mask Generated_protocol.Page_prop.dialog_barrier_dismissible
+      ; field_mask Generated_protocol.Page_prop.dialog_barrier_color
+      ; field_mask Generated_protocol.Page_prop.dialog_barrier_label
+      ; field_mask Generated_protocol.Page_prop.dialog_use_safe_area
+      ; field_mask Generated_protocol.Page_prop.dialog_request_focus
+      ; field_mask Generated_protocol.Page_prop.dialog_transition_duration_ms
+      ; field_mask Generated_protocol.Page_prop.dialog_reverse_transition_duration_ms
       ]
   | Safe_area_props _ ->
     List.fold_left
@@ -1298,8 +1784,6 @@ let changed_fields = function
       ; field_mask Generated_protocol.Safe_area_prop.bottom
       ; field_mask Generated_protocol.Safe_area_prop.minimum
       ]
-  | Material_dialog_props _ ->
-    field_mask Generated_protocol.Material_dialog_prop.barrier_dismissible
   | Native_widget_props _ ->
     List.fold_left
       Int64.logor
@@ -1492,18 +1976,101 @@ let write_update_props writer props =
     write_optional_f64 writer sort_key;
     check_u32 "semantics actions" actions;
     Writer.u32 writer actions
-  | Theme_props { brightness; color_seed } ->
-    Writer.u8
-      writer
-      (match brightness with
-       | Light -> 0
-       | Dark -> 1);
-    Writer.u32 writer (Int32.to_int color_seed)
-  | Material_scaffold_props { has_app_bar } -> write_bool writer has_app_bar
+  | Theme_props data -> write_theme_data writer data
+  | Material_scaffold_props
+      { has_app_bar
+      ; has_floating_action_button
+      ; floating_action_button_location
+      ; has_bottom_navigation_bar
+      ; has_bottom_sheet
+      } ->
+    write_bool writer has_app_bar;
+    write_bool writer has_floating_action_button;
+    Writer.u8 writer (material_fab_location_id floating_action_button_location);
+    write_bool writer has_bottom_navigation_bar;
+    write_bool writer has_bottom_sheet
   | Material_app_bar_props { center_title } -> write_bool writer center_title
   | Material_button_props { enabled; autofocus; _ } ->
     write_bool writer enabled;
     write_bool writer autofocus
+  | Material_floating_action_button_props { variant; enabled; autofocus; has_icon } ->
+    Writer.u8 writer (material_fab_variant_id variant);
+    write_bool writer enabled;
+    write_bool writer autofocus;
+    write_bool writer has_icon
+  | Material_navigation_bar_props { selected_index; destinations } ->
+    validate_navigation ~selected_index destinations;
+    Writer.u32 writer selected_index;
+    Writer.u16 writer (List.length destinations);
+    List.iter
+      (fun (destination : Wire_frame.material_navigation_destination) ->
+         write_string writer destination.label;
+         write_bool writer destination.enabled;
+         write_bool writer destination.has_selected_icon)
+      destinations
+  | Material_radio_group_props { selected_id; options } ->
+    validate_radio_group ~selected_id options;
+    (match selected_id with
+     | None -> Writer.u8 writer 0
+     | Some selected_id ->
+       Writer.u8 writer 1;
+       Writer.u64 writer selected_id);
+    Writer.u16 writer (List.length options);
+    List.iter
+      (fun (option : Wire_frame.material_radio_option) ->
+         Writer.u64 writer option.option_id;
+         write_bool writer option.enabled;
+         write_bool writer option.has_label)
+      options
+  | Material_slider_props { value; min; max; divisions; label; enabled; has_on_change } ->
+    validate_slider ~value ~min ~max ~divisions;
+    Writer.f64 writer value;
+    Writer.f64 writer min;
+    Writer.f64 writer max;
+    write_optional_u32 writer "slider divisions" divisions;
+    write_optional_string writer label;
+    write_bool writer enabled;
+    write_bool writer has_on_change
+  | Material_range_slider_props
+      { start; end_; min; max; divisions; label_start; label_end; enabled; has_on_change }
+    ->
+    validate_slider ~value:start ~min ~max ~divisions;
+    validate_slider ~value:end_ ~min ~max ~divisions;
+    if Float.compare start end_ > 0
+    then fail Invalid_props "range slider selection is reversed";
+    Writer.f64 writer start;
+    Writer.f64 writer end_;
+    Writer.f64 writer min;
+    Writer.f64 writer max;
+    write_optional_u32 writer "range slider divisions" divisions;
+    write_optional_string writer label_start;
+    write_optional_string writer label_end;
+    write_bool writer enabled;
+    write_bool writer has_on_change
+  | Material_chip_props
+      { variant
+      ; enabled
+      ; selected
+      ; has_avatar
+      ; has_delete_icon
+      ; has_on_press
+      ; has_on_selected
+      ; has_on_delete
+      } ->
+    ignore (material_chip_variant_id variant);
+    write_bool writer enabled;
+    write_bool writer selected;
+    write_bool writer has_avatar;
+    write_bool writer has_delete_icon;
+    write_bool writer has_on_press;
+    write_bool writer has_on_selected;
+    write_bool writer has_on_delete
+  | Material_alert_dialog_props { has_icon; has_title; has_content; action_count } ->
+    check_u32 "alert dialog action count" action_count;
+    write_bool writer has_icon;
+    write_bool writer has_title;
+    write_bool writer has_content;
+    Writer.u32 writer action_count
   | Material_checkbox_props { value; enabled } ->
     write_bool writer value;
     write_bool writer enabled
@@ -1576,7 +2143,7 @@ let write_update_props writer props =
       (page_transition_id
          (match presentation with
           | Wire_frame.Standard_page transition -> transition
-          | Modal_bottom_sheet _ -> No_transition));
+          | Modal_bottom_sheet _ | Modal_dialog _ -> No_transition));
     write_bool writer can_pop;
     write_optional_string
       writer
@@ -1600,7 +2167,6 @@ let write_update_props writer props =
     Writer.f64 writer minimum_top;
     Writer.f64 writer minimum_right;
     Writer.f64 writer minimum_bottom
-  | Material_dialog_props { barrier_dismissible } -> write_bool writer barrier_dismissible
   | Native_widget_props { kind_id; version; capabilities; payload } ->
     let kind_id = ID.Native_widget.Kind_id.to_int kind_id in
     check_u32 "native widget kind ID" kind_id;
@@ -1708,6 +2274,21 @@ let write_host_request body request_id payload =
           let node_id = ID.Ui.Node_id.to_int64 node_id in
           check_u64 "layout node ID" node_id;
           Writer.u64 body node_id )
+    | Show_snack_bar { message; action_label; duration_ms } ->
+      ( Generated_protocol.Host_request.show_snack_bar
+      , fun () ->
+          if String.length (String.trim message) = 0
+          then fail Invalid_props "snack bar message must not be empty";
+          (match action_label with
+           | Some label when String.length (String.trim label) = 0 ->
+             fail Invalid_props "snack bar action label must not be empty"
+           | None | Some _ -> ());
+          if duration_ms <= 0
+          then fail Invalid_props "snack bar duration must be positive";
+          check_u32 "snack bar duration" duration_ms;
+          write_string body message;
+          write_optional_string body action_label;
+          Writer.u32 body duration_ms )
   in
   Writer.u16 body (ID.Protocol.Host_request_kind.to_int request_kind);
   write_payload ()
@@ -1805,6 +2386,12 @@ let write_operation ?(record_runtime_stats_offsets = fun _ -> ()) payload = func
     let body = Writer.create () in
     Writer.u64 body node_id;
     envelope payload Generated_protocol.Operation.set_root body
+  | Set_application_theme { title; theme } ->
+    let body = Writer.create () in
+    Option.iter (require_theme_font_name "application title") title;
+    write_optional_string body title;
+    write_application_theme body theme;
+    envelope payload Generated_protocol.Operation.set_application_theme body
   | Drop_node node_id ->
     let node_id = ID.Ui.Node_id.to_int64 node_id in
     check_u64 "node ID" node_id;
@@ -2170,6 +2757,16 @@ let read_optional_u8 reader =
   | value -> fail Invalid_props "invalid optional u8 tag %d" value
 ;;
 
+let read_optional_u32 reader =
+  match Reader.u8 reader with
+  | 0 -> None
+  | 1 ->
+    let value = Reader.u32 reader in
+    if value <= 0 then fail Invalid_props "optional u32 must be positive";
+    Some value
+  | value -> fail Invalid_props "invalid optional u32 tag %d" value
+;;
+
 let read_optional_argb32 reader =
   match Reader.u8 reader with
   | 0 -> None
@@ -2207,6 +2804,134 @@ let read_text_style reader =
     let color = read_optional_argb32 reader in
     Some Wire_frame.{ font_size; font_weight; line_height; color }
   | value -> fail Invalid_props "invalid optional text style tag %d" value
+;;
+
+let read_theme_variant reader =
+  match Reader.u8 reader with
+  | 0 -> Wire_frame.Tonal_spot
+  | 1 -> Fidelity
+  | 2 -> Content
+  | 3 -> Monochrome
+  | 4 -> Neutral
+  | 5 -> Vibrant
+  | 6 -> Expressive
+  | value -> fail Invalid_props "invalid theme dynamic variant %d" value
+;;
+
+let read_theme_typography reader : Wire_frame.theme_typography =
+  let font_family = read_optional_string reader in
+  Option.iter (require_theme_font_name "theme font family") font_family;
+  let fallback_count = Reader.u8 reader in
+  if fallback_count > 16 then fail Invalid_props "theme has too many fallback fonts";
+  let font_family_fallback =
+    List.init fallback_count (fun _ ->
+      let name = read_string reader in
+      require_theme_font_name "theme fallback font family" name;
+      name)
+  in
+  let styles = Array.init 15 (fun _ -> read_text_style reader) in
+  { font_family
+  ; font_family_fallback
+  ; display_large = styles.(0)
+  ; display_medium = styles.(1)
+  ; display_small = styles.(2)
+  ; headline_large = styles.(3)
+  ; headline_medium = styles.(4)
+  ; headline_small = styles.(5)
+  ; title_large = styles.(6)
+  ; title_medium = styles.(7)
+  ; title_small = styles.(8)
+  ; body_large = styles.(9)
+  ; body_medium = styles.(10)
+  ; body_small = styles.(11)
+  ; label_large = styles.(12)
+  ; label_medium = styles.(13)
+  ; label_small = styles.(14)
+  }
+;;
+
+let read_theme_data reader : Wire_frame.theme_data =
+  let brightness : Wire_frame.brightness =
+    match Reader.u8 reader with
+    | 0 -> Wire_frame.Light
+    | 1 -> Wire_frame.Dark
+    | value -> fail Invalid_props "invalid theme brightness %d" value
+  in
+  let seed_argb = Int32.of_int (Reader.u32 reader) in
+  let variant = read_theme_variant reader in
+  let contrast_level = Reader.f64 reader in
+  let color_scheme : Wire_frame.theme_color_scheme =
+    { seed_argb; variant; contrast_level }
+  in
+  let typography = read_theme_typography reader in
+  let extra_small = Reader.f64 reader in
+  let small = Reader.f64 reader in
+  let medium = Reader.f64 reader in
+  let large = Reader.f64 reader in
+  let extra_large = Reader.f64 reader in
+  let shape : Wire_frame.theme_shape =
+    { extra_small; small; medium; large; extra_large }
+  in
+  let visual_density =
+    match Reader.u8 reader with
+    | 0 -> Wire_frame.Adaptive
+    | 1 -> Standard
+    | 2 -> Comfortable
+    | 3 -> Compact
+    | value -> fail Invalid_props "invalid theme visual density %d" value
+  in
+  let tap_target_size =
+    match Reader.u8 reader with
+    | 0 -> Wire_frame.Padded
+    | 1 -> Shrink_wrap
+    | value -> fail Invalid_props "invalid theme tap target size %d" value
+  in
+  let data =
+    { Wire_frame.brightness
+    ; color_scheme
+    ; typography
+    ; shape
+    ; visual_density
+    ; tap_target_size
+    }
+  in
+  validate_theme_data data;
+  data
+;;
+
+let read_optional_theme_data reader =
+  match Reader.u8 reader with
+  | 0 -> None
+  | 1 -> Some (read_theme_data reader)
+  | value -> fail Invalid_props "invalid optional theme data tag %d" value
+;;
+
+let read_application_theme reader : Wire_frame.application_theme =
+  let mode =
+    match Reader.u8 reader with
+    | 0 -> Wire_frame.System
+    | 1 -> Light
+    | 2 -> Dark
+    | value -> fail Invalid_props "invalid application theme mode %d" value
+  in
+  let light = read_theme_data reader in
+  let dark = read_theme_data reader in
+  let high_contrast_light = read_optional_theme_data reader in
+  let high_contrast_dark = read_optional_theme_data reader in
+  let theme = { Wire_frame.mode; light; dark; high_contrast_light; high_contrast_dark } in
+  if light.brightness <> Wire_frame.Light || dark.brightness <> Wire_frame.Dark
+  then fail Invalid_props "application light and dark themes have inconsistent brightness";
+  Option.iter
+    (fun data ->
+       if data.brightness <> Wire_frame.Light
+       then fail Invalid_props "high contrast light theme has dark brightness")
+    high_contrast_light;
+  Option.iter
+    (fun data ->
+       if data.brightness <> Wire_frame.Dark
+       then fail Invalid_props "high contrast dark theme has light brightness")
+    high_contrast_dark;
+  theme
 ;;
 
 let read_text_align reader =
@@ -2403,6 +3128,31 @@ let read_node_kind reader =
     Material_text_button
   | value when value = Generated_protocol.Node_kind.material_icon_button ->
     Material_icon_button
+  | value when value = Generated_protocol.Node_kind.material_filled_button ->
+    Material_filled_button
+  | value when value = Generated_protocol.Node_kind.material_filled_tonal_button ->
+    Material_filled_tonal_button
+  | value when value = Generated_protocol.Node_kind.material_outlined_button ->
+    Material_outlined_button
+  | value when value = Generated_protocol.Node_kind.material_floating_action_button ->
+    Material_floating_action_button
+  | value when value = Generated_protocol.Node_kind.material_navigation_bar ->
+    Material_navigation_bar
+  | value when value = Generated_protocol.Node_kind.material_radio_group ->
+    Material_radio_group
+  | value when value = Generated_protocol.Node_kind.material_slider -> Material_slider
+  | value when value = Generated_protocol.Node_kind.material_range_slider ->
+    Material_range_slider
+  | value when value = Generated_protocol.Node_kind.material_action_chip ->
+    Material_action_chip
+  | value when value = Generated_protocol.Node_kind.material_filter_chip ->
+    Material_filter_chip
+  | value when value = Generated_protocol.Node_kind.material_choice_chip ->
+    Material_choice_chip
+  | value when value = Generated_protocol.Node_kind.material_input_chip ->
+    Material_input_chip
+  | value when value = Generated_protocol.Node_kind.material_alert_dialog ->
+    Material_alert_dialog
   | value when value = Generated_protocol.Node_kind.material_checkbox -> Material_checkbox
   | value when value = Generated_protocol.Node_kind.material_switch -> Material_switch
   | value when value = Generated_protocol.Node_kind.material_list_tile ->
@@ -2420,7 +3170,6 @@ let read_node_kind reader =
   | value when value = Generated_protocol.Node_kind.safe_area -> Safe_area
   | value when value = Generated_protocol.Node_kind.environment_boundary ->
     Environment_boundary
-  | value when value = Generated_protocol.Node_kind.material_dialog -> Material_dialog
   | value when value = Generated_protocol.Node_kind.native_widget -> Native_widget
   | value ->
     fail Unknown_node_kind "unknown node kind %d" (ID.Protocol.Node_kind.to_int value)
@@ -2694,25 +3443,157 @@ let read_props reader kind ~protocol_minor =
       ; sort_key
       ; actions
       }
-  | Theme ->
-    let brightness =
+  | Theme -> Theme_props (read_theme_data reader)
+  | Material_scaffold ->
+    let has_app_bar = read_bool reader in
+    let has_floating_action_button = read_bool reader in
+    let floating_action_button_location =
       match Reader.u8 reader with
-      | 0 -> Light
-      | 1 -> Dark
-      | value -> fail Invalid_props "invalid brightness %d" value
+      | 0 -> Wire_frame.Start_float
+      | 1 -> Center_float
+      | 2 -> End_float
+      | 3 -> Start_docked
+      | 4 -> Center_docked
+      | 5 -> End_docked
+      | value -> fail Invalid_props "invalid floating action button location %d" value
     in
-    Theme_props { brightness; color_seed = Int32.of_int (Reader.u32 reader) }
-  | Material_scaffold -> Material_scaffold_props { has_app_bar = read_bool reader }
+    let has_bottom_navigation_bar = read_bool reader in
+    let has_bottom_sheet = read_bool reader in
+    Material_scaffold_props
+      { has_app_bar
+      ; has_floating_action_button
+      ; floating_action_button_location
+      ; has_bottom_navigation_bar
+      ; has_bottom_sheet
+      }
   | Material_app_bar -> Material_app_bar_props { center_title = read_bool reader }
   | Material_elevated_button ->
-    Material_button_props
-      { variant = Elevated; enabled = read_bool reader; autofocus = read_bool reader }
+    let enabled = read_bool reader in
+    let autofocus = read_bool reader in
+    Material_button_props { variant = Elevated; enabled; autofocus }
   | Material_text_button ->
-    Material_button_props
-      { variant = Text_button; enabled = read_bool reader; autofocus = read_bool reader }
+    let enabled = read_bool reader in
+    let autofocus = read_bool reader in
+    Material_button_props { variant = Text_button; enabled; autofocus }
   | Material_icon_button ->
-    Material_button_props
-      { variant = Icon_button; enabled = read_bool reader; autofocus = read_bool reader }
+    let enabled = read_bool reader in
+    let autofocus = read_bool reader in
+    Material_button_props { variant = Icon_button; enabled; autofocus }
+  | Material_filled_button ->
+    let enabled = read_bool reader in
+    let autofocus = read_bool reader in
+    Material_button_props { variant = Filled; enabled; autofocus }
+  | Material_filled_tonal_button ->
+    let enabled = read_bool reader in
+    let autofocus = read_bool reader in
+    Material_button_props { variant = Filled_tonal; enabled; autofocus }
+  | Material_outlined_button ->
+    let enabled = read_bool reader in
+    let autofocus = read_bool reader in
+    Material_button_props { variant = Outlined; enabled; autofocus }
+  | Material_floating_action_button ->
+    let variant =
+      match Reader.u8 reader with
+      | 0 -> Wire_frame.Small
+      | 1 -> Standard
+      | 2 -> Large
+      | 3 -> Extended
+      | value -> fail Invalid_props "invalid floating action button variant %d" value
+    in
+    Material_floating_action_button_props
+      { variant
+      ; enabled = read_bool reader
+      ; autofocus = read_bool reader
+      ; has_icon = read_bool reader
+      }
+  | Material_navigation_bar ->
+    let selected_index = Reader.u32 reader in
+    let destinations =
+      List.init (Reader.u16 reader) (fun _ ->
+        let label = read_string reader in
+        let enabled = read_bool reader in
+        let has_selected_icon = read_bool reader in
+        Wire_frame.{ label; enabled; has_selected_icon })
+    in
+    validate_navigation ~selected_index destinations;
+    Material_navigation_bar_props { selected_index; destinations }
+  | Material_radio_group ->
+    let selected_id =
+      match Reader.u8 reader with
+      | 0 -> None
+      | 1 -> Some (Reader.u64 reader)
+      | value -> fail Invalid_props "invalid optional radio selected ID tag %d" value
+    in
+    let options =
+      List.init (Reader.u16 reader) (fun _ ->
+        let option_id = Reader.u64 reader in
+        let enabled = read_bool reader in
+        let has_label = read_bool reader in
+        Wire_frame.{ option_id; enabled; has_label })
+    in
+    validate_radio_group ~selected_id options;
+    Material_radio_group_props { selected_id; options }
+  | Material_slider ->
+    let value = read_finite_f64 reader in
+    let min = read_finite_f64 reader in
+    let max = read_finite_f64 reader in
+    let divisions = read_optional_u32 reader in
+    let label = read_optional_string reader in
+    let enabled = read_bool reader in
+    let has_on_change = read_bool reader in
+    validate_slider ~value ~min ~max ~divisions;
+    Material_slider_props { value; min; max; divisions; label; enabled; has_on_change }
+  | Material_range_slider ->
+    let start = read_finite_f64 reader in
+    let end_ = read_finite_f64 reader in
+    let min = read_finite_f64 reader in
+    let max = read_finite_f64 reader in
+    let divisions = read_optional_u32 reader in
+    let label_start = read_optional_string reader in
+    let label_end = read_optional_string reader in
+    let enabled = read_bool reader in
+    let has_on_change = read_bool reader in
+    validate_slider ~value:start ~min ~max ~divisions;
+    validate_slider ~value:end_ ~min ~max ~divisions;
+    if Float.compare start end_ > 0
+    then fail Invalid_props "range slider selection is reversed";
+    Material_range_slider_props
+      { start; end_; min; max; divisions; label_start; label_end; enabled; has_on_change }
+  | ( Material_action_chip
+    | Material_filter_chip
+    | Material_choice_chip
+    | Material_input_chip ) as kind ->
+    let variant =
+      match kind with
+      | Material_action_chip -> Wire_frame.Action_chip
+      | Material_filter_chip -> Filter_chip
+      | Material_choice_chip -> Choice_chip
+      | Material_input_chip -> Input_chip
+      | _ -> assert false
+    in
+    let enabled = read_bool reader in
+    let selected = read_bool reader in
+    let has_avatar = read_bool reader in
+    let has_delete_icon = read_bool reader in
+    let has_on_press = read_bool reader in
+    let has_on_selected = read_bool reader in
+    let has_on_delete = read_bool reader in
+    Material_chip_props
+      { variant
+      ; enabled
+      ; selected
+      ; has_avatar
+      ; has_delete_icon
+      ; has_on_press
+      ; has_on_selected
+      ; has_on_delete
+      }
+  | Material_alert_dialog ->
+    let has_icon = read_bool reader in
+    let has_title = read_bool reader in
+    let has_content = read_bool reader in
+    let action_count = Reader.u32 reader in
+    Material_alert_dialog_props { has_icon; has_title; has_content; action_count }
   | Material_checkbox ->
     let value = read_bool reader in
     let enabled = read_bool reader in
@@ -2875,6 +3756,22 @@ let read_props reader kind ~protocol_minor =
     let handle_semantics_label = read_optional_string reader in
     let medium_semantics_value = read_optional_string reader in
     let large_semantics_value = read_optional_string reader in
+    let dialog_barrier_dismissible = read_bool reader in
+    let dialog_barrier_color_argb = read_optional_argb32 reader in
+    let dialog_barrier_label = read_optional_string reader in
+    let dialog_use_safe_area = read_bool reader in
+    let dialog_request_focus = read_bool reader in
+    let dialog_transition_duration_ms = Reader.u32 reader in
+    let dialog_reverse_transition_duration_ms = Reader.u32 reader in
+    let has_dialog_properties =
+      dialog_barrier_dismissible
+      || Option.is_some dialog_barrier_color_argb
+      || Option.is_some dialog_barrier_label
+      || dialog_use_safe_area
+      || dialog_request_focus
+      || dialog_transition_duration_ms <> 0
+      || dialog_reverse_transition_duration_ms <> 0
+    in
     let presentation =
       match presentation_kind with
       | 0 ->
@@ -2893,11 +3790,14 @@ let read_props reader kind ~protocol_minor =
           || Option.is_some handle_semantics_label
           || Option.is_some medium_semantics_value
           || Option.is_some large_semantics_value
+          || has_dialog_properties
         then fail Invalid_props "standard page has noncanonical modal properties";
         Wire_frame.Standard_page transition
       | 1 ->
         if transition <> Wire_frame.No_transition
         then fail Invalid_props "modal bottom sheet cannot carry a standard transition";
+        if has_dialog_properties
+        then fail Invalid_props "modal bottom sheet has dialog properties";
         let sizing =
           match sizing_kind with
           | 0 -> Wire_frame.Content_bounded_sizing
@@ -2945,6 +3845,34 @@ let read_props reader kind ~protocol_minor =
           ; transition_duration_ms
           ; reverse_transition_duration_ms
           }
+      | 2 ->
+        if transition <> Wire_frame.No_transition
+        then fail Invalid_props "modal dialog cannot carry a standard transition";
+        if
+          barrier_dismissible
+          || Option.is_some barrier_color_argb
+          || Option.is_some barrier_label
+          || sizing_kind <> 0
+          || use_safe_area
+          || request_focus
+          || transition_duration_ms <> 0
+          || reverse_transition_duration_ms <> 0
+          || detents <> Wire_frame.Medium_only
+          || initial_detent <> Wire_frame.Medium_detent
+          || dismiss_on_drag
+          || Option.is_some handle_semantics_label
+          || Option.is_some medium_semantics_value
+          || Option.is_some large_semantics_value
+        then fail Invalid_props "modal dialog has bottom-sheet properties";
+        Modal_dialog
+          { barrier_dismissible = dialog_barrier_dismissible
+          ; barrier_color_argb = dialog_barrier_color_argb
+          ; barrier_label = dialog_barrier_label
+          ; use_safe_area = dialog_use_safe_area
+          ; request_focus = dialog_request_focus
+          ; transition_duration_ms = dialog_transition_duration_ms
+          ; reverse_transition_duration_ms = dialog_reverse_transition_duration_ms
+          }
       | value -> fail Invalid_props "invalid page presentation %d" value
     in
     Page_props { page_key; presentation; can_pop; restoration_id }
@@ -2959,7 +3887,6 @@ let read_props reader kind ~protocol_minor =
       ; minimum_right = read_finite_f64 reader
       ; minimum_bottom = read_finite_f64 reader
       }
-  | Material_dialog -> Material_dialog_props { barrier_dismissible = read_bool reader }
   | Native_widget ->
     let kind_id_value = Reader.u32 reader in
     let version = Reader.u16 reader in
@@ -3067,6 +3994,19 @@ let read_host_request body request_id request_kind =
     then Platform_information
     else if request_kind = Generated_protocol.Host_request.measure_layout
     then Measure_layout { node_id = Reader.u64 body |> ID.Ui.Node_id.of_int64 }
+    else if request_kind = Generated_protocol.Host_request.show_snack_bar
+    then (
+      let message = read_string body in
+      let action_label = read_optional_string body in
+      let duration_ms = Reader.u32 body in
+      if String.length (String.trim message) = 0
+      then fail Invalid_props "snack bar message must not be empty";
+      (match action_label with
+       | Some label when String.length (String.trim label) = 0 ->
+         fail Invalid_props "snack bar action label must not be empty"
+       | None | Some _ -> ());
+      if duration_ms <= 0 then fail Invalid_props "snack bar duration must be positive";
+      Show_snack_bar { message; action_label; duration_ms })
     else
       fail
         Invalid_props
@@ -3145,6 +4085,11 @@ let read_operation opcode body ~protocol_minor =
       Set_children { node_id; children })
     else if opcode = Generated_protocol.Operation.set_root
     then Set_root (Reader.u64 body |> ID.Ui.Node_id.of_int64)
+    else if opcode = Generated_protocol.Operation.set_application_theme
+    then (
+      let title = read_optional_string body in
+      Option.iter (require_theme_font_name "application title") title;
+      Set_application_theme { title; theme = read_application_theme body })
     else if opcode = Generated_protocol.Operation.drop_node
     then Drop_node (Reader.u64 body |> ID.Ui.Node_id.of_int64)
     else if opcode = Generated_protocol.Operation.host_request

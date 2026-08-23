@@ -34,19 +34,21 @@ void main() {
       expect(frame.baseRevision, 0);
       expect(frame.targetRevision, 1);
       expect(frame.kind, FrameKind.fullSnapshot);
-      expect(frame.operations, hasLength(4));
-      final column = frame.operations[0] as CreateNode;
+      expect(frame.operations, hasLength(5));
+      final theme = frame.operations[0] as SetApplicationTheme;
+      expect(theme.title, 'Counter');
+      final column = frame.operations[1] as CreateNode;
       expect(column.nodeId, 1);
       expect(column.kind, NodeKind.column);
       expect(column.props, const LinearProps());
-      final text = frame.operations[1] as CreateNode;
+      final text = frame.operations[2] as CreateNode;
       expect(text.nodeId, 2);
       expect(text.kind, NodeKind.text);
       expect(text.props, const TextProps('Count: 0'));
-      final children = frame.operations[2] as SetChildren;
+      final children = frame.operations[3] as SetChildren;
       expect(children.nodeId, 1);
       expect(children.children, [2]);
-      expect((frame.operations[3] as SetRoot).nodeId, 1);
+      expect((frame.operations[4] as SetRoot).nodeId, 1);
       expectFixtureMatchesDartEncoding(
         'ocaml_counter_full.hex',
         counterSnapshot(text: 'Count: 0'),

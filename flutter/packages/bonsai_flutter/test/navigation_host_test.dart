@@ -1,6 +1,8 @@
+import 'fixture.dart';
 import 'dart:ui' show ImageByteFormat, PointerDeviceKind, SemanticsAction;
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
+import 'package:bonsai_flutter/src/navigation/navigation_host.dart';
 import 'package:bonsai_flutter/src/navigation/modal_bottom_sheet_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show OffsetLayer;
@@ -38,6 +40,63 @@ void main() {
       events.single.payload,
       const RoutePopEventPayload(pageKey: 'settings', result: null),
     );
+  });
+
+  testWidgets('modal dialog presentation owns barrier and transition policy', (
+    tester,
+  ) async {
+    final events = <RendererEvent>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NavigationHost(
+          restorationScopeId: null,
+          nodeId: 1,
+          binding: const EventBinding(
+            eventTag: EventTagId.routePop,
+            handlerId: 2,
+          ),
+          onEvent: events.add,
+          pages: const [
+            NavigationEntry(
+              props: PageProps(
+                pageKey: 'home',
+                presentation: StandardPagePresentation(PageTransition.none),
+                canPop: false,
+                restorationId: null,
+              ),
+              child: Scaffold(body: Text('Home')),
+            ),
+            NavigationEntry(
+              props: PageProps(
+                pageKey: 'confirm',
+                presentation: ModalDialogPresentation(
+                  barrierDismissible: false,
+                  barrierColorArgb: 0x7f112233,
+                  barrierLabel: 'Close confirmation',
+                  useSafeArea: true,
+                  requestFocus: true,
+                  transitionDurationMilliseconds: 180,
+                  reverseTransitionDurationMilliseconds: 120,
+                ),
+                canPop: true,
+                restorationId: 'confirm-dialog',
+              ),
+              child: AlertDialog(title: Text('Confirm')),
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+    final route = ModalRoute.of(tester.element(find.byType(AlertDialog)))!;
+    expect(route.barrierDismissible, isFalse);
+    expect(route.barrierColor, const Color(0x7f112233));
+    expect(route.barrierLabel, 'Close confirmation');
+    expect(route.transitionDuration, const Duration(milliseconds: 180));
+    expect(route.reverseTransitionDuration, const Duration(milliseconds: 120));
+    expect(events, isEmpty);
   });
 
   group('Slide navigation', () {
@@ -1875,6 +1934,7 @@ Frame _rootPageFrame() => const Frame(
   targetRevision: 1,
   kind: FrameKind.fullSnapshot,
   operations: [
+    SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
     CreateNode(
       nodeId: 1,
       kind: NodeKind.navigator,
@@ -1954,6 +2014,7 @@ Frame _navigationSnapshot() => const Frame(
   targetRevision: 1,
   kind: FrameKind.fullSnapshot,
   operations: [
+    SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
     CreateNode(
       nodeId: 1,
       kind: NodeKind.navigator,
@@ -2019,8 +2080,13 @@ Frame _navigationSnapshot() => const Frame(
     ),
     CreateNode(
       nodeId: 9,
-      kind: NodeKind.materialDialog,
-      props: MaterialDialogProps(barrierDismissible: false),
+      kind: NodeKind.materialAlertDialog,
+      props: MaterialAlertDialogProps(
+        hasIcon: false,
+        hasTitle: false,
+        hasContent: true,
+        actionCount: 0,
+      ),
       eventBindings: [],
     ),
     CreateNode(
@@ -2443,6 +2509,7 @@ Frame _modalSnapshot(
   targetRevision: 1,
   kind: FrameKind.fullSnapshot,
   operations: [
+    const SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
     const CreateNode(
       nodeId: 1,
       kind: NodeKind.navigator,
@@ -2863,6 +2930,7 @@ Frame _detentedSnapshot({
   targetRevision: 1,
   kind: FrameKind.fullSnapshot,
   operations: [
+    const SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
     const CreateNode(
       nodeId: 1,
       kind: NodeKind.navigator,
@@ -3021,6 +3089,7 @@ Frame _modalOnlySnapshot() => Frame(
   targetRevision: 1,
   kind: FrameKind.fullSnapshot,
   operations: [
+    const SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
     const CreateNode(
       nodeId: 1,
       kind: NodeKind.navigator,

@@ -33,6 +33,7 @@ module Operation : sig
   val runtime_notification : Bonsai_flutter_spec.Id.Protocol.operation
   val end_frame : Bonsai_flutter_spec.Id.Protocol.operation
   val application_request : Bonsai_flutter_spec.Id.Protocol.operation
+  val set_application_theme : Bonsai_flutter_spec.Id.Protocol.operation
   val debug_name : Bonsai_flutter_spec.Id.Protocol.operation -> string option
 end
 
@@ -91,10 +92,23 @@ module Node_kind : sig
   val material_list_tile : Bonsai_flutter_spec.Id.Protocol.node_kind
   val material_divider : Bonsai_flutter_spec.Id.Protocol.node_kind
   val material_card : Bonsai_flutter_spec.Id.Protocol.node_kind
-  val material_dialog : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val reserved_node_kind_107 : Bonsai_flutter_spec.Id.Protocol.node_kind
   val material_circular_progress_indicator : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val material_filled_button : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val material_filled_tonal_button : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val material_outlined_button : Bonsai_flutter_spec.Id.Protocol.node_kind
   val cupertino_button : Bonsai_flutter_spec.Id.Protocol.node_kind
   val cupertino_switch : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val material_floating_action_button : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val material_navigation_bar : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val material_radio_group : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val material_slider : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val material_range_slider : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val material_action_chip : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val material_filter_chip : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val material_choice_chip : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val material_input_chip : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val material_alert_dialog : Bonsai_flutter_spec.Id.Protocol.node_kind
   val native_widget : Bonsai_flutter_spec.Id.Protocol.node_kind
   val debug_name : Bonsai_flutter_spec.Id.Protocol.node_kind -> string option
 end
@@ -127,6 +141,13 @@ module Event_tag : sig
   val application_response : Bonsai_flutter_spec.Id.Protocol.event_tag
   val application_request_error : Bonsai_flutter_spec.Id.Protocol.event_tag
   val application_event : Bonsai_flutter_spec.Id.Protocol.event_tag
+  val navigation_destination_selected : Bonsai_flutter_spec.Id.Protocol.event_tag
+  val radio_selected : Bonsai_flutter_spec.Id.Protocol.event_tag
+  val slider_changed : Bonsai_flutter_spec.Id.Protocol.event_tag
+  val slider_change_end : Bonsai_flutter_spec.Id.Protocol.event_tag
+  val range_slider_changed : Bonsai_flutter_spec.Id.Protocol.event_tag
+  val range_slider_change_end : Bonsai_flutter_spec.Id.Protocol.event_tag
+  val delete : Bonsai_flutter_spec.Id.Protocol.event_tag
   val debug_name : Bonsai_flutter_spec.Id.Protocol.event_tag -> string option
 end
 
@@ -145,6 +166,7 @@ module Host_request : sig
   val haptic_feedback : Bonsai_flutter_spec.Id.Protocol.host_request_kind
   val platform_information : Bonsai_flutter_spec.Id.Protocol.host_request_kind
   val measure_layout : Bonsai_flutter_spec.Id.Protocol.host_request_kind
+  val show_snack_bar : Bonsai_flutter_spec.Id.Protocol.host_request_kind
   val debug_name : Bonsai_flutter_spec.Id.Protocol.host_request_kind -> string option
 end
 
@@ -380,13 +402,16 @@ module Semantics_prop : sig
 end
 
 module Theme_prop : sig
-  val brightness : Bonsai_flutter_spec.Id.Protocol.property
-  val color_seed : Bonsai_flutter_spec.Id.Protocol.property
+  val data : Bonsai_flutter_spec.Id.Protocol.property
   val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
 end
 
 module Material_scaffold_prop : sig
   val has_app_bar : Bonsai_flutter_spec.Id.Protocol.property
+  val has_floating_action_button : Bonsai_flutter_spec.Id.Protocol.property
+  val floating_action_button_location : Bonsai_flutter_spec.Id.Protocol.property
+  val has_bottom_navigation_bar : Bonsai_flutter_spec.Id.Protocol.property
+  val has_bottom_sheet : Bonsai_flutter_spec.Id.Protocol.property
   val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
 end
 
@@ -410,6 +435,120 @@ end
 module Material_icon_button_prop : sig
   val enabled : Bonsai_flutter_spec.Id.Protocol.property
   val autofocus : Bonsai_flutter_spec.Id.Protocol.property
+  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
+end
+
+module Material_filled_button_prop : sig
+  val enabled : Bonsai_flutter_spec.Id.Protocol.property
+  val autofocus : Bonsai_flutter_spec.Id.Protocol.property
+  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
+end
+
+module Material_filled_tonal_button_prop : sig
+  val enabled : Bonsai_flutter_spec.Id.Protocol.property
+  val autofocus : Bonsai_flutter_spec.Id.Protocol.property
+  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
+end
+
+module Material_outlined_button_prop : sig
+  val enabled : Bonsai_flutter_spec.Id.Protocol.property
+  val autofocus : Bonsai_flutter_spec.Id.Protocol.property
+  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
+end
+
+module Material_floating_action_button_prop : sig
+  val variant : Bonsai_flutter_spec.Id.Protocol.property
+  val enabled : Bonsai_flutter_spec.Id.Protocol.property
+  val autofocus : Bonsai_flutter_spec.Id.Protocol.property
+  val has_icon : Bonsai_flutter_spec.Id.Protocol.property
+  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
+end
+
+module Material_navigation_bar_prop : sig
+  val selected_index : Bonsai_flutter_spec.Id.Protocol.property
+  val destinations : Bonsai_flutter_spec.Id.Protocol.property
+  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
+end
+
+module Material_radio_group_prop : sig
+  val selected_id : Bonsai_flutter_spec.Id.Protocol.property
+  val options : Bonsai_flutter_spec.Id.Protocol.property
+  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
+end
+
+module Material_slider_prop : sig
+  val value : Bonsai_flutter_spec.Id.Protocol.property
+  val min : Bonsai_flutter_spec.Id.Protocol.property
+  val max : Bonsai_flutter_spec.Id.Protocol.property
+  val divisions : Bonsai_flutter_spec.Id.Protocol.property
+  val label : Bonsai_flutter_spec.Id.Protocol.property
+  val enabled : Bonsai_flutter_spec.Id.Protocol.property
+  val has_on_change : Bonsai_flutter_spec.Id.Protocol.property
+  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
+end
+
+module Material_range_slider_prop : sig
+  val start : Bonsai_flutter_spec.Id.Protocol.property
+  val end_value : Bonsai_flutter_spec.Id.Protocol.property
+  val min : Bonsai_flutter_spec.Id.Protocol.property
+  val max : Bonsai_flutter_spec.Id.Protocol.property
+  val divisions : Bonsai_flutter_spec.Id.Protocol.property
+  val label_start : Bonsai_flutter_spec.Id.Protocol.property
+  val label_end : Bonsai_flutter_spec.Id.Protocol.property
+  val enabled : Bonsai_flutter_spec.Id.Protocol.property
+  val has_on_change : Bonsai_flutter_spec.Id.Protocol.property
+  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
+end
+
+module Material_action_chip_prop : sig
+  val enabled : Bonsai_flutter_spec.Id.Protocol.property
+  val selected : Bonsai_flutter_spec.Id.Protocol.property
+  val has_avatar : Bonsai_flutter_spec.Id.Protocol.property
+  val has_delete_icon : Bonsai_flutter_spec.Id.Protocol.property
+  val has_on_press : Bonsai_flutter_spec.Id.Protocol.property
+  val has_on_selected : Bonsai_flutter_spec.Id.Protocol.property
+  val has_on_delete : Bonsai_flutter_spec.Id.Protocol.property
+  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
+end
+
+module Material_filter_chip_prop : sig
+  val enabled : Bonsai_flutter_spec.Id.Protocol.property
+  val selected : Bonsai_flutter_spec.Id.Protocol.property
+  val has_avatar : Bonsai_flutter_spec.Id.Protocol.property
+  val has_delete_icon : Bonsai_flutter_spec.Id.Protocol.property
+  val has_on_press : Bonsai_flutter_spec.Id.Protocol.property
+  val has_on_selected : Bonsai_flutter_spec.Id.Protocol.property
+  val has_on_delete : Bonsai_flutter_spec.Id.Protocol.property
+  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
+end
+
+module Material_choice_chip_prop : sig
+  val enabled : Bonsai_flutter_spec.Id.Protocol.property
+  val selected : Bonsai_flutter_spec.Id.Protocol.property
+  val has_avatar : Bonsai_flutter_spec.Id.Protocol.property
+  val has_delete_icon : Bonsai_flutter_spec.Id.Protocol.property
+  val has_on_press : Bonsai_flutter_spec.Id.Protocol.property
+  val has_on_selected : Bonsai_flutter_spec.Id.Protocol.property
+  val has_on_delete : Bonsai_flutter_spec.Id.Protocol.property
+  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
+end
+
+module Material_input_chip_prop : sig
+  val enabled : Bonsai_flutter_spec.Id.Protocol.property
+  val selected : Bonsai_flutter_spec.Id.Protocol.property
+  val has_avatar : Bonsai_flutter_spec.Id.Protocol.property
+  val has_delete_icon : Bonsai_flutter_spec.Id.Protocol.property
+  val has_on_press : Bonsai_flutter_spec.Id.Protocol.property
+  val has_on_selected : Bonsai_flutter_spec.Id.Protocol.property
+  val has_on_delete : Bonsai_flutter_spec.Id.Protocol.property
+  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
+end
+
+module Material_alert_dialog_prop : sig
+  val has_icon : Bonsai_flutter_spec.Id.Protocol.property
+  val has_title : Bonsai_flutter_spec.Id.Protocol.property
+  val has_content : Bonsai_flutter_spec.Id.Protocol.property
+  val action_count : Bonsai_flutter_spec.Id.Protocol.property
   val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
 end
 
@@ -507,6 +646,13 @@ module Page_prop : sig
   val modal_handle_semantics_label : Bonsai_flutter_spec.Id.Protocol.property
   val modal_medium_semantics_value : Bonsai_flutter_spec.Id.Protocol.property
   val modal_large_semantics_value : Bonsai_flutter_spec.Id.Protocol.property
+  val dialog_barrier_dismissible : Bonsai_flutter_spec.Id.Protocol.property
+  val dialog_barrier_color : Bonsai_flutter_spec.Id.Protocol.property
+  val dialog_barrier_label : Bonsai_flutter_spec.Id.Protocol.property
+  val dialog_use_safe_area : Bonsai_flutter_spec.Id.Protocol.property
+  val dialog_request_focus : Bonsai_flutter_spec.Id.Protocol.property
+  val dialog_transition_duration_ms : Bonsai_flutter_spec.Id.Protocol.property
+  val dialog_reverse_transition_duration_ms : Bonsai_flutter_spec.Id.Protocol.property
   val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
 end
 
@@ -516,11 +662,6 @@ module Safe_area_prop : sig
   val right : Bonsai_flutter_spec.Id.Protocol.property
   val bottom : Bonsai_flutter_spec.Id.Protocol.property
   val minimum : Bonsai_flutter_spec.Id.Protocol.property
-  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
-end
-
-module Material_dialog_prop : sig
-  val barrier_dismissible : Bonsai_flutter_spec.Id.Protocol.property
   val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
 end
 

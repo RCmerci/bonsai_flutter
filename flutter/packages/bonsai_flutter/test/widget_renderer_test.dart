@@ -70,6 +70,7 @@ void main() {
             targetRevision: 1,
             kind: FrameKind.fullSnapshot,
             operations: [
+              SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
               CreateNode(
                 nodeId: 1,
                 kind: NodeKind.semantics,
@@ -192,6 +193,7 @@ void main() {
           targetRevision: 1,
           kind: FrameKind.fullSnapshot,
           operations: [
+            SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
             CreateNode(
               nodeId: 1,
               kind: NodeKind.gesture,
@@ -305,6 +307,7 @@ void main() {
           targetRevision: 1,
           kind: FrameKind.fullSnapshot,
           operations: [
+            SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
             CreateNode(
               nodeId: 1,
               kind: NodeKind.gesture,
@@ -387,6 +390,7 @@ void main() {
         targetRevision: 1,
         kind: FrameKind.fullSnapshot,
         operations: [
+          SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
           CreateNode(
             nodeId: 8,
             kind: NodeKind.text,
@@ -415,13 +419,11 @@ void main() {
           targetRevision: 1,
           kind: FrameKind.fullSnapshot,
           operations: [
+            SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
             CreateNode(
               nodeId: 1,
               kind: NodeKind.theme,
-              props: ThemeProps(
-                brightness: ThemeBrightness.dark,
-                colorSeedArgb: 0xff2060a0,
-              ),
+              props: ThemeProps(data: testDarkThemeData),
               eventBindings: [],
             ),
             CreateNode(
@@ -572,6 +574,7 @@ void main() {
           targetRevision: 7,
           kind: FrameKind.fullSnapshot,
           operations: [
+            SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
             CreateNode(
               nodeId: 1,
               kind: NodeKind.text,
@@ -611,6 +614,7 @@ void main() {
           targetRevision: 1,
           kind: FrameKind.fullSnapshot,
           operations: [
+            SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
             CreateNode(
               nodeId: 1,
               kind: NodeKind.column,
@@ -670,6 +674,7 @@ void main() {
           targetRevision: 1,
           kind: FrameKind.fullSnapshot,
           operations: [
+            SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
             CreateNode(
               nodeId: 1,
               kind: NodeKind.materialScaffold,
@@ -790,6 +795,7 @@ void main() {
           targetRevision: 1,
           kind: FrameKind.fullSnapshot,
           operations: [
+            SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
             CreateNode(
               nodeId: 1,
               kind: NodeKind.column,
@@ -935,7 +941,13 @@ void main() {
           baseRevision: 0,
           targetRevision: 1,
           kind: FrameKind.fullSnapshot,
-          operations: operations,
+          operations: [
+            const SetApplicationTheme(
+              title: 'Test',
+              theme: testApplicationTheme,
+            ),
+            ...operations,
+          ],
         ),
       );
 
@@ -960,6 +972,7 @@ Frame counterWidgetSnapshot() => const Frame(
   targetRevision: 1,
   kind: FrameKind.fullSnapshot,
   operations: [
+    SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
     CreateNode(
       nodeId: 1,
       kind: NodeKind.column,

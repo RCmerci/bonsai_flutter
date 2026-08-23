@@ -1,3 +1,4 @@
+import 'fixture.dart';
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -31,6 +32,10 @@ void main() {
             targetRevision: 1,
             kind: FrameKind.fullSnapshot,
             operations: [
+              const SetApplicationTheme(
+                title: 'Test',
+                theme: testApplicationTheme,
+              ),
               ApplicationRequestOperation(requestId: 11, payload: firstRequest),
               ApplicationRequestOperation(
                 requestId: 12,
@@ -275,6 +280,7 @@ Frame _requestFrame({required int epoch, required int requestId}) => Frame(
   targetRevision: 1,
   kind: FrameKind.fullSnapshot,
   operations: [
+    const SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
     ApplicationRequestOperation(
       requestId: requestId,
       payload: Uint8List.fromList([1, 2, 3]),

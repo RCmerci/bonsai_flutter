@@ -23,6 +23,13 @@ module Tag : sig
     | Value_changed
     | Native_event
     | Semantics_action
+    | Navigation_destination_selected
+    | Radio_selected
+    | Slider_changed
+    | Slider_change_end
+    | Range_slider_changed
+    | Range_slider_change_end
+    | Delete
 
   val compare : t -> t -> int
   val equal : t -> t -> bool
@@ -116,6 +123,11 @@ module Payload : sig
     | Text of string
     | Text_edit of text_edit
     | Int64 of int64
+    | Float of float
+    | Float_range of
+        { start : float
+        ; end_ : float
+        }
     | Tap of tap
     | Pointer of pointer
     | Key of key

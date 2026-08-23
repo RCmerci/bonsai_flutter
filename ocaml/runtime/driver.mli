@@ -43,6 +43,24 @@ module Handler : sig
   val wait_before_display : t -> unit Bonsai.Effect.t
 end
 
+module View : sig
+  type t
+
+  val create
+    :  theme:Bonsai_flutter_ui.Theme.application
+    -> body:Bonsai_flutter_ui.Widget.t
+    -> t
+
+  module Private : sig
+    type view =
+      { theme : Bonsai_flutter_ui.Theme.application
+      ; body : Bonsai_flutter_ui.Widget.t
+      }
+
+    val view : t -> view
+  end
+end
+
 type frame =
   { revision : Bonsai_flutter_spec.Id.Runtime.renderer_revision
   ; frame_patch : Bonsai_flutter_runtime.Frame_patch.t
@@ -82,9 +100,10 @@ val create
   :  ?trace:(string -> unit)
   -> ?before_flush:(schedule:(unit Bonsai.Effect.t -> unit) -> unit)
   -> ?before_shutdown:(unit -> unit)
+  -> ?application_title:string
   -> runtime_epoch:Bonsai_flutter_spec.Id.Runtime.epoch
   -> time_source:Bonsai.Time_source.t
-  -> (Handler.t -> Bonsai.Cont.graph -> Bonsai_flutter_ui.Widget.t Bonsai.Cont.t)
+  -> (Handler.t -> Bonsai.Cont.graph -> View.t Bonsai.Cont.t)
   -> t
 
 (** Advances logical time, consumes at most one atomic input batch, drains the
@@ -115,6 +134,15 @@ val shutdown : ?application_error:Host_effect.Application_platform.error -> t ->
 val is_shutdown : t -> bool
 
 module For_testing : sig
+  val create_widget_component
+    :  ?trace:(string -> unit)
+    -> ?before_flush:(schedule:(unit Bonsai.Effect.t -> unit) -> unit)
+    -> ?before_shutdown:(unit -> unit)
+    -> runtime_epoch:Bonsai_flutter_spec.Id.Runtime.epoch
+    -> time_source:Bonsai.Time_source.t
+    -> (Handler.t -> Bonsai.Cont.graph -> Bonsai_flutter_ui.Widget.t Bonsai.Cont.t)
+    -> t
+
   val runtime_epoch : t -> Bonsai_flutter_spec.Id.Runtime.epoch
   val revision : t -> Bonsai_flutter_spec.Id.Runtime.renderer_revision
   val snapshot : t -> Bonsai_flutter_runtime.Mounted_tree.Snapshot.t option

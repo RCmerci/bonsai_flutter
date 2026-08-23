@@ -885,16 +885,10 @@ let view ~timings model recurring_state deadline_state exact_now approx_now hand
               ())
   in
   let body = Ui.Widget.Body.Vertical.create [ Ui.Widget.Body.Vertical.fill viewport ] in
-  Ui.Widget.theme
-    ~data:
-      (Ui.Theme.material
-         ~brightness:Ui.Style.Brightness.Light
-         ~color_seed:(Ui.Style.Color.rgb ~red:30 ~green:72 ~blue:116)
-         ())
-    (Ui.Material.scaffold
-       ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Clock") ())
-       ~body
-       ())
+  Ui.Material.scaffold
+    ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Clock") ())
+    ~body
+    ()
 ;;
 
 let component handlers graph =
@@ -984,4 +978,23 @@ let component handlers graph =
   ui
 ;;
 
-let app = App.create ~name:"Clock" component
+let application_theme =
+  let color_scheme =
+    Ui.Theme.Color_scheme.from_seed
+      ~color:(Ui.Style.Color.rgb ~red:30 ~green:72 ~blue:116)
+      ()
+  in
+  let data brightness = Ui.Theme.material ~brightness ~color_scheme () in
+  Ui.Theme.application
+    ~mode:Ui.Theme.System
+    ~light:(data Ui.Style.Brightness.Light)
+    ~dark:(data Ui.Style.Brightness.Dark)
+    ()
+;;
+
+let application_component handlers graph =
+  Bonsai.Cont.map (component handlers graph) ~f:(fun body ->
+    App.View.create ~theme:application_theme ~body)
+;;
+
+let app = App.create ~name:"Clock" application_component

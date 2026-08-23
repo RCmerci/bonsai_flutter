@@ -17,9 +17,9 @@ final class SqliteWorkerApplication extends StatelessWidget {
   const SqliteWorkerApplication({super.key});
 
   @override
-  Widget build(BuildContext context) => const MaterialApp(
-    title: 'bonsai_flutter SQLite Worker Todo',
-    home: SqliteWorkerHost(),
+  Widget build(BuildContext context) => const Directionality(
+    textDirection: TextDirection.ltr,
+    child: SqliteWorkerHost(),
   );
 }
 
@@ -165,15 +165,13 @@ final class _SqliteWorkerHostState extends State<SqliteWorkerHost> {
       );
     }
     return _withStartupTiming(
-      Material(
-        child: BonsaiFlutterRoot(
-          config: Uint8List.fromList(bootstrap.runtimeConfig),
-          runtimeStarter: _startRuntime,
-          loading: const _MessageScreen(title: 'Starting Todo worker…'),
-          errorBuilder: (context, runtimeError) => _MessageScreen(
-            title: 'Unable to start Todo worker',
-            detail: runtimeError.toString(),
-          ),
+      BonsaiFlutterRoot(
+        config: Uint8List.fromList(bootstrap.runtimeConfig),
+        runtimeStarter: _startRuntime,
+        loading: const _MessageScreen(title: 'Starting Todo worker…'),
+        errorBuilder: (context, runtimeError) => _MessageScreen(
+          title: 'Unable to start Todo worker',
+          detail: runtimeError.toString(),
         ),
       ),
     );
@@ -185,48 +183,50 @@ final class _SqliteWorkerHostState extends State<SqliteWorkerHost> {
       Positioned(
         right: 12,
         bottom: 12,
-        child: SafeArea(
-          child: IgnorePointer(
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: DefaultTextStyle(
-                  style: Theme.of(context).textTheme.bodySmall!,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Host startup timings',
-                        style: Theme.of(context).textTheme.titleSmall,
+        child: IgnorePointer(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xfff1f0f4),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: DefaultTextStyle(
+                style: const TextStyle(color: Color(0xff45464f), fontSize: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Host startup timings',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      _stageText(
+                        'Storage bootstrap',
+                        _storageBootstrap,
+                        _storageBootstrapFailure,
                       ),
-                      Text(
-                        _stageText(
-                          'Storage bootstrap',
-                          _storageBootstrap,
-                          _storageBootstrapFailure,
-                        ),
+                    ),
+                    Text(
+                      _stageText(
+                        'Runtime + Worker ready',
+                        _runtimeAndWorker,
+                        _runtimeAndWorkerFailure,
                       ),
-                      Text(
-                        _stageText(
-                          'Runtime + Worker ready',
-                          _runtimeAndWorker,
-                          _runtimeAndWorkerFailure,
-                        ),
+                    ),
+                    Text(
+                      _stageText('First OCaml frame', _firstOcamlFrame, null),
+                    ),
+                    Text(
+                      _stageText(
+                        'First Flutter presentation',
+                        _firstFlutterPresentation,
+                        null,
                       ),
-                      Text(
-                        _stageText('First OCaml frame', _firstOcamlFrame, null),
-                      ),
-                      Text(
-                        _stageText(
-                          'First Flutter presentation',
-                          _firstFlutterPresentation,
-                          null,
-                        ),
-                      ),
-                      Text(_totalText()),
-                    ],
-                  ),
+                    ),
+                    Text(_totalText()),
+                  ],
                 ),
               ),
             ),
@@ -339,19 +339,23 @@ final class _MessageScreen extends StatelessWidget {
   final String? detail;
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    body: Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(title, textAlign: TextAlign.center),
-            if (detail case final detail?) ...[
-              const SizedBox(height: 12),
-              Text(detail, textAlign: TextAlign.center),
+  Widget build(BuildContext context) => ColoredBox(
+    color: const Color(0xfffafafa),
+    child: DefaultTextStyle(
+      style: const TextStyle(color: Color(0xff1b1b1f), fontSize: 16),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(title, textAlign: TextAlign.center),
+              if (detail case final detail?) ...[
+                const SizedBox(height: 12),
+                Text(detail, textAlign: TextAlign.center),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     ),

@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/pump_bonsai.dart';
+import 'fixture.dart';
 
 const duplicateKeyDiagnostic =
     'duplicate key "journal-row-focus:duplicate" in candidate children\n\n'
@@ -19,6 +20,252 @@ const duplicateKeyDiagnostic =
     '  child[2]: Focus_scope[key="journal-row-focus:duplicate"]';
 
 void main() {
+  testWidgets(
+    'root installs the committed OCaml theme on the only MaterialApp',
+    (tester) async {
+      final runtime = _OrderedRuntimeSession();
+
+      await tester.pumpWidget(
+        BonsaiFlutterRoot(
+          config: Uint8List(0),
+          runtimeStarter: (_) async => runtime,
+        ),
+      );
+      await tester.pump();
+      expect(find.byType(MaterialApp), findsNothing);
+
+      runtime.emitCycle(
+        presentationId: 900,
+        revision: 1,
+        bytes: FrameCodec.encode(counterWidgetSnapshot()),
+      );
+      await tester.pump();
+
+      expect(find.byType(MaterialApp), findsOneWidget);
+      final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+      expect(app.title, 'Counter');
+      expect(app.themeMode, ThemeMode.system);
+      expect(app.theme!.useMaterial3, isTrue);
+      expect(app.theme!.brightness, Brightness.light);
+      expect(app.darkTheme!.brightness, Brightness.dark);
+      expect(identical(app.highContrastTheme, app.theme), isTrue);
+      expect(identical(app.highContrastDarkTheme, app.darkTheme), isTrue);
+    },
+  );
+
+  testWidgets('root installs explicit high-contrast variants', (tester) async {
+    final runtime = _OrderedRuntimeSession();
+    final snapshot = counterWidgetSnapshot();
+    final highContrastLight = testLightThemeData.copyWith(
+      colorScheme: const ThemeColorSchemeValue(
+        seedArgb: 0xffb3261e,
+        variant: ThemeDynamicVariant.monochrome,
+        contrastLevel: 1,
+      ),
+    );
+    final highContrastDark = testDarkThemeData.copyWith(
+      colorScheme: const ThemeColorSchemeValue(
+        seedArgb: 0xff7d5260,
+        variant: ThemeDynamicVariant.vibrant,
+        contrastLevel: 1,
+      ),
+    );
+
+    await tester.pumpWidget(
+      BonsaiFlutterRoot(
+        config: Uint8List(0),
+        runtimeStarter: (_) async => runtime,
+      ),
+    );
+    await tester.pump();
+    runtime.emitCycle(
+      presentationId: 905,
+      revision: 1,
+      bytes: FrameCodec.encode(
+        Frame(
+          runtimeEpoch: snapshot.runtimeEpoch,
+          baseRevision: snapshot.baseRevision,
+          targetRevision: snapshot.targetRevision,
+          kind: snapshot.kind,
+          operations: [
+            SetApplicationTheme(
+              title: 'Counter',
+              theme: ApplicationThemeValue(
+                mode: ApplicationThemeMode.system,
+                light: testLightThemeData,
+                dark: testDarkThemeData,
+                highContrastLight: highContrastLight,
+                highContrastDark: highContrastDark,
+              ),
+            ),
+            ...snapshot.operations.skip(1),
+          ],
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(identical(app.highContrastTheme, app.theme), isFalse);
+    expect(identical(app.highContrastDarkTheme, app.darkTheme), isFalse);
+    expect(app.highContrastTheme!.brightness, Brightness.light);
+    expect(app.highContrastDarkTheme!.brightness, Brightness.dark);
+    expect(
+      app.highContrastTheme!.colorScheme.primary,
+      isNot(app.theme!.colorScheme.primary),
+    );
+  });
+
+  testWidgets('an unrelated widget frame reuses decoded theme state', (
+    tester,
+  ) async {
+    final runtime = _OrderedRuntimeSession();
+    await tester.pumpWidget(
+      BonsaiFlutterRoot(
+        config: Uint8List(0),
+        runtimeStarter: (_) async => runtime,
+      ),
+    );
+    await tester.pump();
+    runtime.emitCycle(
+      presentationId: 906,
+      revision: 1,
+      bytes: FrameCodec.encode(counterWidgetSnapshot()),
+    );
+    await tester.pump();
+    final appBefore = tester.widget<MaterialApp>(find.byType(MaterialApp));
+
+    runtime.emitCycle(
+      presentationId: 907,
+      revision: 2,
+      bytes: FrameCodec.encode(
+        const Frame(
+          runtimeEpoch: 21,
+          baseRevision: 1,
+          targetRevision: 2,
+          kind: FrameKind.incremental,
+          operations: [UpdateProps(nodeId: 2, props: TextProps('Count: 1'))],
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final appAfter = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(identical(appAfter.theme, appBefore.theme), isTrue);
+    expect(identical(appAfter.darkTheme, appBefore.darkTheme), isTrue);
+    expect(
+      identical(appAfter.highContrastTheme, appBefore.highContrastTheme),
+      isTrue,
+    );
+    expect(
+      identical(
+        appAfter.highContrastDarkTheme,
+        appBefore.highContrastDarkTheme,
+      ),
+      isTrue,
+    );
+  });
+
+  testWidgets('a theme-only frame updates the existing MaterialApp state', (
+    tester,
+  ) async {
+    final runtime = _OrderedRuntimeSession();
+    await tester.pumpWidget(
+      BonsaiFlutterRoot(
+        config: Uint8List(0),
+        runtimeStarter: (_) async => runtime,
+      ),
+    );
+    await tester.pump();
+    runtime.emitCycle(
+      presentationId: 901,
+      revision: 1,
+      bytes: FrameCodec.encode(counterWidgetSnapshot()),
+    );
+    await tester.pump();
+    final stateBefore = tester.state(find.byType(MaterialApp));
+
+    runtime.emitCycle(
+      presentationId: 902,
+      revision: 2,
+      bytes: FrameCodec.encode(
+        const Frame(
+          runtimeEpoch: 21,
+          baseRevision: 1,
+          targetRevision: 2,
+          kind: FrameKind.incremental,
+          operations: [
+            SetApplicationTheme(
+              title: 'Counter dark',
+              theme: ApplicationThemeValue(
+                mode: ApplicationThemeMode.dark,
+                light: testLightThemeData,
+                dark: testDarkThemeData,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      identical(tester.state(find.byType(MaterialApp)), stateBefore),
+      isTrue,
+    );
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.title, 'Counter dark');
+    expect(app.themeMode, ThemeMode.dark);
+  });
+
+  testWidgets('runtime replacement clears the previous committed theme', (
+    tester,
+  ) async {
+    final first = _OrderedRuntimeSession();
+    final second = _OrderedRuntimeSession();
+    var starts = 0;
+    Future<RuntimeSession> starter(Uint8List config) async {
+      starts += 1;
+      return config.single == 1 ? first : second;
+    }
+
+    await tester.pumpWidget(
+      BonsaiFlutterRoot(
+        config: Uint8List.fromList([1]),
+        runtimeStarter: starter,
+      ),
+    );
+    await tester.pump();
+    first.emitCycle(
+      presentationId: 903,
+      revision: 1,
+      bytes: FrameCodec.encode(counterWidgetSnapshot()),
+    );
+    await tester.pump();
+    expect(find.byType(MaterialApp), findsOneWidget);
+
+    await tester.pumpWidget(
+      BonsaiFlutterRoot(
+        config: Uint8List.fromList([2]),
+        runtimeStarter: starter,
+      ),
+    );
+    await tester.pump();
+
+    expect(first.disposed, isTrue);
+    expect(find.byType(MaterialApp), findsNothing);
+
+    await pumpBonsaiFrames(tester, count: 6);
+    expect(starts, 2);
+    second.emitCycle(
+      presentationId: 904,
+      revision: 1,
+      bytes: FrameCodec.encode(counterWidgetSnapshot()),
+    );
+    await pumpBonsaiFrames(tester, count: 2);
+    expect(find.byType(MaterialApp), findsOneWidget);
+  });
+
   testWidgets('root owns runtime startup, event flushing, and presentation', (
     tester,
   ) async {
@@ -105,6 +352,10 @@ void main() {
           targetRevision: 1,
           kind: FrameKind.fullSnapshot,
           operations: [
+            const SetApplicationTheme(
+              title: 'Application bridge',
+              theme: testApplicationTheme,
+            ),
             const CreateNode(
               nodeId: 1,
               kind: NodeKind.text,
@@ -521,6 +772,10 @@ void main() {
               targetRevision: 1,
               kind: FrameKind.fullSnapshot,
               operations: [
+                SetApplicationTheme(
+                  title: 'Host dispatch',
+                  theme: testApplicationTheme,
+                ),
                 CreateNode(
                   nodeId: 1,
                   kind: NodeKind.text,
@@ -795,6 +1050,10 @@ final class _HostRequestRuntimeSession extends _LegacyRuntimeSessionAdapter {
         targetRevision: 1,
         kind: FrameKind.fullSnapshot,
         operations: [
+          SetApplicationTheme(
+            title: 'Clipboard runtime',
+            theme: testApplicationTheme,
+          ),
           CreateNode(
             nodeId: 1,
             kind: NodeKind.text,
@@ -874,6 +1133,10 @@ final class _FocusHostRequestRuntimeSession
         targetRevision: 1,
         kind: FrameKind.fullSnapshot,
         operations: [
+          SetApplicationTheme(
+            title: 'Focus runtime',
+            theme: testApplicationTheme,
+          ),
           CreateNode(
             nodeId: 7,
             kind: NodeKind.textInput,
@@ -1115,6 +1378,10 @@ final class _ResyncRuntimeSession extends _LegacyRuntimeSessionAdapter {
             targetRevision: 2,
             kind: FrameKind.fullSnapshot,
             operations: [
+              SetApplicationTheme(
+                title: 'Resync runtime',
+                theme: testApplicationTheme,
+              ),
               CreateNode(
                 nodeId: 11,
                 kind: NodeKind.column,
@@ -1177,6 +1444,7 @@ Frame counterWidgetSnapshot() => const Frame(
   targetRevision: 1,
   kind: FrameKind.fullSnapshot,
   operations: [
+    SetApplicationTheme(title: 'Counter', theme: testApplicationTheme),
     CreateNode(
       nodeId: 1,
       kind: NodeKind.column,

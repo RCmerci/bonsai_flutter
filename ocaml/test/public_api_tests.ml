@@ -3,6 +3,57 @@ module Ui = Bonsai_flutter
 
 let require condition message = if not condition then failwith message
 
+let application_theme =
+  let seed = Ui.Style.Color.rgb ~red:103 ~green:80 ~blue:164 in
+  let color_scheme =
+    Ui.Theme.Color_scheme.from_seed
+      ~color:seed
+      ~variant:Ui.Theme.Color_scheme.Tonal_spot
+      ~contrast_level:0.
+      ()
+  in
+  let typography =
+    Ui.Theme.Typography.material
+      ~font_family:"Inter"
+      ~font_family_fallback:[ "Noto Sans"; "sans-serif" ]
+      ~display_large:(Ui.Style.Text_style.create ~font_size:57. ())
+      ~headline_medium:(Ui.Style.Text_style.create ~font_size:28. ())
+      ~body_large:(Ui.Style.Text_style.create ~font_size:16. ())
+      ~label_small:(Ui.Style.Text_style.create ~font_size:11. ())
+      ()
+  in
+  let shape =
+    Ui.Theme.Shape.create
+      ~extra_small:4.
+      ~small:8.
+      ~medium:12.
+      ~large:16.
+      ~extra_large:28.
+      ()
+  in
+  let light =
+    Ui.Theme.material
+      ~brightness:Ui.Style.Brightness.Light
+      ~color_scheme
+      ~typography
+      ~shape
+      ~visual_density:Ui.Theme.Adaptive
+      ~tap_target_size:Ui.Theme.Padded
+      ()
+  in
+  let dark =
+    Ui.Theme.material
+      ~brightness:Ui.Style.Brightness.Dark
+      ~color_scheme
+      ~typography
+      ~shape
+      ~visual_density:Ui.Theme.Compact
+      ~tap_target_size:Ui.Theme.Shrink_wrap
+      ()
+  in
+  Ui.Theme.application ~mode:Ui.Theme.System ~light ~dark ()
+;;
+
 let component context _graph =
   let environment = Ui.App.Context.environment context in
   let application_platform = Ui.App.Context.application_platform context in
@@ -13,11 +64,14 @@ let component context _graph =
        application_platform
        (Bytes.of_string "compile-surface"));
   Bonsai.Cont.map environment ~f:(fun environment ->
-    Ui.Widget.text
-      (Printf.sprintf
-         "%.0fx%.0f"
-         environment.Ui.Environment.viewport_width
-         environment.viewport_height))
+    Ui.App.View.create
+      ~theme:application_theme
+      ~body:
+        (Ui.Widget.text
+           (Printf.sprintf
+              "%.0fx%.0f"
+              environment.Ui.Environment.viewport_width
+              environment.viewport_height)))
 ;;
 
 let worker_service =
@@ -35,7 +89,10 @@ let worker_component client _context _graph =
   ignore (Ui.Worker.worker_generation client);
   ignore (Ui.Worker.send client "compile-surface");
   Ui.Worker.on_event client (fun _ -> Ui.Effect.return ());
-  Bonsai.Cont.return (Ui.Widget.text "worker public API")
+  Bonsai.Cont.return
+    (Ui.App.View.create
+       ~theme:application_theme
+       ~body:(Ui.Widget.text "worker public API"))
 ;;
 
 let viewport_handler = Ui.Event.Handler.create (fun _ -> ())
@@ -67,6 +124,19 @@ let (_ : Ui.Navigation.page_presentation) =
        ~request_focus:true
        ~transition_duration_ms:250
        ~reverse_transition_duration_ms:200
+       ())
+;;
+
+let (_ : Ui.Navigation.page_presentation) =
+  Ui.Navigation.Modal_dialog
+    (Ui.Navigation.Modal_dialog.create
+       ~barrier_dismissible:false
+       ~barrier_color:(Ui.Style.Color.rgb ~red:17 ~green:34 ~blue:51)
+       ~barrier_label:"Close confirmation"
+       ~use_safe_area:true
+       ~request_focus:true
+       ~transition_duration_ms:180
+       ~reverse_transition_duration_ms:120
        ())
 ;;
 
@@ -135,6 +205,8 @@ let () =
     }
   in
   let (_ : Ui.Host_effect.haptic_kind) = Ui.Host_effect.Haptic_selection in
+  let (_ : Ui.Host_effect.snack_bar_close_reason) = Ui.Host_effect.Action in
+  ignore Ui.Host_effect.show_snack_bar;
   let app = Ui.App.create ~name:"public-api-test" component in
   let worker_app =
     Ui.App.create_with_worker

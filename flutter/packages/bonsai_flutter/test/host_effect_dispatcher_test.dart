@@ -30,6 +30,33 @@ void main() {
   );
 
   test(
+    'snack bars use renderer identity, typed close reasons, and cancellation',
+    () async {
+      final resources = _FakeRendererHostResources();
+      final implementation = FlutterHostEffectImplementation(
+        resources: resources,
+      );
+
+      final result = await implementation.execute(
+        77,
+        const ShowSnackBarRequest(
+          message: 'Saved',
+          actionLabel: 'Undo',
+          durationMs: 1500,
+        ),
+      );
+      expect(
+        result,
+        const HostSnackBarCloseReasonValue(SnackBarCloseReason.action),
+      );
+      expect(resources.snackBars, [(77, 'Saved', 'Undo', 1500)]);
+
+      await implementation.cancel(77);
+      expect(resources.cancelledSnackBars, [77]);
+    },
+  );
+
+  test(
     'typed host requests return success, error, and cancellation events',
     () async {
       final implementation = _FakeHostEffects();
@@ -182,6 +209,8 @@ void main() {
 final class _FakeRendererHostResources implements RendererHostResources {
   final focusRequests = <int>[];
   final scrollRequests = <(int, double, bool)>[];
+  final snackBars = <(int, String, String?, int)>[];
+  final cancelledSnackBars = <int>[];
 
   @override
   Future<void> requestFocus(int nodeId) async {
@@ -195,6 +224,22 @@ final class _FakeRendererHostResources implements RendererHostResources {
     required bool animated,
   }) async {
     scrollRequests.add((nodeId, alignment, animated));
+  }
+
+  @override
+  Future<SnackBarCloseReason> showSnackBar(
+    int requestId, {
+    required String message,
+    required String? actionLabel,
+    required int durationMs,
+  }) async {
+    snackBars.add((requestId, message, actionLabel, durationMs));
+    return SnackBarCloseReason.action;
+  }
+
+  @override
+  Future<void> cancelSnackBar(int requestId) async {
+    cancelledSnackBars.add(requestId);
   }
 }
 

@@ -2,7 +2,7 @@
 
 abstract final class ProtocolVersion {
   static const int protocolMajor = 1;
-  static const int protocolMinor = 19;
+  static const int protocolMinor = 21;
 }
 
 abstract final class ProtocolLimits {
@@ -43,6 +43,7 @@ abstract final class OperationId {
   static const int runtimeNotification = 9;
   static const int endFrame = 10;
   static const int applicationRequest = 11;
+  static const int setApplicationTheme = 12;
 
   static String? debugName(int id) => switch (id) {
     1 => 'begin_frame',
@@ -56,6 +57,7 @@ abstract final class OperationId {
     9 => 'runtime_notification',
     10 => 'end_frame',
     11 => 'application_request',
+    12 => 'set_application_theme',
     _ => null,
   };
 }
@@ -115,10 +117,23 @@ abstract final class NodeKindId {
   static const int materialListTile = 104;
   static const int materialDivider = 105;
   static const int materialCard = 106;
-  static const int materialDialog = 107;
+  static const int reservedNodeKind107 = 107;
   static const int materialCircularProgressIndicator = 108;
+  static const int materialFilledButton = 109;
+  static const int materialFilledTonalButton = 110;
+  static const int materialOutlinedButton = 111;
   static const int cupertinoButton = 112;
   static const int cupertinoSwitch = 113;
+  static const int materialFloatingActionButton = 114;
+  static const int materialNavigationBar = 115;
+  static const int materialRadioGroup = 116;
+  static const int materialSlider = 117;
+  static const int materialRangeSlider = 118;
+  static const int materialActionChip = 119;
+  static const int materialFilterChip = 120;
+  static const int materialChoiceChip = 121;
+  static const int materialInputChip = 122;
+  static const int materialAlertDialog = 123;
   static const int nativeWidget = 128;
 
   static String? debugName(int id) => switch (id) {
@@ -176,10 +191,23 @@ abstract final class NodeKindId {
     104 => 'material_list_tile',
     105 => 'material_divider',
     106 => 'material_card',
-    107 => 'material_dialog',
+    107 => 'reserved_node_kind_107',
     108 => 'material_circular_progress_indicator',
+    109 => 'material_filled_button',
+    110 => 'material_filled_tonal_button',
+    111 => 'material_outlined_button',
     112 => 'cupertino_button',
     113 => 'cupertino_switch',
+    114 => 'material_floating_action_button',
+    115 => 'material_navigation_bar',
+    116 => 'material_radio_group',
+    117 => 'material_slider',
+    118 => 'material_range_slider',
+    119 => 'material_action_chip',
+    120 => 'material_filter_chip',
+    121 => 'material_choice_chip',
+    122 => 'material_input_chip',
+    123 => 'material_alert_dialog',
     128 => 'native_widget',
     _ => null,
   };
@@ -213,6 +241,13 @@ abstract final class EventTagId {
   static const int applicationResponse = 25;
   static const int applicationRequestError = 26;
   static const int applicationEvent = 27;
+  static const int navigationDestinationSelected = 28;
+  static const int radioSelected = 29;
+  static const int sliderChanged = 30;
+  static const int sliderChangeEnd = 31;
+  static const int rangeSliderChanged = 32;
+  static const int rangeSliderChangeEnd = 33;
+  static const int delete = 34;
 
   static String? debugName(int id) => switch (id) {
     1 => 'press',
@@ -242,6 +277,13 @@ abstract final class EventTagId {
     25 => 'application_response',
     26 => 'application_request_error',
     27 => 'application_event',
+    28 => 'navigation_destination_selected',
+    29 => 'radio_selected',
+    30 => 'slider_changed',
+    31 => 'slider_change_end',
+    32 => 'range_slider_changed',
+    33 => 'range_slider_change_end',
+    34 => 'delete',
     _ => null,
   };
 }
@@ -261,6 +303,7 @@ abstract final class HostRequestId {
   static const int hapticFeedback = 12;
   static const int platformInformation = 13;
   static const int measureLayout = 14;
+  static const int showSnackBar = 15;
 
   static String? debugName(int id) => switch (id) {
     1 => 'clipboard_read',
@@ -277,6 +320,7 @@ abstract final class HostRequestId {
     12 => 'haptic_feedback',
     13 => 'platform_information',
     14 => 'measure_layout',
+    15 => 'show_snack_bar',
     _ => null,
   };
 }
@@ -713,21 +757,27 @@ abstract final class SemanticsPropId {
 }
 
 abstract final class ThemePropId {
-  static const int brightness = 1;
-  static const int colorSeed = 2;
+  static const int data = 1;
 
   static String? debugName(int id) => switch (id) {
-    1 => 'brightness',
-    2 => 'color_seed',
+    1 => 'data',
     _ => null,
   };
 }
 
 abstract final class MaterialScaffoldPropId {
   static const int hasAppBar = 1;
+  static const int hasFloatingActionButton = 2;
+  static const int floatingActionButtonLocation = 3;
+  static const int hasBottomNavigationBar = 4;
+  static const int hasBottomSheet = 5;
 
   static String? debugName(int id) => switch (id) {
     1 => 'has_app_bar',
+    2 => 'has_floating_action_button',
+    3 => 'floating_action_button_location',
+    4 => 'has_bottom_navigation_bar',
+    5 => 'has_bottom_sheet',
     _ => null,
   };
 }
@@ -770,6 +820,221 @@ abstract final class MaterialIconButtonPropId {
   static String? debugName(int id) => switch (id) {
     1 => 'enabled',
     2 => 'autofocus',
+    _ => null,
+  };
+}
+
+abstract final class MaterialFilledButtonPropId {
+  static const int enabled = 1;
+  static const int autofocus = 2;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'enabled',
+    2 => 'autofocus',
+    _ => null,
+  };
+}
+
+abstract final class MaterialFilledTonalButtonPropId {
+  static const int enabled = 1;
+  static const int autofocus = 2;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'enabled',
+    2 => 'autofocus',
+    _ => null,
+  };
+}
+
+abstract final class MaterialOutlinedButtonPropId {
+  static const int enabled = 1;
+  static const int autofocus = 2;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'enabled',
+    2 => 'autofocus',
+    _ => null,
+  };
+}
+
+abstract final class MaterialFloatingActionButtonPropId {
+  static const int variant = 1;
+  static const int enabled = 2;
+  static const int autofocus = 3;
+  static const int hasIcon = 4;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'variant',
+    2 => 'enabled',
+    3 => 'autofocus',
+    4 => 'has_icon',
+    _ => null,
+  };
+}
+
+abstract final class MaterialNavigationBarPropId {
+  static const int selectedIndex = 1;
+  static const int destinations = 2;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'selected_index',
+    2 => 'destinations',
+    _ => null,
+  };
+}
+
+abstract final class MaterialRadioGroupPropId {
+  static const int selectedId = 1;
+  static const int options = 2;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'selected_id',
+    2 => 'options',
+    _ => null,
+  };
+}
+
+abstract final class MaterialSliderPropId {
+  static const int value = 1;
+  static const int min = 2;
+  static const int max = 3;
+  static const int divisions = 4;
+  static const int label = 5;
+  static const int enabled = 6;
+  static const int hasOnChange = 7;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'value',
+    2 => 'min',
+    3 => 'max',
+    4 => 'divisions',
+    5 => 'label',
+    6 => 'enabled',
+    7 => 'has_on_change',
+    _ => null,
+  };
+}
+
+abstract final class MaterialRangeSliderPropId {
+  static const int start = 1;
+  static const int endValue = 2;
+  static const int min = 3;
+  static const int max = 4;
+  static const int divisions = 5;
+  static const int labelStart = 6;
+  static const int labelEnd = 7;
+  static const int enabled = 8;
+  static const int hasOnChange = 9;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'start',
+    2 => 'end_value',
+    3 => 'min',
+    4 => 'max',
+    5 => 'divisions',
+    6 => 'label_start',
+    7 => 'label_end',
+    8 => 'enabled',
+    9 => 'has_on_change',
+    _ => null,
+  };
+}
+
+abstract final class MaterialActionChipPropId {
+  static const int enabled = 1;
+  static const int selected = 2;
+  static const int hasAvatar = 3;
+  static const int hasDeleteIcon = 4;
+  static const int hasOnPress = 5;
+  static const int hasOnSelected = 6;
+  static const int hasOnDelete = 7;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'enabled',
+    2 => 'selected',
+    3 => 'has_avatar',
+    4 => 'has_delete_icon',
+    5 => 'has_on_press',
+    6 => 'has_on_selected',
+    7 => 'has_on_delete',
+    _ => null,
+  };
+}
+
+abstract final class MaterialFilterChipPropId {
+  static const int enabled = 1;
+  static const int selected = 2;
+  static const int hasAvatar = 3;
+  static const int hasDeleteIcon = 4;
+  static const int hasOnPress = 5;
+  static const int hasOnSelected = 6;
+  static const int hasOnDelete = 7;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'enabled',
+    2 => 'selected',
+    3 => 'has_avatar',
+    4 => 'has_delete_icon',
+    5 => 'has_on_press',
+    6 => 'has_on_selected',
+    7 => 'has_on_delete',
+    _ => null,
+  };
+}
+
+abstract final class MaterialChoiceChipPropId {
+  static const int enabled = 1;
+  static const int selected = 2;
+  static const int hasAvatar = 3;
+  static const int hasDeleteIcon = 4;
+  static const int hasOnPress = 5;
+  static const int hasOnSelected = 6;
+  static const int hasOnDelete = 7;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'enabled',
+    2 => 'selected',
+    3 => 'has_avatar',
+    4 => 'has_delete_icon',
+    5 => 'has_on_press',
+    6 => 'has_on_selected',
+    7 => 'has_on_delete',
+    _ => null,
+  };
+}
+
+abstract final class MaterialInputChipPropId {
+  static const int enabled = 1;
+  static const int selected = 2;
+  static const int hasAvatar = 3;
+  static const int hasDeleteIcon = 4;
+  static const int hasOnPress = 5;
+  static const int hasOnSelected = 6;
+  static const int hasOnDelete = 7;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'enabled',
+    2 => 'selected',
+    3 => 'has_avatar',
+    4 => 'has_delete_icon',
+    5 => 'has_on_press',
+    6 => 'has_on_selected',
+    7 => 'has_on_delete',
+    _ => null,
+  };
+}
+
+abstract final class MaterialAlertDialogPropId {
+  static const int hasIcon = 1;
+  static const int hasTitle = 2;
+  static const int hasContent = 3;
+  static const int actionCount = 4;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'has_icon',
+    2 => 'has_title',
+    3 => 'has_content',
+    4 => 'action_count',
     _ => null,
   };
 }
@@ -931,6 +1196,13 @@ abstract final class PagePropId {
   static const int modalHandleSemanticsLabel = 18;
   static const int modalMediumSemanticsValue = 19;
   static const int modalLargeSemanticsValue = 20;
+  static const int dialogBarrierDismissible = 21;
+  static const int dialogBarrierColor = 22;
+  static const int dialogBarrierLabel = 23;
+  static const int dialogUseSafeArea = 24;
+  static const int dialogRequestFocus = 25;
+  static const int dialogTransitionDurationMs = 26;
+  static const int dialogReverseTransitionDurationMs = 27;
 
   static String? debugName(int id) => switch (id) {
     1 => 'page_key',
@@ -952,6 +1224,13 @@ abstract final class PagePropId {
     18 => 'modal_handle_semantics_label',
     19 => 'modal_medium_semantics_value',
     20 => 'modal_large_semantics_value',
+    21 => 'dialog_barrier_dismissible',
+    22 => 'dialog_barrier_color',
+    23 => 'dialog_barrier_label',
+    24 => 'dialog_use_safe_area',
+    25 => 'dialog_request_focus',
+    26 => 'dialog_transition_duration_ms',
+    27 => 'dialog_reverse_transition_duration_ms',
     _ => null,
   };
 }
@@ -969,15 +1248,6 @@ abstract final class SafeAreaPropId {
     3 => 'right',
     4 => 'bottom',
     5 => 'minimum',
-    _ => null,
-  };
-}
-
-abstract final class MaterialDialogPropId {
-  static const int barrierDismissible = 1;
-
-  static String? debugName(int id) => switch (id) {
-    1 => 'barrier_dismissible',
     _ => null,
   };
 }

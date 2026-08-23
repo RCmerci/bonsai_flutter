@@ -154,6 +154,7 @@ route state.
 `Navigation.Standard Navigation.Fade` retain their existing page-route
 behavior.
 
-`Widget.overlay` and `Widget.material_dialog` follow the same ownership rule:
-their content and presence are declared by OCaml, while Flutter owns layout,
-paint, hit testing, and transition frames.
+`Widget.overlay` and pages using `Navigation.Modal_dialog` follow the same
+ownership rule: their content and presence are declared by OCaml, while
+Flutter owns layout, paint, hit testing, focus, barriers, and transition
+frames. Dialog content is built with `Material.alert_dialog`.

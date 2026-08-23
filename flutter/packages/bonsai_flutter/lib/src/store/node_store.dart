@@ -12,6 +12,7 @@ enum FrameErrorCode {
   duplicateNode,
   missingNode,
   invalidProps,
+  invalidApplicationTheme,
   missingRoot,
   cycle,
   multipleParents,
@@ -79,10 +80,14 @@ final class PreparedNodeStoreFrame {
     required int? baseRootId,
     required int? baseRuntimeEpoch,
     required int baseRevision,
+    required ApplicationThemeValue? baseApplicationTheme,
+    required String? baseApplicationTitle,
     required this.frame,
     required Map<int, UiNode> nodes,
     required this.rootId,
     required this.resourceGeneration,
+    required this.applicationTheme,
+    required this.applicationTitle,
     required this.result,
     required this.prepareDuration,
   }) : _owner = owner,
@@ -90,6 +95,8 @@ final class PreparedNodeStoreFrame {
        _baseRootId = baseRootId,
        _baseRuntimeEpoch = baseRuntimeEpoch,
        _baseRevision = baseRevision,
+       _baseApplicationTheme = baseApplicationTheme,
+       _baseApplicationTitle = baseApplicationTitle,
        _nodes = nodes;
 
   final NodeStore _owner;
@@ -97,10 +104,14 @@ final class PreparedNodeStoreFrame {
   final int? _baseRootId;
   final int? _baseRuntimeEpoch;
   final int _baseRevision;
+  final ApplicationThemeValue? _baseApplicationTheme;
+  final String? _baseApplicationTitle;
   final Frame frame;
   final Map<int, UiNode> _nodes;
   final int? rootId;
   final int resourceGeneration;
+  final ApplicationThemeValue applicationTheme;
+  final String? applicationTitle;
   final ApplyResult result;
   final Duration prepareDuration;
   bool _committed = false;
@@ -114,6 +125,8 @@ final class NodeStore {
   int? _runtimeEpoch;
   int _revision = 0;
   int _resourceGeneration = 0;
+  ApplicationThemeValue? _applicationTheme;
+  String? _applicationTitle;
   final Map<int, Set<NodeListener>> _listeners = {};
   final Set<NodeListener> _storeListeners = {};
 
@@ -122,6 +135,8 @@ final class NodeStore {
   int? get runtimeEpoch => _runtimeEpoch;
   int get revision => _revision;
   int get resourceGeneration => _resourceGeneration;
+  ApplicationThemeValue? get applicationTheme => _applicationTheme;
+  String? get applicationTitle => _applicationTitle;
 
   UiNode node(int nodeId) {
     final result = _nodes[nodeId];
@@ -158,6 +173,8 @@ final class NodeStore {
     final baseRootId = _rootId;
     final baseRuntimeEpoch = _runtimeEpoch;
     final baseRevision = _revision;
+    final baseApplicationTheme = _applicationTheme;
+    final baseApplicationTitle = _applicationTitle;
     _validateRevision(frame);
 
     final isFullSnapshot = frame.kind == FrameKind.fullSnapshot;
@@ -165,6 +182,11 @@ final class NodeStore {
         ? <int, UiNode>{}
         : Map<int, UiNode>.of(_nodes);
     var shadowRoot = isFullSnapshot ? null : _rootId;
+    ApplicationThemeValue? shadowTheme = isFullSnapshot
+        ? null
+        : _applicationTheme;
+    String? shadowTitle = isFullSnapshot ? null : _applicationTitle;
+    var themeOperationCount = 0;
     final dirty = <int>{};
     final dropped = isFullSnapshot ? _nodes.keys.toSet() : <int>{};
 
@@ -210,6 +232,17 @@ final class NodeStore {
           dirty.add(operation.nodeId);
         case SetRoot():
           shadowRoot = operation.nodeId;
+        case SetApplicationTheme():
+          themeOperationCount += 1;
+          if (themeOperationCount > 1) {
+            _fail(
+              FrameErrorCode.invalidApplicationTheme,
+              'A frame may contain at most one application theme',
+            );
+          }
+          _validateApplicationTheme(operation.theme, operation.title);
+          shadowTheme = operation.theme;
+          shadowTitle = operation.title;
         case DropNode():
           if (shadow.remove(operation.nodeId) == null) {
             _fail(
@@ -231,6 +264,12 @@ final class NodeStore {
     }
 
     _validateTree(shadow, shadowRoot);
+    if (shadowTheme == null || (isFullSnapshot && themeOperationCount != 1)) {
+      _fail(
+        FrameErrorCode.invalidApplicationTheme,
+        'A full snapshot requires exactly one application theme',
+      );
+    }
 
     final result = ApplyResult(
       dirtyNodeIds: Set.unmodifiable(dirty),
@@ -243,12 +282,18 @@ final class NodeStore {
       baseRootId: baseRootId,
       baseRuntimeEpoch: baseRuntimeEpoch,
       baseRevision: baseRevision,
+      baseApplicationTheme: baseApplicationTheme,
+      baseApplicationTitle: baseApplicationTitle,
       frame: frame,
-      nodes: UnmodifiableMapView(shadow),
+      nodes: !isFullSnapshot && dirty.isEmpty && dropped.isEmpty
+          ? baseNodes
+          : UnmodifiableMapView(shadow),
       rootId: shadowRoot,
       resourceGeneration: isFullSnapshot
           ? _resourceGeneration + 1
           : _resourceGeneration,
+      applicationTheme: shadowTheme,
+      applicationTitle: shadowTitle,
       result: result,
       prepareDuration: stopwatch.elapsed,
     );
@@ -264,6 +309,8 @@ final class NodeStore {
     if (!identical(_nodes, prepared._baseNodes) ||
         _rootId != prepared._baseRootId ||
         _runtimeEpoch != prepared._baseRuntimeEpoch ||
+        _applicationTheme != prepared._baseApplicationTheme ||
+        _applicationTitle != prepared._baseApplicationTitle ||
         _revision != prepared._baseRevision) {
       throw StateError('Prepared frame base is stale');
     }
@@ -273,6 +320,8 @@ final class NodeStore {
     _runtimeEpoch = prepared.frame.runtimeEpoch;
     _revision = prepared.frame.targetRevision;
     _resourceGeneration = prepared.resourceGeneration;
+    _applicationTheme = prepared.applicationTheme;
+    _applicationTitle = prepared.applicationTitle;
 
     for (final nodeId in prepared.result.dirtyNodeIds) {
       final listeners = _listeners[nodeId]?.toList(growable: false) ?? const [];
@@ -290,6 +339,75 @@ final class NodeStore {
       duration: prepared.prepareDuration,
     );
     return prepared.result;
+  }
+
+  void _validateApplicationTheme(ApplicationThemeValue theme, String? title) {
+    if (title != null && (title.trim().isEmpty || title.contains('\u0000'))) {
+      _fail(
+        FrameErrorCode.invalidApplicationTheme,
+        'Application title must be non-empty and contain no NUL',
+      );
+    }
+    if (theme.light.brightness != ThemeBrightness.light ||
+        theme.dark.brightness != ThemeBrightness.dark ||
+        theme.highContrastLight?.brightness == ThemeBrightness.dark ||
+        theme.highContrastDark?.brightness == ThemeBrightness.light) {
+      _fail(
+        FrameErrorCode.invalidApplicationTheme,
+        'Application theme brightness variants are inconsistent',
+      );
+    }
+    for (final data in [
+      theme.light,
+      theme.dark,
+      theme.highContrastLight,
+      theme.highContrastDark,
+    ].whereType<ThemeDataValue>()) {
+      final contrast = data.colorScheme.contrastLevel;
+      if (!contrast.isFinite || contrast < -1 || contrast > 1) {
+        _fail(
+          FrameErrorCode.invalidApplicationTheme,
+          'Theme contrast must be finite and between -1 and 1',
+        );
+      }
+      for (final radius in [
+        data.shape.extraSmall,
+        data.shape.small,
+        data.shape.medium,
+        data.shape.large,
+        data.shape.extraLarge,
+      ]) {
+        if (!radius.isFinite || radius < 0) {
+          _fail(
+            FrameErrorCode.invalidApplicationTheme,
+            'Theme shape radii must be finite and non-negative',
+          );
+        }
+      }
+      final fontNames = [
+        ?data.typography.fontFamily,
+        ...data.typography.fontFamilyFallback,
+      ];
+      if (data.typography.fontFamilyFallback.length > 16 ||
+          fontNames.any(
+            (name) => name.trim().isEmpty || name.contains('\u0000'),
+          )) {
+        _fail(
+          FrameErrorCode.invalidApplicationTheme,
+          'Theme font names are invalid',
+        );
+      }
+      for (final role in data.typography.roles.whereType<TextStyleValue>()) {
+        for (final value in [role.fontSize, role.lineHeight]) {
+          if (value != null && (!value.isFinite || value <= 0)) {
+            _fail(
+              FrameErrorCode.invalidApplicationTheme,
+              'Theme text sizes must be finite and positive',
+            );
+          }
+        }
+      }
+    }
   }
 
   void _validateRevision(Frame frame) {
@@ -462,6 +580,20 @@ final class NodeStore {
       NodeKind.materialElevatedButton ||
       NodeKind.materialTextButton ||
       NodeKind.materialIconButton => props is MaterialButtonProps,
+      NodeKind.materialFilledButton ||
+      NodeKind.materialFilledTonalButton ||
+      NodeKind.materialOutlinedButton => props is MaterialButtonProps,
+      NodeKind.materialFloatingActionButton =>
+        props is MaterialFloatingActionButtonProps,
+      NodeKind.materialNavigationBar => props is MaterialNavigationBarProps,
+      NodeKind.materialRadioGroup => props is MaterialRadioGroupProps,
+      NodeKind.materialSlider => props is MaterialSliderProps,
+      NodeKind.materialRangeSlider => props is MaterialRangeSliderProps,
+      NodeKind.materialActionChip ||
+      NodeKind.materialFilterChip ||
+      NodeKind.materialChoiceChip ||
+      NodeKind.materialInputChip => props is MaterialChipProps,
+      NodeKind.materialAlertDialog => props is MaterialAlertDialogProps,
       NodeKind.materialCheckbox => props is MaterialCheckboxProps,
       NodeKind.materialSwitch => props is MaterialSwitchProps,
       NodeKind.materialListTile => props is MaterialListTileProps,
@@ -476,7 +608,6 @@ final class NodeStore {
       NodeKind.navigator => props is NavigatorProps,
       NodeKind.page => props is PageProps,
       NodeKind.safeArea => props is SafeAreaProps,
-      NodeKind.materialDialog => props is MaterialDialogProps,
       NodeKind.nativeWidget => props is NativeWidgetProps,
     };
     if (!valid) {

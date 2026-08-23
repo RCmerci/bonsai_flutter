@@ -82,6 +82,7 @@ module Reader = struct
     result
   ;;
 
+  let i64 = u64_bits
   let f64 reader = Int64.float_of_bits (u64_bits reader)
 
   let string reader length =
@@ -299,6 +300,7 @@ let read_payload reader event_tag =
     || event_tag = Generated_protocol.Event_tag.long_press
     || event_tag = Generated_protocol.Event_tag.resync_requested
     || event_tag = Generated_protocol.Event_tag.text_limit_reached
+    || event_tag = Generated_protocol.Event_tag.delete
   then Inbound_event.Unit
   else if
     event_tag = Generated_protocol.Event_tag.tap
@@ -358,6 +360,28 @@ let read_payload reader event_tag =
     event_tag = Generated_protocol.Event_tag.animation_completed
     || event_tag = Generated_protocol.Event_tag.semantics_action
   then Int64 (Reader.u64 reader)
+  else if
+    event_tag = Generated_protocol.Event_tag.navigation_destination_selected
+    || event_tag = Generated_protocol.Event_tag.radio_selected
+  then Int64 (Reader.i64 reader)
+  else if
+    event_tag = Generated_protocol.Event_tag.slider_changed
+    || event_tag = Generated_protocol.Event_tag.slider_change_end
+  then (
+    let value = Reader.f64 reader in
+    if not (Float.is_finite value) then fail Invalid_payload "slider value must be finite";
+    Float value)
+  else if
+    event_tag = Generated_protocol.Event_tag.range_slider_changed
+    || event_tag = Generated_protocol.Event_tag.range_slider_change_end
+  then (
+    let start = Reader.f64 reader in
+    let end_ = Reader.f64 reader in
+    if not (Float.is_finite start && Float.is_finite end_)
+    then fail Invalid_payload "range slider values must be finite";
+    if Float.compare start end_ > 0
+    then fail Invalid_payload "range slider values are reversed";
+    Float_range { start; end_ })
   else if event_tag = Generated_protocol.Event_tag.scroll_notification
   then (
     let pixels = Reader.f64 reader in
@@ -578,6 +602,7 @@ let write_payload writer event_tag payload =
       && event_tag <> Generated_protocol.Event_tag.long_press
       && event_tag <> Generated_protocol.Event_tag.resync_requested
       && event_tag <> Generated_protocol.Event_tag.text_limit_reached
+      && event_tag <> Generated_protocol.Event_tag.delete
     then fail Invalid_payload "unit payload does not match event tag"
   | Bool value ->
     if
@@ -614,9 +639,32 @@ let write_payload writer event_tag payload =
     if
       event_tag <> Generated_protocol.Event_tag.animation_completed
       && event_tag <> Generated_protocol.Event_tag.semantics_action
+      && event_tag <> Generated_protocol.Event_tag.navigation_destination_selected
+      && event_tag <> Generated_protocol.Event_tag.radio_selected
     then fail Invalid_payload "int64 payload does not match event tag";
-    check_u64 "event int64" value;
+    if
+      event_tag = Generated_protocol.Event_tag.animation_completed
+      || event_tag = Generated_protocol.Event_tag.semantics_action
+    then check_u64 "event int64" value;
     Writer.u64 writer value
+  | Float value ->
+    if
+      event_tag <> Generated_protocol.Event_tag.slider_changed
+      && event_tag <> Generated_protocol.Event_tag.slider_change_end
+    then fail Invalid_payload "float payload does not match event tag";
+    if not (Float.is_finite value) then fail Invalid_payload "slider value must be finite";
+    Writer.f64 writer value
+  | Float_range { start; end_ } ->
+    if
+      event_tag <> Generated_protocol.Event_tag.range_slider_changed
+      && event_tag <> Generated_protocol.Event_tag.range_slider_change_end
+    then fail Invalid_payload "float range payload does not match event tag";
+    if not (Float.is_finite start && Float.is_finite end_)
+    then fail Invalid_payload "range slider values must be finite";
+    if Float.compare start end_ > 0
+    then fail Invalid_payload "range slider values are reversed";
+    Writer.f64 writer start;
+    Writer.f64 writer end_
   | Tap { local_x; local_y; global_x; global_y; pointer_kind } ->
     if
       event_tag <> Generated_protocol.Event_tag.tap

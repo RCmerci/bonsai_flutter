@@ -42,6 +42,19 @@ enum NodeKind {
   materialElevatedButton,
   materialTextButton,
   materialIconButton,
+  materialFilledButton,
+  materialFilledTonalButton,
+  materialOutlinedButton,
+  materialFloatingActionButton,
+  materialNavigationBar,
+  materialRadioGroup,
+  materialSlider,
+  materialRangeSlider,
+  materialActionChip,
+  materialFilterChip,
+  materialChoiceChip,
+  materialInputChip,
+  materialAlertDialog,
   materialCheckbox,
   materialSwitch,
   materialListTile,
@@ -56,7 +69,6 @@ enum NodeKind {
   page,
   safeArea,
   environmentBoundary,
-  materialDialog,
   nativeWidget,
   preferredSize,
 }
@@ -88,6 +100,22 @@ enum ImageFitValue {
 enum ClipBehaviorValue { hardEdge, antiAlias, antiAliasWithSaveLayer }
 
 enum ThemeBrightness { light, dark }
+
+enum ThemeDynamicVariant {
+  tonalSpot,
+  fidelity,
+  content,
+  monochrome,
+  neutral,
+  vibrant,
+  expressive,
+}
+
+enum ThemeVisualDensity { adaptive, standard, comfortable, compact }
+
+enum ThemeTapTargetSize { padded, shrinkWrap }
+
+enum ApplicationThemeMode { system, light, dark }
 
 enum TextFontWeight { normal, medium, semiBold, bold }
 
@@ -278,6 +306,50 @@ final class ModalBottomSheetPresentation extends PagePresentation {
   );
 }
 
+final class ModalDialogPresentation extends PagePresentation {
+  const ModalDialogPresentation({
+    required this.barrierDismissible,
+    required this.barrierColorArgb,
+    required this.barrierLabel,
+    required this.useSafeArea,
+    required this.requestFocus,
+    required this.transitionDurationMilliseconds,
+    required this.reverseTransitionDurationMilliseconds,
+  });
+
+  final bool barrierDismissible;
+  final int? barrierColorArgb;
+  final String? barrierLabel;
+  final bool useSafeArea;
+  final bool requestFocus;
+  final int transitionDurationMilliseconds;
+  final int reverseTransitionDurationMilliseconds;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ModalDialogPresentation &&
+      other.barrierDismissible == barrierDismissible &&
+      other.barrierColorArgb == barrierColorArgb &&
+      other.barrierLabel == barrierLabel &&
+      other.useSafeArea == useSafeArea &&
+      other.requestFocus == requestFocus &&
+      other.transitionDurationMilliseconds == transitionDurationMilliseconds &&
+      other.reverseTransitionDurationMilliseconds ==
+          reverseTransitionDurationMilliseconds;
+
+  @override
+  int get hashCode => Object.hash(
+    ModalDialogPresentation,
+    barrierDismissible,
+    barrierColorArgb,
+    barrierLabel,
+    useSafeArea,
+    requestFocus,
+    transitionDurationMilliseconds,
+    reverseTransitionDurationMilliseconds,
+  );
+}
+
 enum OverlayAlignment {
   topStart,
   topCenter,
@@ -300,7 +372,27 @@ final class NoParentData extends ParentDataValue {
 
 enum FlexParentFit { loose, tight }
 
-enum MaterialButtonVariant { elevated, text, icon }
+enum MaterialButtonVariant {
+  filled,
+  filledTonal,
+  outlined,
+  elevated,
+  text,
+  icon,
+}
+
+enum MaterialFloatingActionButtonLocation {
+  startFloat,
+  centerFloat,
+  endFloat,
+  startDocked,
+  centerDocked,
+  endDocked,
+}
+
+enum MaterialFloatingActionButtonVariant { small, standard, large, extended }
+
+enum MaterialChipVariant { action, filter, choice, input }
 
 enum KeyEventPolicy { handled, ignored }
 
@@ -1093,20 +1185,188 @@ final class SemanticsProps extends UiProps {
   );
 }
 
-final class ThemeProps extends UiProps {
-  const ThemeProps({required this.brightness, required this.colorSeedArgb});
-
-  final ThemeBrightness brightness;
-  final int colorSeedArgb;
-
+final class ThemeColorSchemeValue {
+  const ThemeColorSchemeValue({
+    required this.seedArgb,
+    required this.variant,
+    required this.contrastLevel,
+  });
+  final int seedArgb;
+  final ThemeDynamicVariant variant;
+  final double contrastLevel;
   @override
   bool operator ==(Object other) =>
-      other is ThemeProps &&
+      other is ThemeColorSchemeValue &&
+      other.seedArgb == seedArgb &&
+      other.variant == variant &&
+      other.contrastLevel == contrastLevel;
+  @override
+  int get hashCode => Object.hash(seedArgb, variant, contrastLevel);
+}
+
+final class ThemeTypographyValue {
+  const ThemeTypographyValue({
+    this.fontFamily,
+    this.fontFamilyFallback = const [],
+    this.displayLarge,
+    this.displayMedium,
+    this.displaySmall,
+    this.headlineLarge,
+    this.headlineMedium,
+    this.headlineSmall,
+    this.titleLarge,
+    this.titleMedium,
+    this.titleSmall,
+    this.bodyLarge,
+    this.bodyMedium,
+    this.bodySmall,
+    this.labelLarge,
+    this.labelMedium,
+    this.labelSmall,
+  });
+  final String? fontFamily;
+  final List<String> fontFamilyFallback;
+  final TextStyleValue? displayLarge, displayMedium, displaySmall;
+  final TextStyleValue? headlineLarge, headlineMedium, headlineSmall;
+  final TextStyleValue? titleLarge, titleMedium, titleSmall;
+  final TextStyleValue? bodyLarge, bodyMedium, bodySmall;
+  final TextStyleValue? labelLarge, labelMedium, labelSmall;
+  List<TextStyleValue?> get roles => [
+    displayLarge,
+    displayMedium,
+    displaySmall,
+    headlineLarge,
+    headlineMedium,
+    headlineSmall,
+    titleLarge,
+    titleMedium,
+    titleSmall,
+    bodyLarge,
+    bodyMedium,
+    bodySmall,
+    labelLarge,
+    labelMedium,
+    labelSmall,
+  ];
+  @override
+  bool operator ==(Object other) =>
+      other is ThemeTypographyValue &&
+      other.fontFamily == fontFamily &&
+      _listEquals(other.fontFamilyFallback, fontFamilyFallback) &&
+      _listEquals(other.roles, roles);
+  @override
+  int get hashCode => Object.hash(
+    fontFamily,
+    Object.hashAll(fontFamilyFallback),
+    Object.hashAll(roles),
+  );
+}
+
+final class ThemeShapeValue {
+  const ThemeShapeValue({
+    required this.extraSmall,
+    required this.small,
+    required this.medium,
+    required this.large,
+    required this.extraLarge,
+  });
+  final double extraSmall, small, medium, large, extraLarge;
+  @override
+  bool operator ==(Object other) =>
+      other is ThemeShapeValue &&
+      other.extraSmall == extraSmall &&
+      other.small == small &&
+      other.medium == medium &&
+      other.large == large &&
+      other.extraLarge == extraLarge;
+  @override
+  int get hashCode => Object.hash(extraSmall, small, medium, large, extraLarge);
+}
+
+final class ThemeDataValue {
+  const ThemeDataValue({
+    required this.brightness,
+    required this.colorScheme,
+    required this.typography,
+    required this.shape,
+    required this.visualDensity,
+    required this.tapTargetSize,
+  });
+  final ThemeBrightness brightness;
+  final ThemeColorSchemeValue colorScheme;
+  final ThemeTypographyValue typography;
+  final ThemeShapeValue shape;
+  final ThemeVisualDensity visualDensity;
+  final ThemeTapTargetSize tapTargetSize;
+  ThemeDataValue copyWith({
+    ThemeBrightness? brightness,
+    ThemeColorSchemeValue? colorScheme,
+    ThemeTypographyValue? typography,
+    ThemeShapeValue? shape,
+    ThemeVisualDensity? visualDensity,
+    ThemeTapTargetSize? tapTargetSize,
+  }) => ThemeDataValue(
+    brightness: brightness ?? this.brightness,
+    colorScheme: colorScheme ?? this.colorScheme,
+    typography: typography ?? this.typography,
+    shape: shape ?? this.shape,
+    visualDensity: visualDensity ?? this.visualDensity,
+    tapTargetSize: tapTargetSize ?? this.tapTargetSize,
+  );
+  @override
+  bool operator ==(Object other) =>
+      other is ThemeDataValue &&
       other.brightness == brightness &&
-      other.colorSeedArgb == colorSeedArgb;
+      other.colorScheme == colorScheme &&
+      other.typography == typography &&
+      other.shape == shape &&
+      other.visualDensity == visualDensity &&
+      other.tapTargetSize == tapTargetSize;
+  @override
+  int get hashCode => Object.hash(
+    brightness,
+    colorScheme,
+    typography,
+    shape,
+    visualDensity,
+    tapTargetSize,
+  );
+}
+
+final class ApplicationThemeValue {
+  const ApplicationThemeValue({
+    required this.mode,
+    required this.light,
+    required this.dark,
+    this.highContrastLight,
+    this.highContrastDark,
+  });
+  final ApplicationThemeMode mode;
+  final ThemeDataValue light, dark;
+  final ThemeDataValue? highContrastLight, highContrastDark;
+  @override
+  bool operator ==(Object other) =>
+      other is ApplicationThemeValue &&
+      other.mode == mode &&
+      other.light == light &&
+      other.dark == dark &&
+      other.highContrastLight == highContrastLight &&
+      other.highContrastDark == highContrastDark;
+  @override
+  int get hashCode =>
+      Object.hash(mode, light, dark, highContrastLight, highContrastDark);
+}
+
+final class ThemeProps extends UiProps {
+  const ThemeProps({required this.data});
+
+  final ThemeDataValue data;
 
   @override
-  int get hashCode => Object.hash(ThemeProps, brightness, colorSeedArgb);
+  bool operator ==(Object other) => other is ThemeProps && other.data == data;
+
+  @override
+  int get hashCode => Object.hash(ThemeProps, data);
 }
 
 final class MaterialCheckboxProps extends UiProps {
@@ -1126,9 +1386,39 @@ final class MaterialCheckboxProps extends UiProps {
 }
 
 final class MaterialScaffoldProps extends UiProps {
-  const MaterialScaffoldProps({required this.hasAppBar});
+  const MaterialScaffoldProps({
+    required this.hasAppBar,
+    this.hasFloatingActionButton = false,
+    this.floatingActionButtonLocation =
+        MaterialFloatingActionButtonLocation.endFloat,
+    this.hasBottomNavigationBar = false,
+    this.hasBottomSheet = false,
+  });
 
   final bool hasAppBar;
+  final bool hasFloatingActionButton;
+  final MaterialFloatingActionButtonLocation floatingActionButtonLocation;
+  final bool hasBottomNavigationBar;
+  final bool hasBottomSheet;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialScaffoldProps &&
+      other.hasAppBar == hasAppBar &&
+      other.hasFloatingActionButton == hasFloatingActionButton &&
+      other.floatingActionButtonLocation == floatingActionButtonLocation &&
+      other.hasBottomNavigationBar == hasBottomNavigationBar &&
+      other.hasBottomSheet == hasBottomSheet;
+
+  @override
+  int get hashCode => Object.hash(
+    MaterialScaffoldProps,
+    hasAppBar,
+    hasFloatingActionButton,
+    floatingActionButtonLocation,
+    hasBottomNavigationBar,
+    hasBottomSheet,
+  );
 }
 
 final class MaterialAppBarProps extends UiProps {
@@ -1147,6 +1437,275 @@ final class MaterialButtonProps extends UiProps {
   final MaterialButtonVariant variant;
   final bool enabled;
   final bool autofocus;
+}
+
+final class MaterialFloatingActionButtonProps extends UiProps {
+  const MaterialFloatingActionButtonProps({
+    required this.variant,
+    required this.enabled,
+    required this.autofocus,
+    required this.hasIcon,
+  });
+
+  final MaterialFloatingActionButtonVariant variant;
+  final bool enabled;
+  final bool autofocus;
+  final bool hasIcon;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialFloatingActionButtonProps &&
+      other.variant == variant &&
+      other.enabled == enabled &&
+      other.autofocus == autofocus &&
+      other.hasIcon == hasIcon;
+
+  @override
+  int get hashCode => Object.hash(
+    MaterialFloatingActionButtonProps,
+    variant,
+    enabled,
+    autofocus,
+    hasIcon,
+  );
+}
+
+final class MaterialNavigationDestinationProps {
+  const MaterialNavigationDestinationProps({
+    required this.label,
+    required this.enabled,
+    required this.hasSelectedIcon,
+  });
+
+  final String label;
+  final bool enabled;
+  final bool hasSelectedIcon;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialNavigationDestinationProps &&
+      other.label == label &&
+      other.enabled == enabled &&
+      other.hasSelectedIcon == hasSelectedIcon;
+
+  @override
+  int get hashCode => Object.hash(label, enabled, hasSelectedIcon);
+}
+
+final class MaterialNavigationBarProps extends UiProps {
+  const MaterialNavigationBarProps({
+    required this.selectedIndex,
+    required this.destinations,
+  });
+
+  final int selectedIndex;
+  final List<MaterialNavigationDestinationProps> destinations;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialNavigationBarProps &&
+      other.selectedIndex == selectedIndex &&
+      _listEquals(other.destinations, destinations);
+
+  @override
+  int get hashCode => Object.hash(selectedIndex, Object.hashAll(destinations));
+}
+
+final class MaterialRadioOptionProps {
+  const MaterialRadioOptionProps({
+    required this.id,
+    required this.enabled,
+    required this.hasLabel,
+  });
+
+  final int id;
+  final bool enabled;
+  final bool hasLabel;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialRadioOptionProps &&
+      other.id == id &&
+      other.enabled == enabled &&
+      other.hasLabel == hasLabel;
+
+  @override
+  int get hashCode => Object.hash(id, enabled, hasLabel);
+}
+
+final class MaterialRadioGroupProps extends UiProps {
+  const MaterialRadioGroupProps({
+    required this.selectedId,
+    required this.options,
+  });
+
+  final int? selectedId;
+  final List<MaterialRadioOptionProps> options;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialRadioGroupProps &&
+      other.selectedId == selectedId &&
+      _listEquals(other.options, options);
+
+  @override
+  int get hashCode => Object.hash(selectedId, Object.hashAll(options));
+}
+
+final class MaterialSliderProps extends UiProps {
+  const MaterialSliderProps({
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.divisions,
+    required this.label,
+    required this.enabled,
+    required this.hasOnChange,
+  });
+
+  final double value;
+  final double min;
+  final double max;
+  final int? divisions;
+  final String? label;
+  final bool enabled;
+  final bool hasOnChange;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialSliderProps &&
+      other.value == value &&
+      other.min == min &&
+      other.max == max &&
+      other.divisions == divisions &&
+      other.label == label &&
+      other.enabled == enabled &&
+      other.hasOnChange == hasOnChange;
+
+  @override
+  int get hashCode =>
+      Object.hash(value, min, max, divisions, label, enabled, hasOnChange);
+}
+
+final class MaterialRangeSliderProps extends UiProps {
+  const MaterialRangeSliderProps({
+    required this.start,
+    required this.end,
+    required this.min,
+    required this.max,
+    required this.divisions,
+    required this.labelStart,
+    required this.labelEnd,
+    required this.enabled,
+    required this.hasOnChange,
+  });
+
+  final double start;
+  final double end;
+  final double min;
+  final double max;
+  final int? divisions;
+  final String? labelStart;
+  final String? labelEnd;
+  final bool enabled;
+  final bool hasOnChange;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialRangeSliderProps &&
+      other.start == start &&
+      other.end == end &&
+      other.min == min &&
+      other.max == max &&
+      other.divisions == divisions &&
+      other.labelStart == labelStart &&
+      other.labelEnd == labelEnd &&
+      other.enabled == enabled &&
+      other.hasOnChange == hasOnChange;
+
+  @override
+  int get hashCode => Object.hash(
+    start,
+    end,
+    min,
+    max,
+    divisions,
+    labelStart,
+    labelEnd,
+    enabled,
+    hasOnChange,
+  );
+}
+
+final class MaterialChipProps extends UiProps {
+  const MaterialChipProps({
+    required this.variant,
+    required this.enabled,
+    required this.selected,
+    required this.hasAvatar,
+    required this.hasDeleteIcon,
+    required this.hasOnPress,
+    required this.hasOnSelected,
+    required this.hasOnDelete,
+  });
+
+  final MaterialChipVariant variant;
+  final bool enabled;
+  final bool selected;
+  final bool hasAvatar;
+  final bool hasDeleteIcon;
+  final bool hasOnPress;
+  final bool hasOnSelected;
+  final bool hasOnDelete;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialChipProps &&
+      other.variant == variant &&
+      other.enabled == enabled &&
+      other.selected == selected &&
+      other.hasAvatar == hasAvatar &&
+      other.hasDeleteIcon == hasDeleteIcon &&
+      other.hasOnPress == hasOnPress &&
+      other.hasOnSelected == hasOnSelected &&
+      other.hasOnDelete == hasOnDelete;
+
+  @override
+  int get hashCode => Object.hash(
+    variant,
+    enabled,
+    selected,
+    hasAvatar,
+    hasDeleteIcon,
+    hasOnPress,
+    hasOnSelected,
+    hasOnDelete,
+  );
+}
+
+final class MaterialAlertDialogProps extends UiProps {
+  const MaterialAlertDialogProps({
+    required this.hasIcon,
+    required this.hasTitle,
+    required this.hasContent,
+    required this.actionCount,
+  });
+
+  final bool hasIcon;
+  final bool hasTitle;
+  final bool hasContent;
+  final int actionCount;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialAlertDialogProps &&
+      other.hasIcon == hasIcon &&
+      other.hasTitle == hasTitle &&
+      other.hasContent == hasContent &&
+      other.actionCount == actionCount;
+
+  @override
+  int get hashCode => Object.hash(hasIcon, hasTitle, hasContent, actionCount);
 }
 
 final class MaterialSwitchProps extends UiProps {
@@ -1376,20 +1935,6 @@ final class SafeAreaProps extends UiProps {
   final EdgeInsetsValue minimum;
 }
 
-final class MaterialDialogProps extends UiProps {
-  const MaterialDialogProps({required this.barrierDismissible});
-
-  final bool barrierDismissible;
-
-  @override
-  bool operator ==(Object other) =>
-      other is MaterialDialogProps &&
-      other.barrierDismissible == barrierDismissible;
-
-  @override
-  int get hashCode => Object.hash(MaterialDialogProps, barrierDismissible);
-}
-
 final class NativeWidgetProps extends UiProps {
   NativeWidgetProps({
     required this.kindId,
@@ -1476,6 +2021,12 @@ final class SetRoot extends FrameOperation {
   const SetRoot(this.nodeId);
 
   final int nodeId;
+}
+
+final class SetApplicationTheme extends FrameOperation {
+  const SetApplicationTheme({required this.title, required this.theme});
+  final String? title;
+  final ApplicationThemeValue theme;
 }
 
 final class DropNode extends FrameOperation {
@@ -1582,6 +2133,28 @@ final class PlatformInformationRequest extends HostRequest {
 final class MeasureLayoutRequest extends HostRequest {
   const MeasureLayoutRequest(this.nodeId);
   final int nodeId;
+}
+
+final class ShowSnackBarRequest extends HostRequest {
+  const ShowSnackBarRequest({
+    required this.message,
+    required this.actionLabel,
+    required this.durationMs,
+  });
+
+  final String message;
+  final String? actionLabel;
+  final int durationMs;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ShowSnackBarRequest &&
+      other.message == message &&
+      other.actionLabel == actionLabel &&
+      other.durationMs == durationMs;
+
+  @override
+  int get hashCode => Object.hash(message, actionLabel, durationMs);
 }
 
 final class HostRequestOperation extends FrameOperation {

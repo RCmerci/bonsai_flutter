@@ -38,6 +38,14 @@ type haptic_kind =
   | Haptic_heavy
   | Haptic_selection
 
+type snack_bar_close_reason =
+  | Action
+  | Dismiss
+  | Swipe
+  | Hide
+  | Remove
+  | Timeout
+
 module Cancellation = struct
   type t =
     { mutable cancelled : bool
@@ -507,6 +515,20 @@ let decode_layout bytes =
     bytes
 ;;
 
+let decode_snack_bar_close_reason bytes =
+  if Bytes.length bytes <> 1
+  then invalid_response "snack bar close reason must contain one byte"
+  else (
+    match Char.code (Bytes.get bytes 0) with
+    | 0 -> Ok Action
+    | 1 -> Ok Dismiss
+    | 2 -> Ok Swipe
+    | 3 -> Ok Hide
+    | 4 -> Ok Remove
+    | 5 -> Ok Timeout
+    | value -> invalid_response (Printf.sprintf "unknown snack bar close reason %d" value))
+;;
+
 let respond t callback response =
   t.schedule (Effect.Private.Callback.respond_to callback response)
 ;;
@@ -643,6 +665,22 @@ let platform_information ?cancellation t () =
 
 let measure_layout ?cancellation t ~node_id =
   request ?cancellation t (Protocol.Wire_frame.Measure_layout { node_id }) decode_layout
+;;
+
+let show_snack_bar ?cancellation ?action_label ?(duration_ms = 4000) t ~message () =
+  if String.length (String.trim message) = 0
+  then invalid_arg "Host_effect.show_snack_bar: message must not be empty";
+  (match action_label with
+   | Some label when String.length (String.trim label) = 0 ->
+     invalid_arg "Host_effect.show_snack_bar: action_label must not be empty"
+   | None | Some _ -> ());
+  if duration_ms <= 0 || Int64.compare (Int64.of_int duration_ms) 0xffff_ffffL > 0
+  then invalid_arg "Host_effect.show_snack_bar: duration_ms must be a positive u32";
+  request
+    ?cancellation
+    t
+    (Protocol.Wire_frame.Show_snack_bar { message; action_label; duration_ms })
+    decode_snack_bar_close_reason
 ;;
 
 module Prepared_operations = struct

@@ -1,3 +1,4 @@
+import 'fixture.dart';
 import 'dart:collection';
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
@@ -19,6 +20,7 @@ void main() {
       targetRevision: 1,
       kind: FrameKind.fullSnapshot,
       operations: [
+        const SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
         CreateNode(
           nodeId: 1,
           kind: NodeKind.sliverFixedExtent,
@@ -29,7 +31,7 @@ void main() {
       ],
     );
     final decoded = FrameCodec.decode(FrameCodec.encode(frame));
-    final create = decoded.operations[0] as CreateNode;
+    final create = decoded.operations.whereType<CreateNode>().single;
     expect(create.kind, NodeKind.sliverFixedExtent);
     expect(create.props, props);
   });
@@ -51,6 +53,7 @@ void main() {
       targetRevision: 1,
       kind: FrameKind.fullSnapshot,
       operations: [
+        const SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
         CreateNode(
           nodeId: 1,
           kind: NodeKind.sliverVariedExtent,
@@ -61,7 +64,7 @@ void main() {
       ],
     );
     final decoded = FrameCodec.decode(FrameCodec.encode(frame));
-    final create = decoded.operations[0] as CreateNode;
+    final create = decoded.operations.whereType<CreateNode>().single;
     expect(create.kind, NodeKind.sliverVariedExtent);
     expect(create.props, props);
   });
@@ -88,6 +91,7 @@ void main() {
       targetRevision: 1,
       kind: FrameKind.fullSnapshot,
       operations: [
+        const SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
         CreateNode(
           nodeId: 1,
           kind: NodeKind.sliverVariedExtent,
@@ -98,7 +102,7 @@ void main() {
       ],
     );
     final decoded = FrameCodec.decode(FrameCodec.encode(frame));
-    final create = decoded.operations[0] as CreateNode;
+    final create = decoded.operations.whereType<CreateNode>().single;
     expect(create.props, props);
     final decodedProps = create.props as SliverVariedExtentProps;
     expect(decodedProps.transition, transition);
@@ -118,6 +122,7 @@ void main() {
       targetRevision: 1,
       kind: FrameKind.fullSnapshot,
       operations: [
+        const SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
         CreateNode(
           nodeId: 1,
           kind: NodeKind.sliverVariedExtent,
@@ -128,7 +133,7 @@ void main() {
       ],
     );
     final decoded = FrameCodec.decode(FrameCodec.encode(frame));
-    final create = decoded.operations[0] as CreateNode;
+    final create = decoded.operations.whereType<CreateNode>().single;
     expect(create.props, props);
     expect((create.props as SliverVariedExtentProps).transition, isNull);
   });
@@ -191,6 +196,10 @@ void main() {
           targetRevision: 1,
           kind: FrameKind.fullSnapshot,
           operations: [
+            const SetApplicationTheme(
+              title: 'Test',
+              theme: testApplicationTheme,
+            ),
             CreateNode(
               nodeId: 1,
               kind: NodeKind.scrollView,
@@ -266,6 +275,10 @@ void main() {
             targetRevision: 1,
             kind: FrameKind.fullSnapshot,
             operations: [
+              const SetApplicationTheme(
+                title: 'Test',
+                theme: testApplicationTheme,
+              ),
               CreateNode(
                 nodeId: 1,
                 kind: NodeKind.scrollView,
@@ -395,6 +408,10 @@ void main() {
             targetRevision: 1,
             kind: FrameKind.fullSnapshot,
             operations: [
+              const SetApplicationTheme(
+                title: 'Test',
+                theme: testApplicationTheme,
+              ),
               CreateNode(
                 nodeId: 1,
                 kind: NodeKind.scrollView,
@@ -513,6 +530,10 @@ void main() {
               targetRevision: 1,
               kind: FrameKind.fullSnapshot,
               operations: [
+                const SetApplicationTheme(
+                  title: 'Test',
+                  theme: testApplicationTheme,
+                ),
                 CreateNode(
                   nodeId: 1,
                   kind: NodeKind.scrollView,
@@ -1362,6 +1383,10 @@ void main() {
           targetRevision: 1,
           kind: FrameKind.fullSnapshot,
           operations: [
+            const SetApplicationTheme(
+              title: 'Test',
+              theme: testApplicationTheme,
+            ),
             CreateNode(
               nodeId: 1,
               kind: NodeKind.scrollView,
@@ -1420,6 +1445,10 @@ void main() {
           targetRevision: 1,
           kind: FrameKind.fullSnapshot,
           operations: [
+            const SetApplicationTheme(
+              title: 'Test',
+              theme: testApplicationTheme,
+            ),
             CreateNode(
               nodeId: 1,
               kind: NodeKind.scrollView,
@@ -1473,6 +1502,7 @@ void main() {
           targetRevision: 1,
           kind: FrameKind.fullSnapshot,
           operations: [
+            SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
             CreateNode(
               nodeId: 99,
               kind: NodeKind.text,
@@ -1705,7 +1735,10 @@ Frame _virtualSliverFrame({
     baseRevision: 0,
     targetRevision: 1,
     kind: FrameKind.fullSnapshot,
-    operations: operations,
+    operations: [
+      const SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
+      ...operations,
+    ],
   );
 }
 
@@ -1808,7 +1841,10 @@ NodeStore _twoVirtualSliverStore({
       baseRevision: 0,
       targetRevision: 1,
       kind: FrameKind.fullSnapshot,
-      operations: operations,
+      operations: [
+        const SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
+        ...operations,
+      ],
     ),
   );
 }

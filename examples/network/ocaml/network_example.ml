@@ -554,11 +554,27 @@ let component ~https_endpoint ~websocket_endpoint client handlers graph =
 ;;
 
 let create ~https_endpoint ~websocket_endpoint ~service () =
+  let color_scheme =
+    Ui.Theme.Color_scheme.from_seed
+      ~color:(Ui.Style.Color.rgb ~red:0 ~green:96 ~blue:100)
+      ()
+  in
+  let data brightness = Ui.Theme.material ~brightness ~color_scheme () in
+  let theme =
+    Ui.Theme.application
+      ~mode:Ui.Theme.System
+      ~light:(data Ui.Style.Brightness.Light)
+      ~dark:(data Ui.Style.Brightness.Dark)
+      ()
+  in
   App.create_with_worker
     ~name:"Secure Network Lab"
     ~decode_config:(fun _payload -> Ok ())
     ~service
-    (component ~https_endpoint ~websocket_endpoint)
+    (fun client handlers graph ->
+       Bonsai.Cont.map
+         (component ~https_endpoint ~websocket_endpoint client handlers graph)
+         ~f:(fun body -> App.View.create ~theme ~body))
 ;;
 
 let app =

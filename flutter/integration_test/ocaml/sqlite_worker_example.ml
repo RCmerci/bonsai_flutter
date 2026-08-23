@@ -709,11 +709,26 @@ let component client handlers graph =
 ;;
 
 let create_app ~service =
+  let color_scheme =
+    Ui.Theme.Color_scheme.from_seed
+      ~color:(Ui.Style.Color.rgb ~red:46 ~green:125 ~blue:50)
+      ()
+  in
+  let data brightness = Ui.Theme.material ~brightness ~color_scheme () in
+  let theme =
+    Ui.Theme.application
+      ~mode:Ui.Theme.System
+      ~light:(data Ui.Style.Brightness.Light)
+      ~dark:(data Ui.Style.Brightness.Dark)
+      ()
+  in
   App.create_with_worker
     ~name:"SQLite Worker Todo"
     ~decode_config:Sqlite_worker_config.decode
     ~service
-    component
+    (fun client handlers graph ->
+       Bonsai.Cont.map (component client handlers graph) ~f:(fun body ->
+         App.View.create ~theme ~body))
 ;;
 
 let app = create_app ~service:Sqlite_worker_service.service

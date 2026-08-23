@@ -96,7 +96,7 @@ let dart_single_quoted value =
   Buffer.contents buffer
 ;;
 
-let managed_main_dart config adapter =
+let managed_main_dart adapter =
   let launch_policy =
     match adapter.Config.launch_policy with
     | Config.Fresh -> "fresh"
@@ -106,7 +106,7 @@ let managed_main_dart config adapter =
     {|%simport 'dart:typed_data';
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 import '%s' as application;
 
@@ -171,9 +171,12 @@ final class _BonsaiFlutterHostState extends State<BonsaiFlutterHost> {
       final prepared = snapshot.data;
       final Widget home;
       if (snapshot.error case final error?) {
-        home = Center(child: Text('Unable to prepare application: $error'));
+        home = Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(child: Text('Unable to prepare application: $error')),
+        );
       } else if (prepared == null) {
-        home = const Center(child: CircularProgressIndicator());
+        home = const SizedBox.shrink();
       } else {
         home = BonsaiFlutterRoot(
           config: prepared.runtimeConfig,
@@ -182,7 +185,7 @@ final class _BonsaiFlutterHostState extends State<BonsaiFlutterHost> {
       }
       return widget.adapter.buildHost(
         context: context,
-        child: MaterialApp(title: %s, home: home),
+        child: home,
       );
     },
   );
@@ -192,12 +195,11 @@ final class _BonsaiFlutterHostState extends State<BonsaiFlutterHost> {
     (strip_lib_prefix adapter.adapter)
     (dart_single_quoted adapter.entrypoint)
     launch_policy
-    (dart_single_quoted config.Config.name)
 ;;
 
 let main_dart config =
   match config.Config.host with
-  | Config.Managed_adapter adapter -> managed_main_dart config adapter
+  | Config.Managed_adapter adapter -> managed_main_dart adapter
   | Config.Custom _ -> invalid_arg "custom hosts do not have generated main.dart"
 ;;
 

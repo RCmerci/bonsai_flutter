@@ -54,6 +54,19 @@ The Counter model, handler, and view all live in OCaml:
 ```ocaml
 module Ui = Bonsai_flutter_ui
 
+let application_theme =
+  let color_scheme =
+    Ui.Theme.Color_scheme.from_seed
+      ~color:(Ui.Style.Color.rgb ~red:103 ~green:80 ~blue:164)
+      ()
+  in
+  let data brightness = Ui.Theme.material ~brightness ~color_scheme () in
+  Ui.Theme.application
+    ~mode:Ui.Theme.System
+    ~light:(data Ui.Style.Brightness.Light)
+    ~dark:(data Ui.Style.Brightness.Dark)
+    ()
+
 let component handlers graph =
   let count, set_count = Bonsai_v017.state ~equal:Int.equal 0 graph in
   let increment =
@@ -67,20 +80,26 @@ let component handlers graph =
         | _ -> Bonsai.Effect.Ignore)
   in
   Bonsai.Cont.map2 count increment ~f:(fun count increment ->
-    Ui.Material.scaffold
-      ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Counter") ())
-      ~body:
-        (Ui.Widget.Body.static
-           (Ui.Widget.center
-              (Ui.Widget.column
-                 [ Ui.Widget.text (Printf.sprintf "Count: %d" count)
-                 ; Ui.Material.elevated_button
-                     ~on_press:increment
-                     ~child:(Ui.Widget.text "Increment")
-                     ()
-                 ])))
-      ())
+    let body =
+      Ui.Material.scaffold
+        ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Counter") ())
+        ~body:
+          (Ui.Widget.Body.static
+             (Ui.Widget.center
+                (Ui.Widget.column
+                   [ Ui.Widget.text (Printf.sprintf "Count: %d" count)
+                   ; Ui.Material.elevated_button
+                       ~on_press:increment
+                       ~child:(Ui.Widget.text "Increment")
+                       ()
+                   ])))
+        ()
+    in
+    App.View.create ~theme:application_theme ~body)
 ```
+
+The application theme and logical body commit in the same frame. See
+[`docs/theme.md`](docs/theme.md) for the complete token and hosting contract.
 
 Scrollable widgets use axis-specific viewport types and must enter a bounded
 body slot or receive an explicit finite extent. See

@@ -20,9 +20,13 @@ abstract interface class BonsaiFlutterApplicationPlatform {
 The managed host creates one `BonsaiFlutterHostAdapter`, awaits
 `createApplicationPayload()`, obtains the optional bridge from
 `createApplicationPlatform()`, and passes both to `BonsaiFlutterRoot`. The
-adapter still receives the generated `MaterialApp` through `buildHost(...)`.
-The generator owns the host and runtime envelope but never inspects, casts, or
-reconstructs the root from application code.
+adapter receives `BonsaiFlutterRoot` directly through `buildHost(...)`.
+`BonsaiFlutterRoot` installs the single application `MaterialApp` only after
+the first OCaml application theme commits. Adapters may install plugin,
+lifecycle, localization-service, and dependency scopes, but they do not own or
+provide application `ThemeData`. The generator owns the host and runtime
+envelope but never inspects, casts, or reconstructs the root from application
+code.
 
 Requests, responses, and events are limited to 1 MiB each. Buffers are copied
 at every ownership boundary. Oversized values are rejected without truncation,

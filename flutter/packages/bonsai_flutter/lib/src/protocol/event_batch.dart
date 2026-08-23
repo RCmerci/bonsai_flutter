@@ -105,6 +105,35 @@ final class Int64EventPayload extends EventPayload {
   int get hashCode => Object.hash(Int64EventPayload, value);
 }
 
+final class FloatEventPayload extends EventPayload {
+  const FloatEventPayload(this.value);
+
+  final double value;
+
+  @override
+  bool operator ==(Object other) =>
+      other is FloatEventPayload && other.value == value;
+
+  @override
+  int get hashCode => Object.hash(FloatEventPayload, value);
+}
+
+final class FloatRangeEventPayload extends EventPayload {
+  const FloatRangeEventPayload({required this.start, required this.end});
+
+  final double start;
+  final double end;
+
+  @override
+  bool operator ==(Object other) =>
+      other is FloatRangeEventPayload &&
+      other.start == start &&
+      other.end == end;
+
+  @override
+  int get hashCode => Object.hash(FloatRangeEventPayload, start, end);
+}
+
 enum PointerKindValue {
   mouse,
   touch,
@@ -720,7 +749,8 @@ abstract final class EventBatchCodec {
     if ((eventTag == EventTagId.press ||
             eventTag == EventTagId.longPress ||
             eventTag == EventTagId.resyncRequested ||
-            eventTag == EventTagId.textLimitReached) &&
+            eventTag == EventTagId.textLimitReached ||
+            eventTag == EventTagId.delete) &&
         payload is UnitEventPayload) {
       return;
     }
@@ -816,6 +846,41 @@ abstract final class EventBatchCodec {
         payload is Int64EventPayload) {
       _checkEventUint64('integer event value', payload.value);
       writer.uint64(payload.value);
+      return;
+    }
+    if ((eventTag == EventTagId.navigationDestinationSelected ||
+            eventTag == EventTagId.radioSelected) &&
+        payload is Int64EventPayload) {
+      writer.int64(payload.value);
+      return;
+    }
+    if ((eventTag == EventTagId.sliderChanged ||
+            eventTag == EventTagId.sliderChangeEnd) &&
+        payload is FloatEventPayload) {
+      if (!payload.value.isFinite) {
+        _eventFail(
+          ProtocolErrorCode.invalidProps,
+          'Slider value must be finite',
+        );
+      }
+      writer.float64(payload.value);
+      return;
+    }
+    if ((eventTag == EventTagId.rangeSliderChanged ||
+            eventTag == EventTagId.rangeSliderChangeEnd) &&
+        payload is FloatRangeEventPayload) {
+      if (!payload.start.isFinite || !payload.end.isFinite) {
+        _eventFail(
+          ProtocolErrorCode.invalidProps,
+          'Range slider values must be finite',
+        );
+      }
+      if (payload.start > payload.end) {
+        _eventFail(ProtocolErrorCode.invalidProps, 'Range slider is reversed');
+      }
+      writer
+        ..float64(payload.start)
+        ..float64(payload.end);
       return;
     }
     if (eventTag == EventTagId.scrollNotification &&
@@ -964,7 +1029,8 @@ abstract final class EventBatchCodec {
     if (eventTag == EventTagId.press ||
         eventTag == EventTagId.longPress ||
         eventTag == EventTagId.resyncRequested ||
-        eventTag == EventTagId.textLimitReached) {
+        eventTag == EventTagId.textLimitReached ||
+        eventTag == EventTagId.delete) {
       return const UnitEventPayload();
     }
     if (eventTag == EventTagId.tap || eventTag == EventTagId.doubleTap) {
@@ -1045,6 +1111,36 @@ abstract final class EventBatchCodec {
     if (eventTag == EventTagId.animationCompleted ||
         eventTag == EventTagId.semanticsAction) {
       return Int64EventPayload(reader.uint64());
+    }
+    if (eventTag == EventTagId.navigationDestinationSelected ||
+        eventTag == EventTagId.radioSelected) {
+      return Int64EventPayload(reader.int64());
+    }
+    if (eventTag == EventTagId.sliderChanged ||
+        eventTag == EventTagId.sliderChangeEnd) {
+      final value = reader.float64();
+      if (!value.isFinite) {
+        _eventFail(
+          ProtocolErrorCode.invalidProps,
+          'Slider value must be finite',
+        );
+      }
+      return FloatEventPayload(value);
+    }
+    if (eventTag == EventTagId.rangeSliderChanged ||
+        eventTag == EventTagId.rangeSliderChangeEnd) {
+      final start = reader.float64();
+      final end = reader.float64();
+      if (!start.isFinite || !end.isFinite) {
+        _eventFail(
+          ProtocolErrorCode.invalidProps,
+          'Range slider values must be finite',
+        );
+      }
+      if (start > end) {
+        _eventFail(ProtocolErrorCode.invalidProps, 'Range slider is reversed');
+      }
+      return FloatRangeEventPayload(start: start, end: end);
     }
     if (eventTag == EventTagId.scrollNotification) {
       final pixels = reader.float64();
@@ -1239,6 +1335,11 @@ final class _EventWriter {
     _builder.add(data.buffer.asUint8List());
   }
 
+  void int64(int value) {
+    final data = ByteData(8)..setInt64(0, value, Endian.little);
+    raw(data.buffer.asUint8List());
+  }
+
   void float64(double value) {
     final data = ByteData(8)..setFloat64(0, value, Endian.little);
     _builder.add(data.buffer.asUint8List());
@@ -1365,6 +1466,17 @@ final class _EventReader {
       );
     }
     return value;
+  }
+
+  int int64() {
+    _require(8);
+    final result = ByteData.sublistView(
+      _bytes,
+      _position,
+      _position + 8,
+    ).getInt64(0, Endian.little);
+    _position += 8;
+    return result;
   }
 
   double float64() {

@@ -10,13 +10,116 @@ import 'package:test/test.dart';
 import 'fixture.dart';
 
 void main() {
+  test('application theme structured value round-trips every token group', () {
+    const typography = ThemeTypographyValue(
+      fontFamily: 'Inter',
+      fontFamilyFallback: ['Noto Sans', 'sans-serif'],
+      displayLarge: TextStyleValue(fontSize: 57, lineHeight: 1.12),
+      headlineMedium: TextStyleValue(fontSize: 28),
+      titleSmall: TextStyleValue(fontWeight: TextFontWeight.semiBold),
+      bodyLarge: TextStyleValue(fontSize: 16),
+      labelSmall: TextStyleValue(fontSize: 11),
+    );
+    const highContrastDark = ThemeDataValue(
+      brightness: ThemeBrightness.dark,
+      colorScheme: ThemeColorSchemeValue(
+        seedArgb: 0xff123456,
+        variant: ThemeDynamicVariant.monochrome,
+        contrastLevel: 1,
+      ),
+      typography: typography,
+      shape: ThemeShapeValue(
+        extraSmall: 0,
+        small: 2,
+        medium: 4,
+        large: 8,
+        extraLarge: 16,
+      ),
+      visualDensity: ThemeVisualDensity.comfortable,
+      tapTargetSize: ThemeTapTargetSize.padded,
+    );
+    const theme = ApplicationThemeValue(
+      mode: ApplicationThemeMode.system,
+      light: testLightThemeData,
+      dark: testDarkThemeData,
+      highContrastLight: testLightThemeData,
+      highContrastDark: highContrastDark,
+    );
+    const frame = Frame(
+      runtimeEpoch: 51,
+      baseRevision: 0,
+      targetRevision: 1,
+      kind: FrameKind.fullSnapshot,
+      operations: [
+        SetApplicationTheme(title: 'Theme test', theme: theme),
+        CreateNode(
+          nodeId: 1,
+          kind: NodeKind.text,
+          props: TextProps('body'),
+          eventBindings: [],
+        ),
+        SetRoot(1),
+      ],
+    );
+
+    final decoded = FrameCodec.decode(FrameCodec.encode(frame));
+    final operation = decoded.operations.first as SetApplicationTheme;
+
+    expect(operation.title, 'Theme test');
+    expect(operation.theme, theme);
+  });
+
+  test('application theme codec rejects invalid contrast and font names', () {
+    final invalidValues = [
+      testLightThemeData.copyWith(
+        colorScheme: const ThemeColorSchemeValue(
+          seedArgb: 0xff6750a4,
+          variant: ThemeDynamicVariant.tonalSpot,
+          contrastLevel: 1.01,
+        ),
+      ),
+      testLightThemeData.copyWith(
+        typography: const ThemeTypographyValue(fontFamily: '   '),
+      ),
+      testLightThemeData.copyWith(
+        shape: const ThemeShapeValue(
+          extraSmall: 4,
+          small: 8,
+          medium: double.nan,
+          large: 16,
+          extraLarge: 28,
+        ),
+      ),
+    ];
+
+    for (final value in invalidValues) {
+      final frame = Frame(
+        runtimeEpoch: 51,
+        baseRevision: 0,
+        targetRevision: 1,
+        kind: FrameKind.fullSnapshot,
+        operations: [
+          SetApplicationTheme(
+            title: 'Invalid',
+            theme: ApplicationThemeValue(
+              mode: ApplicationThemeMode.light,
+              light: value,
+              dark: testDarkThemeData,
+            ),
+          ),
+        ],
+      );
+      expect(() => FrameCodec.encode(frame), throwsA(isA<ProtocolException>()));
+    }
+  });
+
   group('binary frame codec', () {
     test('matches the shared counter full-snapshot fixture byte for byte', () {
       final encoded = FrameCodec.encode(counterSnapshot(text: 'Count: 0'));
       final expected = readHexFixture('counter_full.hex');
 
       expect(encoded, orderedEquals(expected));
-      expect(encoded.length, 148);
+      expect(encoded.length, expected.length);
       expect(encoded.sublist(0, 4), [0x42, 0x46, 0x46, 0x52]);
       expect(readUint16(encoded, 4), 1);
       expect(readUint16(encoded, 6), ProtocolVersion.protocolMinor);
@@ -25,7 +128,7 @@ void main() {
       expect(readUint64(encoded, 12), 7);
       expect(readUint64(encoded, 20), 0);
       expect(readUint64(encoded, 28), 1);
-      expect(readUint32(encoded, 36), 100);
+      expect(readUint32(encoded, 36), encoded.length - 48);
     });
 
     test('round trips an incremental Unicode property update', () {
@@ -47,6 +150,225 @@ void main() {
       final update = decoded.operations.single as UpdateProps;
       expect(update.nodeId, 2);
       expect(update.props, const TextProps('计数: 1'));
+    });
+
+    test('round trips the complete Material component protocol surface', () {
+      const props = <UiProps>[
+        MaterialScaffoldProps(
+          hasAppBar: true,
+          hasFloatingActionButton: true,
+          floatingActionButtonLocation:
+              MaterialFloatingActionButtonLocation.endDocked,
+          hasBottomNavigationBar: true,
+          hasBottomSheet: true,
+        ),
+        MaterialButtonProps(
+          variant: MaterialButtonVariant.filledTonal,
+          enabled: true,
+          autofocus: false,
+        ),
+        MaterialFloatingActionButtonProps(
+          variant: MaterialFloatingActionButtonVariant.extended,
+          enabled: true,
+          autofocus: false,
+          hasIcon: true,
+        ),
+        MaterialNavigationBarProps(
+          selectedIndex: 0,
+          destinations: [
+            MaterialNavigationDestinationProps(
+              label: 'Home',
+              enabled: true,
+              hasSelectedIcon: true,
+            ),
+            MaterialNavigationDestinationProps(
+              label: 'Settings',
+              enabled: false,
+              hasSelectedIcon: false,
+            ),
+          ],
+        ),
+        MaterialAlertDialogProps(
+          hasIcon: true,
+          hasTitle: true,
+          hasContent: true,
+          actionCount: 2,
+        ),
+        MaterialRadioGroupProps(
+          selectedId: -7,
+          options: [
+            MaterialRadioOptionProps(id: -7, enabled: true, hasLabel: true),
+            MaterialRadioOptionProps(id: 9, enabled: false, hasLabel: false),
+          ],
+        ),
+        MaterialSliderProps(
+          value: 0.25,
+          min: 0,
+          max: 1,
+          divisions: 4,
+          label: 'Quarter',
+          enabled: true,
+          hasOnChange: true,
+        ),
+        MaterialRangeSliderProps(
+          start: 0.2,
+          end: 0.8,
+          min: 0,
+          max: 1,
+          divisions: null,
+          labelStart: null,
+          labelEnd: null,
+          enabled: true,
+          hasOnChange: false,
+        ),
+        MaterialChipProps(
+          variant: MaterialChipVariant.input,
+          enabled: true,
+          selected: true,
+          hasAvatar: true,
+          hasDeleteIcon: true,
+          hasOnPress: true,
+          hasOnSelected: true,
+          hasOnDelete: true,
+        ),
+      ];
+      final operations = <FrameOperation>[
+        for (var index = 0; index < props.length; index += 1)
+          UpdateProps(nodeId: index + 1, props: props[index]),
+        const UpdateProps(
+          nodeId: 30,
+          props: PageProps(
+            pageKey: 'confirm',
+            presentation: ModalDialogPresentation(
+              barrierDismissible: false,
+              barrierColorArgb: 0x7f000000,
+              barrierLabel: 'Close confirmation',
+              useSafeArea: true,
+              requestFocus: true,
+              transitionDurationMilliseconds: 180,
+              reverseTransitionDurationMilliseconds: 120,
+            ),
+            canPop: true,
+            restorationId: 'confirm-dialog',
+          ),
+        ),
+        const HostRequestOperation(
+          requestId: 91,
+          request: ShowSnackBarRequest(
+            message: 'Saved',
+            actionLabel: 'Undo',
+            durationMs: 1500,
+          ),
+        ),
+      ];
+      final frame = Frame(
+        runtimeEpoch: 77,
+        baseRevision: 1,
+        targetRevision: 2,
+        kind: FrameKind.incremental,
+        operations: operations,
+      );
+
+      final decoded = FrameCodec.decode(FrameCodec.encode(frame));
+
+      expect(decoded.operations, hasLength(operations.length));
+      expect(
+        FrameCodec.encode(decoded),
+        orderedEquals(FrameCodec.encode(frame)),
+      );
+      expect(
+        (decoded.operations.first as UpdateProps).props,
+        const MaterialScaffoldProps(
+          hasAppBar: true,
+          hasFloatingActionButton: true,
+          floatingActionButtonLocation:
+              MaterialFloatingActionButtonLocation.endDocked,
+          hasBottomNavigationBar: true,
+          hasBottomSheet: true,
+        ),
+      );
+      expect((decoded.operations[3] as UpdateProps).props, props[3]);
+      expect((decoded.operations[8] as UpdateProps).props, props[8]);
+      expect(
+        (decoded.operations[9] as UpdateProps).props,
+        const PageProps(
+          pageKey: 'confirm',
+          presentation: ModalDialogPresentation(
+            barrierDismissible: false,
+            barrierColorArgb: 0x7f000000,
+            barrierLabel: 'Close confirmation',
+            useSafeArea: true,
+            requestFocus: true,
+            transitionDurationMilliseconds: 180,
+            reverseTransitionDurationMilliseconds: 120,
+          ),
+          canPop: true,
+          restorationId: 'confirm-dialog',
+        ),
+      );
+    });
+
+    test('rejects malformed Material controls at the Dart wire boundary', () {
+      Frame frame(UiProps props) => Frame(
+        runtimeEpoch: 77,
+        baseRevision: 1,
+        targetRevision: 2,
+        kind: FrameKind.incremental,
+        operations: [UpdateProps(nodeId: 1, props: props)],
+      );
+
+      final invalid = <UiProps>[
+        const MaterialNavigationBarProps(
+          selectedIndex: 2,
+          destinations: [
+            MaterialNavigationDestinationProps(
+              label: 'Home',
+              enabled: true,
+              hasSelectedIcon: false,
+            ),
+            MaterialNavigationDestinationProps(
+              label: 'Settings',
+              enabled: true,
+              hasSelectedIcon: false,
+            ),
+          ],
+        ),
+        const MaterialRadioGroupProps(
+          selectedId: 1,
+          options: [
+            MaterialRadioOptionProps(id: 1, enabled: true, hasLabel: false),
+            MaterialRadioOptionProps(id: 1, enabled: true, hasLabel: false),
+          ],
+        ),
+        const MaterialSliderProps(
+          value: double.nan,
+          min: 0,
+          max: 1,
+          divisions: null,
+          label: null,
+          enabled: true,
+          hasOnChange: true,
+        ),
+        const MaterialRangeSliderProps(
+          start: 0.8,
+          end: 0.2,
+          min: 0,
+          max: 1,
+          divisions: 4,
+          labelStart: null,
+          labelEnd: null,
+          enabled: true,
+          hasOnChange: true,
+        ),
+      ];
+
+      for (final props in invalid) {
+        expect(
+          () => FrameCodec.encode(frame(props)),
+          throwsProtocolCode(ProtocolErrorCode.invalidProps),
+          reason: '${props.runtimeType}',
+        );
+      }
     });
 
     test('round trips every styled text property', () {
@@ -86,7 +408,11 @@ void main() {
       expect(decoded.kind, FrameKind.fullSnapshot);
       expect(decoded.operations, hasLength(4));
       expect(
-        (decoded.operations[1] as CreateNode).props,
+        decoded.operations
+            .whereType<CreateNode>()
+            .map((operation) => operation.props)
+            .whereType<TextProps>()
+            .single,
         const TextProps('Count: 0'),
       );
     });
@@ -690,10 +1016,7 @@ void main() {
           CreateNode(
             nodeId: 5,
             kind: NodeKind.theme,
-            props: ThemeProps(
-              brightness: ThemeBrightness.dark,
-              colorSeedArgb: 0xff2060a0,
-            ),
+            props: ThemeProps(data: testDarkThemeData),
             eventBindings: [],
           ),
           CreateNode(
@@ -738,10 +1061,7 @@ void main() {
             enabled: true,
             checked: false,
           ),
-          const ThemeProps(
-            brightness: ThemeBrightness.dark,
-            colorSeedArgb: 0xff2060a0,
-          ),
+          const ThemeProps(data: testDarkThemeData),
           const MaterialCheckboxProps(value: false, enabled: true),
         ]),
       );
@@ -1405,7 +1725,11 @@ void main() {
       final decoded = FrameCodec.decode(visible);
 
       expect(
-        (decoded.operations[1] as CreateNode).props,
+        decoded.operations
+            .whereType<CreateNode>()
+            .map((operation) => operation.props)
+            .whereType<TextProps>()
+            .single,
         const TextProps('Offset 😀'),
       );
     });
@@ -1457,11 +1781,16 @@ void main() {
         mutate(valid, 48, 0xff),
         ProtocolErrorCode.unknownOperation,
       );
+      final firstCreateBody = findOperationBody(valid, OperationId.createNode);
       expectDecodeError(
-        mutate(valid, 66, 0xff),
+        mutate(valid, firstCreateBody + 8, 0xff),
         ProtocolErrorCode.unknownNodeKind,
       );
-      expectDecodeError(mutate(valid, 90, 0xff), ProtocolErrorCode.invalidUtf8);
+      final textBody = findCreateBody(valid, NodeKindId.text);
+      expectDecodeError(
+        mutate(valid, textBody + 14, 0xff),
+        ProtocolErrorCode.invalidUtf8,
+      );
       expectDecodeError(
         mutate(valid, 48, 2),
         ProtocolErrorCode.invalidOperationOrder,
@@ -1502,6 +1831,30 @@ Uint8List mutate(Uint8List source, int offset, int value) {
 
 int readUint16(Uint8List bytes, int offset) =>
     ByteData.sublistView(bytes).getUint16(offset, Endian.little);
+
+int findOperationBody(Uint8List bytes, int operationId) {
+  var offset = 48;
+  while (offset < bytes.length) {
+    final bodyLength = readUint32(bytes, offset + 1);
+    if (bytes[offset] == operationId) return offset + 5;
+    offset += 5 + bodyLength;
+  }
+  throw StateError('Operation $operationId not found');
+}
+
+int findCreateBody(Uint8List bytes, int nodeKindId) {
+  var offset = 48;
+  while (offset < bytes.length) {
+    final bodyLength = readUint32(bytes, offset + 1);
+    final body = offset + 5;
+    if (bytes[offset] == OperationId.createNode &&
+        readUint16(bytes, body + 8) == nodeKindId) {
+      return body;
+    }
+    offset += 5 + bodyLength;
+  }
+  throw StateError('CreateNode for kind $nodeKindId not found');
+}
 
 int readUint32(Uint8List bytes, int offset) =>
     ByteData.sublistView(bytes).getUint32(offset, Endian.little);

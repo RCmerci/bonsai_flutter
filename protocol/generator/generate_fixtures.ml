@@ -51,6 +51,77 @@ let text_props value =
     { value; style = None; text_align = Start; max_lines = None; overflow = Clip_text }
 ;;
 
+let counter_theme_operation =
+  let open Protocol.Wire_frame in
+  let typography font_family : theme_typography =
+    { font_family
+    ; font_family_fallback = []
+    ; display_large = None
+    ; display_medium = None
+    ; display_small = None
+    ; headline_large = None
+    ; headline_medium = None
+    ; headline_small = None
+    ; title_large = None
+    ; title_medium = None
+    ; title_small = None
+    ; body_large = None
+    ; body_medium = None
+    ; body_small = None
+    ; label_large = None
+    ; label_medium = None
+    ; label_small = None
+    }
+  in
+  let data
+        brightness
+        variant
+        contrast_level
+        typography
+        shape
+        visual_density
+        tap_target_size
+    =
+    { brightness
+    ; color_scheme = { seed_argb = 0xff6750a4l; variant; contrast_level }
+    ; typography
+    ; shape
+    ; visual_density
+    ; tap_target_size
+    }
+  in
+  let light =
+    data
+      Light
+      Tonal_spot
+      0.
+      (typography None)
+      { extra_small = 4.; small = 8.; medium = 12.; large = 16.; extra_large = 28. }
+      Adaptive
+      Padded
+  in
+  let dark =
+    data
+      Dark
+      Fidelity
+      0.5
+      (typography (Some "Inter"))
+      { extra_small = 2.; small = 6.; medium = 10.; large = 14.; extra_large = 24. }
+      Compact
+      Shrink_wrap
+  in
+  Set_application_theme
+    { title = Some "Counter"
+    ; theme =
+        { mode = System
+        ; light
+        ; dark
+        ; high_contrast_light = None
+        ; high_contrast_dark = None
+        }
+    }
+;;
+
 let viewport_body_frame : Protocol.Wire_frame.t =
   let open Protocol.Wire_frame in
   let create ?(parent_data = No_parent_data) node_id kind props =
@@ -68,7 +139,17 @@ let viewport_body_frame : Protocol.Wire_frame.t =
   ; target_revision = revision 1L
   ; kind = Full_snapshot
   ; operations =
-      [ create 1 Material_scaffold (Material_scaffold_props { has_app_bar = false })
+      [ counter_theme_operation
+      ; create
+          1
+          Material_scaffold
+          (Material_scaffold_props
+             { has_app_bar = false
+             ; has_floating_action_button = false
+             ; floating_action_button_location = End_float
+             ; has_bottom_navigation_bar = false
+             ; has_bottom_sheet = false
+             })
       ; create 2 Stack Empty_props
       ; create
           ~parent_data:
@@ -143,7 +224,8 @@ let counter_frame : Protocol.Wire_frame.t =
   ; target_revision = revision 1L
   ; kind = Full_snapshot
   ; operations =
-      [ Create_node
+      [ counter_theme_operation
+      ; Create_node
           { node_id = node 1L
           ; kind = Column
           ; props = Linear_props

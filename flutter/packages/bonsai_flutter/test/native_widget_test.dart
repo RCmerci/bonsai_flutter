@@ -1,3 +1,4 @@
+import 'fixture.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -33,6 +34,10 @@ void main() {
             targetRevision: 1,
             kind: FrameKind.fullSnapshot,
             operations: [
+              const SetApplicationTheme(
+                title: 'Test',
+                theme: testApplicationTheme,
+              ),
               CreateNode(
                 nodeId: 1,
                 kind: NodeKind.nativeWidget,
@@ -98,8 +103,8 @@ void main() {
       payload: Uint8List.fromList([0, 1, 2, 255]),
     );
     final decoded = FrameCodec.decode(FrameCodec.encode(frame));
-    final props = (decoded.operations.first as CreateNode).props;
-    expect(props, frame.operations.cast<CreateNode>().first.props);
+    final props = decoded.operations.whereType<CreateNode>().single.props;
+    expect(props, frame.operations.whereType<CreateNode>().single.props);
   });
 
   test('typed native event survives event protocol round trip', () {
@@ -292,6 +297,7 @@ Frame _nativeFrame({int capabilityBits = 0, Uint8List? payload}) => Frame(
   targetRevision: 1,
   kind: FrameKind.fullSnapshot,
   operations: [
+    const SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
     CreateNode(
       nodeId: 1,
       kind: NodeKind.nativeWidget,
@@ -376,6 +382,7 @@ Frame _swipeNativeFrameFromProps(
     targetRevision: 1,
     kind: FrameKind.fullSnapshot,
     operations: [
+      const SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
       CreateNode(
         nodeId: 1,
         kind: NodeKind.nativeWidget,

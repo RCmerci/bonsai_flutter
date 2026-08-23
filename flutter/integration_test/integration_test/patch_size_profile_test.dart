@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -30,10 +29,8 @@ void main() {
     final counts = _parseCounts(_configuredCounts);
     BonsaiFlutterDebug.reset();
     await tester.pumpWidget(
-      MaterialApp(
-        home: BonsaiFlutterRoot(
-          config: Uint8List.fromList(utf8.encode('patch_size_profile')),
-        ),
+      BonsaiFlutterRoot(
+        config: Uint8List.fromList(utf8.encode('patch_size_profile')),
       ),
     );
     await _waitForPresent(tester, find.text('Expand ${counts.first}'));

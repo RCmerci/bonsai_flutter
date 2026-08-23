@@ -1,3 +1,4 @@
+import 'fixture.dart';
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -164,6 +165,7 @@ Frame _snapshot() => const Frame(
   targetRevision: 1,
   kind: FrameKind.fullSnapshot,
   operations: [
+    SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
     CreateNode(
       nodeId: 1,
       kind: NodeKind.animatedOpacity,
@@ -242,6 +244,7 @@ Frame _drop() => const Frame(
   targetRevision: 3,
   kind: FrameKind.fullSnapshot,
   operations: [
+    SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
     CreateNode(
       nodeId: 3,
       kind: NodeKind.empty,
@@ -258,6 +261,7 @@ Frame _legacyOpacitySnapshot() => const Frame(
   targetRevision: 1,
   kind: FrameKind.fullSnapshot,
   operations: [
+    SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
     CreateNode(
       nodeId: 4,
       kind: NodeKind.opacity,

@@ -73,8 +73,30 @@ let semantic_operations (frame : Protocol.Wire_frame.t) =
   List.filter
     (function
       | Protocol.Wire_frame.Runtime_stats _ -> false
+      | Set_application_theme _ -> false
       | _ -> true)
     frame.operations
+;;
+
+let default_application_theme =
+  let scheme =
+    Ui.Theme.Color_scheme.from_seed
+      ~color:(Ui.Style.Color.rgb ~red:103 ~green:80 ~blue:164)
+      ()
+  in
+  let light =
+    Ui.Theme.material ~brightness:Ui.Style.Brightness.Light ~color_scheme:scheme ()
+  in
+  let dark =
+    Ui.Theme.material ~brightness:Ui.Style.Brightness.Dark ~color_scheme:scheme ()
+  in
+  Ui.Theme.application ~mode:Ui.Theme.System ~light ~dark ()
+;;
+
+let create_driver ?trace ~runtime_epoch ~time_source component =
+  Driver.create ?trace ~runtime_epoch ~time_source (fun handlers graph ->
+    Bonsai.Cont.map (component handlers graph) ~f:(fun body ->
+      Driver.View.create ~theme:default_application_theme ~body))
 ;;
 
 let component ~activations ~after_displays handlers graph =
@@ -132,7 +154,7 @@ let () =
   in
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   let driver =
-    Driver.create
+    create_driver
       ~trace
       ~runtime_epoch
       ~time_source
@@ -364,7 +386,7 @@ let test_host_effect_round_trip () =
   let host_ref = ref None in
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   let driver =
-    Driver.create ~runtime_epoch ~time_source (host_effect_component host_ref)
+    create_driver ~runtime_epoch ~time_source (host_effect_component host_ref)
   in
   let initial =
     match ok (pump driver ()) with
@@ -455,7 +477,7 @@ let test_host_effect_cancellation () =
   let cancellation = Host_effect.Cancellation.create () in
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   let driver =
-    Driver.create
+    create_driver
       ~runtime_epoch
       ~time_source
       (host_effect_component ~cancellation host_ref)
@@ -541,7 +563,7 @@ let environment_component handlers _graph =
 let test_environment_is_dynamic_input () =
   let runtime_epoch = ID.Runtime.Epoch.of_int64 82L in
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
-  let driver = Driver.create ~runtime_epoch ~time_source environment_component in
+  let driver = create_driver ~runtime_epoch ~time_source environment_component in
   let initial =
     match ok (pump driver ()) with
     | Some frame -> frame
@@ -710,7 +732,7 @@ let event_batch ~runtime_epoch ~sequence ~revision ~node_id binding =
 let test_handler_dependencies_control_identity () =
   let runtime_epoch = ID.Runtime.Epoch.of_int64 84L in
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
-  let driver = Driver.create ~runtime_epoch ~time_source handler_dependency_component in
+  let driver = create_driver ~runtime_epoch ~time_source handler_dependency_component in
   let initial =
     match ok (pump driver ()) with
     | Some frame -> frame
@@ -849,7 +871,7 @@ let test_application_platform_requests_events_and_cancellation () =
   let cancellation = Host_effect.Application_platform.Cancellation.create () in
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   let driver =
-    Driver.create
+    create_driver
       ~runtime_epoch
       ~time_source
       (application_platform_component
@@ -1054,7 +1076,7 @@ let test_application_platform_bounds_errors_and_recoverable_traffic () =
   let results = ref [] in
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   let driver =
-    Driver.create
+    create_driver
       ~runtime_epoch
       ~time_source
       (single_application_request_component
@@ -1136,7 +1158,7 @@ let test_application_platform_bounds_errors_and_recoverable_traffic () =
   let oversized_results = ref [] in
   let oversized_platform = ref None in
   let oversized_driver =
-    Driver.create
+    create_driver
       ~runtime_epoch:(ID.Runtime.Epoch.of_int64 99L)
       ~time_source:(Bonsai.Time_source.create ~start:Core.Time_ns.epoch)
       (single_application_request_component
@@ -1163,7 +1185,7 @@ let test_application_platform_runtime_replacement_resolves_pending () =
   let platform_ref = ref None in
   let results = ref [] in
   let driver =
-    Driver.create
+    create_driver
       ~runtime_epoch
       ~time_source:(Bonsai.Time_source.create ~start:Core.Time_ns.epoch)
       (single_application_request_component
@@ -1193,7 +1215,7 @@ let test_application_platform_shutdown_resolves_pending () =
   let platform_ref = ref None in
   let results = ref [] in
   let driver =
-    Driver.create
+    create_driver
       ~runtime_epoch
       ~time_source:(Bonsai.Time_source.create ~start:Core.Time_ns.epoch)
       (single_application_request_component
@@ -1212,7 +1234,87 @@ let test_application_platform_shutdown_resolves_pending () =
     "shutdown retained pending application requests"
 ;;
 
+let test_application_theme_is_atomic_and_diffed_independently () =
+  let seed = Ui.Style.Color.rgb ~red:103 ~green:80 ~blue:164 in
+  let scheme = Ui.Theme.Color_scheme.from_seed ~color:seed () in
+  let light_data =
+    Ui.Theme.material ~brightness:Ui.Style.Brightness.Light ~color_scheme:scheme ()
+  in
+  let dark_data =
+    Ui.Theme.material ~brightness:Ui.Style.Brightness.Dark ~color_scheme:scheme ()
+  in
+  let component handlers graph =
+    let dark, set_dark = Bonsai_v017.state ~equal:Bool.equal false graph in
+    let toggle =
+      Driver.Handler.create handlers ~equal:( == ) set_dark ~f:(fun set_dark _ ->
+        set_dark not)
+    in
+    Bonsai.Cont.map2 dark toggle ~f:(fun dark toggle ->
+      let mode = if dark then Ui.Theme.Dark else Ui.Theme.Light in
+      Driver.View.create
+        ~theme:(Ui.Theme.application ~mode ~light:light_data ~dark:dark_data ())
+        ~body:(Ui.Widget.button ~on_press:toggle ~child:(Ui.Widget.text "Theme body") ()))
+  in
+  let runtime_epoch = ID.Runtime.Epoch.of_int64 102L in
+  let driver =
+    Driver.create
+      ~application_title:"Theme driver"
+      ~runtime_epoch
+      ~time_source:(Bonsai.Time_source.create ~start:Core.Time_ns.epoch)
+      component
+  in
+  let initial = Option.get (ok (pump driver ())) in
+  let initial_wire = decode_frame initial.bytes in
+  let initial_operations =
+    List.filter
+      (function
+        | Protocol.Wire_frame.Runtime_stats _ -> false
+        | _ -> true)
+      initial_wire.operations
+  in
+  require
+    (List.exists
+       (function
+         | Protocol.Wire_frame.Set_application_theme
+             { title = Some "Theme driver"; theme = { mode = Light; _ } } -> true
+         | _ -> false)
+       initial_operations)
+    "full snapshot omitted the application theme";
+  let node_id, event_tag, handler_id = find_button_binding initial_wire in
+  ok (present driver ~revision:initial.revision);
+  let events =
+    Protocol.Inbound_event.
+      { runtime_epoch
+      ; events =
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 1L
+            ; displayed_revision = initial.revision
+            ; node_id
+            ; handler_id
+            ; event_tag
+            ; payload = Unit
+            }
+          ]
+      }
+  in
+  let update = Option.get (ok (pump driver ~events ())) in
+  (match
+     List.filter
+       (function
+         | Protocol.Wire_frame.Runtime_stats _ -> false
+         | _ -> true)
+       (decode_frame update.bytes).operations
+   with
+   | [ Protocol.Wire_frame.Set_application_theme { theme = { mode = Dark; _ }; _ } ] -> ()
+   | _ -> fail "theme-only state change emitted widget operations or omitted theme update");
+  ok (present driver ~revision:update.revision);
+  (match ok (pump driver ()) with
+   | None -> ()
+   | Some _ -> fail "unchanged application theme emitted a frame");
+  Driver.shutdown driver
+;;
+
 let () =
+  test_application_theme_is_atomic_and_diffed_independently ();
   test_application_platform_bounds_errors_and_recoverable_traffic ();
   test_application_platform_runtime_replacement_resolves_pending ();
   test_application_platform_shutdown_resolves_pending ()

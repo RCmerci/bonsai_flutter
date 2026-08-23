@@ -47,6 +47,19 @@ type node_kind =
   | Material_elevated_button
   | Material_text_button
   | Material_icon_button
+  | Material_filled_button
+  | Material_filled_tonal_button
+  | Material_outlined_button
+  | Material_floating_action_button
+  | Material_navigation_bar
+  | Material_radio_group
+  | Material_slider
+  | Material_range_slider
+  | Material_action_chip
+  | Material_filter_chip
+  | Material_choice_chip
+  | Material_input_chip
+  | Material_alert_dialog
   | Material_checkbox
   | Material_switch
   | Material_list_tile
@@ -61,7 +74,6 @@ type node_kind =
   | Page
   | Safe_area
   | Environment_boundary
-  | Material_dialog
   | Native_widget
 
 type axis =
@@ -119,6 +131,83 @@ type text_style =
   ; font_weight : text_font_weight option
   ; line_height : float option
   ; color : int32 option
+  }
+
+type theme_dynamic_variant =
+  | Tonal_spot
+  | Fidelity
+  | Content
+  | Monochrome
+  | Neutral
+  | Vibrant
+  | Expressive
+
+type theme_text_style = text_style
+
+type theme_color_scheme =
+  { seed_argb : int32
+  ; variant : theme_dynamic_variant
+  ; contrast_level : float
+  }
+
+type theme_typography =
+  { font_family : string option
+  ; font_family_fallback : string list
+  ; display_large : theme_text_style option
+  ; display_medium : theme_text_style option
+  ; display_small : theme_text_style option
+  ; headline_large : theme_text_style option
+  ; headline_medium : theme_text_style option
+  ; headline_small : theme_text_style option
+  ; title_large : theme_text_style option
+  ; title_medium : theme_text_style option
+  ; title_small : theme_text_style option
+  ; body_large : theme_text_style option
+  ; body_medium : theme_text_style option
+  ; body_small : theme_text_style option
+  ; label_large : theme_text_style option
+  ; label_medium : theme_text_style option
+  ; label_small : theme_text_style option
+  }
+
+type theme_shape =
+  { extra_small : float
+  ; small : float
+  ; medium : float
+  ; large : float
+  ; extra_large : float
+  }
+
+type theme_visual_density =
+  | Adaptive
+  | Standard
+  | Comfortable
+  | Compact
+
+type theme_tap_target_size =
+  | Padded
+  | Shrink_wrap
+
+type theme_data =
+  { brightness : brightness
+  ; color_scheme : theme_color_scheme
+  ; typography : theme_typography
+  ; shape : theme_shape
+  ; visual_density : theme_visual_density
+  ; tap_target_size : theme_tap_target_size
+  }
+
+type application_theme_mode =
+  | System
+  | Light
+  | Dark
+
+type application_theme =
+  { mode : application_theme_mode
+  ; light : theme_data
+  ; dark : theme_data
+  ; high_contrast_light : theme_data option
+  ; high_contrast_dark : theme_data option
   }
 
 type text_props =
@@ -215,6 +304,17 @@ type modal_bottom_sheet_presentation =
 type page_presentation =
   | Standard_page of page_transition
   | Modal_bottom_sheet of modal_bottom_sheet_presentation
+  | Modal_dialog of modal_dialog_presentation
+
+and modal_dialog_presentation =
+  { barrier_dismissible : bool
+  ; barrier_color_argb : int32 option
+  ; barrier_label : string option
+  ; use_safe_area : bool
+  ; request_focus : bool
+  ; transition_duration_ms : int
+  ; reverse_transition_duration_ms : int
+  }
 
 type overlay_alignment =
   | Top_start
@@ -247,9 +347,44 @@ type parent_data =
   | Stack_position of position
 
 type material_button_variant =
+  | Filled
+  | Filled_tonal
+  | Outlined
   | Elevated
   | Text_button
   | Icon_button
+
+type material_floating_action_button_location =
+  | Start_float
+  | Center_float
+  | End_float
+  | Start_docked
+  | Center_docked
+  | End_docked
+
+type material_floating_action_button_variant =
+  | Small
+  | Standard
+  | Large
+  | Extended
+
+type material_navigation_destination =
+  { label : string
+  ; enabled : bool
+  ; has_selected_icon : bool
+  }
+
+type material_radio_option =
+  { option_id : int64
+  ; enabled : bool
+  ; has_label : bool
+  }
+
+type material_chip_variant =
+  | Action_chip
+  | Filter_chip
+  | Choice_chip
+  | Input_chip
 
 type key_policy =
   | Handled
@@ -413,16 +548,69 @@ type props =
       ; sort_key : float option
       ; actions : int
       }
-  | Theme_props of
-      { brightness : brightness
-      ; color_seed : int32
+  | Theme_props of theme_data
+  | Material_scaffold_props of
+      { has_app_bar : bool
+      ; has_floating_action_button : bool
+      ; floating_action_button_location : material_floating_action_button_location
+      ; has_bottom_navigation_bar : bool
+      ; has_bottom_sheet : bool
       }
-  | Material_scaffold_props of { has_app_bar : bool }
   | Material_app_bar_props of { center_title : bool }
   | Material_button_props of
       { variant : material_button_variant
       ; enabled : bool
       ; autofocus : bool
+      }
+  | Material_floating_action_button_props of
+      { variant : material_floating_action_button_variant
+      ; enabled : bool
+      ; autofocus : bool
+      ; has_icon : bool
+      }
+  | Material_navigation_bar_props of
+      { selected_index : int
+      ; destinations : material_navigation_destination list
+      }
+  | Material_radio_group_props of
+      { selected_id : int64 option
+      ; options : material_radio_option list
+      }
+  | Material_slider_props of
+      { value : float
+      ; min : float
+      ; max : float
+      ; divisions : int option
+      ; label : string option
+      ; enabled : bool
+      ; has_on_change : bool
+      }
+  | Material_range_slider_props of
+      { start : float
+      ; end_ : float
+      ; min : float
+      ; max : float
+      ; divisions : int option
+      ; label_start : string option
+      ; label_end : string option
+      ; enabled : bool
+      ; has_on_change : bool
+      }
+  | Material_chip_props of
+      { variant : material_chip_variant
+      ; enabled : bool
+      ; selected : bool
+      ; has_avatar : bool
+      ; has_delete_icon : bool
+      ; has_on_press : bool
+      ; has_on_selected : bool
+      ; has_on_delete : bool
+      }
+  | Material_alert_dialog_props of
+      { has_icon : bool
+      ; has_title : bool
+      ; has_content : bool
+      ; action_count : int
       }
   | Material_checkbox_props of
       { value : bool
@@ -486,7 +674,6 @@ type props =
       ; minimum_bottom : float
       }
   | Environment_boundary_props
-  | Material_dialog_props of { barrier_dismissible : bool }
   | Native_widget_props of
       { kind_id : Bonsai_flutter_spec.Id.Native_widget.kind_id
       ; version : int
@@ -542,6 +729,11 @@ type host_request_payload =
   | Haptic_feedback of haptic_kind
   | Platform_information
   | Measure_layout of { node_id : Bonsai_flutter_spec.Id.Ui.node_id }
+  | Show_snack_bar of
+      { message : string
+      ; action_label : string option
+      ; duration_ms : int
+      }
 
 type event_binding =
   { event_tag : Bonsai_flutter_spec.Id.Protocol.event_tag
@@ -582,6 +774,10 @@ type operation =
       ; children : Bonsai_flutter_spec.Id.Ui.node_id list
       }
   | Set_root of Bonsai_flutter_spec.Id.Ui.node_id
+  | Set_application_theme of
+      { title : string option
+      ; theme : application_theme
+      }
   | Drop_node of Bonsai_flutter_spec.Id.Ui.node_id
   | Host_request of
       { request_id : Bonsai_flutter_spec.Id.Host.request_id

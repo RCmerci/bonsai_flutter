@@ -1378,6 +1378,14 @@ let test_generated_managed_adapter_host () =
   |> List.iter (fun expected ->
     Alcotest.(check bool) expected true (contains main expected));
   Alcotest.(check bool)
+    "managed host does not own MaterialApp"
+    false
+    (contains main "MaterialApp(");
+  Alcotest.(check bool)
+    "managed host passes BonsaiFlutterRoot directly to the adapter"
+    true
+    (contains main "child: home");
+  Alcotest.(check bool)
     "raw entrypoint is absent"
     false
     (contains main "utf8.encode('journal')");

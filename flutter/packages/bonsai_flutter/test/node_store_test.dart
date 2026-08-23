@@ -5,6 +5,123 @@ import 'package:test/test.dart';
 import 'fixture.dart';
 
 void main() {
+  test('application theme and widget tree commit atomically', () {
+    final store = NodeStore();
+    final prepared = store.prepare(counterSnapshot(text: 'Count: 0'));
+
+    expect(store.applicationTheme, isNull);
+    expect(store.applicationTitle, isNull);
+
+    store.commit(prepared);
+
+    expect(store.applicationTheme, testApplicationTheme);
+    expect(store.applicationTitle, 'Counter');
+    expect(store.rootId, 1);
+  });
+
+  test('full snapshots require exactly one complete application theme', () {
+    final missing = Frame(
+      runtimeEpoch: 1,
+      baseRevision: 0,
+      targetRevision: 1,
+      kind: FrameKind.fullSnapshot,
+      operations: const [
+        CreateNode(
+          nodeId: 1,
+          kind: NodeKind.text,
+          props: TextProps('missing theme'),
+          eventBindings: [],
+        ),
+        SetRoot(1),
+      ],
+    );
+    final duplicate = Frame(
+      runtimeEpoch: 1,
+      baseRevision: 0,
+      targetRevision: 1,
+      kind: FrameKind.fullSnapshot,
+      operations: const [
+        SetApplicationTheme(title: 'A', theme: testApplicationTheme),
+        SetApplicationTheme(title: 'B', theme: testApplicationTheme),
+        CreateNode(
+          nodeId: 1,
+          kind: NodeKind.text,
+          props: TextProps('duplicate theme'),
+          eventBindings: [],
+        ),
+        SetRoot(1),
+      ],
+    );
+
+    for (final frame in [missing, duplicate]) {
+      final store = NodeStore();
+      expect(
+        () => store.apply(frame),
+        throwsA(
+          isA<FrameApplyException>().having(
+            (error) => error.code,
+            'code',
+            FrameErrorCode.invalidApplicationTheme,
+          ),
+        ),
+      );
+      expect(store.nodes, isEmpty);
+      expect(store.applicationTheme, isNull);
+    }
+  });
+
+  test('theme-only incremental frames preserve logical node identity', () {
+    final store = NodeStore()..apply(counterSnapshot(text: 'Count: 0'));
+    final nodesBefore = store.nodes;
+    const updatedTheme = ApplicationThemeValue(
+      mode: ApplicationThemeMode.dark,
+      light: testLightThemeData,
+      dark: testDarkThemeData,
+    );
+
+    store.apply(
+      const Frame(
+        runtimeEpoch: 7,
+        baseRevision: 1,
+        targetRevision: 2,
+        kind: FrameKind.incremental,
+        operations: [
+          SetApplicationTheme(title: 'Counter', theme: updatedTheme),
+        ],
+      ),
+    );
+
+    expect(identical(store.nodes, nodesBefore), isTrue);
+    expect(store.applicationTheme, updatedTheme);
+    expect(store.revision, 2);
+  });
+
+  test('runtime replacement never retains the previous application theme', () {
+    final store = NodeStore()..apply(counterSnapshot(text: 'Count: 0'));
+    final invalidReplacement = const Frame(
+      runtimeEpoch: 8,
+      baseRevision: 0,
+      targetRevision: 1,
+      kind: FrameKind.fullSnapshot,
+      operations: [
+        CreateNode(
+          nodeId: 1,
+          kind: NodeKind.text,
+          props: TextProps('replacement'),
+          eventBindings: [],
+        ),
+        SetRoot(1),
+      ],
+    );
+
+    expect(
+      () => store.apply(invalidReplacement),
+      throwsA(isA<FrameApplyException>()),
+    );
+    expect(store.runtimeEpoch, 7);
+    expect(store.applicationTheme, testApplicationTheme);
+  });
+
   test('full snapshot commits a validated tree atomically', () {
     final store = NodeStore();
     final result = store.apply(counterSnapshot(text: 'Count: 0'));
@@ -161,6 +278,10 @@ void main() {
         targetRevision: 1,
         kind: FrameKind.fullSnapshot,
         operations: [
+          SetApplicationTheme(
+            title: 'Replacement',
+            theme: testApplicationTheme,
+          ),
           CreateNode(
             nodeId: 1,
             kind: NodeKind.text,
@@ -367,6 +488,10 @@ void main() {
             targetRevision: 1,
             kind: FrameKind.fullSnapshot,
             operations: [
+              const SetApplicationTheme(
+                title: 'Sliver test',
+                theme: testApplicationTheme,
+              ),
               CreateNode(
                 nodeId: 1,
                 kind: kind,
@@ -394,6 +519,10 @@ void main() {
             targetRevision: 1,
             kind: FrameKind.fullSnapshot,
             operations: [
+              const SetApplicationTheme(
+                title: 'Sliver store',
+                theme: testApplicationTheme,
+              ),
               CreateNode(
                 nodeId: 1,
                 kind: kind,

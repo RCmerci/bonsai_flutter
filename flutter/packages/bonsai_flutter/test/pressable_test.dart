@@ -1,3 +1,4 @@
+import 'fixture.dart';
 import 'dart:ui' show PointerDeviceKind;
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
@@ -328,7 +329,13 @@ final class _PressableFixture {
           baseRevision: 0,
           targetRevision: 1,
           kind: FrameKind.fullSnapshot,
-          operations: operations,
+          operations: [
+            const SetApplicationTheme(
+              title: 'Test',
+              theme: testApplicationTheme,
+            ),
+            ...operations,
+          ],
         ),
       );
   }

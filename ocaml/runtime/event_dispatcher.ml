@@ -48,6 +48,20 @@ let convert_tag tag =
   then Ok Route_pop
   else if tag = Id.native_event
   then Ok Native_event
+  else if tag = Id.navigation_destination_selected
+  then Ok Navigation_destination_selected
+  else if tag = Id.radio_selected
+  then Ok Radio_selected
+  else if tag = Id.slider_changed
+  then Ok Slider_changed
+  else if tag = Id.slider_change_end
+  then Ok Slider_change_end
+  else if tag = Id.range_slider_changed
+  then Ok Range_slider_changed
+  else if tag = Id.range_slider_change_end
+  then Ok Range_slider_change_end
+  else if tag = Id.delete
+  then Ok Delete
   else invalid "unsupported event tag %d" (ID.Protocol.Event_tag.to_int tag)
 ;;
 
@@ -116,6 +130,14 @@ let convert_payload tag payload =
          ; composing
          })
   | Int64 value when tag = Id.animation_completed -> Ok (Int64 value)
+  | Int64 value when tag = Id.navigation_destination_selected || tag = Id.radio_selected
+    -> Ok (Int64 value)
+  | Float value when tag = Id.slider_changed || tag = Id.slider_change_end ->
+    Ok (Float value)
+  | Float_range { start; end_ }
+    when tag = Id.range_slider_changed || tag = Id.range_slider_change_end ->
+    Ok (Float_range { start; end_ })
+  | Unit when tag = Id.delete -> Ok Unit
   | Scroll { pixels; delta } when tag = Id.scroll_notification ->
     Ok (Scroll { pixels; delta })
   | Visible_range { first_index; last_exclusive } when tag = Id.visible_range_changed ->

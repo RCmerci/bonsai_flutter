@@ -1597,7 +1597,10 @@ let render_detail_page
     Ui.Widget.Body.Vertical.create
       [ Ui.Widget.Body.Vertical.fixed toolbar
       ; Ui.Widget.Body.Vertical.fill
-          (Ui.Widget.Scroll_view.vertical ~on_scroll:scroll [ Ui.Widget.Sliver.box (Ui.Widget.column blocks) ] ())
+          (Ui.Widget.Scroll_view.vertical
+             ~on_scroll:scroll
+             [ Ui.Widget.Sliver.box (Ui.Widget.column blocks) ]
+             ())
       ]
   in
   let page_key = Printf.sprintf "mail-detail-%d" message.id in
@@ -2074,16 +2077,25 @@ let component handlers graph =
       pages
     |> Ui.Widget.constrained_box
          ~constraints:(Ui.Layout.Box_constraints.create ~max_width:720. ())
-    |> Ui.Widget.center
-    |> Ui.Widget.theme
-         ~data:
-           (Ui.Theme.material
-              ~brightness:Ui.Style.Brightness.Light
-              ~color_seed:primary
-              ()))
+    |> Ui.Widget.center)
 ;;
 
-let app = App.create ~name:"Bonsai Mail" component
+let application_theme =
+  let color_scheme = Ui.Theme.Color_scheme.from_seed ~color:primary () in
+  let data brightness = Ui.Theme.material ~brightness ~color_scheme () in
+  Ui.Theme.application
+    ~mode:Ui.Theme.System
+    ~light:(data Ui.Style.Brightness.Light)
+    ~dark:(data Ui.Style.Brightness.Dark)
+    ()
+;;
+
+let application_component handlers graph =
+  Bonsai.Cont.map (component handlers graph) ~f:(fun body ->
+    App.View.create ~theme:application_theme ~body)
+;;
+
+let app = App.create ~name:"Bonsai Mail" application_component
 
 module For_testing = struct
   let initial_inbox_ids = List.map (fun message -> message.id) initial_messages

@@ -95,9 +95,10 @@ let component handlers graph =
                  ; Ui.Widget.overlay
                      ~alignment:Ui.Navigation.Center
                      [ Ui.Widget.text "Overlay owned by OCaml" ]
-                 ; Ui.Widget.material_dialog
-                     ~barrier_dismissible:false
-                     (Ui.Widget.text "Dialog owned by OCaml")
+                 ; Ui.Material.alert_dialog
+                     ~content:(Ui.Widget.text "Dialog owned by OCaml")
+                     ~actions:[]
+                     ()
                  ; Ui.Widget.button
                      ~on_press:close_settings
                      ~child:(Ui.Widget.text "Close settings")

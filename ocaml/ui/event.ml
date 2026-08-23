@@ -23,6 +23,13 @@ module Tag = struct
     | Value_changed
     | Native_event
     | Semantics_action
+    | Navigation_destination_selected
+    | Radio_selected
+    | Slider_changed
+    | Slider_change_end
+    | Range_slider_changed
+    | Range_slider_change_end
+    | Delete
 
   let compare left right = Stdlib.compare left right
   let equal left right = compare left right = 0
@@ -49,6 +56,13 @@ module Tag = struct
     | Value_changed -> "value_changed"
     | Native_event -> "native_event"
     | Semantics_action -> "semantics_action"
+    | Navigation_destination_selected -> "navigation_destination_selected"
+    | Radio_selected -> "radio_selected"
+    | Slider_changed -> "slider_changed"
+    | Slider_change_end -> "slider_change_end"
+    | Range_slider_changed -> "range_slider_changed"
+    | Range_slider_change_end -> "range_slider_change_end"
+    | Delete -> "delete"
   ;;
 end
 
@@ -139,6 +153,11 @@ module Payload = struct
     | Text of string
     | Text_edit of text_edit
     | Int64 of int64
+    | Float of float
+    | Float_range of
+        { start : float
+        ; end_ : float
+        }
     | Tap of tap
     | Pointer of pointer
     | Key of key

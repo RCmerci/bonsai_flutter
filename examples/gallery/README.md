@@ -1,7 +1,8 @@
 # Gallery
 
-The Gallery covers the Phase 4 widget slice and the Phase 7 native-extension
-slice. Its application state and declarative tree live in `ocaml/gallery.ml`.
+The Gallery covers the complete core Material 3 component matrix and the
+native-extension slice. Its application state and declarative tree live in
+`ocaml/gallery.ml`.
 The Flutter application contains the Material shell, `BonsaiFlutterRoot`, and
 the typed factory registration for custom kind `1001`.
 

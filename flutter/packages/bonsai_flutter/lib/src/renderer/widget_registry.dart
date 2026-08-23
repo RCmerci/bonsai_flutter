@@ -3,6 +3,7 @@ import 'dart:ui' show PointerDeviceKind;
 import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
@@ -20,6 +21,7 @@ import '../protocol/generated_protocol.dart';
 import '../store/node_store.dart';
 import '../text_input/text_input_host.dart';
 import 'animated_opacity_host.dart';
+import 'application_theme.dart';
 import 'node_host.dart';
 import 'pressable_host.dart';
 import 'renderer_event.dart';
@@ -95,6 +97,19 @@ final class WidgetRegistry {
       NodeKind.materialElevatedButton: _buildMaterialButton,
       NodeKind.materialTextButton: _buildMaterialButton,
       NodeKind.materialIconButton: _buildMaterialButton,
+      NodeKind.materialFilledButton: _buildMaterialButton,
+      NodeKind.materialFilledTonalButton: _buildMaterialButton,
+      NodeKind.materialOutlinedButton: _buildMaterialButton,
+      NodeKind.materialFloatingActionButton: _buildMaterialFloatingActionButton,
+      NodeKind.materialNavigationBar: _buildMaterialNavigationBar,
+      NodeKind.materialRadioGroup: _buildMaterialRadioGroup,
+      NodeKind.materialSlider: _buildMaterialSlider,
+      NodeKind.materialRangeSlider: _buildMaterialRangeSlider,
+      NodeKind.materialActionChip: _buildMaterialChip,
+      NodeKind.materialFilterChip: _buildMaterialChip,
+      NodeKind.materialChoiceChip: _buildMaterialChip,
+      NodeKind.materialInputChip: _buildMaterialChip,
+      NodeKind.materialAlertDialog: _buildMaterialAlertDialog,
       NodeKind.materialCheckbox: _buildMaterialCheckbox,
       NodeKind.materialSwitch: _buildMaterialSwitch,
       NodeKind.materialListTile: _buildMaterialListTile,
@@ -109,7 +124,6 @@ final class WidgetRegistry {
       NodeKind.page: _buildPage,
       NodeKind.safeArea: _buildSafeArea,
       NodeKind.environmentBoundary: _buildEnvironmentBoundary,
-      NodeKind.materialDialog: _buildMaterialDialog,
     }, extensions);
   }
 
@@ -1176,15 +1190,7 @@ Widget _buildTheme(
 ) {
   _expectChildCount(node, children, 1);
   final props = _expectProps<ThemeProps>(node);
-  return Theme(
-    data: ThemeData(
-      brightness: props.brightness == ThemeBrightness.light
-          ? Brightness.light
-          : Brightness.dark,
-      colorSchemeSeed: Color(props.colorSeedArgb),
-    ),
-    child: children.single,
-  );
+  return Theme(data: decodeThemeData(props.data), child: children.single);
 }
 
 Widget _buildMaterialCheckbox(
@@ -1218,16 +1224,54 @@ Widget _buildMaterialScaffold(
   RendererEventCallback? onEvent,
 ) {
   final props = _expectProps<MaterialScaffoldProps>(node);
-  final expected = props.hasAppBar ? 2 : 1;
+  RendererResourceScope.maybeOf(
+    context,
+  )?.bindScaffoldMessenger(ScaffoldMessenger.maybeOf(context));
+  final expected =
+      (props.hasAppBar ? 1 : 0) +
+      (props.hasFloatingActionButton ? 1 : 0) +
+      (props.hasBottomNavigationBar ? 1 : 0) +
+      (props.hasBottomSheet ? 1 : 0) +
+      1;
   _expectChildCount(node, children, expected);
-  if (!props.hasAppBar) return Scaffold(body: children.single);
-  return Scaffold(
-    body: Column(
-      children: [
-        SizedBox(height: kToolbarHeight, child: children.first),
-        Expanded(child: children.last),
-      ],
+  var childIndex = 0;
+  final Widget? appBarChild = props.hasAppBar ? children[childIndex++] : null;
+  final PreferredSizeWidget? appBar = switch (appBarChild) {
+    null => null,
+    final PreferredSizeWidget widget => widget,
+    final widget => PreferredSize(
+      preferredSize: const Size.fromHeight(kToolbarHeight),
+      child: widget,
     ),
+  };
+  final floatingActionButton = props.hasFloatingActionButton
+      ? children[childIndex++]
+      : null;
+  final bottomNavigationBar = props.hasBottomNavigationBar
+      ? children[childIndex++]
+      : null;
+  final bottomSheet = props.hasBottomSheet ? children[childIndex++] : null;
+  final body = children[childIndex];
+  return Scaffold(
+    appBar: appBar,
+    floatingActionButton: floatingActionButton,
+    floatingActionButtonLocation: switch (props.floatingActionButtonLocation) {
+      MaterialFloatingActionButtonLocation.startFloat =>
+        FloatingActionButtonLocation.startFloat,
+      MaterialFloatingActionButtonLocation.centerFloat =>
+        FloatingActionButtonLocation.centerFloat,
+      MaterialFloatingActionButtonLocation.endFloat =>
+        FloatingActionButtonLocation.endFloat,
+      MaterialFloatingActionButtonLocation.startDocked =>
+        FloatingActionButtonLocation.startDocked,
+      MaterialFloatingActionButtonLocation.centerDocked =>
+        FloatingActionButtonLocation.centerDocked,
+      MaterialFloatingActionButtonLocation.endDocked =>
+        FloatingActionButtonLocation.endDocked,
+    },
+    bottomNavigationBar: bottomNavigationBar,
+    bottomSheet: bottomSheet,
+    body: body,
   );
 }
 
@@ -1282,7 +1326,409 @@ Widget _buildMaterialButton(
       onPressed: callback,
       icon: children.single,
     ),
+    MaterialButtonVariant.filled => FilledButton(
+      autofocus: props.autofocus,
+      onPressed: callback,
+      child: children.single,
+    ),
+    MaterialButtonVariant.filledTonal => FilledButton.tonal(
+      autofocus: props.autofocus,
+      onPressed: callback,
+      child: children.single,
+    ),
+    MaterialButtonVariant.outlined => OutlinedButton(
+      autofocus: props.autofocus,
+      onPressed: callback,
+      child: children.single,
+    ),
   };
+}
+
+Widget _buildMaterialFloatingActionButton(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  final props = _expectProps<MaterialFloatingActionButtonProps>(node);
+  final expected = props.variant == MaterialFloatingActionButtonVariant.extended
+      ? (props.hasIcon ? 2 : 1)
+      : 1;
+  _expectChildCount(node, children, expected);
+  final binding = _binding(node, EventTagId.press);
+  final callback = props.enabled && binding != null && onEvent != null
+      ? () => onEvent(
+          RendererEvent(
+            nodeId: node.id,
+            eventTag: binding.eventTag,
+            handlerId: binding.handlerId,
+            payload: const UnitEventPayload(),
+          ),
+        )
+      : null;
+  return switch (props.variant) {
+    MaterialFloatingActionButtonVariant.small => FloatingActionButton.small(
+      autofocus: props.autofocus,
+      onPressed: callback,
+      child: children.single,
+    ),
+    MaterialFloatingActionButtonVariant.standard => FloatingActionButton(
+      autofocus: props.autofocus,
+      onPressed: callback,
+      child: children.single,
+    ),
+    MaterialFloatingActionButtonVariant.large => FloatingActionButton.large(
+      autofocus: props.autofocus,
+      onPressed: callback,
+      child: children.single,
+    ),
+    MaterialFloatingActionButtonVariant.extended =>
+      FloatingActionButton.extended(
+        autofocus: props.autofocus,
+        onPressed: callback,
+        icon: props.hasIcon ? children.first : null,
+        label: children.last,
+      ),
+  };
+}
+
+Widget _buildMaterialNavigationBar(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  final props = _expectProps<MaterialNavigationBarProps>(node);
+  final expected = props.destinations.fold<int>(
+    0,
+    (count, destination) => count + (destination.hasSelectedIcon ? 2 : 1),
+  );
+  _expectChildCount(node, children, expected);
+  var childIndex = 0;
+  final destinations = <NavigationDestination>[];
+  for (final destination in props.destinations) {
+    final icon = children[childIndex++];
+    final selectedIcon = destination.hasSelectedIcon
+        ? children[childIndex++]
+        : null;
+    destinations.add(
+      NavigationDestination(
+        icon: icon,
+        selectedIcon: selectedIcon,
+        label: destination.label,
+        enabled: destination.enabled,
+      ),
+    );
+  }
+  final binding = _binding(node, EventTagId.navigationDestinationSelected);
+  return NavigationBar(
+    selectedIndex: props.selectedIndex,
+    destinations: destinations,
+    onDestinationSelected: binding == null || onEvent == null
+        ? null
+        : (index) => onEvent(
+            RendererEvent(
+              nodeId: node.id,
+              eventTag: binding.eventTag,
+              handlerId: binding.handlerId,
+              payload: Int64EventPayload(index),
+            ),
+          ),
+  );
+}
+
+Widget _buildMaterialRadioGroup(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  final props = _expectProps<MaterialRadioGroupProps>(node);
+  final expected = props.options.where((option) => option.hasLabel).length;
+  _expectChildCount(node, children, expected);
+  var childIndex = 0;
+  final radios = <Widget>[];
+  for (final option in props.options) {
+    final radio = Radio<int>(value: option.id, enabled: option.enabled);
+    radios.add(
+      option.hasLabel
+          ? Row(
+              children: [
+                radio,
+                Expanded(child: children[childIndex++]),
+              ],
+            )
+          : radio,
+    );
+  }
+  final binding = _binding(node, EventTagId.radioSelected);
+  return RadioGroup<int>(
+    groupValue: props.selectedId,
+    onChanged: binding == null || onEvent == null
+        ? (_) {}
+        : (value) {
+            if (value == null) return;
+            onEvent(
+              RendererEvent(
+                nodeId: node.id,
+                eventTag: binding.eventTag,
+                handlerId: binding.handlerId,
+                payload: Int64EventPayload(value),
+              ),
+            );
+          },
+    child: Column(mainAxisSize: MainAxisSize.min, children: radios),
+  );
+}
+
+Widget _buildMaterialSlider(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  _expectChildCount(node, children, 0);
+  return _MaterialSliderHost(node: node, onEvent: onEvent);
+}
+
+Widget _buildMaterialRangeSlider(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  _expectChildCount(node, children, 0);
+  return _MaterialRangeSliderHost(node: node, onEvent: onEvent);
+}
+
+Widget _buildMaterialChip(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  final props = _expectProps<MaterialChipProps>(node);
+  final expected =
+      1 + (props.hasAvatar ? 1 : 0) + (props.hasDeleteIcon ? 1 : 0);
+  _expectChildCount(node, children, expected);
+  var childIndex = 0;
+  final avatar = props.hasAvatar ? children[childIndex++] : null;
+  final label = children[childIndex++];
+  final deleteIcon = props.hasDeleteIcon ? children[childIndex] : null;
+  final pressBinding = _binding(node, EventTagId.press);
+  final selectedBinding = _binding(node, EventTagId.valueChanged);
+  final deleteBinding = _binding(node, EventTagId.delete);
+  VoidCallback? unitCallback(EventBinding? binding, bool enabled) =>
+      enabled && binding != null && onEvent != null
+      ? () => onEvent(
+          RendererEvent(
+            nodeId: node.id,
+            eventTag: binding.eventTag,
+            handlerId: binding.handlerId,
+            payload: const UnitEventPayload(),
+          ),
+        )
+      : null;
+  final onSelected =
+      props.enabled &&
+          props.hasOnSelected &&
+          selectedBinding != null &&
+          onEvent != null
+      ? (bool value) => onEvent(
+          RendererEvent(
+            nodeId: node.id,
+            eventTag: selectedBinding.eventTag,
+            handlerId: selectedBinding.handlerId,
+            payload: BoolEventPayload(value),
+          ),
+        )
+      : null;
+  return switch (props.variant) {
+    MaterialChipVariant.action => ActionChip(
+      avatar: avatar,
+      label: label,
+      onPressed: unitCallback(pressBinding, props.enabled && props.hasOnPress),
+    ),
+    MaterialChipVariant.filter => FilterChip(
+      avatar: avatar,
+      label: label,
+      selected: props.selected,
+      onSelected: onSelected,
+    ),
+    MaterialChipVariant.choice => ChoiceChip(
+      avatar: avatar,
+      label: label,
+      selected: props.selected,
+      onSelected: onSelected,
+    ),
+    MaterialChipVariant.input => () {
+      final onPressed = unitCallback(
+        pressBinding,
+        props.enabled && props.hasOnPress,
+      );
+      final chip = InputChip(
+        avatar: avatar,
+        label: label,
+        selected: props.selected,
+        deleteIcon: deleteIcon,
+        onSelected: onSelected,
+        onDeleted: unitCallback(
+          deleteBinding,
+          props.enabled && props.hasOnDelete,
+        ),
+      );
+      return onPressed == null
+          ? chip
+          : GestureDetector(onTap: onPressed, child: chip);
+    }(),
+  };
+}
+
+Widget _buildMaterialAlertDialog(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  final props = _expectProps<MaterialAlertDialogProps>(node);
+  final expected =
+      (props.hasIcon ? 1 : 0) +
+      (props.hasTitle ? 1 : 0) +
+      (props.hasContent ? 1 : 0) +
+      props.actionCount;
+  _expectChildCount(node, children, expected);
+  var childIndex = 0;
+  final icon = props.hasIcon ? children[childIndex++] : null;
+  final title = props.hasTitle ? children[childIndex++] : null;
+  final content = props.hasContent ? children[childIndex++] : null;
+  return AlertDialog(
+    icon: icon,
+    title: title,
+    content: content,
+    actions: children.sublist(childIndex),
+  );
+}
+
+final class _MaterialSliderHost extends StatefulWidget {
+  const _MaterialSliderHost({required this.node, required this.onEvent});
+  final UiNode node;
+  final RendererEventCallback? onEvent;
+
+  @override
+  State<_MaterialSliderHost> createState() => _MaterialSliderHostState();
+}
+
+final class _MaterialSliderHostState extends State<_MaterialSliderHost> {
+  double? _pending;
+  bool _scheduled = false;
+
+  void _emit(EventBinding binding, double value) => widget.onEvent!(
+    RendererEvent(
+      nodeId: widget.node.id,
+      eventTag: binding.eventTag,
+      handlerId: binding.handlerId,
+      payload: FloatEventPayload(value),
+    ),
+  );
+
+  void _coalesce(EventBinding binding, double value) {
+    _pending = value;
+    if (_scheduled) return;
+    _scheduled = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _scheduled = false;
+      final pending = _pending;
+      _pending = null;
+      if (mounted && pending != null) _emit(binding, pending);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final props = widget.node.props as MaterialSliderProps;
+    final changed = _binding(widget.node, EventTagId.sliderChanged);
+    final ended = _binding(widget.node, EventTagId.sliderChangeEnd);
+    return Slider(
+      value: props.value,
+      min: props.min,
+      max: props.max,
+      divisions: props.divisions,
+      label: props.label,
+      onChanged:
+          props.enabled &&
+              props.hasOnChange &&
+              changed != null &&
+              widget.onEvent != null
+          ? (value) => _coalesce(changed, value)
+          : null,
+      onChangeEnd: props.enabled && ended != null && widget.onEvent != null
+          ? (value) => _emit(ended, value)
+          : null,
+    );
+  }
+}
+
+final class _MaterialRangeSliderHost extends StatefulWidget {
+  const _MaterialRangeSliderHost({required this.node, required this.onEvent});
+  final UiNode node;
+  final RendererEventCallback? onEvent;
+
+  @override
+  State<_MaterialRangeSliderHost> createState() =>
+      _MaterialRangeSliderHostState();
+}
+
+final class _MaterialRangeSliderHostState
+    extends State<_MaterialRangeSliderHost> {
+  RangeValues? _pending;
+  bool _scheduled = false;
+
+  void _emit(EventBinding binding, RangeValues value) => widget.onEvent!(
+    RendererEvent(
+      nodeId: widget.node.id,
+      eventTag: binding.eventTag,
+      handlerId: binding.handlerId,
+      payload: FloatRangeEventPayload(start: value.start, end: value.end),
+    ),
+  );
+
+  void _coalesce(EventBinding binding, RangeValues value) {
+    _pending = value;
+    if (_scheduled) return;
+    _scheduled = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _scheduled = false;
+      final pending = _pending;
+      _pending = null;
+      if (mounted && pending != null) _emit(binding, pending);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final props = widget.node.props as MaterialRangeSliderProps;
+    final changed = _binding(widget.node, EventTagId.rangeSliderChanged);
+    final ended = _binding(widget.node, EventTagId.rangeSliderChangeEnd);
+    return RangeSlider(
+      values: RangeValues(props.start, props.end),
+      min: props.min,
+      max: props.max,
+      divisions: props.divisions,
+      labels: props.labelStart == null && props.labelEnd == null
+          ? null
+          : RangeLabels(props.labelStart ?? '', props.labelEnd ?? ''),
+      onChanged:
+          props.enabled &&
+              props.hasOnChange &&
+              changed != null &&
+              widget.onEvent != null
+          ? (value) => _coalesce(changed, value)
+          : null,
+      onChangeEnd: props.enabled && ended != null && widget.onEvent != null
+          ? (value) => _emit(ended, value)
+          : null,
+    );
+  }
 }
 
 Widget _buildMaterialSwitch(
@@ -1577,17 +2023,6 @@ Widget _buildEnvironmentBoundary(
   _expectChildCount(node, children, 1);
   _expectProps<EnvironmentBoundaryProps>(node);
   return MediaQuery(data: MediaQuery.of(context), child: children.single);
-}
-
-Widget _buildMaterialDialog(
-  BuildContext context,
-  UiNode node,
-  List<Widget> children,
-  RendererEventCallback? onEvent,
-) {
-  _expectChildCount(node, children, 1);
-  _expectProps<MaterialDialogProps>(node);
-  return Dialog(child: children.single);
 }
 
 Alignment _overlayAlignment(OverlayAlignment alignment) => switch (alignment) {

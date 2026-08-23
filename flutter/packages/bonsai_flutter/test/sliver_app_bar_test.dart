@@ -1,3 +1,4 @@
+import 'fixture.dart';
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -188,6 +189,7 @@ NodeStore _sliverAppBarStore({
       targetRevision: 1,
       kind: FrameKind.fullSnapshot,
       operations: [
+        const SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
         const CreateNode(
           nodeId: 1,
           kind: NodeKind.scrollView,

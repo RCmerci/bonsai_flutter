@@ -42,12 +42,7 @@ Future<RuntimeClient> _mount(WidgetTester tester, Uint8List config) async {
   );
   if (runtime == null) throw StateError('SQLite worker runtime did not start');
   await tester.pumpWidget(
-    MaterialApp(
-      home: BonsaiFlutterRoot(
-        config: config,
-        runtimeStarter: (_) async => runtime,
-      ),
-    ),
+    BonsaiFlutterRoot(config: config, runtimeStarter: (_) async => runtime),
   );
   return runtime;
 }

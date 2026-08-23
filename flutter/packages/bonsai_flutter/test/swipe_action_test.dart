@@ -1,3 +1,4 @@
+import 'fixture.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' show PointerDeviceKind;
@@ -870,6 +871,9 @@ Frame _swipeFrame({
     baseRevision: 0,
     targetRevision: 1,
     kind: FrameKind.fullSnapshot,
-    operations: operations,
+    operations: [
+      const SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
+      ...operations,
+    ],
   );
 }

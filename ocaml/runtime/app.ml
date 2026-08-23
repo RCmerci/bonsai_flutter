@@ -8,8 +8,9 @@ module Context = struct
   let native_event_handler = Driver.Handler.create_native
 end
 
-type component =
-  Context.t -> Bonsai.Cont.graph -> Bonsai_flutter_ui.Widget.t Bonsai.Cont.t
+module View = Driver.View
+
+type component = Context.t -> Bonsai.Cont.graph -> View.t Bonsai.Cont.t
 
 type t =
   | Ui_only of
@@ -26,7 +27,7 @@ type t =
           ('request, 'response, 'push) Worker.client
           -> Context.t
           -> Bonsai.Cont.graph
-          -> Bonsai_flutter_ui.Widget.t Bonsai.Cont.t
+          -> View.t Bonsai.Cont.t
       }
       -> t
 

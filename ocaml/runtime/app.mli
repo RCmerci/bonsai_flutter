@@ -30,12 +30,14 @@ end
 
 type t
 
+module View = Driver.View
+
 val create
   :  ?name:string
        (** [trace], when supplied, receives runtime diagnostic messages. Trace sink
       failures are ignored so diagnostics cannot interrupt rendering. *)
   -> ?trace:(string -> unit)
-  -> (Context.t -> Bonsai.Cont.graph -> Bonsai_flutter_ui.Widget.t Bonsai.Cont.t)
+  -> (Context.t -> Bonsai.Cont.graph -> View.t Bonsai.Cont.t)
   -> t
 
 (** Creates a runtime-scoped worker-backed application. [decode_config] runs
@@ -50,7 +52,7 @@ val create_with_worker
   -> (('request, 'response, 'push) Worker.client
       -> Context.t
       -> Bonsai.Cont.graph
-      -> Bonsai_flutter_ui.Widget.t Bonsai.Cont.t)
+      -> View.t Bonsai.Cont.t)
   -> t
 
 val name : t -> string option
@@ -68,7 +70,7 @@ module Private : sig
     :  instance
     -> Driver.Handler.t
     -> Bonsai.Cont.graph
-    -> Bonsai_flutter_ui.Widget.t Bonsai.Cont.t
+    -> View.t Bonsai.Cont.t
 
   val trace : t -> (string -> unit) option
   val before_flush : instance -> schedule:(unit Bonsai.Effect.t -> unit) -> unit

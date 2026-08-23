@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 import '../protocol/frame.dart';
 import '../store/node_store.dart';
@@ -11,7 +11,18 @@ abstract interface class RendererHostResources {
     required double alignment,
     required bool animated,
   });
+
+  Future<SnackBarCloseReason> showSnackBar(
+    int requestId, {
+    required String message,
+    required String? actionLabel,
+    required int durationMs,
+  });
+
+  Future<void> cancelSnackBar(int requestId);
 }
+
+enum SnackBarCloseReason { action, dismiss, swipe, hide, remove, timeout }
 
 final class TextInputResourceHandle {
   TextInputResourceHandle(TextInputProps props)
@@ -122,6 +133,9 @@ final class RendererResourceStore implements RendererHostResources {
   final Map<int, AnimationResourceHandle> _animations = {};
   final Map<int, _NativeResourceEntry> _nativeResources = {};
   final Map<int, int> _mountedNodeCounts = {};
+  final Map<int, ScaffoldFeatureController<SnackBar, SnackBarClosedReason>>
+  _snackBars = {};
+  ScaffoldMessengerState? _scaffoldMessenger;
   Set<int> _currentNodeIds = const {};
   int? _runtimeEpoch;
   int? _resourceGeneration;
@@ -311,6 +325,53 @@ final class RendererResourceStore implements RendererHostResources {
     }
   }
 
+  void bindScaffoldMessenger(ScaffoldMessengerState? messenger) {
+    if (_disposed) return;
+    _scaffoldMessenger = messenger;
+  }
+
+  @override
+  Future<SnackBarCloseReason> showSnackBar(
+    int requestId, {
+    required String message,
+    required String? actionLabel,
+    required int durationMs,
+  }) async {
+    await _waitForResourceAttachment();
+    if (_disposed) {
+      throw StateError('RendererResourceStore has been disposed');
+    }
+    final messenger = _scaffoldMessenger;
+    if (messenger == null || !messenger.mounted) {
+      throw StateError('No ScaffoldMessenger is attached');
+    }
+    final controller = messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: Duration(milliseconds: durationMs),
+        action: actionLabel == null
+            ? null
+            : SnackBarAction(label: actionLabel, onPressed: () {}),
+      ),
+    );
+    _snackBars[requestId] = controller;
+    final reason = await controller.closed;
+    _snackBars.remove(requestId);
+    return switch (reason) {
+      SnackBarClosedReason.action => SnackBarCloseReason.action,
+      SnackBarClosedReason.dismiss => SnackBarCloseReason.dismiss,
+      SnackBarClosedReason.swipe => SnackBarCloseReason.swipe,
+      SnackBarClosedReason.hide => SnackBarCloseReason.hide,
+      SnackBarClosedReason.remove => SnackBarCloseReason.remove,
+      SnackBarClosedReason.timeout => SnackBarCloseReason.timeout,
+    };
+  }
+
+  @override
+  Future<void> cancelSnackBar(int requestId) async {
+    _snackBars.remove(requestId)?.close();
+  }
+
   Resource acquireNativeResource<Resource extends Object>({
     required int nodeId,
     required int kindId,
@@ -421,6 +482,11 @@ final class RendererResourceStore implements RendererHostResources {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    for (final controller in _snackBars.values) {
+      controller.close();
+    }
+    _snackBars.clear();
+    _scaffoldMessenger = null;
     _disposeEntries();
   }
 
@@ -490,6 +556,10 @@ final class RendererResourceScope extends InheritedWidget {
     }
     return scope.resources;
   }
+
+  static RendererResourceStore? maybeOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<RendererResourceScope>()
+      ?.resources;
 
   @override
   bool updateShouldNotify(RendererResourceScope oldWidget) =>

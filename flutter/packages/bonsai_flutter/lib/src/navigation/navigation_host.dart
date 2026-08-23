@@ -60,6 +60,50 @@ final class BonsaiStandardPageRoute extends PageRouteBuilder<void> {
       super.canTransitionTo(nextRoute);
 }
 
+final class BonsaiModalDialogPage extends Page<void> {
+  const BonsaiModalDialogPage({
+    required this.presentation,
+    required this.child,
+    super.key,
+    super.name,
+    super.restorationId,
+    super.canPop,
+  });
+
+  final ModalDialogPresentation presentation;
+  final Widget child;
+
+  @override
+  Route<void> createRoute(BuildContext context) =>
+      BonsaiModalDialogRoute(page: this);
+}
+
+final class BonsaiModalDialogRoute extends PageRouteBuilder<void> {
+  BonsaiModalDialogRoute({required BonsaiModalDialogPage page})
+    : super(
+        settings: page,
+        barrierDismissible: page.presentation.barrierDismissible,
+        barrierColor: page.presentation.barrierColorArgb == null
+            ? null
+            : Color(page.presentation.barrierColorArgb!),
+        barrierLabel: page.presentation.barrierLabel,
+        requestFocus: page.presentation.requestFocus,
+        transitionDuration: Duration(
+          milliseconds: page.presentation.transitionDurationMilliseconds,
+        ),
+        reverseTransitionDuration: Duration(
+          milliseconds: page.presentation.reverseTransitionDurationMilliseconds,
+        ),
+        pageBuilder: (_, _, _) => page.presentation.useSafeArea
+            ? SafeArea(child: page.child)
+            : page.child,
+        transitionsBuilder: (_, animation, _, routeChild) => FadeTransition(
+          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+          child: routeChild,
+        ),
+      );
+}
+
 final class NavigationHost extends StatefulWidget {
   const NavigationHost({
     required this.restorationScopeId,
@@ -117,6 +161,14 @@ final class NavigationHostState extends State<NavigationHost> {
                 presentation: presentation,
                 child: page.child,
               ),
+            final ModalDialogPresentation presentation => BonsaiModalDialogPage(
+              key: ValueKey<String>(page.props.pageKey),
+              name: page.props.pageKey,
+              restorationId: page.props.restorationId,
+              canPop: page.props.canPop,
+              presentation: presentation,
+              child: page.child,
+            ),
           },
       ],
       onDidRemovePage: (page) {

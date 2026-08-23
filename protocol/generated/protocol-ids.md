@@ -2,7 +2,7 @@
 
 # Protocol IDs
 
-Protocol version: `1.19`
+Protocol version: `1.21`
 
 ## Frame kind
 
@@ -29,6 +29,7 @@ Protocol version: `1.19`
 | `runtime_notification` | 9 |
 | `end_frame` | 10 |
 | `application_request` | 11 |
+| `set_application_theme` | 12 |
 
 ## Node kind
 
@@ -88,10 +89,23 @@ Protocol version: `1.19`
 | `material_list_tile` | 104 |
 | `material_divider` | 105 |
 | `material_card` | 106 |
-| `material_dialog` | 107 |
+| `reserved_node_kind_107` | 107 |
 | `material_circular_progress_indicator` | 108 |
+| `material_filled_button` | 109 |
+| `material_filled_tonal_button` | 110 |
+| `material_outlined_button` | 111 |
 | `cupertino_button` | 112 |
 | `cupertino_switch` | 113 |
+| `material_floating_action_button` | 114 |
+| `material_navigation_bar` | 115 |
+| `material_radio_group` | 116 |
+| `material_slider` | 117 |
+| `material_range_slider` | 118 |
+| `material_action_chip` | 119 |
+| `material_filter_chip` | 120 |
+| `material_choice_chip` | 121 |
+| `material_input_chip` | 122 |
+| `material_alert_dialog` | 123 |
 | `native_widget` | 128 |
 
 ## Event tag
@@ -125,6 +139,13 @@ Protocol version: `1.19`
 | `application_response` | 25 |
 | `application_request_error` | 26 |
 | `application_event` | 27 |
+| `navigation_destination_selected` | 28 |
+| `radio_selected` | 29 |
+| `slider_changed` | 30 |
+| `slider_change_end` | 31 |
+| `range_slider_changed` | 32 |
+| `range_slider_change_end` | 33 |
+| `delete` | 34 |
 
 ## Host request
 
@@ -144,6 +165,7 @@ Protocol version: `1.19`
 | `haptic_feedback` | 12 |
 | `platform_information` | 13 |
 | `measure_layout` | 14 |
+| `show_snack_bar` | 15 |
 
 ## Runtime error
 
@@ -410,14 +432,17 @@ Protocol version: `1.19`
 
 | Name | ID | Encoding |
 |---|---:|---|
-| `brightness` | 1 | `brightness` |
-| `color_seed` | 2 | `argb32` |
+| `data` | 1 | `theme_data` |
 
 ## Material scaffold properties
 
 | Name | ID | Encoding |
 |---|---:|---|
 | `has_app_bar` | 1 | `bool` |
+| `has_floating_action_button` | 2 | `bool` |
+| `floating_action_button_location` | 3 | `material_floating_action_button_location` |
+| `has_bottom_navigation_bar` | 4 | `bool` |
+| `has_bottom_sheet` | 5 | `bool` |
 
 ## Material app bar properties
 
@@ -445,6 +470,133 @@ Protocol version: `1.19`
 |---|---:|---|
 | `enabled` | 1 | `bool` |
 | `autofocus` | 2 | `bool` |
+
+## Material filled button properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `enabled` | 1 | `bool` |
+| `autofocus` | 2 | `bool` |
+
+## Material filled tonal button properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `enabled` | 1 | `bool` |
+| `autofocus` | 2 | `bool` |
+
+## Material outlined button properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `enabled` | 1 | `bool` |
+| `autofocus` | 2 | `bool` |
+
+## Material floating action button properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `variant` | 1 | `material_floating_action_button_variant` |
+| `enabled` | 2 | `bool` |
+| `autofocus` | 3 | `bool` |
+| `has_icon` | 4 | `bool` |
+
+## Material navigation bar properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `selected_index` | 1 | `u32` |
+| `destinations` | 2 | `material_navigation_destinations` |
+
+## Material radio group properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `selected_id` | 1 | `optional_i64` |
+| `options` | 2 | `material_radio_options` |
+
+## Material slider properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `value` | 1 | `f64` |
+| `min` | 2 | `f64` |
+| `max` | 3 | `f64` |
+| `divisions` | 4 | `optional_u32` |
+| `label` | 5 | `optional_string` |
+| `enabled` | 6 | `bool` |
+| `has_on_change` | 7 | `bool` |
+
+## Material range slider properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `start` | 1 | `f64` |
+| `end_value` | 2 | `f64` |
+| `min` | 3 | `f64` |
+| `max` | 4 | `f64` |
+| `divisions` | 5 | `optional_u32` |
+| `label_start` | 6 | `optional_string` |
+| `label_end` | 7 | `optional_string` |
+| `enabled` | 8 | `bool` |
+| `has_on_change` | 9 | `bool` |
+
+## Material action chip properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `enabled` | 1 | `bool` |
+| `selected` | 2 | `bool` |
+| `has_avatar` | 3 | `bool` |
+| `has_delete_icon` | 4 | `bool` |
+| `has_on_press` | 5 | `bool` |
+| `has_on_selected` | 6 | `bool` |
+| `has_on_delete` | 7 | `bool` |
+
+## Material filter chip properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `enabled` | 1 | `bool` |
+| `selected` | 2 | `bool` |
+| `has_avatar` | 3 | `bool` |
+| `has_delete_icon` | 4 | `bool` |
+| `has_on_press` | 5 | `bool` |
+| `has_on_selected` | 6 | `bool` |
+| `has_on_delete` | 7 | `bool` |
+
+## Material choice chip properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `enabled` | 1 | `bool` |
+| `selected` | 2 | `bool` |
+| `has_avatar` | 3 | `bool` |
+| `has_delete_icon` | 4 | `bool` |
+| `has_on_press` | 5 | `bool` |
+| `has_on_selected` | 6 | `bool` |
+| `has_on_delete` | 7 | `bool` |
+
+## Material input chip properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `enabled` | 1 | `bool` |
+| `selected` | 2 | `bool` |
+| `has_avatar` | 3 | `bool` |
+| `has_delete_icon` | 4 | `bool` |
+| `has_on_press` | 5 | `bool` |
+| `has_on_selected` | 6 | `bool` |
+| `has_on_delete` | 7 | `bool` |
+
+## Material alert dialog properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `has_icon` | 1 | `bool` |
+| `has_title` | 2 | `bool` |
+| `has_content` | 3 | `bool` |
+| `action_count` | 4 | `u32` |
 
 ## Material checkbox properties
 
@@ -554,6 +706,13 @@ Protocol version: `1.19`
 | `modal_handle_semantics_label` | 18 | `optional_string` |
 | `modal_medium_semantics_value` | 19 | `optional_string` |
 | `modal_large_semantics_value` | 20 | `optional_string` |
+| `dialog_barrier_dismissible` | 21 | `bool` |
+| `dialog_barrier_color` | 22 | `optional_argb32` |
+| `dialog_barrier_label` | 23 | `optional_string` |
+| `dialog_use_safe_area` | 24 | `bool` |
+| `dialog_request_focus` | 25 | `bool` |
+| `dialog_transition_duration_ms` | 26 | `u32` |
+| `dialog_reverse_transition_duration_ms` | 27 | `u32` |
 
 ## Safe area properties
 
@@ -564,12 +723,6 @@ Protocol version: `1.19`
 | `right` | 3 | `bool` |
 | `bottom` | 4 | `bool` |
 | `minimum` | 5 | `edge_insets` |
-
-## Material dialog properties
-
-| Name | ID | Encoding |
-|---|---:|---|
-| `barrier_dismissible` | 1 | `bool` |
 
 ## Pressable properties
 

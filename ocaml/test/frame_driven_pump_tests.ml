@@ -65,7 +65,7 @@ let require_text result expected =
 let create ?trace ?(runtime_epoch = 41L) component =
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   ( time_source
-  , Driver.create
+  , Driver.For_testing.create_widget_component
       ?trace
       ~runtime_epoch:(ID.Runtime.Epoch.of_int64 runtime_epoch)
       ~time_source
@@ -170,7 +170,7 @@ let test_sleep_and_until_without_input () =
   let source_until_fired = ref 0 in
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   let driver =
-    Driver.create
+    Driver.For_testing.create_widget_component
       ~runtime_epoch:(ID.Runtime.Epoch.of_int64 42L)
       ~time_source
       (timer_component
@@ -308,7 +308,7 @@ let test_retained_token_starts_relative_timer_at_resume_acknowledgment () =
   let timer_fired = ref 0 in
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   let driver =
-    Driver.create
+    Driver.For_testing.create_widget_component
       ~runtime_epoch:(ID.Runtime.Epoch.of_int64 45L)
       ~time_source
       (relative_timer_after_display_component ~timer_fired)
@@ -486,7 +486,7 @@ let test_invalid_input_is_atomic_and_does_not_starve_due_timer () =
   let timer_fired = ref 0 in
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   let driver =
-    Driver.create
+    Driver.For_testing.create_widget_component
       ~runtime_epoch
       ~time_source
       (atomic_input_component ~handled ~timer_fired ~time_source)
@@ -745,7 +745,7 @@ let wait_before_display_component handlers graph =
 let test_wait_before_display_updates_initial_candidate () =
   let time_source = Bonsai.Time_source.create ~start:Core.Time_ns.epoch in
   let driver =
-    Driver.create
+    Driver.For_testing.create_widget_component
       ~runtime_epoch:(ID.Runtime.Epoch.of_int64 54L)
       ~time_source
       wait_before_display_component

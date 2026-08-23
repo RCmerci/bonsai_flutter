@@ -4,6 +4,21 @@ module Ui = Bonsai_flutter_ui
 let fail format = Printf.ksprintf failwith format
 let require condition message = if not condition then fail "%s" message
 
+let application_theme =
+  let scheme =
+    Ui.Theme.Color_scheme.from_seed
+      ~color:(Ui.Style.Color.rgb ~red:103 ~green:80 ~blue:164)
+      ()
+  in
+  let light =
+    Ui.Theme.material ~brightness:Ui.Style.Brightness.Light ~color_scheme:scheme ()
+  in
+  let dark =
+    Ui.Theme.material ~brightness:Ui.Style.Brightness.Dark ~color_scheme:scheme ()
+  in
+  Ui.Theme.application ~mode:Ui.Theme.System ~light ~dark ()
+;;
+
 let set_u16_le bytes offset value =
   Bytes.set_uint8 bytes offset (value land 0xff);
   Bytes.set_uint8 bytes (offset + 1) ((value lsr 8) land 0xff)
@@ -62,10 +77,14 @@ let worker_component client _context _graph =
   Worker.on_event client (function
     | Worker.Terminal _ -> Bonsai.Effect.of_thunk (fun () -> Stdlib.incr terminal_events)
     | Response _ | Push _ -> Bonsai.Effect.return ());
-  Bonsai.Cont.return (Ui.Widget.text "worker-backed")
+  Bonsai.Cont.return
+    (App.View.create ~theme:application_theme ~body:(Ui.Widget.text "worker-backed"))
 ;;
 
-let ui_component _context _graph = Bonsai.Cont.return (Ui.Widget.text "ui-only")
+let ui_component _context _graph =
+  Bonsai.Cont.return
+    (App.View.create ~theme:application_theme ~body:(Ui.Widget.text "ui-only"))
+;;
 
 let client () =
   match !live_client with

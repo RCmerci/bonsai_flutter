@@ -1588,13 +1588,14 @@ let test_layout_material_and_semantics_widgets_are_incremental () =
   in
   let on_scroll = Event.Handler.create ~name:"scroll" (fun _ -> ()) in
   let key = Key.string "checkbox" in
+  let color_scheme =
+    Ui.Theme.Color_scheme.from_seed
+      ~color:(Ui.Style.Color.rgb ~red:32 ~green:96 ~blue:160)
+      ()
+  in
   let tree value =
     Widget.theme
-      ~data:
-        (Ui.Theme.material
-           ~brightness:Ui.Style.Brightness.Dark
-           ~color_seed:(Ui.Style.Color.rgb ~red:32 ~green:96 ~blue:160)
-           ())
+      ~data:(Ui.Theme.material ~brightness:Ui.Style.Brightness.Dark ~color_scheme ())
       (Widget.semantics
          ~properties:
            (Ui.Semantics.create ~label:"Accept terms" ~enabled:true ~checked:false ())

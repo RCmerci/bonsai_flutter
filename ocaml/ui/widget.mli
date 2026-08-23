@@ -84,7 +84,7 @@ module Viewport : sig
     val decorated_box : decoration:Style.Decoration.t -> t -> t
     val semantics : properties:Semantics.t -> t -> t
     val safe_area : ?minimum:Layout.Edge_insets.t -> t -> t
-    val theme : data:Theme.t -> t -> t
+    val theme : data:Theme.data -> t -> t
     val with_height : height:float -> t -> widget
   end
 
@@ -96,7 +96,7 @@ module Viewport : sig
     val decorated_box : decoration:Style.Decoration.t -> t -> t
     val semantics : properties:Semantics.t -> t -> t
     val safe_area : ?minimum:Layout.Edge_insets.t -> t -> t
-    val theme : data:Theme.t -> t -> t
+    val theme : data:Theme.data -> t -> t
     val with_width : width:float -> t -> widget
   end
 end
@@ -313,7 +313,7 @@ val semantics
   -> t
   -> t
 
-val theme : ?key:Key.t -> data:Theme.t -> t -> t
+val theme : ?key:Key.t -> data:Theme.data -> t -> t
 
 val navigator
   :  ?key:Key.t
@@ -339,8 +339,6 @@ val overlay
   -> ?dismissible:bool
   -> t list
   -> t
-
-val material_dialog : ?key:Key.t -> ?barrier_dismissible:bool -> t -> t
 
 val text_input
   :  ?key:Key.t
@@ -426,7 +424,7 @@ module Body : sig
     -> t
     -> t
 
-  val theme : data:Theme.t -> t -> t
+  val theme : data:Theme.data -> t -> t
 
   module Vertical : sig
     type child
@@ -499,6 +497,19 @@ module Private : sig
     | K_material_elevated_button
     | K_material_text_button
     | K_material_icon_button
+    | K_material_filled_button
+    | K_material_filled_tonal_button
+    | K_material_outlined_button
+    | K_material_floating_action_button
+    | K_material_navigation_bar
+    | K_material_radio_group
+    | K_material_slider
+    | K_material_range_slider
+    | K_material_action_chip
+    | K_material_filter_chip
+    | K_material_choice_chip
+    | K_material_input_chip
+    | K_material_alert_dialog
     | K_material_checkbox
     | K_material_switch
     | K_material_list_tile
@@ -513,7 +524,6 @@ module Private : sig
     | K_page
     | K_safe_area
     | K_environment_boundary
-    | K_material_dialog
     | K_native_widget
 
   val kind_tag_compare : kind_tag -> kind_tag -> int
@@ -542,9 +552,44 @@ module Private : sig
     | Stack_position of position
 
   type material_button_variant =
+    | Filled
+    | Filled_tonal
+    | Outlined
     | Elevated
     | Text_button
     | Icon_button
+
+  type material_floating_action_button_location =
+    | Start_float
+    | Center_float
+    | End_float
+    | Start_docked
+    | Center_docked
+    | End_docked
+
+  type material_floating_action_button_variant =
+    | Small
+    | Standard
+    | Large
+    | Extended
+
+  type material_navigation_destination =
+    { label : string
+    ; enabled : bool
+    ; has_selected_icon : bool
+    }
+
+  type material_radio_option =
+    { option_id : int64
+    ; enabled : bool
+    ; has_label : bool
+    }
+
+  type material_chip_variant =
+    | Action
+    | Filter
+    | Choice
+    | Input
 
   type 'k node =
     | Empty : [ `Empty ] node
@@ -698,12 +743,15 @@ module Private : sig
         ; actions : Semantics.Action.t list
         }
         -> [ `Semantics ] node
-    | Theme :
-        { brightness : Style.Brightness.t
-        ; color_seed : int32
+    | Theme : Theme.Private.data_view -> [ `Theme ] node
+    | Material_scaffold :
+        { has_app_bar : bool
+        ; has_floating_action_button : bool
+        ; floating_action_button_location : material_floating_action_button_location
+        ; has_bottom_navigation_bar : bool
+        ; has_bottom_sheet : bool
         }
-        -> [ `Theme ] node
-    | Material_scaffold : { has_app_bar : bool } -> [ `Material_scaffold ] node
+        -> [ `Material_scaffold ] node
     | Material_app_bar : { center_title : bool } -> [ `Material_app_bar ] node
     | Material_elevated_button :
         { variant : material_button_variant
@@ -723,6 +771,114 @@ module Private : sig
         ; autofocus : bool
         }
         -> [ `Material_icon_button ] node
+    | Material_filled_button :
+        { variant : material_button_variant
+        ; enabled : bool
+        ; autofocus : bool
+        }
+        -> [ `Material_filled_button ] node
+    | Material_filled_tonal_button :
+        { variant : material_button_variant
+        ; enabled : bool
+        ; autofocus : bool
+        }
+        -> [ `Material_filled_tonal_button ] node
+    | Material_outlined_button :
+        { variant : material_button_variant
+        ; enabled : bool
+        ; autofocus : bool
+        }
+        -> [ `Material_outlined_button ] node
+    | Material_floating_action_button :
+        { variant : material_floating_action_button_variant
+        ; enabled : bool
+        ; autofocus : bool
+        ; has_icon : bool
+        }
+        -> [ `Material_floating_action_button ] node
+    | Material_navigation_bar :
+        { selected_index : int
+        ; destinations : material_navigation_destination list
+        }
+        -> [ `Material_navigation_bar ] node
+    | Material_radio_group :
+        { selected_id : int64 option
+        ; options : material_radio_option list
+        }
+        -> [ `Material_radio_group ] node
+    | Material_slider :
+        { value : float
+        ; min : float
+        ; max : float
+        ; divisions : int option
+        ; label : string option
+        ; enabled : bool
+        ; has_on_change : bool
+        }
+        -> [ `Material_slider ] node
+    | Material_range_slider :
+        { start : float
+        ; end_ : float
+        ; min : float
+        ; max : float
+        ; divisions : int option
+        ; label_start : string option
+        ; label_end : string option
+        ; enabled : bool
+        ; has_on_change : bool
+        }
+        -> [ `Material_range_slider ] node
+    | Material_action_chip :
+        { variant : material_chip_variant
+        ; enabled : bool
+        ; selected : bool
+        ; has_avatar : bool
+        ; has_delete_icon : bool
+        ; has_on_press : bool
+        ; has_on_selected : bool
+        ; has_on_delete : bool
+        }
+        -> [ `Material_action_chip ] node
+    | Material_filter_chip :
+        { variant : material_chip_variant
+        ; enabled : bool
+        ; selected : bool
+        ; has_avatar : bool
+        ; has_delete_icon : bool
+        ; has_on_press : bool
+        ; has_on_selected : bool
+        ; has_on_delete : bool
+        }
+        -> [ `Material_filter_chip ] node
+    | Material_choice_chip :
+        { variant : material_chip_variant
+        ; enabled : bool
+        ; selected : bool
+        ; has_avatar : bool
+        ; has_delete_icon : bool
+        ; has_on_press : bool
+        ; has_on_selected : bool
+        ; has_on_delete : bool
+        }
+        -> [ `Material_choice_chip ] node
+    | Material_input_chip :
+        { variant : material_chip_variant
+        ; enabled : bool
+        ; selected : bool
+        ; has_avatar : bool
+        ; has_delete_icon : bool
+        ; has_on_press : bool
+        ; has_on_selected : bool
+        ; has_on_delete : bool
+        }
+        -> [ `Material_input_chip ] node
+    | Material_alert_dialog :
+        { has_icon : bool
+        ; has_title : bool
+        ; has_content : bool
+        ; action_count : int
+        }
+        -> [ `Material_alert_dialog ] node
     | Material_checkbox :
         { value : bool
         ; enabled : bool
@@ -796,7 +952,6 @@ module Private : sig
         }
         -> [ `Safe_area ] node
     | Environment_boundary : [ `Environment_boundary ] node
-    | Material_dialog : { barrier_dismissible : bool } -> [ `Material_dialog ] node
     | Native_widget :
         { kind_id : Bonsai_flutter_spec.Id.Native_widget.kind_id
         ; version : int
@@ -841,7 +996,17 @@ module Private : sig
     -> unit
     -> t
 
-  val material_scaffold : ?key:Key.t -> ?app_bar:t -> body:Body.t -> unit -> t
+  val material_scaffold
+    :  ?key:Key.t
+    -> ?app_bar:t
+    -> ?floating_action_button:t
+    -> ?floating_action_button_location:material_floating_action_button_location
+    -> ?bottom_navigation_bar:t
+    -> ?bottom_sheet:t
+    -> body:Body.t
+    -> unit
+    -> t
+
   val material_app_bar : ?key:Key.t -> ?center_title:bool -> title:t -> unit -> t
 
   val material_button
@@ -851,6 +1016,86 @@ module Private : sig
     -> variant:material_button_variant
     -> on_press:Event.Handler.t
     -> child:t
+    -> unit
+    -> t
+
+  val material_floating_action_button
+    :  ?key:Key.t
+    -> ?enabled:bool
+    -> ?autofocus:bool
+    -> variant:material_floating_action_button_variant
+    -> on_press:Event.Handler.t
+    -> ?icon:t
+    -> label:t
+    -> unit
+    -> t
+
+  val material_navigation_bar
+    :  ?key:Key.t
+    -> selected_index:int
+    -> destinations:material_navigation_destination list
+    -> children:t list
+    -> on_select:Event.Handler.t
+    -> unit
+    -> t
+
+  val material_radio_group
+    :  ?key:Key.t
+    -> selected_id:int64 option
+    -> options:material_radio_option list
+    -> children:t list
+    -> on_select:Event.Handler.t
+    -> unit
+    -> t
+
+  val material_slider
+    :  ?key:Key.t
+    -> value:float
+    -> min:float
+    -> max:float
+    -> divisions:int option
+    -> label:string option
+    -> enabled:bool
+    -> on_change:Event.Handler.t option
+    -> on_change_end:Event.Handler.t
+    -> unit
+    -> t
+
+  val material_range_slider
+    :  ?key:Key.t
+    -> start:float
+    -> end_:float
+    -> min:float
+    -> max:float
+    -> divisions:int option
+    -> label_start:string option
+    -> label_end:string option
+    -> enabled:bool
+    -> on_change:Event.Handler.t option
+    -> on_change_end:Event.Handler.t
+    -> unit
+    -> t
+
+  val material_chip
+    :  ?key:Key.t
+    -> variant:material_chip_variant
+    -> enabled:bool
+    -> selected:bool
+    -> ?avatar:t
+    -> ?delete_icon:t
+    -> ?on_press:Event.Handler.t
+    -> ?on_selected:Event.Handler.t
+    -> ?on_delete:Event.Handler.t
+    -> label:t
+    -> unit
+    -> t
+
+  val material_alert_dialog
+    :  ?key:Key.t
+    -> ?icon:t
+    -> ?title:t
+    -> ?content:t
+    -> actions:t list
     -> unit
     -> t
 

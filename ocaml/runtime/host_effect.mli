@@ -38,6 +38,14 @@ type haptic_kind =
   | Haptic_heavy
   | Haptic_selection
 
+type snack_bar_close_reason =
+  | Action
+  | Dismiss
+  | Swipe
+  | Hide
+  | Remove
+  | Timeout
+
 module Application_platform : sig
   type t
 
@@ -197,6 +205,15 @@ val measure_layout
   -> t
   -> node_id:Bonsai_flutter_spec.Id.Ui.node_id
   -> (layout, error) result Bonsai.Effect.t
+
+val show_snack_bar
+  :  ?cancellation:Cancellation.t
+  -> ?action_label:string
+  -> ?duration_ms:int
+  -> t
+  -> message:string
+  -> unit
+  -> (snack_bar_close_reason, error) result Bonsai.Effect.t
 
 module Prepared_operations : sig
   type t

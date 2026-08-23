@@ -300,6 +300,13 @@ abstract final class FrameCodec {
             ..uint32(operation.payload.length)
             ..raw(operation.payload);
         });
+      case SetApplicationTheme():
+        final title = operation.title;
+        if (title != null) _validateThemeFontName('Application title', title);
+        payload.envelope(OperationId.setApplicationTheme, (body) {
+          body.optionalString(title);
+          _writeApplicationTheme(body, operation.theme);
+        });
       case RuntimeStatsOperation():
         payload.envelope(OperationId.runtimeNotification, (body) {
           _writeRuntimeStats(body, operation);
@@ -392,6 +399,14 @@ abstract final class FrameCodec {
       return ApplicationRequestOperation(
         requestId: requestId,
         payload: body.bytes(length),
+      );
+    }
+    if (opcode == OperationId.setApplicationTheme) {
+      final title = body.optionalString();
+      if (title != null) _validateThemeFontName('Application title', title);
+      return SetApplicationTheme(
+        title: title,
+        theme: _readApplicationTheme(body),
       );
     }
     _fail(ProtocolErrorCode.unknownOperation, 'Unknown operation $opcode');
@@ -618,26 +633,144 @@ abstract final class FrameCodec {
           ..uint8(keyPolicy.index);
       case (NodeKind.semantics, final SemanticsProps props):
         _writeSemanticsProps(writer, props);
+      case (NodeKind.theme, ThemeProps(:final data)):
+        _writeThemeData(writer, data);
       case (
-        NodeKind.theme,
-        ThemeProps(:final brightness, :final colorSeedArgb),
+        NodeKind.materialScaffold,
+        MaterialScaffoldProps(
+          :final hasAppBar,
+          :final hasFloatingActionButton,
+          :final floatingActionButtonLocation,
+          :final hasBottomNavigationBar,
+          :final hasBottomSheet,
+        ),
       ):
         writer
-          ..uint8(brightness == ThemeBrightness.light ? 0 : 1)
-          ..uint32(colorSeedArgb);
-      case (NodeKind.materialScaffold, MaterialScaffoldProps(:final hasAppBar)):
-        writer.uint8(hasAppBar ? 1 : 0);
+          ..uint8(hasAppBar ? 1 : 0)
+          ..uint8(hasFloatingActionButton ? 1 : 0)
+          ..uint8(floatingActionButtonLocation.index)
+          ..uint8(hasBottomNavigationBar ? 1 : 0)
+          ..uint8(hasBottomSheet ? 1 : 0);
       case (NodeKind.materialAppBar, MaterialAppBarProps(:final centerTitle)):
         writer.uint8(centerTitle ? 1 : 0);
       case (
         NodeKind.materialElevatedButton ||
             NodeKind.materialTextButton ||
-            NodeKind.materialIconButton,
+            NodeKind.materialIconButton ||
+            NodeKind.materialFilledButton ||
+            NodeKind.materialFilledTonalButton ||
+            NodeKind.materialOutlinedButton,
         MaterialButtonProps(:final enabled, :final autofocus),
       ):
         writer
           ..uint8(enabled ? 1 : 0)
           ..uint8(autofocus ? 1 : 0);
+      case (
+        NodeKind.materialFloatingActionButton,
+        MaterialFloatingActionButtonProps(
+          :final variant,
+          :final enabled,
+          :final autofocus,
+          :final hasIcon,
+        ),
+      ):
+        writer
+          ..uint8(variant.index)
+          ..uint8(enabled ? 1 : 0)
+          ..uint8(autofocus ? 1 : 0)
+          ..uint8(hasIcon ? 1 : 0);
+      case (
+        NodeKind.materialNavigationBar,
+        MaterialNavigationBarProps(:final selectedIndex, :final destinations),
+      ):
+        _validateMaterialNavigation(selectedIndex, destinations);
+        writer
+          ..uint32(selectedIndex)
+          ..uint16(destinations.length);
+        for (final destination in destinations) {
+          writer
+            ..string(destination.label)
+            ..uint8(destination.enabled ? 1 : 0)
+            ..uint8(destination.hasSelectedIcon ? 1 : 0);
+        }
+      case (
+        NodeKind.materialRadioGroup,
+        MaterialRadioGroupProps(:final selectedId, :final options),
+      ):
+        _validateMaterialRadio(selectedId, options);
+        if (selectedId == null) {
+          writer.uint8(0);
+        } else {
+          writer
+            ..uint8(1)
+            ..int64(selectedId);
+        }
+        writer.uint16(options.length);
+        for (final option in options) {
+          writer
+            ..int64(option.id)
+            ..uint8(option.enabled ? 1 : 0)
+            ..uint8(option.hasLabel ? 1 : 0);
+        }
+      case (NodeKind.materialSlider, final MaterialSliderProps props):
+        _validateMaterialSlider(props);
+        writer
+          ..float64(props.value)
+          ..float64(props.min)
+          ..float64(props.max)
+          ..optionalUint32(props.divisions)
+          ..optionalString(props.label)
+          ..uint8(props.enabled ? 1 : 0)
+          ..uint8(props.hasOnChange ? 1 : 0);
+      case (NodeKind.materialRangeSlider, final MaterialRangeSliderProps props):
+        _validateMaterialRangeSlider(props);
+        writer
+          ..float64(props.start)
+          ..float64(props.end)
+          ..float64(props.min)
+          ..float64(props.max)
+          ..optionalUint32(props.divisions)
+          ..optionalString(props.labelStart)
+          ..optionalString(props.labelEnd)
+          ..uint8(props.enabled ? 1 : 0)
+          ..uint8(props.hasOnChange ? 1 : 0);
+      case (
+        NodeKind.materialActionChip ||
+            NodeKind.materialFilterChip ||
+            NodeKind.materialChoiceChip ||
+            NodeKind.materialInputChip,
+        MaterialChipProps(
+          :final enabled,
+          :final selected,
+          :final hasAvatar,
+          :final hasDeleteIcon,
+          :final hasOnPress,
+          :final hasOnSelected,
+          :final hasOnDelete,
+        ),
+      ):
+        writer
+          ..uint8(enabled ? 1 : 0)
+          ..uint8(selected ? 1 : 0)
+          ..uint8(hasAvatar ? 1 : 0)
+          ..uint8(hasDeleteIcon ? 1 : 0)
+          ..uint8(hasOnPress ? 1 : 0)
+          ..uint8(hasOnSelected ? 1 : 0)
+          ..uint8(hasOnDelete ? 1 : 0);
+      case (
+        NodeKind.materialAlertDialog,
+        MaterialAlertDialogProps(
+          :final hasIcon,
+          :final hasTitle,
+          :final hasContent,
+          :final actionCount,
+        ),
+      ):
+        writer
+          ..uint8(hasIcon ? 1 : 0)
+          ..uint8(hasTitle ? 1 : 0)
+          ..uint8(hasContent ? 1 : 0)
+          ..uint32(actionCount);
       case (
         NodeKind.materialCheckbox,
         MaterialCheckboxProps(:final value, :final enabled),
@@ -715,11 +848,6 @@ abstract final class FrameCodec {
           ..uint8(right ? 1 : 0)
           ..uint8(bottom ? 1 : 0);
         _writeInsets(writer, minimum);
-      case (
-        NodeKind.materialDialog,
-        MaterialDialogProps(:final barrierDismissible),
-      ):
-        writer.uint8(barrierDismissible ? 1 : 0);
       case (NodeKind.nativeWidget, final NativeWidgetProps props):
         _writeNativeWidgetProps(writer, props);
       default:
@@ -1011,20 +1139,16 @@ abstract final class FrameCodec {
                 _fieldMask(SemanticsPropId.actions),
           );
         _writeSemanticsProps(writer, props);
-      case ThemeProps(:final brightness, :final colorSeedArgb):
+      case ThemeProps(:final data):
         writer
           ..uint16(NodeKindId.theme)
-          ..uint64(
-            _fieldMask(ThemePropId.brightness) |
-                _fieldMask(ThemePropId.colorSeed),
-          )
-          ..uint8(brightness == ThemeBrightness.light ? 0 : 1)
-          ..uint32(colorSeedArgb);
-      case MaterialScaffoldProps(:final hasAppBar):
+          ..uint64(_fieldMask(ThemePropId.data));
+        _writeThemeData(writer, data);
+      case final MaterialScaffoldProps props:
         writer
           ..uint16(NodeKindId.materialScaffold)
-          ..uint64(_changedFields(props))
-          ..uint8(hasAppBar ? 1 : 0);
+          ..uint64(_changedFields(props));
+        _writeCreateProps(writer, NodeKind.materialScaffold, props);
       case MaterialAppBarProps(:final centerTitle):
         writer
           ..uint16(NodeKindId.materialAppBar)
@@ -1040,10 +1164,55 @@ abstract final class FrameCodec {
             MaterialButtonVariant.elevated => NodeKindId.materialElevatedButton,
             MaterialButtonVariant.text => NodeKindId.materialTextButton,
             MaterialButtonVariant.icon => NodeKindId.materialIconButton,
+            MaterialButtonVariant.filled => NodeKindId.materialFilledButton,
+            MaterialButtonVariant.filledTonal =>
+              NodeKindId.materialFilledTonalButton,
+            MaterialButtonVariant.outlined => NodeKindId.materialOutlinedButton,
           })
           ..uint64(_changedFields(props))
           ..uint8(enabled ? 1 : 0)
           ..uint8(autofocus ? 1 : 0);
+      case final MaterialFloatingActionButtonProps props:
+        writer
+          ..uint16(NodeKindId.materialFloatingActionButton)
+          ..uint64(_changedFields(props));
+        _writeCreateProps(writer, NodeKind.materialFloatingActionButton, props);
+      case final MaterialNavigationBarProps props:
+        writer
+          ..uint16(NodeKindId.materialNavigationBar)
+          ..uint64(_changedFields(props));
+        _writeCreateProps(writer, NodeKind.materialNavigationBar, props);
+      case final MaterialRadioGroupProps props:
+        writer
+          ..uint16(NodeKindId.materialRadioGroup)
+          ..uint64(_changedFields(props));
+        _writeCreateProps(writer, NodeKind.materialRadioGroup, props);
+      case final MaterialSliderProps props:
+        writer
+          ..uint16(NodeKindId.materialSlider)
+          ..uint64(_changedFields(props));
+        _writeCreateProps(writer, NodeKind.materialSlider, props);
+      case final MaterialRangeSliderProps props:
+        writer
+          ..uint16(NodeKindId.materialRangeSlider)
+          ..uint64(_changedFields(props));
+        _writeCreateProps(writer, NodeKind.materialRangeSlider, props);
+      case final MaterialChipProps props:
+        final kind = switch (props.variant) {
+          MaterialChipVariant.action => NodeKind.materialActionChip,
+          MaterialChipVariant.filter => NodeKind.materialFilterChip,
+          MaterialChipVariant.choice => NodeKind.materialChoiceChip,
+          MaterialChipVariant.input => NodeKind.materialInputChip,
+        };
+        writer
+          ..uint16(_nodeKindId(kind))
+          ..uint64(_changedFields(props));
+        _writeCreateProps(writer, kind, props);
+      case final MaterialAlertDialogProps props:
+        writer
+          ..uint16(NodeKindId.materialAlertDialog)
+          ..uint64(_changedFields(props));
+        _writeCreateProps(writer, NodeKind.materialAlertDialog, props);
       case MaterialCheckboxProps(:final value, :final enabled):
         writer
           ..uint16(NodeKindId.materialCheckbox)
@@ -1139,11 +1308,6 @@ abstract final class FrameCodec {
           ..uint8(right ? 1 : 0)
           ..uint8(bottom ? 1 : 0);
         _writeInsets(writer, minimum);
-      case MaterialDialogProps(:final barrierDismissible):
-        writer
-          ..uint16(NodeKindId.materialDialog)
-          ..uint64(_fieldMask(MaterialDialogPropId.barrierDismissible))
-          ..uint8(barrierDismissible ? 1 : 0);
       case final NativeWidgetProps props:
         writer
           ..uint16(NodeKindId.nativeWidget)
@@ -1272,12 +1436,17 @@ abstract final class FrameCodec {
       ),
     ),
     NodeKind.semantics => _readSemanticsProps(reader),
-    NodeKind.theme => ThemeProps(
-      brightness: reader.themeBrightness(),
-      colorSeedArgb: reader.uint32(),
-    ),
+    NodeKind.theme => ThemeProps(data: _readThemeData(reader)),
     NodeKind.materialScaffold => MaterialScaffoldProps(
       hasAppBar: reader.boolean(),
+      hasFloatingActionButton: reader.boolean(),
+      floatingActionButtonLocation: _enumValue(
+        MaterialFloatingActionButtonLocation.values,
+        reader.uint8(),
+        'floating action button location',
+      ),
+      hasBottomNavigationBar: reader.boolean(),
+      hasBottomSheet: reader.boolean(),
     ),
     NodeKind.materialAppBar => MaterialAppBarProps(
       centerTitle: reader.boolean(),
@@ -1296,6 +1465,57 @@ abstract final class FrameCodec {
       variant: MaterialButtonVariant.icon,
       enabled: reader.boolean(),
       autofocus: reader.boolean(),
+    ),
+    NodeKind.materialFilledButton => MaterialButtonProps(
+      variant: MaterialButtonVariant.filled,
+      enabled: reader.boolean(),
+      autofocus: reader.boolean(),
+    ),
+    NodeKind.materialFilledTonalButton => MaterialButtonProps(
+      variant: MaterialButtonVariant.filledTonal,
+      enabled: reader.boolean(),
+      autofocus: reader.boolean(),
+    ),
+    NodeKind.materialOutlinedButton => MaterialButtonProps(
+      variant: MaterialButtonVariant.outlined,
+      enabled: reader.boolean(),
+      autofocus: reader.boolean(),
+    ),
+    NodeKind.materialFloatingActionButton => MaterialFloatingActionButtonProps(
+      variant: _enumValue(
+        MaterialFloatingActionButtonVariant.values,
+        reader.uint8(),
+        'floating action button variant',
+      ),
+      enabled: reader.boolean(),
+      autofocus: reader.boolean(),
+      hasIcon: reader.boolean(),
+    ),
+    NodeKind.materialNavigationBar => _readMaterialNavigationBar(reader),
+    NodeKind.materialRadioGroup => _readMaterialRadioGroup(reader),
+    NodeKind.materialSlider => _readMaterialSlider(reader),
+    NodeKind.materialRangeSlider => _readMaterialRangeSlider(reader),
+    NodeKind.materialActionChip => _readMaterialChip(
+      reader,
+      MaterialChipVariant.action,
+    ),
+    NodeKind.materialFilterChip => _readMaterialChip(
+      reader,
+      MaterialChipVariant.filter,
+    ),
+    NodeKind.materialChoiceChip => _readMaterialChip(
+      reader,
+      MaterialChipVariant.choice,
+    ),
+    NodeKind.materialInputChip => _readMaterialChip(
+      reader,
+      MaterialChipVariant.input,
+    ),
+    NodeKind.materialAlertDialog => MaterialAlertDialogProps(
+      hasIcon: reader.boolean(),
+      hasTitle: reader.boolean(),
+      hasContent: reader.boolean(),
+      actionCount: reader.uint32(),
     ),
     NodeKind.materialCheckbox => MaterialCheckboxProps(
       value: reader.boolean(),
@@ -1350,9 +1570,6 @@ abstract final class FrameCodec {
         right: reader.finiteFloat64(),
         bottom: reader.finiteFloat64(),
       ),
-    ),
-    NodeKind.materialDialog => MaterialDialogProps(
-      barrierDismissible: reader.boolean(),
     ),
     NodeKind.nativeWidget => _readNativeWidgetProps(reader),
   };
@@ -1443,6 +1660,20 @@ abstract final class FrameCodec {
     NodeKind.materialElevatedButton => NodeKindId.materialElevatedButton,
     NodeKind.materialTextButton => NodeKindId.materialTextButton,
     NodeKind.materialIconButton => NodeKindId.materialIconButton,
+    NodeKind.materialFilledButton => NodeKindId.materialFilledButton,
+    NodeKind.materialFilledTonalButton => NodeKindId.materialFilledTonalButton,
+    NodeKind.materialOutlinedButton => NodeKindId.materialOutlinedButton,
+    NodeKind.materialFloatingActionButton =>
+      NodeKindId.materialFloatingActionButton,
+    NodeKind.materialNavigationBar => NodeKindId.materialNavigationBar,
+    NodeKind.materialRadioGroup => NodeKindId.materialRadioGroup,
+    NodeKind.materialSlider => NodeKindId.materialSlider,
+    NodeKind.materialRangeSlider => NodeKindId.materialRangeSlider,
+    NodeKind.materialActionChip => NodeKindId.materialActionChip,
+    NodeKind.materialFilterChip => NodeKindId.materialFilterChip,
+    NodeKind.materialChoiceChip => NodeKindId.materialChoiceChip,
+    NodeKind.materialInputChip => NodeKindId.materialInputChip,
+    NodeKind.materialAlertDialog => NodeKindId.materialAlertDialog,
     NodeKind.materialCheckbox => NodeKindId.materialCheckbox,
     NodeKind.materialSwitch => NodeKindId.materialSwitch,
     NodeKind.materialListTile => NodeKindId.materialListTile,
@@ -1458,7 +1689,6 @@ abstract final class FrameCodec {
     NodeKind.page => NodeKindId.page,
     NodeKind.safeArea => NodeKindId.safeArea,
     NodeKind.environmentBoundary => NodeKindId.environmentBoundary,
-    NodeKind.materialDialog => NodeKindId.materialDialog,
     NodeKind.nativeWidget => NodeKindId.nativeWidget,
   };
 
@@ -1519,6 +1749,43 @@ abstract final class FrameCodec {
     if (value == NodeKindId.materialIconButton) {
       return NodeKind.materialIconButton;
     }
+    if (value == NodeKindId.materialFilledButton) {
+      return NodeKind.materialFilledButton;
+    }
+    if (value == NodeKindId.materialFilledTonalButton) {
+      return NodeKind.materialFilledTonalButton;
+    }
+    if (value == NodeKindId.materialOutlinedButton) {
+      return NodeKind.materialOutlinedButton;
+    }
+    if (value == NodeKindId.materialFloatingActionButton) {
+      return NodeKind.materialFloatingActionButton;
+    }
+    if (value == NodeKindId.materialNavigationBar) {
+      return NodeKind.materialNavigationBar;
+    }
+    if (value == NodeKindId.materialRadioGroup) {
+      return NodeKind.materialRadioGroup;
+    }
+    if (value == NodeKindId.materialSlider) return NodeKind.materialSlider;
+    if (value == NodeKindId.materialRangeSlider) {
+      return NodeKind.materialRangeSlider;
+    }
+    if (value == NodeKindId.materialActionChip) {
+      return NodeKind.materialActionChip;
+    }
+    if (value == NodeKindId.materialFilterChip) {
+      return NodeKind.materialFilterChip;
+    }
+    if (value == NodeKindId.materialChoiceChip) {
+      return NodeKind.materialChoiceChip;
+    }
+    if (value == NodeKindId.materialInputChip) {
+      return NodeKind.materialInputChip;
+    }
+    if (value == NodeKindId.materialAlertDialog) {
+      return NodeKind.materialAlertDialog;
+    }
     if (value == NodeKindId.materialCheckbox) {
       return NodeKind.materialCheckbox;
     }
@@ -1539,7 +1806,6 @@ abstract final class FrameCodec {
     if (value == NodeKindId.environmentBoundary) {
       return NodeKind.environmentBoundary;
     }
-    if (value == NodeKindId.materialDialog) return NodeKind.materialDialog;
     if (value == NodeKindId.nativeWidget) return NodeKind.nativeWidget;
     _fail(ProtocolErrorCode.unknownNodeKind, 'Unknown node kind $value');
   }
@@ -1553,7 +1819,8 @@ abstract final class FrameCodec {
       opcode == OperationId.dropNode ||
       opcode == OperationId.hostRequest ||
       opcode == OperationId.runtimeNotification ||
-      opcode == OperationId.applicationRequest;
+      opcode == OperationId.applicationRequest ||
+      opcode == OperationId.setApplicationTheme;
 }
 
 void _writeTextProps(_Writer writer, TextProps props) {
@@ -1596,6 +1863,126 @@ void _writeTextProps(_Writer writer, TextProps props) {
       ..uint32(props.maxLines!);
   }
   writer.uint8(props.overflow.index);
+}
+
+void _writeThemeTextStyle(_Writer writer, TextStyleValue? style) {
+  if (style == null) {
+    writer.uint8(0);
+    return;
+  }
+  for (final value in [style.fontSize, style.lineHeight]) {
+    if (value != null && (!value.isFinite || value <= 0)) {
+      _fail(
+        ProtocolErrorCode.invalidProps,
+        'Theme text values must be positive',
+      );
+    }
+  }
+  writer
+    ..uint8(1)
+    ..optionalFloat64(style.fontSize);
+  if (style.fontWeight == null) {
+    writer.uint8(0);
+  } else {
+    writer
+      ..uint8(1)
+      ..uint8(style.fontWeight!.index);
+  }
+  writer.optionalFloat64(style.lineHeight);
+  _writeOptionalArgb32(writer, style.colorArgb);
+}
+
+void _validateThemeFontName(String label, String value) {
+  if (value.trim().isEmpty || value.contains('\u0000')) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      '$label must be non-empty and contain no NUL',
+    );
+  }
+}
+
+void _validateThemeData(ThemeDataValue data) {
+  if (!data.colorScheme.contrastLevel.isFinite ||
+      data.colorScheme.contrastLevel < -1 ||
+      data.colorScheme.contrastLevel > 1) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Theme contrast must be finite and between -1 and 1',
+    );
+  }
+  for (final radius in [
+    data.shape.extraSmall,
+    data.shape.small,
+    data.shape.medium,
+    data.shape.large,
+    data.shape.extraLarge,
+  ]) {
+    if (!radius.isFinite || radius < 0) {
+      _fail(
+        ProtocolErrorCode.invalidProps,
+        'Theme shape radii must be finite and non-negative',
+      );
+    }
+  }
+  final family = data.typography.fontFamily;
+  if (family != null) _validateThemeFontName('Theme font family', family);
+  if (data.typography.fontFamilyFallback.length > 16) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Theme supports at most 16 fallback fonts',
+    );
+  }
+  for (final fallback in data.typography.fontFamilyFallback) {
+    _validateThemeFontName('Theme fallback font family', fallback);
+  }
+}
+
+void _writeThemeData(_Writer writer, ThemeDataValue data) {
+  _validateThemeData(data);
+  writer
+    ..uint8(data.brightness.index)
+    ..uint32(data.colorScheme.seedArgb)
+    ..uint8(data.colorScheme.variant.index)
+    ..float64(data.colorScheme.contrastLevel)
+    ..optionalString(data.typography.fontFamily)
+    ..uint8(data.typography.fontFamilyFallback.length);
+  for (final fallback in data.typography.fontFamilyFallback) {
+    writer.string(fallback);
+  }
+  for (final role in data.typography.roles) {
+    _writeThemeTextStyle(writer, role);
+  }
+  writer
+    ..float64(data.shape.extraSmall)
+    ..float64(data.shape.small)
+    ..float64(data.shape.medium)
+    ..float64(data.shape.large)
+    ..float64(data.shape.extraLarge)
+    ..uint8(data.visualDensity.index)
+    ..uint8(data.tapTargetSize.index);
+}
+
+void _writeApplicationTheme(_Writer writer, ApplicationThemeValue theme) {
+  if (theme.light.brightness != ThemeBrightness.light ||
+      theme.dark.brightness != ThemeBrightness.dark ||
+      theme.highContrastLight?.brightness == ThemeBrightness.dark ||
+      theme.highContrastDark?.brightness == ThemeBrightness.light) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Application theme brightness variants are inconsistent',
+    );
+  }
+  writer.uint8(theme.mode.index);
+  _writeThemeData(writer, theme.light);
+  _writeThemeData(writer, theme.dark);
+  for (final optional in [theme.highContrastLight, theme.highContrastDark]) {
+    if (optional == null) {
+      writer.uint8(0);
+    } else {
+      writer.uint8(1);
+      _writeThemeData(writer, optional);
+    }
+  }
 }
 
 const _styledTextProtocolMinor = 13;
@@ -1657,6 +2044,139 @@ TextProps _readTextProps(_Reader reader, {required int protocolMinor}) {
     maxLines: maxLines,
     overflow: overflow,
   );
+}
+
+TextStyleValue? _readThemeTextStyle(_Reader reader) => switch (reader.uint8()) {
+  0 => null,
+  1 => TextStyleValue(
+    fontSize: _readPositiveOptionalFloat(reader, 'Theme font size'),
+    fontWeight: switch (reader.uint8()) {
+      0 => null,
+      1 => _enumValue(
+        TextFontWeight.values,
+        reader.uint8(),
+        'theme font weight',
+      ),
+      final tag => _fail(
+        ProtocolErrorCode.invalidProps,
+        'Invalid optional theme font weight tag $tag',
+      ),
+    },
+    lineHeight: _readPositiveOptionalFloat(reader, 'Theme line height'),
+    colorArgb: _readOptionalArgb32(reader),
+  ),
+  final tag => _fail(
+    ProtocolErrorCode.invalidProps,
+    'Invalid optional theme text style tag $tag',
+  ),
+};
+
+ThemeDataValue _readThemeData(_Reader reader) {
+  final brightness = _enumValue(
+    ThemeBrightness.values,
+    reader.uint8(),
+    'theme brightness',
+  );
+  final colorScheme = ThemeColorSchemeValue(
+    seedArgb: reader.uint32(),
+    variant: _enumValue(
+      ThemeDynamicVariant.values,
+      reader.uint8(),
+      'theme dynamic variant',
+    ),
+    contrastLevel: reader.finiteFloat64(),
+  );
+  final fontFamily = reader.optionalString();
+  final fallbackCount = reader.uint8();
+  if (fallbackCount > 16) {
+    _fail(ProtocolErrorCode.invalidProps, 'Theme has too many fallback fonts');
+  }
+  final fallbacks = List<String>.unmodifiable([
+    for (var index = 0; index < fallbackCount; index += 1) reader.string(),
+  ]);
+  final roles = List<TextStyleValue?>.generate(
+    15,
+    (_) => _readThemeTextStyle(reader),
+    growable: false,
+  );
+  final typography = ThemeTypographyValue(
+    fontFamily: fontFamily,
+    fontFamilyFallback: fallbacks,
+    displayLarge: roles[0],
+    displayMedium: roles[1],
+    displaySmall: roles[2],
+    headlineLarge: roles[3],
+    headlineMedium: roles[4],
+    headlineSmall: roles[5],
+    titleLarge: roles[6],
+    titleMedium: roles[7],
+    titleSmall: roles[8],
+    bodyLarge: roles[9],
+    bodyMedium: roles[10],
+    bodySmall: roles[11],
+    labelLarge: roles[12],
+    labelMedium: roles[13],
+    labelSmall: roles[14],
+  );
+  final data = ThemeDataValue(
+    brightness: brightness,
+    colorScheme: colorScheme,
+    typography: typography,
+    shape: ThemeShapeValue(
+      extraSmall: reader.finiteFloat64(),
+      small: reader.finiteFloat64(),
+      medium: reader.finiteFloat64(),
+      large: reader.finiteFloat64(),
+      extraLarge: reader.finiteFloat64(),
+    ),
+    visualDensity: _enumValue(
+      ThemeVisualDensity.values,
+      reader.uint8(),
+      'theme visual density',
+    ),
+    tapTargetSize: _enumValue(
+      ThemeTapTargetSize.values,
+      reader.uint8(),
+      'theme tap target size',
+    ),
+  );
+  _validateThemeData(data);
+  return data;
+}
+
+ApplicationThemeValue _readApplicationTheme(_Reader reader) {
+  final mode = _enumValue(
+    ApplicationThemeMode.values,
+    reader.uint8(),
+    'application theme mode',
+  );
+  final light = _readThemeData(reader);
+  final dark = _readThemeData(reader);
+  ThemeDataValue? optional() => switch (reader.uint8()) {
+    0 => null,
+    1 => _readThemeData(reader),
+    final tag => _fail(
+      ProtocolErrorCode.invalidProps,
+      'Invalid optional theme data tag $tag',
+    ),
+  };
+  final theme = ApplicationThemeValue(
+    mode: mode,
+    light: light,
+    dark: dark,
+    highContrastLight: optional(),
+    highContrastDark: optional(),
+  );
+  if (theme.light.brightness != ThemeBrightness.light ||
+      theme.dark.brightness != ThemeBrightness.dark ||
+      theme.highContrastLight?.brightness == ThemeBrightness.dark ||
+      theme.highContrastDark?.brightness == ThemeBrightness.light) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Application theme brightness variants are inconsistent',
+    );
+  }
+  return theme;
 }
 
 double? _readPositiveOptionalFloat(_Reader reader, String label) {
@@ -1781,9 +2301,13 @@ int _changedFields(UiProps props) => switch (props) {
         _fieldMask(SemanticsPropId.headingLevel) |
         _fieldMask(SemanticsPropId.sortKey) |
         _fieldMask(SemanticsPropId.actions),
-  ThemeProps() =>
-    _fieldMask(ThemePropId.brightness) | _fieldMask(ThemePropId.colorSeed),
-  MaterialScaffoldProps() => _fieldMask(MaterialScaffoldPropId.hasAppBar),
+  ThemeProps() => _fieldMask(ThemePropId.data),
+  MaterialScaffoldProps() =>
+    _fieldMask(MaterialScaffoldPropId.hasAppBar) |
+        _fieldMask(MaterialScaffoldPropId.hasFloatingActionButton) |
+        _fieldMask(MaterialScaffoldPropId.floatingActionButtonLocation) |
+        _fieldMask(MaterialScaffoldPropId.hasBottomNavigationBar) |
+        _fieldMask(MaterialScaffoldPropId.hasBottomSheet),
   MaterialAppBarProps() => _fieldMask(MaterialAppBarPropId.centerTitle),
   MaterialButtonProps(:final variant) => switch (variant) {
     MaterialButtonVariant.elevated =>
@@ -1795,7 +2319,58 @@ int _changedFields(UiProps props) => switch (props) {
     MaterialButtonVariant.icon =>
       _fieldMask(MaterialIconButtonPropId.enabled) |
           _fieldMask(MaterialIconButtonPropId.autofocus),
+    MaterialButtonVariant.filled =>
+      _fieldMask(MaterialFilledButtonPropId.enabled) |
+          _fieldMask(MaterialFilledButtonPropId.autofocus),
+    MaterialButtonVariant.filledTonal =>
+      _fieldMask(MaterialFilledTonalButtonPropId.enabled) |
+          _fieldMask(MaterialFilledTonalButtonPropId.autofocus),
+    MaterialButtonVariant.outlined =>
+      _fieldMask(MaterialOutlinedButtonPropId.enabled) |
+          _fieldMask(MaterialOutlinedButtonPropId.autofocus),
   },
+  MaterialFloatingActionButtonProps() =>
+    _fieldMask(MaterialFloatingActionButtonPropId.variant) |
+        _fieldMask(MaterialFloatingActionButtonPropId.enabled) |
+        _fieldMask(MaterialFloatingActionButtonPropId.autofocus) |
+        _fieldMask(MaterialFloatingActionButtonPropId.hasIcon),
+  MaterialNavigationBarProps() =>
+    _fieldMask(MaterialNavigationBarPropId.selectedIndex) |
+        _fieldMask(MaterialNavigationBarPropId.destinations),
+  MaterialRadioGroupProps() =>
+    _fieldMask(MaterialRadioGroupPropId.selectedId) |
+        _fieldMask(MaterialRadioGroupPropId.options),
+  MaterialSliderProps() =>
+    _fieldMask(MaterialSliderPropId.value) |
+        _fieldMask(MaterialSliderPropId.min) |
+        _fieldMask(MaterialSliderPropId.max) |
+        _fieldMask(MaterialSliderPropId.divisions) |
+        _fieldMask(MaterialSliderPropId.label) |
+        _fieldMask(MaterialSliderPropId.enabled) |
+        _fieldMask(MaterialSliderPropId.hasOnChange),
+  MaterialRangeSliderProps() =>
+    _fieldMask(MaterialRangeSliderPropId.start) |
+        _fieldMask(MaterialRangeSliderPropId.endValue) |
+        _fieldMask(MaterialRangeSliderPropId.min) |
+        _fieldMask(MaterialRangeSliderPropId.max) |
+        _fieldMask(MaterialRangeSliderPropId.divisions) |
+        _fieldMask(MaterialRangeSliderPropId.labelStart) |
+        _fieldMask(MaterialRangeSliderPropId.labelEnd) |
+        _fieldMask(MaterialRangeSliderPropId.enabled) |
+        _fieldMask(MaterialRangeSliderPropId.hasOnChange),
+  MaterialChipProps() =>
+    _fieldMask(MaterialActionChipPropId.enabled) |
+        _fieldMask(MaterialActionChipPropId.selected) |
+        _fieldMask(MaterialActionChipPropId.hasAvatar) |
+        _fieldMask(MaterialActionChipPropId.hasDeleteIcon) |
+        _fieldMask(MaterialActionChipPropId.hasOnPress) |
+        _fieldMask(MaterialActionChipPropId.hasOnSelected) |
+        _fieldMask(MaterialActionChipPropId.hasOnDelete),
+  MaterialAlertDialogProps() =>
+    _fieldMask(MaterialAlertDialogPropId.hasIcon) |
+        _fieldMask(MaterialAlertDialogPropId.hasTitle) |
+        _fieldMask(MaterialAlertDialogPropId.hasContent) |
+        _fieldMask(MaterialAlertDialogPropId.actionCount),
   MaterialCheckboxProps() =>
     _fieldMask(MaterialCheckboxPropId.value) |
         _fieldMask(MaterialCheckboxPropId.enabled),
@@ -1852,14 +2427,20 @@ int _changedFields(UiProps props) => switch (props) {
         _fieldMask(PagePropId.modalDismissOnDrag) |
         _fieldMask(PagePropId.modalHandleSemanticsLabel) |
         _fieldMask(PagePropId.modalMediumSemanticsValue) |
-        _fieldMask(PagePropId.modalLargeSemanticsValue),
+        _fieldMask(PagePropId.modalLargeSemanticsValue) |
+        _fieldMask(PagePropId.dialogBarrierDismissible) |
+        _fieldMask(PagePropId.dialogBarrierColor) |
+        _fieldMask(PagePropId.dialogBarrierLabel) |
+        _fieldMask(PagePropId.dialogUseSafeArea) |
+        _fieldMask(PagePropId.dialogRequestFocus) |
+        _fieldMask(PagePropId.dialogTransitionDurationMs) |
+        _fieldMask(PagePropId.dialogReverseTransitionDurationMs),
   SafeAreaProps() =>
     _fieldMask(SafeAreaPropId.left) |
         _fieldMask(SafeAreaPropId.top) |
         _fieldMask(SafeAreaPropId.right) |
         _fieldMask(SafeAreaPropId.bottom) |
         _fieldMask(SafeAreaPropId.minimum),
-  MaterialDialogProps() => _fieldMask(MaterialDialogPropId.barrierDismissible),
   NativeWidgetProps() =>
     _fieldMask(NativeWidgetPropId.kindId) |
         _fieldMask(NativeWidgetPropId.version) |
@@ -1970,6 +2551,169 @@ RuntimeStatsOperation _readRuntimeStats(_Reader reader) =>
       resyncCount: reader.uint32(),
     );
 
+void _validateMaterialNavigation(
+  int selectedIndex,
+  List<MaterialNavigationDestinationProps> destinations,
+) {
+  if (destinations.length < 2) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'NavigationBar needs two destinations',
+    );
+  }
+  if (selectedIndex < 0 || selectedIndex >= destinations.length) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'NavigationBar index is outside destinations',
+    );
+  }
+  if (destinations.any((destination) => destination.label.trim().isEmpty)) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Navigation destination label is empty',
+    );
+  }
+}
+
+void _validateMaterialRadio(
+  int? selectedId,
+  List<MaterialRadioOptionProps> options,
+) {
+  final ids = <int>{};
+  for (final option in options) {
+    if (!ids.add(option.id)) {
+      _fail(ProtocolErrorCode.invalidProps, 'Radio option IDs must be unique');
+    }
+  }
+  if (selectedId != null && !ids.contains(selectedId)) {
+    _fail(ProtocolErrorCode.invalidProps, 'Selected radio ID is absent');
+  }
+}
+
+void _validateMaterialSlider(MaterialSliderProps props) {
+  if (!props.value.isFinite || !props.min.isFinite || !props.max.isFinite) {
+    _fail(ProtocolErrorCode.invalidProps, 'Slider values must be finite');
+  }
+  if (props.min >= props.max ||
+      props.value < props.min ||
+      props.value > props.max) {
+    _fail(ProtocolErrorCode.invalidProps, 'Slider domain or value is invalid');
+  }
+  if (props.divisions case final divisions? when divisions <= 0) {
+    _fail(ProtocolErrorCode.invalidProps, 'Slider divisions must be positive');
+  }
+}
+
+void _validateMaterialRangeSlider(MaterialRangeSliderProps props) {
+  _validateMaterialSlider(
+    MaterialSliderProps(
+      value: props.start,
+      min: props.min,
+      max: props.max,
+      divisions: props.divisions,
+      label: props.labelStart,
+      enabled: props.enabled,
+      hasOnChange: props.hasOnChange,
+    ),
+  );
+  _validateMaterialSlider(
+    MaterialSliderProps(
+      value: props.end,
+      min: props.min,
+      max: props.max,
+      divisions: props.divisions,
+      label: props.labelEnd,
+      enabled: props.enabled,
+      hasOnChange: props.hasOnChange,
+    ),
+  );
+  if (props.start > props.end) {
+    _fail(ProtocolErrorCode.invalidProps, 'RangeSlider selection is reversed');
+  }
+}
+
+MaterialNavigationBarProps _readMaterialNavigationBar(_Reader reader) {
+  final selectedIndex = reader.uint32();
+  final destinations = List.generate(
+    reader.uint16(),
+    (_) => MaterialNavigationDestinationProps(
+      label: reader.string(),
+      enabled: reader.boolean(),
+      hasSelectedIcon: reader.boolean(),
+    ),
+  );
+  _validateMaterialNavigation(selectedIndex, destinations);
+  return MaterialNavigationBarProps(
+    selectedIndex: selectedIndex,
+    destinations: destinations,
+  );
+}
+
+MaterialRadioGroupProps _readMaterialRadioGroup(_Reader reader) {
+  final selectedId = switch (reader.uint8()) {
+    0 => null,
+    1 => reader.int64(),
+    final value => _fail(
+      ProtocolErrorCode.invalidProps,
+      'Invalid radio tag $value',
+    ),
+  };
+  final options = List.generate(
+    reader.uint16(),
+    (_) => MaterialRadioOptionProps(
+      id: reader.int64(),
+      enabled: reader.boolean(),
+      hasLabel: reader.boolean(),
+    ),
+  );
+  _validateMaterialRadio(selectedId, options);
+  return MaterialRadioGroupProps(selectedId: selectedId, options: options);
+}
+
+MaterialSliderProps _readMaterialSlider(_Reader reader) {
+  final props = MaterialSliderProps(
+    value: reader.finiteFloat64(),
+    min: reader.finiteFloat64(),
+    max: reader.finiteFloat64(),
+    divisions: reader.optionalUint32(),
+    label: reader.optionalString(),
+    enabled: reader.boolean(),
+    hasOnChange: reader.boolean(),
+  );
+  _validateMaterialSlider(props);
+  return props;
+}
+
+MaterialRangeSliderProps _readMaterialRangeSlider(_Reader reader) {
+  final props = MaterialRangeSliderProps(
+    start: reader.finiteFloat64(),
+    end: reader.finiteFloat64(),
+    min: reader.finiteFloat64(),
+    max: reader.finiteFloat64(),
+    divisions: reader.optionalUint32(),
+    labelStart: reader.optionalString(),
+    labelEnd: reader.optionalString(),
+    enabled: reader.boolean(),
+    hasOnChange: reader.boolean(),
+  );
+  _validateMaterialRangeSlider(props);
+  return props;
+}
+
+MaterialChipProps _readMaterialChip(
+  _Reader reader,
+  MaterialChipVariant variant,
+) => MaterialChipProps(
+  variant: variant,
+  enabled: reader.boolean(),
+  selected: reader.boolean(),
+  hasAvatar: reader.boolean(),
+  hasDeleteIcon: reader.boolean(),
+  hasOnPress: reader.boolean(),
+  hasOnSelected: reader.boolean(),
+  hasOnDelete: reader.boolean(),
+);
+
 void _writeHostRequest(_Writer writer, int requestId, HostRequest request) {
   _checkUint64('host request ID', requestId);
   writer.uint64(requestId);
@@ -2057,6 +2801,34 @@ void _writeHostRequest(_Writer writer, int requestId, HostRequest request) {
       writer
         ..uint16(HostRequestId.measureLayout)
         ..uint64(nodeId);
+    case ShowSnackBarRequest(
+      :final message,
+      :final actionLabel,
+      :final durationMs,
+    ):
+      if (message.trim().isEmpty) {
+        _fail(
+          ProtocolErrorCode.invalidProps,
+          'Snack bar message must not be empty',
+        );
+      }
+      if (actionLabel != null && actionLabel.trim().isEmpty) {
+        _fail(
+          ProtocolErrorCode.invalidProps,
+          'Snack bar action label must not be empty',
+        );
+      }
+      if (durationMs <= 0) {
+        _fail(
+          ProtocolErrorCode.invalidProps,
+          'Snack bar duration must be positive',
+        );
+      }
+      writer
+        ..uint16(HostRequestId.showSnackBar)
+        ..string(message)
+        ..optionalString(actionLabel)
+        ..uint32(durationMs);
   }
 }
 
@@ -2135,6 +2907,34 @@ HostRequest _readHostRequest(_Reader reader, int requestKind) {
   }
   if (requestKind == HostRequestId.measureLayout) {
     return MeasureLayoutRequest(reader.uint64());
+  }
+  if (requestKind == HostRequestId.showSnackBar) {
+    final message = reader.string();
+    final actionLabel = reader.optionalString();
+    final durationMs = reader.uint32();
+    if (message.trim().isEmpty) {
+      _fail(
+        ProtocolErrorCode.invalidProps,
+        'Snack bar message must not be empty',
+      );
+    }
+    if (actionLabel != null && actionLabel.trim().isEmpty) {
+      _fail(
+        ProtocolErrorCode.invalidProps,
+        'Snack bar action label must not be empty',
+      );
+    }
+    if (durationMs <= 0) {
+      _fail(
+        ProtocolErrorCode.invalidProps,
+        'Snack bar duration must be positive',
+      );
+    }
+    return ShowSnackBarRequest(
+      message: message,
+      actionLabel: actionLabel,
+      durationMs: durationMs,
+    );
   }
   _fail(
     ProtocolErrorCode.invalidProps,
@@ -2271,7 +3071,8 @@ void _writePageProps(_Writer writer, PageProps props) {
   }
   final transition = switch (props.presentation) {
     StandardPagePresentation(:final transition) => transition,
-    ModalBottomSheetPresentation() => PageTransition.none,
+    ModalBottomSheetPresentation() ||
+    ModalDialogPresentation() => PageTransition.none,
   };
   writer
     ..string(props.pageKey)
@@ -2297,7 +3098,15 @@ void _writePageProps(_Writer writer, PageProps props) {
         ..uint8(0)
         ..optionalString(null)
         ..optionalString(null)
-        ..optionalString(null);
+        ..optionalString(null)
+        ..uint8(0);
+      _writeOptionalArgb32(writer, null);
+      writer
+        ..optionalString(null)
+        ..uint8(0)
+        ..uint8(0)
+        ..uint32(0)
+        ..uint32(0);
     case ModalBottomSheetPresentation(
       :final barrierDismissible,
       :final barrierColorArgb,
@@ -2331,7 +3140,54 @@ void _writePageProps(_Writer writer, PageProps props) {
         ..uint8(dismissOnDrag ? 1 : 0)
         ..optionalString(semantics?.label)
         ..optionalString(semantics?.mediumValue)
-        ..optionalString(semantics?.largeValue);
+        ..optionalString(semantics?.largeValue)
+        ..uint8(0);
+      _writeOptionalArgb32(writer, null);
+      writer
+        ..optionalString(null)
+        ..uint8(0)
+        ..uint8(0)
+        ..uint32(0)
+        ..uint32(0);
+    case ModalDialogPresentation(
+      :final barrierDismissible,
+      :final barrierColorArgb,
+      :final barrierLabel,
+      :final useSafeArea,
+      :final requestFocus,
+      :final transitionDurationMilliseconds,
+      :final reverseTransitionDurationMilliseconds,
+    ):
+      _checkPageDuration('Dialog transition', transitionDurationMilliseconds);
+      _checkPageDuration(
+        'Dialog reverse transition',
+        reverseTransitionDurationMilliseconds,
+      );
+      writer
+        ..uint8(2)
+        ..uint8(0);
+      _writeOptionalArgb32(writer, null);
+      writer
+        ..optionalString(null)
+        ..uint8(0)
+        ..uint8(0)
+        ..uint8(0)
+        ..uint32(0)
+        ..uint32(0)
+        ..uint8(0)
+        ..uint8(0)
+        ..uint8(0)
+        ..optionalString(null)
+        ..optionalString(null)
+        ..optionalString(null)
+        ..uint8(barrierDismissible ? 1 : 0);
+      _writeOptionalArgb32(writer, barrierColorArgb);
+      writer
+        ..optionalString(barrierLabel)
+        ..uint8(useSafeArea ? 1 : 0)
+        ..uint8(requestFocus ? 1 : 0)
+        ..uint32(transitionDurationMilliseconds)
+        ..uint32(reverseTransitionDurationMilliseconds);
   }
 }
 
@@ -2777,6 +3633,21 @@ PageProps _readPageProps(_Reader reader) {
   final handleSemanticsLabel = reader.optionalString();
   final mediumSemanticsValue = reader.optionalString();
   final largeSemanticsValue = reader.optionalString();
+  final dialogBarrierDismissible = reader.boolean();
+  final dialogBarrierColorArgb = _readOptionalArgb32(reader);
+  final dialogBarrierLabel = reader.optionalString();
+  final dialogUseSafeArea = reader.boolean();
+  final dialogRequestFocus = reader.boolean();
+  final dialogTransitionDurationMilliseconds = reader.uint32();
+  final dialogReverseTransitionDurationMilliseconds = reader.uint32();
+  final hasDialogProperties =
+      dialogBarrierDismissible ||
+      dialogBarrierColorArgb != null ||
+      dialogBarrierLabel != null ||
+      dialogUseSafeArea ||
+      dialogRequestFocus ||
+      dialogTransitionDurationMilliseconds != 0 ||
+      dialogReverseTransitionDurationMilliseconds != 0;
 
   final PagePresentation presentation;
   switch (presentationKind) {
@@ -2794,7 +3665,8 @@ PageProps _readPageProps(_Reader reader) {
           dismissOnDrag ||
           handleSemanticsLabel != null ||
           mediumSemanticsValue != null ||
-          largeSemanticsValue != null) {
+          largeSemanticsValue != null ||
+          hasDialogProperties) {
         _fail(
           ProtocolErrorCode.invalidProps,
           'Standard page has noncanonical modal properties',
@@ -2806,6 +3678,12 @@ PageProps _readPageProps(_Reader reader) {
         _fail(
           ProtocolErrorCode.invalidProps,
           'Modal bottom sheet cannot carry a standard transition',
+        );
+      }
+      if (hasDialogProperties) {
+        _fail(
+          ProtocolErrorCode.invalidProps,
+          'Modal bottom sheet has dialog properties',
         );
       }
       final ModalBottomSheetSizing sizing;
@@ -2876,6 +3754,42 @@ PageProps _readPageProps(_Reader reader) {
         transitionDurationMilliseconds: transitionDurationMilliseconds,
         reverseTransitionDurationMilliseconds:
             reverseTransitionDurationMilliseconds,
+      );
+    case 2:
+      if (transition != PageTransition.none) {
+        _fail(
+          ProtocolErrorCode.invalidProps,
+          'Modal dialog cannot carry a standard transition',
+        );
+      }
+      if (barrierDismissible ||
+          barrierColorArgb != null ||
+          barrierLabel != null ||
+          sizingKind != 0 ||
+          useSafeArea ||
+          requestFocus ||
+          transitionDurationMilliseconds != 0 ||
+          reverseTransitionDurationMilliseconds != 0 ||
+          detents != ModalSheetDetentSet.medium ||
+          initialDetent != ModalSheetDetent.medium ||
+          dismissOnDrag ||
+          handleSemanticsLabel != null ||
+          mediumSemanticsValue != null ||
+          largeSemanticsValue != null) {
+        _fail(
+          ProtocolErrorCode.invalidProps,
+          'Modal dialog has bottom-sheet properties',
+        );
+      }
+      presentation = ModalDialogPresentation(
+        barrierDismissible: dialogBarrierDismissible,
+        barrierColorArgb: dialogBarrierColorArgb,
+        barrierLabel: dialogBarrierLabel,
+        useSafeArea: dialogUseSafeArea,
+        requestFocus: dialogRequestFocus,
+        transitionDurationMilliseconds: dialogTransitionDurationMilliseconds,
+        reverseTransitionDurationMilliseconds:
+            dialogReverseTransitionDurationMilliseconds,
       );
     default:
       _fail(
@@ -3117,6 +4031,14 @@ final class _Writer {
     _builder.add(data.buffer.asUint8List());
   }
 
+  void int64(int value) {
+    if (value < -0x8000000000000000 || value > 0x7fffffffffffffff) {
+      _fail(ProtocolErrorCode.invalidProps, 'i64 value is outside i64');
+    }
+    final data = ByteData(8)..setInt64(0, value, Endian.little);
+    _builder.add(data.buffer.asUint8List());
+  }
+
   void float64(double value) {
     if (!value.isFinite) {
       _fail(ProtocolErrorCode.invalidProps, 'Float property must be finite');
@@ -3165,6 +4087,15 @@ final class _Writer {
       }
       uint8(1);
       uint8(value);
+    }
+  }
+
+  void optionalUint32(int? value) {
+    if (value == null) {
+      uint8(0);
+    } else {
+      uint8(1);
+      uint32(value);
     }
   }
 
@@ -3256,6 +4187,13 @@ final class _Reader {
     return result;
   }
 
+  int int64() {
+    _require(8);
+    final result = _data.getInt64(_position, Endian.little);
+    _position += 8;
+    return result;
+  }
+
   double finiteFloat64() {
     _require(8);
     final result = _data.getFloat64(_position, Endian.little);
@@ -3298,6 +4236,15 @@ final class _Reader {
     final value => _fail(
       ProtocolErrorCode.invalidProps,
       'Invalid optional u8 tag $value',
+    ),
+  };
+
+  int? optionalUint32() => switch (uint8()) {
+    0 => null,
+    1 => uint32(),
+    final value => _fail(
+      ProtocolErrorCode.invalidProps,
+      'Invalid optional u32 tag $value',
     ),
   };
 

@@ -46,8 +46,10 @@ Ui.Material.scaffold ~app_bar ~body ()
 ```
 
 Framework slots that guarantee finite constraints consume `Body.t`.
-`Material.scaffold` accepts one body, and `Navigation_shell` accepts a list of
-bodies. Non-scrollable content remains valid through `Body.static`.
+`Material.scaffold` accepts one body plus optional app-bar, floating-action,
+bottom-navigation, and persistent-bottom-sheet slots. `Navigation_shell`
+accepts a list of bodies. Non-scrollable content remains valid through
+`Body.static`.
 
 `Body.overlay` positions its base against all four edges before adding stack
 overlays. This preserves the bounded body contract and prevents an overlay from

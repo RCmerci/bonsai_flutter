@@ -157,6 +157,7 @@ let create_in_empty config =
                ?trace:(App.Private.trace app)
                ~before_flush:(App.Private.before_flush instance)
                ~before_shutdown:(fun () -> App.Private.shutdown instance)
+               ?application_title:(App.name app)
                ~runtime_epoch
                ~time_source
                (App.Private.component instance)

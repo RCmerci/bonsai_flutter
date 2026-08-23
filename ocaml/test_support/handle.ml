@@ -215,6 +215,13 @@ let protocol_tag =
   | Value_changed -> Tag.value_changed
   | Native_event -> Tag.native_event
   | Semantics_action -> Tag.semantics_action
+  | Navigation_destination_selected -> Tag.navigation_destination_selected
+  | Radio_selected -> Tag.radio_selected
+  | Slider_changed -> Tag.slider_changed
+  | Slider_change_end -> Tag.slider_change_end
+  | Range_slider_changed -> Tag.range_slider_changed
+  | Range_slider_change_end -> Tag.range_slider_change_end
+  | Delete -> Tag.delete
 ;;
 
 let dispatch t query tag payload =
@@ -557,7 +564,34 @@ let create_from_driver ~runtime_epoch driver =
 ;;
 
 let create ~runtime_epoch ~time_source component =
-  Driver.create ~runtime_epoch ~time_source component |> create_from_driver ~runtime_epoch
+  let scheme =
+    Bonsai_flutter_ui.Theme.Color_scheme.from_seed
+      ~color:(Bonsai_flutter_ui.Style.Color.rgb ~red:103 ~green:80 ~blue:164)
+      ()
+  in
+  let light =
+    Bonsai_flutter_ui.Theme.material
+      ~brightness:Bonsai_flutter_ui.Style.Brightness.Light
+      ~color_scheme:scheme
+      ()
+  in
+  let dark =
+    Bonsai_flutter_ui.Theme.material
+      ~brightness:Bonsai_flutter_ui.Style.Brightness.Dark
+      ~color_scheme:scheme
+      ()
+  in
+  let theme =
+    Bonsai_flutter_ui.Theme.application
+      ~mode:Bonsai_flutter_ui.Theme.System
+      ~light
+      ~dark
+      ()
+  in
+  Driver.create ~runtime_epoch ~time_source (fun handlers graph ->
+    Bonsai.Cont.map (component handlers graph) ~f:(fun body ->
+      Driver.View.create ~theme ~body))
+  |> create_from_driver ~runtime_epoch
 ;;
 
 let create_app ~runtime_epoch ~time_source app ~application_payload =
@@ -570,6 +604,7 @@ let create_app ~runtime_epoch ~time_source app ~application_payload =
           ?trace:(App.Private.trace app)
           ~before_flush:(App.Private.before_flush instance)
           ~before_shutdown:(fun () -> App.Private.shutdown instance)
+          ?application_title:(App.name app)
           ~runtime_epoch
           ~time_source
           (App.Private.component instance)

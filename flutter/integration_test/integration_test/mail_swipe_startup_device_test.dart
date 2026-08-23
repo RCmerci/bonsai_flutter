@@ -18,11 +18,7 @@ void main() {
 
   testWidgets('measure real Mail row vertical-scroll startup', (tester) async {
     await tester.pumpWidget(
-      MaterialApp(
-        home: BonsaiFlutterRoot(
-          config: Uint8List.fromList(utf8.encode('mail')),
-        ),
-      ),
+      BonsaiFlutterRoot(config: Uint8List.fromList(utf8.encode('mail'))),
     );
     await _waitForPresent(tester, find.text('Juniper Works'));
     await tester.pump(const Duration(milliseconds: 100));

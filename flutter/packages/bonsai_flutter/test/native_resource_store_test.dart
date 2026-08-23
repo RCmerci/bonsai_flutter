@@ -1,3 +1,4 @@
+import 'fixture.dart';
 import 'dart:typed_data';
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
@@ -230,6 +231,7 @@ Frame _scrollFrame({required int revision}) => Frame(
   targetRevision: revision,
   kind: FrameKind.fullSnapshot,
   operations: const [
+    SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
     CreateNode(
       nodeId: 7,
       kind: NodeKind.scrollView,
@@ -277,6 +279,7 @@ Frame _fullFrame({required int version, required int revision}) => Frame(
   targetRevision: revision,
   kind: FrameKind.fullSnapshot,
   operations: [
+    const SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
     CreateNode(
       nodeId: 1,
       kind: NodeKind.nativeWidget,

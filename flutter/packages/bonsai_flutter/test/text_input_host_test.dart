@@ -1,3 +1,4 @@
+import 'fixture.dart';
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:bonsai_flutter/src/navigation/modal_sheet_keyboard_coordinator.dart';
 import 'package:flutter/material.dart';
@@ -510,6 +511,7 @@ void main() {
         targetRevision: 3,
         kind: FrameKind.fullSnapshot,
         operations: [
+          SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
           CreateNode(
             nodeId: 2,
             kind: NodeKind.text,
@@ -536,6 +538,10 @@ void main() {
           targetRevision: 1,
           kind: FrameKind.fullSnapshot,
           operations: [
+            const SetApplicationTheme(
+              title: 'Test',
+              theme: testApplicationTheme,
+            ),
             const CreateNode(
               nodeId: 1,
               kind: NodeKind.column,
@@ -626,6 +632,10 @@ void main() {
           targetRevision: 1,
           kind: FrameKind.fullSnapshot,
           operations: [
+            const SetApplicationTheme(
+              title: 'Test',
+              theme: testApplicationTheme,
+            ),
             const CreateNode(
               nodeId: 1,
               kind: NodeKind.column,
@@ -787,6 +797,7 @@ Frame textInputSnapshot({
   targetRevision: 1,
   kind: FrameKind.fullSnapshot,
   operations: [
+    const SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
     CreateNode(
       nodeId: 1,
       kind: NodeKind.textInput,

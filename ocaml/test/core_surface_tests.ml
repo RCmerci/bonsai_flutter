@@ -341,10 +341,10 @@ let test_navigation_constructors () =
     (String.equal (Ui.Widget.For_testing.kind_name overlay) "Overlay")
     "overlay kind is not typed";
   let dialog =
-    Ui.Widget.material_dialog ~barrier_dismissible:false (Ui.Widget.text "Confirm")
+    Ui.Material.alert_dialog ~content:(Ui.Widget.text "Confirm") ~actions:[] ()
   in
   check
-    (String.equal (Ui.Widget.For_testing.kind_name dialog) "Material_dialog")
+    (String.equal (Ui.Widget.For_testing.kind_name dialog) "Material_alert_dialog")
     "dialog kind is not typed"
 ;;
 
@@ -531,6 +531,42 @@ let test_viewport_extent_and_body_validation () =
     "empty horizontal body was accepted"
 ;;
 
+let test_application_theme_validation () =
+  let seed = Ui.Style.Color.rgb ~red:103 ~green:80 ~blue:164 in
+  List.iter
+    (fun contrast_level ->
+       expect_invalid
+         (fun () -> Ui.Theme.Color_scheme.from_seed ~color:seed ~contrast_level ())
+         "out-of-range or non-finite theme contrast was accepted")
+    [ -1.01; 1.01; nan; infinity; neg_infinity ];
+  List.iter
+    (fun font_family ->
+       expect_invalid
+         (fun () -> Ui.Theme.Typography.material ~font_family ())
+         "empty theme font family was accepted")
+    [ ""; "   "; "\t" ];
+  expect_invalid
+    (fun () -> Ui.Theme.Typography.material ~font_family_fallback:[ "Noto Sans"; "" ] ())
+    "empty theme fallback font family was accepted";
+  List.iter
+    (fun medium ->
+       expect_invalid
+         (fun () -> Ui.Theme.Shape.create ~medium ())
+         "invalid theme shape radius was accepted")
+    [ -0.01; nan; infinity; neg_infinity ];
+  let scheme = Ui.Theme.Color_scheme.from_seed ~color:seed () in
+  let light =
+    Ui.Theme.material ~brightness:Ui.Style.Brightness.Light ~color_scheme:scheme ()
+  in
+  let dark =
+    Ui.Theme.material ~brightness:Ui.Style.Brightness.Dark ~color_scheme:scheme ()
+  in
+  ignore (Ui.Theme.application ~mode:Ui.Theme.System ~light ~dark ());
+  expect_invalid
+    (fun () -> Ui.Theme.application ~mode:Ui.Theme.System ~light:dark ~dark:light ())
+    "application theme accepted inconsistent light and dark brightness"
+;;
+
 let () =
   test_core_constructors ();
   test_navigation_constructors ();
@@ -538,5 +574,6 @@ let () =
   test_semantics_properties ();
   test_styled_text_constructor_and_validation ();
   test_typed_viewport_body_encoding ();
-  test_viewport_extent_and_body_validation ()
+  test_viewport_extent_and_body_validation ();
+  test_application_theme_validation ()
 ;;

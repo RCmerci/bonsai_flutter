@@ -91,9 +91,39 @@ module Modal_bottom_sheet : sig
   end
 end
 
+module Modal_dialog : sig
+  type t
+
+  val create
+    :  ?barrier_dismissible:bool
+    -> ?barrier_color:Style.Color.t
+    -> ?barrier_label:string
+    -> ?use_safe_area:bool
+    -> ?request_focus:bool
+    -> ?transition_duration_ms:int
+    -> ?reverse_transition_duration_ms:int
+    -> unit
+    -> t
+
+  module Private : sig
+    type view =
+      { barrier_dismissible : bool
+      ; barrier_color : Style.Color.t option
+      ; barrier_label : string option
+      ; use_safe_area : bool
+      ; request_focus : bool
+      ; transition_duration_ms : int
+      ; reverse_transition_duration_ms : int
+      }
+
+    val view : t -> view
+  end
+end
+
 type page_presentation =
   | Standard of page_transition
   | Modal_bottom_sheet of Modal_bottom_sheet.t
+  | Modal_dialog of Modal_dialog.t
 
 type overlay_alignment =
   | Top_start

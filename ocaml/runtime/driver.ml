@@ -38,6 +38,24 @@ module Handler = struct
   ;;
 end
 
+module View = struct
+  type t =
+    { theme : Ui.Theme.application
+    ; body : Ui.Widget.t
+    }
+
+  let create ~theme ~body = { theme; body }
+
+  module Private = struct
+    type view = t =
+      { theme : Ui.Theme.application
+      ; body : Ui.Widget.t
+      }
+
+    let view t = t
+  end
+end
+
 type frame =
   { revision : ID.Runtime.renderer_revision
   ; frame_patch : Runtime.Frame_patch.t
@@ -91,6 +109,7 @@ type pending_presentation =
   ; renderer_revision : ID.Runtime.renderer_revision
   ; candidate_tree : Runtime.Mounted_tree.t
   ; candidate_handler_frame : Runtime.Handler_registry.Frame.t option
+  ; candidate_application_theme : Ui.Theme.application
   ; prepared_host_operations : Host_effect.Prepared_operations.t
   ; prepared_application_operations :
       Host_effect.Application_platform.Prepared_operations.t
@@ -99,12 +118,13 @@ type pending_presentation =
 
 type t =
   { runtime_epoch : ID.Runtime.epoch
+  ; application_title : string option
   ; trace : (string -> unit) option
   ; before_flush : schedule:(unit Bonsai.Effect.t -> unit) -> unit
   ; before_shutdown : unit -> unit
   ; time_source : Bonsai.Time_source.t
   ; logical_time_origin : Core.Time_ns.t
-  ; bonsai : Ui.Widget.t Bonsai_runtime_adapter.t
+  ; bonsai : View.t Bonsai_runtime_adapter.t
   ; reconciler : Runtime.Reconciler.t
   ; handlers : Runtime.Handler_registry.t
   ; pending_effects : Handler.t
@@ -113,6 +133,7 @@ type t =
   ; environment : Environment.t
   ; mutable displayed_tree : Runtime.Mounted_tree.t option
   ; mutable displayed_handler_frame : Runtime.Handler_registry.Frame.t option
+  ; mutable displayed_application_theme : Ui.Theme.application option
   ; mutable displayed_revision : ID.Runtime.renderer_revision
   ; mutable last_monotonic_ns : int64
   ; mutable last_event_sequence : ID.Runtime.event_sequence option
@@ -132,6 +153,7 @@ let create
       ?trace
       ?(before_flush = fun ~schedule:_ -> ())
       ?(before_shutdown = fun () -> ())
+      ?application_title
       ~runtime_epoch
       ~time_source
       component
@@ -160,6 +182,7 @@ let create
   in
   let bonsai = Bonsai_runtime_adapter.create ~time_source (component pending_effects) in
   { runtime_epoch
+  ; application_title
   ; trace
   ; before_flush
   ; before_shutdown
@@ -174,6 +197,7 @@ let create
   ; environment = environment_input
   ; displayed_tree = None
   ; displayed_handler_frame = None
+  ; displayed_application_theme = None
   ; displayed_revision = ID.Runtime.Renderer_revision.zero
   ; last_monotonic_ns = -1L
   ; last_event_sequence = None
@@ -249,6 +273,19 @@ let wire_node_kind = function
   | K_material_elevated_button -> Ok Material_elevated_button
   | K_material_text_button -> Ok Material_text_button
   | K_material_icon_button -> Ok Material_icon_button
+  | K_material_filled_button -> Ok Material_filled_button
+  | K_material_filled_tonal_button -> Ok Material_filled_tonal_button
+  | K_material_outlined_button -> Ok Material_outlined_button
+  | K_material_floating_action_button -> Ok Material_floating_action_button
+  | K_material_navigation_bar -> Ok Material_navigation_bar
+  | K_material_radio_group -> Ok Material_radio_group
+  | K_material_slider -> Ok Material_slider
+  | K_material_range_slider -> Ok Material_range_slider
+  | K_material_action_chip -> Ok Material_action_chip
+  | K_material_filter_chip -> Ok Material_filter_chip
+  | K_material_choice_chip -> Ok Material_choice_chip
+  | K_material_input_chip -> Ok Material_input_chip
+  | K_material_alert_dialog -> Ok Material_alert_dialog
   | K_material_checkbox -> Ok Material_checkbox
   | K_material_switch -> Ok Material_switch
   | K_material_list_tile -> Ok Material_list_tile
@@ -263,8 +300,99 @@ let wire_node_kind = function
   | K_page -> Ok Page
   | K_safe_area -> Ok Safe_area
   | K_environment_boundary -> Ok Environment_boundary
-  | K_material_dialog -> Ok Material_dialog
   | K_native_widget -> Ok Native_widget
+;;
+
+let wire_theme_text_style (style : Ui.Style.Text_style.Private.view)
+  : Protocol.Wire_frame.theme_text_style
+  =
+  let font_weight =
+    Option.map
+      (function
+        | Ui.Style.Font_weight.Normal -> Protocol.Wire_frame.Normal
+        | Medium -> Medium
+        | Semi_bold -> Semi_bold
+        | Bold -> Bold)
+      style.font_weight
+  in
+  { font_size = style.font_size
+  ; font_weight
+  ; line_height = style.line_height
+  ; color = style.color
+  }
+;;
+
+let wire_theme_data (data : Ui.Theme.Private.data_view) : Protocol.Wire_frame.theme_data =
+  let typography = data.typography in
+  let style = Option.map wire_theme_text_style in
+  { brightness =
+      (match data.brightness with
+       | Ui.Style.Brightness.Light -> Protocol.Wire_frame.Light
+       | Dark -> Dark)
+  ; color_scheme =
+      { seed_argb = data.color_scheme.seed_argb
+      ; variant =
+          (match data.color_scheme.variant with
+           | Ui.Theme.Color_scheme.Tonal_spot -> Protocol.Wire_frame.Tonal_spot
+           | Fidelity -> Fidelity
+           | Content -> Content
+           | Monochrome -> Monochrome
+           | Neutral -> Neutral
+           | Vibrant -> Vibrant
+           | Expressive -> Expressive)
+      ; contrast_level = data.color_scheme.contrast_level
+      }
+  ; typography =
+      { font_family = typography.font_family
+      ; font_family_fallback = typography.font_family_fallback
+      ; display_large = style typography.display_large
+      ; display_medium = style typography.display_medium
+      ; display_small = style typography.display_small
+      ; headline_large = style typography.headline_large
+      ; headline_medium = style typography.headline_medium
+      ; headline_small = style typography.headline_small
+      ; title_large = style typography.title_large
+      ; title_medium = style typography.title_medium
+      ; title_small = style typography.title_small
+      ; body_large = style typography.body_large
+      ; body_medium = style typography.body_medium
+      ; body_small = style typography.body_small
+      ; label_large = style typography.label_large
+      ; label_medium = style typography.label_medium
+      ; label_small = style typography.label_small
+      }
+  ; shape =
+      { extra_small = data.shape.extra_small
+      ; small = data.shape.small
+      ; medium = data.shape.medium
+      ; large = data.shape.large
+      ; extra_large = data.shape.extra_large
+      }
+  ; visual_density =
+      (match data.visual_density with
+       | Ui.Theme.Adaptive -> Protocol.Wire_frame.Adaptive
+       | Standard -> Standard
+       | Comfortable -> Comfortable
+       | Compact -> Compact)
+  ; tap_target_size =
+      (match data.tap_target_size with
+       | Ui.Theme.Padded -> Protocol.Wire_frame.Padded
+       | Shrink_wrap -> Shrink_wrap)
+  }
+;;
+
+let wire_application_theme theme : Protocol.Wire_frame.application_theme =
+  let view = Ui.Theme.Private.view_application theme in
+  { mode =
+      (match view.mode with
+       | Ui.Theme.System -> Protocol.Wire_frame.System
+       | Light -> Light
+       | Dark -> Dark)
+  ; light = wire_theme_data view.light
+  ; dark = wire_theme_data view.dark
+  ; high_contrast_light = Option.map wire_theme_data view.high_contrast_light
+  ; high_contrast_dark = Option.map wire_theme_data view.high_contrast_dark
+  }
 ;;
 
 let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
@@ -531,25 +659,153 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
          ; sort_key
          ; actions = Ui.Semantics.Private.actions_to_bits actions
          })
-  | Theme { brightness; color_seed } ->
-    let brightness =
-      match brightness with
-      | Ui.Style.Brightness.Light -> Protocol.Wire_frame.Light
-      | Dark -> Dark
+  | Theme data -> Ok (Theme_props (wire_theme_data data))
+  | Material_scaffold
+      { has_app_bar
+      ; has_floating_action_button
+      ; floating_action_button_location
+      ; has_bottom_navigation_bar
+      ; has_bottom_sheet
+      } ->
+    let floating_action_button_location =
+      match floating_action_button_location with
+      | Ui.Widget.Private.Start_float -> Protocol.Wire_frame.Start_float
+      | Center_float -> Center_float
+      | End_float -> End_float
+      | Start_docked -> Start_docked
+      | Center_docked -> Center_docked
+      | End_docked -> End_docked
     in
-    Ok (Theme_props { brightness; color_seed })
-  | Material_scaffold { has_app_bar } -> Ok (Material_scaffold_props { has_app_bar })
+    Ok
+      (Material_scaffold_props
+         { has_app_bar
+         ; has_floating_action_button
+         ; floating_action_button_location
+         ; has_bottom_navigation_bar
+         ; has_bottom_sheet
+         })
   | Material_app_bar { center_title } -> Ok (Material_app_bar_props { center_title })
   | Material_elevated_button { variant; enabled; autofocus }
   | Material_text_button { variant; enabled; autofocus }
-  | Material_icon_button { variant; enabled; autofocus } ->
+  | Material_icon_button { variant; enabled; autofocus }
+  | Material_filled_button { variant; enabled; autofocus }
+  | Material_filled_tonal_button { variant; enabled; autofocus }
+  | Material_outlined_button { variant; enabled; autofocus } ->
     let variant =
       match variant with
+      | Ui.Widget.Private.Filled -> Protocol.Wire_frame.Filled
+      | Filled_tonal -> Filled_tonal
+      | Outlined -> Outlined
       | Ui.Widget.Private.Elevated -> Protocol.Wire_frame.Elevated
       | Text_button -> Text_button
       | Icon_button -> Icon_button
     in
     Ok (Material_button_props { variant; enabled; autofocus })
+  | Material_floating_action_button { variant; enabled; autofocus; has_icon } ->
+    let variant =
+      match variant with
+      | Ui.Widget.Private.Small -> Protocol.Wire_frame.Small
+      | Standard -> Standard
+      | Large -> Large
+      | Extended -> Extended
+    in
+    Ok (Material_floating_action_button_props { variant; enabled; autofocus; has_icon })
+  | Material_navigation_bar { selected_index; destinations } ->
+    Ok
+      (Material_navigation_bar_props
+         { selected_index
+         ; destinations =
+             List.map
+               (fun (destination : Ui.Widget.Private.material_navigation_destination) ->
+                  Protocol.Wire_frame.
+                    { label = destination.label
+                    ; enabled = destination.enabled
+                    ; has_selected_icon = destination.has_selected_icon
+                    })
+               destinations
+         })
+  | Material_radio_group { selected_id; options } ->
+    Ok
+      (Material_radio_group_props
+         { selected_id
+         ; options =
+             List.map
+               (fun (option : Ui.Widget.Private.material_radio_option) ->
+                  Protocol.Wire_frame.
+                    { option_id = option.option_id
+                    ; enabled = option.enabled
+                    ; has_label = option.has_label
+                    })
+               options
+         })
+  | Material_slider { value; min; max; divisions; label; enabled; has_on_change } ->
+    Ok
+      (Material_slider_props { value; min; max; divisions; label; enabled; has_on_change })
+  | Material_range_slider
+      { start; end_; min; max; divisions; label_start; label_end; enabled; has_on_change }
+    ->
+    Ok
+      (Material_range_slider_props
+         { start
+         ; end_
+         ; min
+         ; max
+         ; divisions
+         ; label_start
+         ; label_end
+         ; enabled
+         ; has_on_change
+         })
+  | Material_action_chip fields ->
+    Ok
+      (Material_chip_props
+         { variant = Action_chip
+         ; enabled = fields.enabled
+         ; selected = fields.selected
+         ; has_avatar = fields.has_avatar
+         ; has_delete_icon = fields.has_delete_icon
+         ; has_on_press = fields.has_on_press
+         ; has_on_selected = fields.has_on_selected
+         ; has_on_delete = fields.has_on_delete
+         })
+  | Material_filter_chip fields ->
+    Ok
+      (Material_chip_props
+         { variant = Filter_chip
+         ; enabled = fields.enabled
+         ; selected = fields.selected
+         ; has_avatar = fields.has_avatar
+         ; has_delete_icon = fields.has_delete_icon
+         ; has_on_press = fields.has_on_press
+         ; has_on_selected = fields.has_on_selected
+         ; has_on_delete = fields.has_on_delete
+         })
+  | Material_choice_chip fields ->
+    Ok
+      (Material_chip_props
+         { variant = Choice_chip
+         ; enabled = fields.enabled
+         ; selected = fields.selected
+         ; has_avatar = fields.has_avatar
+         ; has_delete_icon = fields.has_delete_icon
+         ; has_on_press = fields.has_on_press
+         ; has_on_selected = fields.has_on_selected
+         ; has_on_delete = fields.has_on_delete
+         })
+  | Material_input_chip fields ->
+    Ok
+      (Material_chip_props
+         { variant = Input_chip
+         ; enabled = fields.enabled
+         ; selected = fields.selected
+         ; has_avatar = fields.has_avatar
+         ; has_delete_icon = fields.has_delete_icon
+         ; has_on_press = fields.has_on_press
+         ; has_on_selected = fields.has_on_selected
+         ; has_on_delete = fields.has_on_delete
+         })
+  | Material_alert_dialog { has_icon; has_title; has_content; action_count } ->
+    Ok (Material_alert_dialog_props { has_icon; has_title; has_content; action_count })
   | Material_checkbox { value; enabled } ->
     Ok (Material_checkbox_props { value; enabled })
   | Material_switch { value; enabled } -> Ok (Material_switch_props { value; enabled })
@@ -702,6 +958,18 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
           ; transition_duration_ms = modal.transition_duration_ms
           ; reverse_transition_duration_ms = modal.reverse_transition_duration_ms
           }
+      | Modal_dialog modal ->
+        let modal = Ui.Navigation.Modal_dialog.Private.view modal in
+        Protocol.Wire_frame.Modal_dialog
+          { barrier_dismissible = modal.barrier_dismissible
+          ; barrier_color_argb =
+              Option.map Ui.Style.Color.Private.to_argb32 modal.barrier_color
+          ; barrier_label = modal.barrier_label
+          ; use_safe_area = modal.use_safe_area
+          ; request_focus = modal.request_focus
+          ; transition_duration_ms = modal.transition_duration_ms
+          ; reverse_transition_duration_ms = modal.reverse_transition_duration_ms
+          }
     in
     Ok (Page_props { page_key; presentation; can_pop; restoration_id })
   | Safe_area
@@ -726,8 +994,6 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
          ; minimum_bottom
          })
   | Environment_boundary -> Ok Environment_boundary_props
-  | Material_dialog { barrier_dismissible } ->
-    Ok (Material_dialog_props { barrier_dismissible })
   | Native_widget { kind_id; version; capabilities; payload } ->
     Ok (Native_widget_props { kind_id; version; capabilities; payload })
 ;;
@@ -769,6 +1035,13 @@ let wire_event_tag =
   | Value_changed -> Tag.value_changed
   | Native_event -> Tag.native_event
   | Semantics_action -> Tag.semantics_action
+  | Navigation_destination_selected -> Tag.navigation_destination_selected
+  | Radio_selected -> Tag.radio_selected
+  | Slider_changed -> Tag.slider_changed
+  | Slider_change_end -> Tag.slider_change_end
+  | Range_slider_changed -> Tag.range_slider_changed
+  | Range_slider_change_end -> Tag.range_slider_change_end
+  | Delete -> Tag.delete
 ;;
 
 let wire_bindings bindings =
@@ -865,6 +1138,7 @@ let operation_summary operations =
       | Update_event_bindings _ -> incr update_event_bindings
       | Set_children _ -> incr set_children
       | Set_root _ -> incr set_root
+      | Set_application_theme _ -> ()
       | Drop_node _ -> incr drop_node
       | Host_request _ -> incr host_request
       | Cancel_host_request _ -> incr cancel_host_request
@@ -967,6 +1241,7 @@ let trace_widget_diff t ~target_revision ~widget ~old_tree output =
 type produced_candidate =
   { candidate_tree : Runtime.Mounted_tree.t
   ; candidate_handler_frame : Runtime.Handler_registry.Frame.t option
+  ; candidate_application_theme : Ui.Theme.application
   ; prepared_host_operations : Host_effect.Prepared_operations.t
   ; prepared_application_operations :
       Host_effect.Application_platform.Prepared_operations.t
@@ -983,7 +1258,17 @@ let produce_candidate t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot 
   else (
     let target_revision = t.next_renderer_revision in
     let result_started = now_ns () in
-    let widget = Bonsai_runtime_adapter.result t.bonsai in
+    let view = Bonsai_runtime_adapter.result t.bonsai |> View.Private.view in
+    let widget = view.body in
+    let application_theme = view.theme in
+    let theme_changed =
+      force_full_snapshot
+      ||
+      match t.displayed_application_theme with
+      | None -> true
+      | Some displayed ->
+        not (Ui.Theme.Private.equal_application application_theme displayed)
+    in
     let result_read_ns = elapsed_ns result_started in
     let reconcile_started = now_ns () in
     match
@@ -1013,12 +1298,14 @@ let produce_candidate t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot 
       in
       if
         Runtime.Frame_patch.is_empty output.frame_patch
+        && (not theme_changed)
         && host_operations = []
         && application_operations = []
       then
         Ok
           { candidate_tree = output.mounted_tree
           ; candidate_handler_frame = None
+          ; candidate_application_theme = application_theme
           ; prepared_host_operations
           ; prepared_application_operations
           ; renderer_revision = t.displayed_revision
@@ -1028,7 +1315,19 @@ let produce_candidate t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot 
         match wire_operations (Runtime.Frame_patch.operations output.frame_patch) with
         | Error _ as error -> error
         | Ok ui_operations ->
-          let operations = ui_operations @ host_operations @ application_operations in
+          let theme_operations =
+            if theme_changed
+            then
+              [ Protocol.Wire_frame.Set_application_theme
+                  { title = t.application_title
+                  ; theme = wire_application_theme application_theme
+                  }
+              ]
+            else []
+          in
+          let operations =
+            theme_operations @ ui_operations @ host_operations @ application_operations
+          in
           let frame_kind = Runtime.Frame_patch.kind output.frame_patch in
           let base_revision =
             match frame_kind with
@@ -1103,6 +1402,7 @@ let produce_candidate t ~event_batch_size ~bonsai_flush_ns ~force_full_snapshot 
                 Ok
                   { candidate_tree = output.mounted_tree
                   ; candidate_handler_frame = Some output.handler_frame
+                  ; candidate_application_theme = application_theme
                   ; prepared_host_operations
                   ; prepared_application_operations
                   ; renderer_revision = target_revision
@@ -1140,6 +1440,8 @@ let host_response_status_name = function
 let payload_summary = function
   | Protocol.Inbound_event.Unit -> "unit"
   | Bool value -> Printf.sprintf "bool(%b)" value
+  | Float value -> Printf.sprintf "float(%g)" value
+  | Float_range { start; end_ } -> Printf.sprintf "float_range(%g,%g)" start end_
   | Text value -> Printf.sprintf "text(bytes=%d)" (String.length value)
   | Text_edit edit ->
     Printf.sprintf
@@ -1626,6 +1928,7 @@ let pump t ~monotonic_now_ns ?events () =
                     ; renderer_revision = candidate.renderer_revision
                     ; candidate_tree = candidate.candidate_tree
                     ; candidate_handler_frame = candidate.candidate_handler_frame
+                    ; candidate_application_theme = candidate.candidate_application_theme
                     ; prepared_host_operations = candidate.prepared_host_operations
                     ; prepared_application_operations =
                         candidate.prepared_application_operations
@@ -1714,6 +2017,8 @@ let presentation_succeeded t ~presentation_id ~renderer_revision ~monotonic_now_
                  | Ok (displayed_revision, displayed_handler_frame, retire_handlers) ->
                    t.displayed_tree <- Some pending.candidate_tree;
                    t.displayed_handler_frame <- displayed_handler_frame;
+                   t.displayed_application_theme
+                   <- Some pending.candidate_application_theme;
                    t.displayed_revision <- displayed_revision;
                    if retire_handlers
                    then
@@ -1770,12 +2075,44 @@ let shutdown ?(application_error = Host_effect.Application_platform.Shutdown) t 
     Queue.clear t.pending_effects.pending_before_display;
     Runtime.Handler_registry.clear t.handlers;
     t.displayed_handler_frame <- None;
+    t.displayed_application_theme <- None;
     Bonsai_runtime_adapter.shutdown t.bonsai)
 ;;
 
 let is_shutdown t = t.is_shutdown
 
 module For_testing = struct
+  let create_widget_component
+        ?trace
+        ?before_flush
+        ?before_shutdown
+        ~runtime_epoch
+        ~time_source
+        component
+    =
+    let scheme =
+      Ui.Theme.Color_scheme.from_seed
+        ~color:(Ui.Style.Color.rgb ~red:103 ~green:80 ~blue:164)
+        ()
+    in
+    let light =
+      Ui.Theme.material ~brightness:Ui.Style.Brightness.Light ~color_scheme:scheme ()
+    in
+    let dark =
+      Ui.Theme.material ~brightness:Ui.Style.Brightness.Dark ~color_scheme:scheme ()
+    in
+    let theme = Ui.Theme.application ~mode:Ui.Theme.System ~light ~dark () in
+    create
+      ?trace
+      ?before_flush
+      ?before_shutdown
+      ~runtime_epoch
+      ~time_source
+      (fun handlers graph ->
+         Bonsai.Cont.map (component handlers graph) ~f:(fun body ->
+           View.create ~theme ~body))
+  ;;
+
   let runtime_epoch t = t.runtime_epoch
   let revision t = t.displayed_revision
 

@@ -402,6 +402,19 @@ bool _isCoreSliverKind(NodeKind kind) => switch (kind) {
   NodeKind.materialElevatedButton ||
   NodeKind.materialTextButton ||
   NodeKind.materialIconButton ||
+  NodeKind.materialFilledButton ||
+  NodeKind.materialFilledTonalButton ||
+  NodeKind.materialOutlinedButton ||
+  NodeKind.materialFloatingActionButton ||
+  NodeKind.materialNavigationBar ||
+  NodeKind.materialRadioGroup ||
+  NodeKind.materialSlider ||
+  NodeKind.materialRangeSlider ||
+  NodeKind.materialActionChip ||
+  NodeKind.materialFilterChip ||
+  NodeKind.materialChoiceChip ||
+  NodeKind.materialInputChip ||
+  NodeKind.materialAlertDialog ||
   NodeKind.materialCheckbox ||
   NodeKind.materialSwitch ||
   NodeKind.materialListTile ||
@@ -415,7 +428,6 @@ bool _isCoreSliverKind(NodeKind kind) => switch (kind) {
   NodeKind.navigator ||
   NodeKind.page ||
   NodeKind.safeArea ||
-  NodeKind.materialDialog ||
   NodeKind.nativeWidget => false,
 };
 

@@ -70,6 +70,18 @@ final class HostCancelledValue extends HostEffectValue {
   const HostCancelledValue();
 }
 
+final class HostSnackBarCloseReasonValue extends HostEffectValue {
+  const HostSnackBarCloseReasonValue(this.reason);
+  final SnackBarCloseReason reason;
+
+  @override
+  bool operator ==(Object other) =>
+      other is HostSnackBarCloseReasonValue && other.reason == reason;
+
+  @override
+  int get hashCode => Object.hash(HostSnackBarCloseReasonValue, reason);
+}
+
 final class HostEffectException implements Exception {
   const HostEffectException(this.message);
   final String message;
@@ -123,6 +135,18 @@ final class FlutterHostEffectImplementation
           operatingSystemVersion: Platform.operatingSystemVersion,
           localeName: Platform.localeName,
         );
+      case ShowSnackBarRequest(
+        :final message,
+        :final actionLabel,
+        :final durationMs,
+      ):
+        final reason = await _requireResources(request).showSnackBar(
+          requestId,
+          message: message,
+          actionLabel: actionLabel,
+          durationMs: durationMs,
+        );
+        return HostSnackBarCloseReasonValue(reason);
       default:
         throw HostEffectException(
           '${request.runtimeType} requires an injected platform implementation',
@@ -131,7 +155,9 @@ final class FlutterHostEffectImplementation
   }
 
   @override
-  Future<void> cancel(int requestId) async {}
+  Future<void> cancel(int requestId) async {
+    await resources?.cancelSnackBar(requestId);
+  }
 
   RendererHostResources _requireResources(HostRequest request) {
     final resources = this.resources;
@@ -286,6 +312,7 @@ List<int> _encodeValue(HostEffectValue value) => switch (value) {
     return data.buffer.asUint8List();
   }(),
   HostCancelledValue() => const [],
+  HostSnackBarCloseReasonValue(:final reason) => [reason.index],
 };
 
 final class _HostValueWriter {

@@ -37,7 +37,7 @@ let component handlers _graph =
 
 let () =
   let driver =
-    Driver.create
+    Driver.For_testing.create_widget_component
       ~runtime_epoch:(ID.Runtime.Epoch.of_int64 99L)
       ~time_source:(Bonsai.Time_source.create ~start:Core.Time_ns.epoch)
       component

@@ -13,6 +13,26 @@ let require_no_substring output substring message =
   require (not (Core.String.is_substring output ~substring)) message
 ;;
 
+let application_theme =
+  let scheme =
+    Ui.Theme.Color_scheme.from_seed
+      ~color:(Ui.Style.Color.rgb ~red:103 ~green:80 ~blue:164)
+      ()
+  in
+  let light =
+    Ui.Theme.material ~brightness:Ui.Style.Brightness.Light ~color_scheme:scheme ()
+  in
+  let dark =
+    Ui.Theme.material ~brightness:Ui.Style.Brightness.Dark ~color_scheme:scheme ()
+  in
+  Ui.Theme.application ~mode:Ui.Theme.System ~light ~dark ()
+;;
+
+let application_component component handlers graph =
+  Bonsai.Cont.map (component handlers graph) ~f:(fun body ->
+    App.View.create ~theme:application_theme ~body)
+;;
+
 let set_u16_le bytes offset value =
   Bytes.set_uint8 bytes offset (value land 0xff);
   Bytes.set_uint8 bytes (offset + 1) ((value lsr 8) land 0xff)
@@ -116,13 +136,13 @@ let () =
   Entrypoint.For_testing.clear ();
   Entrypoint.register
     ~name:(ID.Application.Entrypoint_name.of_string "counter")
-    (App.create counter);
+    (App.create (application_component counter));
   Entrypoint.register
     ~name:(ID.Application.Entrypoint_name.of_string "broken")
-    (App.create broken_component);
+    (App.create (application_component broken_component));
   Entrypoint.register
     ~name:(ID.Application.Entrypoint_name.of_string "duplicate-key")
-    (App.create duplicate_key_component);
+    (App.create (application_component duplicate_key_component));
   let created = Native_backend.create (Bytes.of_string "counter") in
   require (created.status = Native_backend.Ok) "registered entrypoint did not create";
   require
@@ -277,7 +297,10 @@ let () =
   let trace_message message = Printf.eprintf "[Trace Fixture][ocaml]%s\n%!" message in
   Entrypoint.register
     ~name:(ID.Application.Entrypoint_name.of_string "trace-fixture")
-    (App.create ~name:"Trace Fixture" ~trace:trace_message trace_fixture);
+    (App.create
+       ~name:"Trace Fixture"
+       ~trace:trace_message
+       (application_component trace_fixture));
   let trace =
     capture_stderr (fun () ->
       let runtime = Native_backend.create (Bytes.of_string "trace-fixture") in

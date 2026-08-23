@@ -116,6 +116,16 @@ widget tests validate `NodeHost`, stable keys, subtree-local invalidation, root
 replacement, typed Button and Checkbox event dispatch, finite typed layout
 values, dark Theme mapping, and the Flutter Semantics tree.
 
+Application-theme tests cover the public OCaml token constructors, validation,
+structured OCaml/Dart codec symmetry, exact full-snapshot fixtures, theme-only
+driver frames, and rejected-presentation rollback. Dart transaction tests
+prove that the application theme and node graph publish atomically and that a
+theme-only frame preserves logical node identity. Root widget tests prove that
+no `MaterialApp` exists before the first committed theme, exactly one exists
+after commit, missing high-contrast variants reuse the supplied normal
+variants, theme-only updates preserve `MaterialApp` state, and runtime
+replacement cannot reuse the previous epoch's theme.
+
 Text input tests cover UTF-16/UTF-8 conversion boundaries, Chinese, Japanese,
 Korean, emoji, combining marks, composing, selection, paste, delete, submit,
 focus switching, exact-revision correction, stale correction rejection, force
@@ -231,7 +241,7 @@ the same controller and composing range.
 The Host Effects and Navigation integration test starts the
 `host_navigation` entrypoint, completes a clipboard HostRequest, resumes the
 OCaml continuation, and applies the resulting text patch. It then opens an
-OCaml-owned Settings page containing Overlay and MaterialDialog nodes and
+OCaml-owned Settings page containing Overlay and MaterialAlertDialog nodes and
 returns a system pop to OCaml before the route is removed.
 
 The Mail integration test starts the `mail` entrypoint, verifies that drag

@@ -1,3 +1,4 @@
+import 'fixture.dart';
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -96,6 +97,7 @@ void main() {
           targetRevision: 1,
           kind: FrameKind.fullSnapshot,
           operations: [
+            SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
             CreateNode(
               nodeId: 1,
               kind: NodeKind.column,
@@ -204,6 +206,7 @@ Frame _coreViewportFrame({
     targetRevision: 1,
     kind: FrameKind.fullSnapshot,
     operations: [
+      const SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
       CreateNode(
         nodeId: 1,
         kind: vertical ? NodeKind.column : NodeKind.row,
@@ -254,6 +257,7 @@ Frame _sliverViewportFrame({
     targetRevision: 1,
     kind: FrameKind.fullSnapshot,
     operations: [
+      const SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
       CreateNode(
         nodeId: 1,
         kind: vertical ? NodeKind.column : NodeKind.row,
