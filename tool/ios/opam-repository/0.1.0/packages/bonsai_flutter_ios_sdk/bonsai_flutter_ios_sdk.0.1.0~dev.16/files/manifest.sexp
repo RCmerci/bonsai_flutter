@@ -5,7 +5,7 @@
   4f7d6134d0d5f3850d78aa6fe8eea8f6f2654762
   sha256
   4a1bdb347ec88edabd2dcc72e76c4dd9e02cb406d4280e5ec9f3a201c26b305a)
- (abi_version 3)
+ (abi_version 2)
  (ocaml_version 5.1.1)
  (dune_version_range 3.17 4.0)
  (cross_compiler ocaml-ios64 5.1.1)
