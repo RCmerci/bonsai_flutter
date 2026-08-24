@@ -150,7 +150,7 @@ void main() {
     );
   });
 
-  testWidgets('standard motion mounts sheet before focusing at completion', (
+  testWidgets('standard motion focuses in the first mounted sheet frame', (
     tester,
   ) async {
     await tester.pumpWidget(_app(child: _composer()));
@@ -159,9 +159,9 @@ void main() {
 
     expect(find.byType(BottomSheet), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
-    expect(_editorFocus(tester).hasFocus, isFalse);
-    await tester.pump(const Duration(milliseconds: 199));
-    expect(_editorFocus(tester).hasFocus, isFalse);
+    expect(_editorFocus(tester).hasFocus, isTrue);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(_editorFocus(tester).hasFocus, isTrue);
     await tester.pumpAndSettle();
     expect(_editorFocus(tester).hasFocus, isTrue);
   });
@@ -328,53 +328,104 @@ void main() {
     },
   );
 
+  testWidgets('disablement during entrance keeps the sheet mounted and inert', (
+    tester,
+  ) async {
+    var enabled = true;
+    late StateSetter setHostState;
+    await tester.pumpWidget(
+      _app(
+        child: StatefulBuilder(
+          builder: (context, setState) {
+            setHostState = setState;
+            return _composer(enabled: enabled);
+          },
+        ),
+      ),
+    );
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(find.byType(BottomSheet), findsOneWidget);
+
+    setHostState(() => enabled = false);
+    await tester.pump();
+    await tester.pump();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
+    expect(_editorFocus(tester).hasFocus, isFalse);
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(_editorFocus(tester).hasFocus, isFalse);
+
+    setHostState(() => enabled = true);
+    await tester.pump();
+    await tester.pump();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(tester.widget<TextField>(find.byType(TextField)).enabled, isTrue);
+    expect(_editorFocus(tester).hasFocus, isTrue);
+  });
+
   testWidgets(
-    'disablement cancels stale focus and preserves the staged draft',
+    'saving props disable the mounted editor and action, then restore the exact draft and focus',
     (tester) async {
-      var enabled = true;
+      var saving = false;
       late StateSetter setHostState;
       await tester.pumpWidget(
         _app(
           child: StatefulBuilder(
             builder: (context, setState) {
               setHostState = setState;
-              return _composer(enabled: enabled);
+              return _composer(
+                enabled: !saving,
+                buttons: [
+                  MessageComposerButton(
+                    id: 1,
+                    tooltip: saving
+                        ? 'Saving journal block'
+                        : 'Save journal block',
+                    style: MessageComposerButtonStyle.filled,
+                    enabled: !saving,
+                    child: const Text('SAVE'),
+                  ),
+                ],
+              );
             },
           ),
         ),
       );
-      await tester.tap(find.byType(FloatingActionButton));
-      await tester.pump(const Duration(milliseconds: 80));
+      await _expand(tester);
+      const draft = '  保存 👩🏽‍💻 exact draft  ';
+      await tester.enterText(find.byType(TextField), draft);
+
+      setHostState(() => saving = true);
+      await tester.pump();
+      await tester.pump();
       expect(find.byType(BottomSheet), findsOneWidget);
-      setHostState(() => enabled = false);
-      await tester.pumpAndSettle();
-      expect(find.byType(BottomSheet), findsNothing);
-      expect(find.byType(FloatingActionButton), findsOneWidget);
+      expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
+      expect(find.byTooltip('Save journal block'), findsNothing);
+      expect(find.byTooltip('Saving journal block'), findsOneWidget);
       expect(
         tester
-            .widget<FloatingActionButton>(find.byType(FloatingActionButton))
+            .widget<IconButton>(find.widgetWithText(IconButton, 'SAVE'))
             .onPressed,
         isNull,
       );
       expect(
-        FocusManager.instance.primaryFocus,
-        isNot(_editorFocusOrNull(tester)),
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        draft,
       );
 
-      setHostState(() => enabled = true);
+      setHostState(() => saving = false);
       await tester.pump();
-      await _expand(tester);
-      await tester.enterText(find.byType(TextField), 'staged');
-      setHostState(() => enabled = false);
-      await tester.pumpAndSettle();
-      expect(find.byType(BottomSheet), findsNothing);
-      setHostState(() => enabled = true);
       await tester.pump();
-      await _expand(tester);
       expect(find.byType(BottomSheet), findsOneWidget);
+      expect(tester.widget<TextField>(find.byType(TextField)).enabled, isTrue);
+      expect(find.byTooltip('Saving journal block'), findsNothing);
+      expect(find.byTooltip('Save journal block'), findsOneWidget);
+      expect(_editorFocus(tester).hasFocus, isTrue);
       expect(
         tester.widget<TextField>(find.byType(TextField)).controller!.text,
-        'staged',
+        draft,
       );
     },
   );
@@ -448,14 +499,14 @@ void main() {
       );
 
       await tester.pumpWidget(host(keyboardVisible: true));
-      await tester.pumpAndSettle();
+      await tester.pump();
       expect(
         tester.getBottomRight(surface).dy,
-        lessThanOrEqualTo(viewport.height - keyboardHeight),
+        closeTo(viewport.height - keyboardHeight, 0.01),
       );
 
       await tester.pumpWidget(host(keyboardVisible: false));
-      await tester.pumpAndSettle();
+      await tester.pump();
       expect(
         tester.getBottomRight(surface).dy,
         closeTo(viewport.height - safeAreaBottom, 0.01),
@@ -756,13 +807,6 @@ Future<void> _expand(WidgetTester tester) async {
 
 FocusNode _editorFocus(WidgetTester tester) =>
     tester.widget<TextField>(find.byType(TextField)).focusNode!;
-
-FocusNode? _editorFocusOrNull(WidgetTester tester) {
-  final editor = find.byType(TextField);
-  return editor.evaluate().isEmpty
-      ? null
-      : tester.widget<TextField>(editor).focusNode;
-}
 
 NodeStore _nativeStore(
   ExpandableMessageComposerProps props, {

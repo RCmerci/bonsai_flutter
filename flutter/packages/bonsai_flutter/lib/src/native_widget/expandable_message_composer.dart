@@ -475,31 +475,40 @@ final class _ExpandableMessageComposerState
     extends State<ExpandableMessageComposer> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  late final ValueNotifier<ExpandableMessageComposer> _sheetConfiguration;
   ModalBottomSheetRoute<void>? _sheetRoute;
   int _routeGeneration = 0;
+  int _configurationGeneration = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _sheetConfiguration = ValueNotifier(widget);
+  }
 
   @override
   void didUpdateWidget(ExpandableMessageComposer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.enabled && !widget.enabled && _sheetRoute != null) {
-      final generation = _routeGeneration;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && generation == _routeGeneration && !widget.enabled) {
-          _dismissSheet();
-        }
-      });
-    }
+    final configuration = widget;
+    final generation = ++_configurationGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && generation == _configurationGeneration) {
+        _sheetConfiguration.value = configuration;
+      }
+    });
   }
 
   @override
   void dispose() {
     _routeGeneration += 1;
+    _configurationGeneration += 1;
     final route = _sheetRoute;
     if (route != null && route.isActive) {
       route.navigator?.removeRoute(route);
     }
     _controller.dispose();
     _focusNode.dispose();
+    _sheetConfiguration.dispose();
     super.dispose();
   }
 
@@ -511,18 +520,19 @@ final class _ExpandableMessageComposerState
     final generation = ++_routeGeneration;
     final route = ModalBottomSheetRoute<void>(
       builder: (sheetContext) {
-        final sheet = _ExpandableComposerSheet(
-          controller: _controller,
-          focusNode: _focusNode,
-          enabled: widget.enabled,
-          animationDuration: widget.animationDuration,
-          animationCurve: widget.animationCurve,
-          maxLines: widget.maxLines,
-          hintText: widget.hintText,
-          buttons: widget.buttons,
-          onChanged: widget.onChanged,
-          onButtonPressed: widget.onButtonPressed,
-          onCollapseRequested: _dismissSheet,
+        final sheet = ValueListenableBuilder<ExpandableMessageComposer>(
+          valueListenable: _sheetConfiguration,
+          builder: (context, configuration, child) => _ExpandableComposerSheet(
+            controller: _controller,
+            focusNode: _focusNode,
+            enabled: configuration.enabled,
+            maxLines: configuration.maxLines,
+            hintText: configuration.hintText,
+            buttons: configuration.buttons,
+            onChanged: configuration.onChanged,
+            onButtonPressed: configuration.onButtonPressed,
+            onCollapseRequested: _dismissSheet,
+          ),
         );
         return rendererResources == null
             ? sheet
@@ -619,8 +629,6 @@ final class _ExpandableComposerSheet extends StatefulWidget {
     required this.controller,
     required this.focusNode,
     required this.enabled,
-    required this.animationDuration,
-    required this.animationCurve,
     required this.maxLines,
     required this.hintText,
     required this.buttons,
@@ -632,8 +640,6 @@ final class _ExpandableComposerSheet extends StatefulWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool enabled;
-  final Duration animationDuration;
-  final Curve animationCurve;
   final int maxLines;
   final String hintText;
   final List<MessageComposerButton> buttons;
@@ -650,6 +656,16 @@ final class _ExpandableComposerSheetState
     extends State<_ExpandableComposerSheet> {
   Animation<double>? _routeAnimation;
 
+  void _requestFocusAfterMount() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted &&
+          widget.enabled &&
+          _routeAnimation?.status != AnimationStatus.reverse) {
+        widget.focusNode.requestFocus();
+      }
+    });
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -659,6 +675,17 @@ final class _ExpandableComposerSheetState
     _routeAnimation = animation;
     animation?.addStatusListener(_handleAnimationStatus);
     if (animation != null) _handleAnimationStatus(animation.status);
+    if (widget.enabled) _requestFocusAfterMount();
+  }
+
+  @override
+  void didUpdateWidget(_ExpandableComposerSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.enabled && !widget.enabled) {
+      widget.focusNode.unfocus();
+    } else if (!oldWidget.enabled && widget.enabled) {
+      _requestFocusAfterMount();
+    }
   }
 
   @override
@@ -673,14 +700,6 @@ final class _ExpandableComposerSheetState
       widget.focusNode.unfocus();
       return;
     }
-    if (status != AnimationStatus.completed || !widget.enabled) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted &&
-          widget.enabled &&
-          _routeAnimation?.status == AnimationStatus.completed) {
-        widget.focusNode.requestFocus();
-      }
-    });
   }
 
   @override
@@ -689,9 +708,7 @@ final class _ExpandableComposerSheetState
     final bottomInset = media.viewInsets.bottom > 0
         ? media.viewInsets.bottom
         : media.padding.bottom;
-    return AnimatedPadding(
-      duration: widget.animationDuration,
-      curve: widget.animationCurve,
+    return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
       child: MessageComposerSurfaceScope.embedded(
         child: MessageComposer(
