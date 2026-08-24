@@ -53,7 +53,7 @@ as parallel long-term APIs. Repository policy removes obsolete paths instead
 of preserving compatibility wrappers, and two swipe systems would have
 different geometry, gesture, accessibility, dismissal, and state semantics.
 
-## Proposal
+## Decision
 
 Replace `Native_widget.Swipe_action` with a package-backed
 `Native_widget.Slidable` surface and add a package-backed
@@ -335,9 +335,10 @@ Implementation follows test-driven development:
 - deterministic gesture tests characterize pure and package-wrapped rows at
   slow, normal, and fast delivery schedules without requiring parity; and
 - profile-mode physical-iPhone validation records startup samples, distance,
-  and latency for the real package-wrapped Mail row and an isolated pure-row
-  reference before the decision is considered implemented, while any
-  stock-package regression is accepted.
+  and latency for isolated pure and package-wrapped representative rows before
+  the decision is considered implemented, while any stock-package regression
+  is accepted. Mail example physical and Profile tests are outside this
+  decision's acceptance target.
 
 The representative-row characterization ran in Profile mode on 2026-08-24 on
 an iPhone 13 with iOS 26.6.1. Each cell below contains three trials. The stock
@@ -352,10 +353,8 @@ vertical scroll position changed, as accepted by this decision.
 
 The same device run passed eventual vertical scrolling, horizontal opening,
 near-diagonal opening, RTL logical-start mapping, and stylus, inverted-stylus,
-and unknown-pointer characterization. Real Mail-row sampling remains pending
-until the framework commit is pushed and the fixed iPhoneOS SDK is updated;
-the installed SDK still exposes the removed version-2 `Swipe_action` API and
-cannot compile the migrated Mail OCaml source.
+and unknown-pointer characterization. No Mail example device measurement is
+required by the revised target.
 
 Expected implementation files include `ocaml/ui/native_widget.ml` and `.mli`,
 their OCaml tests, the renderer native-widget registration and tests,
@@ -364,9 +363,10 @@ and integration fixture, and `docs/custom-widgets.md`. No protocol `.mli` under
 `spec/` or Dune file is expected to change because native-widget payloads are
 opaque to the core protocol.
 
-After framework code is committed and pushed, the iOS SDK repository must be
-updated from that pushed framework revision, committed, and pushed separately
-according to the repository workflow.
+The framework implementation was pushed as `bea79f5`, and the separately
+committed iOS SDK repository update `c7069d9` published framework package
+`0.1.0~dev.19` from that exact source revision. The runtime SDK, ABI version,
+and build-recipe revision remained unchanged.
 
 ## Alternatives considered
 
@@ -441,14 +441,34 @@ scroll-start regression are accepted instead.
 - Disabled actions, disabled hosts, close-on-scroll, close-on-action,
   auto-close group behavior, keyboard/semantics activation, and reduced-motion
   behavior have focused widget tests.
-- Real package-wrapped Mail row startup samples plus pure and package-wrapped
-  representative-row samples, distance, and latency are recorded on the target
-  iPhone; parity is not required and does not block implementation.
+- Pure and package-wrapped representative-row startup samples, distance, and
+  latency are recorded on the target iPhone; parity is not required and does
+  not block implementation. Mail example tests are not part of this criterion.
 - The renderer uses the stock public `flutter_slidable` package without a
   fork, patch, package-private import, or compatibility implementation.
-- OCaml tests, renderer analyze/tests, relevant macOS integration tests,
-  native-object verification, documentation checks, and
-  `spec-dev-tool check --all` pass.
+- OCaml tests, renderer analyze/tests, native-object verification,
+  documentation checks, and `spec-dev-tool check --all` pass. Mail example
+  tests are outside this decision's acceptance target.
+
+## Consequences
+
+- `Native_widget.Slidable` version `3` replaces the removed version-2
+  `Swipe_action` API and renderer without aliases, fallbacks, or parallel
+  gesture implementations.
+- OCaml applications can declare custom and icon-label actions, multiple
+  start/end actions, all four stock motions, dismissal, vertical direction,
+  group tags, and auto-close behavior through strict typed configuration and
+  events.
+- Flutter owns package controllers, gestures, animation, dismissal, and group
+  coordination locally. Controller commands, ratio notifications, and
+  asynchronous confirmation remain intentionally deferred.
+- The stock package increases vertical-scroll startup samples, distance, and
+  latency on the characterized iPhone. The measured difference is accepted
+  and recorded rather than hidden behind a fork or compatibility host.
+- The Mail call sites use the new API, but Mail example physical and Profile
+  testing is outside the revised acceptance target.
+- iPhoneOS framework package `0.1.0~dev.19` builds from framework revision
+  `bea79f5`; the runtime SDK, ABI version, and build recipe remain unchanged.
 
 ## Risks
 
