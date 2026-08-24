@@ -161,6 +161,45 @@ open), and the host suppresses that event until the active pointer interaction
 has finished. OCaml uses `drawer_state_of_payload` before committing state.
 Dropping an open shell cancels pending post-frame work.
 
+## Built-in expandable message composer
+
+`Native_widget.Expandable_message_composer` is built-in extension kind `7`,
+schema version `1`, with Stateful and Semantics capabilities. It starts as one
+real Material extended FAB and presents `MessageComposer` in a Material 3 modal
+bottom sheet without an OCaml event or frame. The native Flutter `State` owns
+the modal route, text controller, focus node, staged draft, dismissal lifecycle,
+renderer-resource propagation, and background pointer and semantics gating.
+
+The first logical child is always the extended-FAB icon. Each remaining child
+corresponds in order to one encoded composer button. Both protocol boundaries
+require exactly `1 + button_count` children. Native event `1` carries the exact
+UTF-8 editor text. Event `2` carries a positive little-endian `uint32` button ID
+followed by the exact UTF-8 editor text; the framework never trims whitespace.
+
+The version-1 payload begins with a 24-byte header: enabled flags, animation
+curve, `uint16` duration in milliseconds, positive `uint16` maximum lines,
+`uint16` button count, three `uint32` byte lengths for FAB label, FAB tooltip,
+and hint text, then four reserved zero bytes. Those three UTF-8 strings follow,
+then each button uses a 12-byte ID/position/visibility/style/enabled/tooltip-
+length header followed by its UTF-8 tooltip. Both decoders reject unknown flags
+or enums, nonzero reserved data, invalid or empty required strings, invalid or
+duplicate button IDs, truncation, child-count mismatch, and trailing bytes.
+
+Standard motion defaults to 200 milliseconds with an ease-out curve and
+requests focus only after the bottom-sheet entrance completes. Duration zero
+mounts and focuses the sheet editor in the next frame. The modal sheet uses a
+scrim, drag handle, 28dp top corners, compact full width, a 640dp large-window
+maximum width, and keyboard/safe-area padding. Downward swipe, scrim tap, and
+Escape dismiss and unfocus without clearing the controller draft. Disablement
+dismisses to the disabled FAB, while a changed logical key removes the old
+route and creates fresh native-local state.
+
+The modal sheet is the sole visible compose surface. Its embedded
+`MessageComposer` paints no additional background, outline, or rounded card;
+the editor and actions use the sheet directly with one 16dp horizontal content
+inset. A standalone `MessageComposer` continues to own its outlined Material
+card when no surrounding framework surface is responsible for that chrome.
+
 ## Core pressable
 
 `Widget.pressable` is a core protocol node. It receives exactly one child and

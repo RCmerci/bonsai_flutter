@@ -254,3 +254,103 @@ module Message_composer : sig
     val decode_props_exn : bytes -> props
   end
 end
+
+module Expandable_message_composer : sig
+  type button_position =
+    | Leading
+    | Trailing
+
+  type button_visibility =
+    | Always
+    | When_empty
+    | When_non_empty
+
+  type button_style =
+    | Plain
+    | Filled
+
+  type button
+
+  type event =
+    | Text_changed of string
+    | Button_pressed of
+        { button_id : int
+        ; text : string
+        }
+
+  val kind_id : Bonsai_flutter_spec.Id.Native_widget.kind_id
+  val text_changed_event_id : Bonsai_flutter_spec.Id.Native_widget.event_id
+  val button_pressed_event_id : Bonsai_flutter_spec.Id.Native_widget.event_id
+
+  (** Defines one composer action. The extended-FAB icon is always the first
+      native child; button children follow this metadata order. *)
+  val button
+    :  id:int
+    -> tooltip:string
+    -> ?position:button_position
+    -> ?visibility:button_visibility
+    -> ?style:button_style
+    -> ?enabled:bool
+    -> child:Widget.t
+    -> unit
+    -> button
+
+  (** Creates a native-local extended FAB that presents a modal bottom-sheet
+      message composer. Presentation and dismissal never require an OCaml
+      frame. Duration zero is the reduced-motion contract. *)
+  val create
+    :  ?key:Key.t
+    -> ?enabled:bool
+    -> fab_label:string
+    -> fab_tooltip:string
+    -> fab_icon:Widget.t
+    -> ?animation_duration_ms:int
+    -> ?animation_curve:Animation.Curve.t
+    -> ?max_lines:int
+    -> ?hint_text:string
+    -> buttons:button list
+    -> on_event:(event -> unit)
+    -> unit
+    -> Widget.t
+
+  val create_with_handler
+    :  ?key:Key.t
+    -> ?enabled:bool
+    -> fab_label:string
+    -> fab_tooltip:string
+    -> fab_icon:Widget.t
+    -> ?animation_duration_ms:int
+    -> ?animation_curve:Animation.Curve.t
+    -> ?max_lines:int
+    -> ?hint_text:string
+    -> buttons:button list
+    -> on_event:Event.Handler.t
+    -> unit
+    -> Widget.t
+
+  val event_of_payload : Event.Payload.t -> event option
+
+  module For_testing : sig
+    type button_props =
+      { id : int
+      ; tooltip : string
+      ; position : button_position
+      ; visibility : button_visibility
+      ; style : button_style
+      ; enabled : bool
+      }
+
+    type props =
+      { enabled : bool
+      ; fab_label : string
+      ; fab_tooltip : string
+      ; animation_duration_ms : int
+      ; animation_curve : Animation.Curve.t
+      ; max_lines : int
+      ; hint_text : string
+      ; buttons : button_props list
+      }
+
+    val decode_props_exn : bytes -> props
+  end
+end

@@ -1339,6 +1339,253 @@ let test_message_composer_validation_and_event_filtering () =
     "message composer valid event was filtered"
 ;;
 
+let expandable_message_composer_button
+      ?(position = Ui.Native_widget.Expandable_message_composer.Trailing)
+      ?(visibility = Ui.Native_widget.Expandable_message_composer.Always)
+      ?(style = Ui.Native_widget.Expandable_message_composer.Plain)
+      ?(enabled = true)
+      ~id
+      ~tooltip
+      label
+  =
+  Ui.Native_widget.Expandable_message_composer.button
+    ~id
+    ~tooltip
+    ~position
+    ~visibility
+    ~style
+    ~enabled
+    ~child:(Ui.Widget.text label)
+    ()
+;;
+
+let expandable_message_composer_payload widget =
+  let (Av view) = Ui.Widget.Private.view widget in
+  match view.node with
+  | Native_widget { kind_id; version; capabilities; payload } ->
+    check (kind_id = native_kind_id 7) "expandable composer kind ID";
+    check (version = 1) "expandable composer schema version";
+    check (Int64.equal capabilities 5L) "expandable composer capabilities";
+    payload
+  | _ -> failwith "expandable composer native props"
+;;
+
+let test_expandable_message_composer_contract_and_events () =
+  let events = ref [] in
+  let buttons =
+    [ expandable_message_composer_button
+        ~id:10
+        ~tooltip:"Add attachment 📎"
+        ~position:Leading
+        "attachment"
+    ; expandable_message_composer_button
+        ~id:21
+        ~tooltip:"Send message"
+        ~visibility:When_non_empty
+        ~style:Filled
+        ~enabled:false
+        "send"
+    ]
+  in
+  let widget =
+    Ui.Native_widget.Expandable_message_composer.create
+      ~key:(Ui.Key.string "expandable-composer")
+      ~enabled:false
+      ~fab_label:"Capture ✨"
+      ~fab_tooltip:"Open capture 🚀"
+      ~fab_icon:(Ui.Widget.text "capture-icon")
+      ~animation_duration_ms:375
+      ~animation_curve:Ui.Animation.Curve.Ease_out
+      ~max_lines:9
+      ~hint_text:"Write 你好"
+      ~buttons
+      ~on_event:(fun event -> events := event :: !events)
+      ()
+  in
+  let (Av view) = Ui.Widget.Private.view widget in
+  check
+    (Option.equal Ui.Key.equal view.key (Some (Ui.Key.string "expandable-composer")))
+    "expandable composer key";
+  check (Array.length view.children = 3) "expandable composer child count";
+  Array.iteri
+    (fun index expected ->
+       let (Av child) = Ui.Widget.Private.view view.children.(index).widget in
+       match child.node with
+       | Ui.Widget.Private.Text { value; _ } ->
+         check (String.equal value expected) "expandable composer child order"
+       | _ -> failwith "expandable composer child")
+    [| "capture-icon"; "attachment"; "send" |];
+  let props =
+    widget
+    |> expandable_message_composer_payload
+    |> Ui.Native_widget.Expandable_message_composer.For_testing.decode_props_exn
+  in
+  check (not props.enabled) "expandable composer enabled";
+  check (String.equal props.fab_label "Capture ✨") "expandable FAB label";
+  check (String.equal props.fab_tooltip "Open capture 🚀") "expandable FAB tooltip";
+  check (props.animation_duration_ms = 375) "expandable animation duration";
+  check (props.animation_curve = Ui.Animation.Curve.Ease_out) "expandable curve";
+  check (props.max_lines = 9) "expandable max lines";
+  check (String.equal props.hint_text "Write 你好") "expandable hint";
+  check (List.length props.buttons = 2) "expandable button count";
+  let attachment = List.nth props.buttons 0 in
+  check (attachment.id = 10 && attachment.position = Leading) "expandable leading button";
+  let send = List.nth props.buttons 1 in
+  check
+    (send.visibility = When_non_empty && send.style = Filled && not send.enabled)
+    "expandable button metadata";
+  let binding = view.event_bindings.(0) in
+  let invoke kind_id version event_id payload =
+    Ui.Event.Handler.Private.invoke
+      binding.handler
+      (Native_event { kind_id; version; event_id; payload })
+  in
+  invoke
+    (native_kind_id 7)
+    1
+    Ui.Native_widget.Expandable_message_composer.text_changed_event_id
+    (Bytes.of_string "  hello 👋  ");
+  let button_payload = Bytes.make 16 (Char.chr 0) in
+  Bytes.set_int32_le button_payload 0 21l;
+  Bytes.blit_string "  send  🚀" 0 button_payload 4 12;
+  invoke
+    (native_kind_id 7)
+    1
+    Ui.Native_widget.Expandable_message_composer.button_pressed_event_id
+    button_payload;
+  check
+    (!events
+     = [ Ui.Native_widget.Expandable_message_composer.Button_pressed
+           { button_id = 21; text = "  send  🚀" }
+       ; Text_changed "  hello 👋  "
+       ])
+    "expandable composer typed raw-text events";
+  let payload_event event_id payload =
+    Ui.Native_widget.Expandable_message_composer.event_of_payload
+      (Native_event { kind_id = native_kind_id 7; version = 1; event_id; payload })
+  in
+  check
+    (payload_event
+       Ui.Native_widget.Expandable_message_composer.text_changed_event_id
+       (Bytes.of_string "text")
+     = Some (Ui.Native_widget.Expandable_message_composer.Text_changed "text"))
+    "expandable event_of_payload";
+  List.iter
+    (fun (kind_id, version, event_id, payload) -> invoke kind_id version event_id payload)
+    [ native_kind_id 6, 1, native_event_id 1, Bytes.of_string "wrong kind"
+    ; native_kind_id 7, 2, native_event_id 1, Bytes.of_string "wrong version"
+    ; native_kind_id 7, 1, native_event_id 9, Bytes.empty
+    ; native_kind_id 7, 1, native_event_id 2, Bytes.make 3 (Char.chr 0)
+    ; native_kind_id 7, 1, native_event_id 2, Bytes.make 4 (Char.chr 0)
+    ; ( native_kind_id 7
+      , 1
+      , native_event_id 1
+      , Bytes.of_string (String.make 1 (Char.chr 255)) )
+    ];
+  check (List.length !events = 2) "expandable malformed event was accepted"
+;;
+
+let test_expandable_message_composer_validation_and_malformed_props () =
+  let create
+        ?(fab_label = "Capture")
+        ?(fab_tooltip = "Open capture")
+        ?(animation_duration_ms = 200)
+        ?(animation_curve = Ui.Animation.Curve.Ease_out)
+        ?(max_lines = 5)
+        ?(hint_text = "Ask anything")
+        ?(buttons = [])
+        ()
+    =
+    Ui.Native_widget.Expandable_message_composer.create
+      ~fab_label
+      ~fab_tooltip
+      ~fab_icon:(Ui.Widget.empty ())
+      ~animation_duration_ms
+      ~animation_curve
+      ~max_lines
+      ~hint_text
+      ~buttons
+      ~on_event:(fun _ -> ())
+      ()
+  in
+  List.iter
+    (fun duration ->
+       expect_invalid_argument
+         (fun () -> ignore (create ~animation_duration_ms:duration ()))
+         "expandable composer accepted invalid duration")
+    [ -1; 0x1_0000 ];
+  List.iter
+    (fun max_lines ->
+       expect_invalid_argument
+         (fun () -> ignore (create ~max_lines ()))
+         "expandable composer accepted invalid max_lines")
+    [ 0; -1; 0x1_0000 ];
+  let invalid_utf8 = String.make 1 (Char.chr 255) in
+  List.iter
+    (fun (label, tooltip, hint) ->
+       expect_invalid_argument
+         (fun () ->
+            ignore (create ~fab_label:label ~fab_tooltip:tooltip ~hint_text:hint ()))
+         "expandable composer accepted invalid UTF-8 or empty required text")
+    [ "", "tooltip", "hint"
+    ; "label", "", "hint"
+    ; invalid_utf8, "tooltip", "hint"
+    ; "label", invalid_utf8, "hint"
+    ; "label", "tooltip", invalid_utf8
+    ];
+  List.iter
+    (fun id ->
+       expect_invalid_argument
+         (fun () ->
+            ignore (expandable_message_composer_button ~id ~tooltip:"Invalid" "x"))
+         "expandable composer accepted invalid button ID")
+    [ 0; -1; 0x1_0000_0000 ];
+  expect_invalid_argument
+    (fun () -> ignore (expandable_message_composer_button ~id:1 ~tooltip:"" "x"))
+    "expandable composer accepted empty button tooltip";
+  expect_invalid_argument
+    (fun () ->
+       ignore (expandable_message_composer_button ~id:1 ~tooltip:invalid_utf8 "x"))
+    "expandable composer accepted invalid button tooltip UTF-8";
+  let duplicate = expandable_message_composer_button ~id:1 ~tooltip:"One" "one" in
+  expect_invalid_argument
+    (fun () -> ignore (create ~buttons:[ duplicate; duplicate ] ()))
+    "expandable composer accepted duplicate button IDs";
+  let valid = expandable_message_composer_payload (create ()) in
+  let invalid_payloads =
+    [ Bytes.sub valid 0 23
+    ; Bytes.cat valid (Bytes.make 1 (Char.chr 0))
+    ; (let bytes = Bytes.copy valid in
+       Bytes.set bytes 0 (Char.chr 2);
+       bytes)
+    ; (let bytes = Bytes.copy valid in
+       Bytes.set bytes 1 (Char.chr 4);
+       bytes)
+    ; (let bytes = Bytes.copy valid in
+       Bytes.set bytes 20 (Char.chr 1);
+       bytes)
+    ; (let bytes = Bytes.copy valid in
+       Bytes.set bytes 4 (Char.chr 0);
+       bytes)
+    ; (let bytes = Bytes.copy valid in
+       Bytes.set bytes 8 (Char.chr 0);
+       bytes)
+    ; (let bytes = Bytes.copy valid in
+       Bytes.set bytes 24 (Char.chr 255);
+       bytes)
+    ]
+  in
+  List.iter
+    (fun payload ->
+       expect_invalid_argument
+         (fun () ->
+            ignore
+              (Ui.Native_widget.Expandable_message_composer.For_testing.decode_props_exn
+                 payload))
+         "expandable composer accepted malformed props")
+    invalid_payloads
+;;
+
 let () =
   test_typed_native_widget ();
   test_sliver_box_and_scroll_view ();
@@ -1368,5 +1615,7 @@ let () =
   test_swipe_action_event_filtering ();
   test_navigation_shell_contract_and_events ();
   test_message_composer_contract_and_custom_buttons ();
-  test_message_composer_validation_and_event_filtering ()
+  test_message_composer_validation_and_event_filtering ();
+  test_expandable_message_composer_contract_and_events ();
+  test_expandable_message_composer_validation_and_malformed_props ()
 ;;

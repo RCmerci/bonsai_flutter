@@ -11,6 +11,7 @@ abstract final class NativeWidgetKind {
   static const int navigationShell = 3;
   static const int morphingSurface = 5;
   static const int messageComposer = 6;
+  static const int expandableMessageComposer = 7;
 }
 
 abstract final class NativeCapability {

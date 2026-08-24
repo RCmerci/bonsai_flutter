@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../gesture/bonsai_gesture_detector.dart';
 import '../protocol/frame.dart';
+import 'message_composer_surface_scope.dart';
 import 'native_widget_registry.dart';
 
 enum MessageComposerButtonPosition { leading, trailing }
@@ -386,6 +387,7 @@ final class MessageComposer extends StatefulWidget {
     this.hintText = 'Ask anything',
     this.onChanged,
     this.onButtonPressed,
+    this.onCollapseRequested,
     super.key,
   }) : assert(maxLines > 0);
 
@@ -398,6 +400,7 @@ final class MessageComposer extends StatefulWidget {
   final String hintText;
   final ValueChanged<String>? onChanged;
   final MessageComposerButtonCallback? onButtonPressed;
+  final VoidCallback? onCollapseRequested;
 
   @override
   State<MessageComposer> createState() => _MessageComposerState();
@@ -470,7 +473,12 @@ final class _MessageComposerState extends State<MessageComposer> {
   }
 
   void _handleVerticalDragEnd(DragEndDetails _) {
-    if (_verticalDragDistance < _collapseDragThreshold || !_isExpanded) return;
+    if (_verticalDragDistance < _collapseDragThreshold) return;
+    if (widget.onCollapseRequested != null) {
+      widget.onCollapseRequested!();
+      return;
+    }
+    if (!_isExpanded) return;
     setState(() => _forceCollapsed = true);
     _focusNode.unfocus();
   }
@@ -489,6 +497,7 @@ final class _MessageComposerState extends State<MessageComposer> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final expanded = _isExpanded;
+    final embedded = MessageComposerSurfaceScope.isEmbedded(context);
     final editor = TextField(
       controller: _controller,
       focusNode: _focusNode,
@@ -524,12 +533,15 @@ final class _MessageComposerState extends State<MessageComposer> {
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,
         child: Material(
-          color: colors.surfaceContainerHighest,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(expanded ? 20 : 24),
-            side: BorderSide(color: colors.outlineVariant),
-          ),
-          clipBehavior: Clip.antiAlias,
+          type: embedded ? MaterialType.transparency : MaterialType.canvas,
+          color: embedded ? null : colors.surfaceContainerHighest,
+          shape: embedded
+              ? null
+              : RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(expanded ? 20 : 24),
+                  side: BorderSide(color: colors.outlineVariant),
+                ),
+          clipBehavior: embedded ? Clip.none : Clip.antiAlias,
           child: _AdaptiveComposer(
             expanded: expanded,
             editor: editor,

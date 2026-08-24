@@ -6,6 +6,7 @@ export 'src/debug/frame_stats.dart' show BonsaiFlutterFrameStats;
 export 'src/environment/environment_reporter.dart';
 export 'src/host_effects/host_effect_dispatcher.dart';
 export 'src/native_widget/native_widget_registry.dart';
+export 'src/native_widget/expandable_message_composer.dart';
 export 'src/native_widget/navigation_shell.dart';
 export 'src/native_widget/morphing_surface.dart';
 export 'src/native_widget/message_composer.dart';

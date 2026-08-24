@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 
 import '../gesture/bonsai_gesture_detector.dart';
 import '../native_widget/native_widget_registry.dart';
+import '../native_widget/expandable_message_composer.dart';
 import 'sliver_virtual_host.dart';
 import '../native_widget/morphing_surface.dart';
 import '../native_widget/message_composer.dart';
@@ -55,6 +56,7 @@ final class WidgetRegistry {
       registerSwipeAction(extensions);
       registerNavigationShell(extensions);
       registerMessageComposer(extensions);
+      registerExpandableMessageComposer(extensions);
     }
     return WidgetRegistry({
       NodeKind.empty: _buildEmpty,

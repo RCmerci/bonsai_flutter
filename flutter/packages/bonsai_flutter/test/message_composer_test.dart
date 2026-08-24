@@ -8,6 +8,34 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('standalone composer owns its outlined card surface', (
+    tester,
+  ) async {
+    final theme = ThemeData(
+      colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+      useMaterial3: true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: theme,
+        home: const Scaffold(body: MessageComposer(buttons: [])),
+      ),
+    );
+
+    final material = tester
+        .widgetList<Material>(
+          find.descendant(
+            of: find.byType(MessageComposer),
+            matching: find.byType(Material),
+          ),
+        )
+        .single;
+    expect(material.color, theme.colorScheme.surfaceContainerHighest);
+    final shape = material.shape! as RoundedRectangleBorder;
+    expect(shape.borderRadius, BorderRadius.circular(24));
+    expect(shape.side.color, theme.colorScheme.outlineVariant);
+  });
+
   testWidgets('renders arbitrary custom button content in configured slots', (
     tester,
   ) async {
