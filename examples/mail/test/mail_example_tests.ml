@@ -59,20 +59,20 @@ let test_initial_inbox_and_semantics () =
            handle
            (Test.Query.test_id (Printf.sprintf "mail-row-%d" id))
            (Printf.sprintf "visible inbox message %d is missing" id);
-         let swipe =
+         let slidable =
            require_node
              handle
              (Test.Query.test_id (Printf.sprintf "mail-swipe-%d" id))
-             (Printf.sprintf "swipe host for message %d is missing" id)
+             (Printf.sprintf "Slidable host for message %d is missing" id)
          in
          require
            (Ui.Widget.Private.kind_tag_equal
-              swipe.Runtime.Mounted_tree.Snapshot.node_tag
+              slidable.Runtime.Mounted_tree.Snapshot.node_tag
               Ui.Widget.Private.K_native_widget)
-           "mail swipe host is not a native widget";
+           "mail Slidable host is not a native widget";
          require
-           (Array.length swipe.children = 3)
-           "mail swipe host does not have the fixed three-child shape")
+           (Array.length slidable.children = 4)
+           "mail Slidable host does not expose content and three actions")
       Mail.For_testing.initial_inbox_ids;
     require_present
       handle
@@ -84,15 +84,28 @@ let test_initial_inbox_and_semantics () =
       "initial inbox does not expose read semantics")
 ;;
 
-let native_swipe handle id direction =
+let native_slidable_action handle id action_id =
+  Test.Handle.present handle;
+  let payload = Bytes.make 4 '\000' in
+  Bytes.set_int32_le payload 0 (Int32.of_int action_id);
+  Test.Handle.native_event
+    handle
+    (Test.Query.test_id (Printf.sprintf "mail-swipe-%d" id))
+    ~kind_id:(ID.Native_widget.Kind_id.of_int 2)
+    ~version:3
+    ~event_id:(ID.Native_widget.Event_id.of_int 1)
+    ~payload
+;;
+
+let native_slidable_dismiss handle id side =
   Test.Handle.present handle;
   Test.Handle.native_event
     handle
     (Test.Query.test_id (Printf.sprintf "mail-swipe-%d" id))
     ~kind_id:(ID.Native_widget.Kind_id.of_int 2)
-    ~version:2
-    ~event_id:(ID.Native_widget.Event_id.of_int 1)
-    ~payload:(Bytes.make 1 (Char.chr direction))
+    ~version:3
+    ~event_id:(ID.Native_widget.Event_id.of_int 2)
+    ~payload:(Bytes.make 1 (Char.chr side))
 ;;
 
 let press handle id =
@@ -313,7 +326,7 @@ let test_expand_open_and_platform_pop_preserve_state () =
       "read-state change replaced the keyed swipe host")
 ;;
 
-let test_swipe_archive_removes_only_target_and_retains_following_identity () =
+let test_slidable_archive_removes_only_target_and_retains_following_identity () =
   with_handle (fun handle ->
     let following_before =
       require_node
@@ -321,7 +334,7 @@ let test_swipe_archive_removes_only_target_and_retains_following_identity () =
         (Test.Query.test_id "mail-swipe-2")
         "following swipe host is missing before archive"
     in
-    native_swipe handle 1 0;
+    native_slidable_dismiss handle 1 0;
     require_absent
       handle
       (Test.Query.test_id "mail-swipe-1")
@@ -345,7 +358,24 @@ let test_swipe_archive_removes_only_target_and_retains_following_identity () =
       "archive swipe opened the detail page")
 ;;
 
-let test_swipe_read_action_updates_in_place_without_navigation () =
+let test_slidable_trash_action_removes_target () =
+  with_handle (fun handle ->
+    native_slidable_action handle 1 2;
+    require_absent
+      handle
+      (Test.Query.test_id "mail-row-1")
+      "Trash action left the target in the inbox";
+    require_present
+      handle
+      (Test.Query.test_id "mail-row-2")
+      "Trash action removed an unrelated inbox row";
+    require_absent
+      handle
+      (Test.Query.test_id "mail-detail-page")
+      "Trash action opened the detail page")
+;;
+
+let test_slidable_read_action_updates_in_place_without_navigation () =
   with_handle (fun handle ->
     let before =
       require_node
@@ -353,7 +383,7 @@ let test_swipe_read_action_updates_in_place_without_navigation () =
         (Test.Query.test_id "mail-swipe-1")
         "swipe host is missing before mark read"
     in
-    native_swipe handle 1 1;
+    native_slidable_action handle 1 3;
     require_present
       handle
       (Test.Query.semantics_label "Read message from Mara Vale")
@@ -367,7 +397,7 @@ let test_swipe_read_action_updates_in_place_without_navigation () =
     require
       (Runtime.Node_id.equal before.node_id after_read.node_id)
       "mark read replaced the keyed swipe host";
-    native_swipe handle 1 1;
+    native_slidable_action handle 1 3;
     require_present
       handle
       (Test.Query.semantics_label "Unread message from Mara Vale")
@@ -387,7 +417,7 @@ let test_swipe_read_action_updates_in_place_without_navigation () =
       "read-state swipe opened the detail page")
 ;;
 
-let test_swipe_event_filtering_and_nested_action_isolation () =
+let test_slidable_event_filtering_and_nested_action_isolation () =
   with_handle (fun handle ->
     let send kind_id version event_id payload =
       Test.Handle.present handle;
@@ -411,17 +441,17 @@ let test_swipe_event_filtering_and_nested_action_isolation () =
       (Bytes.of_string "\000");
     send
       (ID.Native_widget.Kind_id.of_int 2)
-      2
+      3
       (ID.Native_widget.Event_id.of_int 2)
-      (Bytes.of_string "\000");
+      Bytes.empty;
     send
       (ID.Native_widget.Kind_id.of_int 2)
-      2
+      3
       (ID.Native_widget.Event_id.of_int 1)
       Bytes.empty;
     send
       (ID.Native_widget.Kind_id.of_int 2)
-      2
+      3
       (ID.Native_widget.Event_id.of_int 1)
       (Bytes.of_string "\002");
     require_present
@@ -698,7 +728,7 @@ let test_drawer_mailboxes_settings_and_settled_state () =
 
 let test_drawer_archived_trash_and_inbox_views_are_functional () =
   with_handle (fun handle ->
-    native_swipe handle 1 0;
+    native_slidable_dismiss handle 1 0;
     Test.Handle.present handle;
     Test.Handle.click handle (Test.Query.test_id "mail-menu");
     Test.Handle.present handle;
@@ -742,7 +772,7 @@ let test_bottom_destinations_are_explicit_and_restore_mail_state () =
       (Test.Query.test_id "mail-pressable-21")
       "precondition append did not complete";
     Test.Handle.present handle;
-    Test.Handle.click handle (Test.Query.test_id "mail-star-2");
+    Test.Handle.click handle (Test.Query.test_id "mail-star-21");
     Test.Handle.present handle;
     Test.Handle.click handle (Test.Query.test_id "mail-destination-chat");
     let chat_props = navigation_props handle in
@@ -769,7 +799,7 @@ let test_bottom_destinations_are_explicit_and_restore_mail_state () =
     require ((navigation_props handle).selected_index = 0) "Mail was not restored";
     require_present
       handle
-      (Test.Query.semantics_label "Starred message from River Tan")
+      (Test.Query.semantics_label "Not starred message from Field Correspondent 21")
       "returning to Mail lost message state";
     require_present
       handle
@@ -916,7 +946,7 @@ let test_expanded_nested_actions_are_isolated () =
       "card Reply did not show its deterministic scope notice";
     require_present handle (Test.Query.test_id "mail-card-1") "Reply collapsed the card";
     require_absent handle (Test.Query.test_id "mail-detail-page") "Reply opened detail";
-    native_swipe handle 1 1;
+    native_slidable_action handle 1 3;
     require_present
       handle
       (Test.Query.test_id "mail-card-1")
@@ -927,7 +957,7 @@ let test_expanded_nested_actions_are_isolated () =
     require
       (Runtime.Node_id.equal swipe_before.node_id swipe_after.node_id)
       "expanded state update replaced the keyed swipe host";
-    native_swipe handle 1 0;
+    native_slidable_dismiss handle 1 0;
     require_absent handle (Test.Query.test_id "mail-card-1") "archive retained the card";
     require
       ((sparse_list_props handle).extent_overrides = [])
@@ -967,9 +997,10 @@ let () =
   test_expansion_accordion_outline_and_collapse ();
   test_expanded_nested_actions_are_isolated ();
   test_filter_cleanup_and_retained_app_destination ();
-  test_swipe_archive_removes_only_target_and_retains_following_identity ();
-  test_swipe_read_action_updates_in_place_without_navigation ();
-  test_swipe_event_filtering_and_nested_action_isolation ();
+  test_slidable_archive_removes_only_target_and_retains_following_identity ();
+  test_slidable_trash_action_removes_target ();
+  test_slidable_read_action_updates_in_place_without_navigation ();
+  test_slidable_event_filtering_and_nested_action_isolation ();
   test_stale_route_pop_is_ignored ();
   test_archive_delete_and_mark_unread ();
   test_detail_star_attachment_and_reply_notice ();

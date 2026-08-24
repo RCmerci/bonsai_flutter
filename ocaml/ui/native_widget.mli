@@ -73,52 +73,178 @@ module Morphing_surface : sig
   end
 end
 
-module Swipe_action : sig
-  type direction =
-    | Start_to_end
-    | End_to_start
+module Slidable : sig
+  type side =
+    | Start
+    | End
 
-  type disposition =
-    | Dismiss
-    | Rebound
+  type motion =
+    | Behind
+    | Drawer
+    | Scroll
+    | Stretch
 
+  type dismiss_motion = Inversed_drawer
+  type dismissible
   type action
+  type action_pane
 
-  (** Creates one directional action. [border_radius] controls the revealed
-      feedback surface and defaults to a capsule radius of [999.]. *)
+  type event =
+    | Action_pressed of int
+    | Dismissed of side
+
+  val kind_id : Bonsai_flutter_spec.Id.Native_widget.kind_id
+  val action_pressed_event_id : Bonsai_flutter_spec.Id.Native_widget.event_id
+  val dismissed_event_id : Bonsai_flutter_spec.Id.Native_widget.event_id
+
+  (** Creates a fully custom action whose rendered content is [child]. *)
   val action
-    :  label:string
+    :  id:int
+    -> ?enabled:bool
+    -> ?flex:int
+    -> ?foreground:Style.Color.t
     -> background:Style.Color.t
+    -> ?auto_close:bool
     -> ?border_radius:float
-    -> disposition:disposition
-    -> icon:Widget.t
+    -> ?padding:Layout.Edge_insets.t
+    -> ?alignment:Layout.Alignment.t
+    -> child:Widget.t
     -> unit
     -> action
 
-  (** Wraps [content] in a bidirectional swipe host. [clip_border_radius]
-      clips the content, feedback, and translation animation together and
-      defaults to [0.]. *)
+  (** Creates the common vertically stacked icon-and-label action content. *)
+  val icon_label_action
+    :  id:int
+    -> ?enabled:bool
+    -> ?flex:int
+    -> ?foreground:Style.Color.t
+    -> background:Style.Color.t
+    -> ?auto_close:bool
+    -> ?border_radius:float
+    -> ?padding:Layout.Edge_insets.t
+    -> ?alignment:Layout.Alignment.t
+    -> ?spacing:float
+    -> icon:Widget.t
+    -> label:string
+    -> unit
+    -> action
+
+  val dismissible
+    :  ?dismiss_threshold:float
+    -> ?dismissal_duration_ms:int
+    -> ?resize_duration_ms:int
+    -> ?close_on_cancel:bool
+    -> ?motion:dismiss_motion
+    -> unit
+    -> dismissible
+
+  val action_pane
+    :  ?extent_ratio:float
+    -> motion:motion
+    -> ?dismissible:dismissible
+    -> ?drag_dismissible:bool
+    -> ?open_threshold:float
+    -> ?close_threshold:float
+    -> actions:action list
+    -> unit
+    -> action_pane
+
   val create
-    :  ?key:Key.t
-    -> ?start_action:action
-    -> ?end_action:action
-    -> ?clip_border_radius:float
+    :  key:Key.t
+    -> ?enabled:bool
+    -> ?close_on_scroll:bool
+    -> ?direction:Layout.Axis.t
+    -> ?use_text_direction:bool
+    -> ?group_tag:string
+    -> ?start_action_pane:action_pane
+    -> ?end_action_pane:action_pane
     -> content:Widget.t
-    -> on_commit:(direction -> unit)
+    -> on_event:(event -> unit)
     -> unit
     -> Widget.t
 
-  val direction_of_payload : Event.Payload.t -> direction option
+  val event_of_payload : Event.Payload.t -> event option
 
   val create_with_handler
-    :  ?key:Key.t
-    -> ?start_action:action
-    -> ?end_action:action
-    -> ?clip_border_radius:float
+    :  key:Key.t
+    -> ?enabled:bool
+    -> ?close_on_scroll:bool
+    -> ?direction:Layout.Axis.t
+    -> ?use_text_direction:bool
+    -> ?group_tag:string
+    -> ?start_action_pane:action_pane
+    -> ?end_action_pane:action_pane
     -> content:Widget.t
-    -> on_commit:Event.Handler.t
+    -> on_event:Event.Handler.t
     -> unit
     -> Widget.t
+
+  module For_testing : sig
+    type action_props =
+      { id : int
+      ; enabled : bool
+      ; flex : int
+      ; foreground : Style.Color.t option
+      ; background : Style.Color.t
+      ; auto_close : bool
+      ; border_radius : float
+      ; padding : Layout.Edge_insets.t option
+      ; alignment : Layout.Alignment.t option
+      }
+
+    type dismissible_props =
+      { dismiss_threshold : float
+      ; dismissal_duration_ms : int
+      ; resize_duration_ms : int
+      ; close_on_cancel : bool
+      ; motion : dismiss_motion
+      }
+
+    type action_pane_props =
+      { extent_ratio : float
+      ; motion : motion
+      ; dismissible : dismissible_props option
+      ; drag_dismissible : bool
+      ; open_threshold : float option
+      ; close_threshold : float option
+      ; actions : action_props list
+      }
+
+    type props =
+      { enabled : bool
+      ; close_on_scroll : bool
+      ; direction : Layout.Axis.t
+      ; use_text_direction : bool
+      ; group_tag : string option
+      ; start_action_pane : action_pane_props option
+      ; end_action_pane : action_pane_props option
+      }
+
+    val decode_props_exn : bytes -> props
+    val encode_action_pressed : int -> bytes
+    val encode_dismissed : side -> bytes
+  end
+end
+
+module Slidable_auto_close_behavior : sig
+  val kind_id : Bonsai_flutter_spec.Id.Native_widget.kind_id
+
+  val create
+    :  ?key:Key.t
+    -> ?close_when_opened:bool
+    -> ?close_when_tapped:bool
+    -> child:Widget.t
+    -> unit
+    -> Widget.t
+
+  module For_testing : sig
+    type props =
+      { close_when_opened : bool
+      ; close_when_tapped : bool
+      }
+
+    val decode_props_exn : bytes -> props
+  end
 end
 
 module Navigation_shell : sig

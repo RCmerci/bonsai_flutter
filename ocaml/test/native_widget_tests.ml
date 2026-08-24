@@ -894,189 +894,389 @@ let test_morphing_surface_contract () =
   | _ -> failwith "morphing surface native props"
 ;;
 
-let swipe_action
-      ?(label = "Archive")
-      ?(background = Ui.Style.Color.argb ~alpha:255 ~red:80 ~green:125 ~blue:88)
-      ?border_radius
-      disposition
+let slidable_background = Ui.Style.Color.rgb ~red:80 ~green:125 ~blue:88
+let slidable_foreground = Ui.Style.Color.rgb ~red:250 ~green:250 ~blue:250
+
+let slidable_action
+      ?(enabled = true)
+      ?(flex = 1)
+      ?foreground
+      ?(auto_close = true)
+      ?(border_radius = 0.)
+      ?padding
+      ?alignment
+      id
   =
-  Ui.Native_widget.Swipe_action.action
-    ~label
-    ~background
-    ?border_radius
-    ~disposition
-    ~icon:(Ui.Widget.text label)
+  Ui.Native_widget.Slidable.action
+    ~id
+    ~enabled
+    ~flex
+    ?foreground
+    ~background:slidable_background
+    ~auto_close
+    ~border_radius
+    ?padding
+    ?alignment
+    ~child:(Ui.Widget.text (Printf.sprintf "Action %d" id))
     ()
 ;;
 
-let test_swipe_action_props_contract () =
-  let received = ref None in
+let slidable_pane
+      ?dismissible
+      ?(extent_ratio = 0.5)
+      ?open_threshold
+      ?close_threshold
+      motion
+      actions
+  =
+  Ui.Native_widget.Slidable.action_pane
+    ~extent_ratio
+    ~motion
+    ?dismissible
+    ?open_threshold
+    ?close_threshold
+    ~actions
+    ()
+;;
+
+let test_slidable_props_children_and_events () =
+  let module S = Ui.Native_widget.Slidable in
+  let padding = Ui.Layout.Edge_insets.only ~left:1. ~top:2. ~right:3. ~bottom:4. () in
+  let dismissible =
+    S.dismissible
+      ~dismiss_threshold:0.8
+      ~dismissal_duration_ms:240
+      ~resize_duration_ms:180
+      ~close_on_cancel:true
+      ~motion:Inversed_drawer
+      ()
+  in
+  let start_action = slidable_action 1 in
+  let icon_label_action =
+    S.icon_label_action
+      ~id:2
+      ~flex:2
+      ~foreground:slidable_foreground
+      ~background:slidable_background
+      ~auto_close:false
+      ~border_radius:12.
+      ~padding
+      ~alignment:Ui.Layout.Alignment.Center_end
+      ~spacing:6.
+      ~icon:(Ui.Widget.icon ~code_point:0xe091 ())
+      ~label:"Archive ✓"
+      ()
+  in
+  let end_action = slidable_action ~enabled:false 3 in
+  let events = ref [] in
   let widget =
-    Ui.Native_widget.Swipe_action.create
-      ~key:(Ui.Key.string "swipe")
-      ~start_action:(swipe_action Dismiss)
-      ~end_action:
-        (swipe_action
-           ~label:"Mark unread ✓"
-           ~background:(Ui.Style.Color.argb ~alpha:255 ~red:67 ~green:95 ~blue:138)
-           ~border_radius:12.
-           Rebound)
-      ~clip_border_radius:18.
+    S.create
+      ~key:(Ui.Key.string "slidable")
+      ~enabled:true
+      ~close_on_scroll:false
+      ~direction:Ui.Layout.Axis.Vertical
+      ~use_text_direction:false
+      ~group_tag:"inbox-收件箱"
+      ~start_action_pane:
+        (slidable_pane
+           ~dismissible
+           ~extent_ratio:0.4
+           ~open_threshold:0.2
+           ~close_threshold:0.1
+           Drawer
+           [ start_action; icon_label_action ])
+      ~end_action_pane:(slidable_pane ~extent_ratio:0.6 Stretch [ end_action ])
       ~content:(Ui.Widget.text "Message")
-      ~on_commit:(fun direction -> received := Some direction)
+      ~on_event:(fun event -> events := event :: !events)
       ()
   in
   let (Av view) = Ui.Widget.Private.view widget in
-  check (Array.length view.children = 3) "swipe action must always have three children";
+  check (Array.length view.children = 4) "slidable child slots are not canonical";
+  check
+    (Ui.Widget.For_testing.text_content view.children.(0).widget = Some "Message")
+    "slidable content is not the first child";
+  check
+    (Ui.Widget.For_testing.text_content view.children.(1).widget = Some "Action 1")
+    "start action order changed";
+  let icon_label_child = view.children.(2).widget in
+  check
+    (String.equal (Ui.Widget.For_testing.kind_name icon_label_child) "Column")
+    "icon-label action did not build a logical column";
+  let icon_label_children = Ui.Widget.For_testing.children icon_label_child in
+  check (Array.length icon_label_children = 3) "icon-label action child count";
+  check
+    (Ui.Widget.For_testing.text_content icon_label_children.(2) = Some "Archive ✓")
+    "icon-label action label child";
+  check
+    (Ui.Widget.For_testing.text_content view.children.(3).widget = Some "Action 3")
+    "end action order changed";
   (match view.node with
    | Native_widget { kind_id; version; capabilities; payload } ->
-     check
-       (ID.Native_widget.Kind_id.equal kind_id (native_kind_id 2))
-       "swipe action kind ID";
-     check (version = 2) "swipe action schema version";
-     check (Int64.equal capabilities 7L) "swipe action capabilities";
-     check (Char.code (Bytes.get payload 0) = 3) "swipe action enabled flags";
-     check (Char.code (Bytes.get payload 1) = 0) "dismiss disposition encoding";
-     check (Char.code (Bytes.get payload 2) = 1) "rebound disposition encoding";
-     check (Char.code (Bytes.get payload 3) = 0) "reserved byte";
-     check
-       (Int32.equal (Bytes.get_int32_le payload 4) 0xff507d58l)
-       "start background encoding";
-     check
-       (Int32.equal (Bytes.get_int32_le payload 8) 0xff435f8al)
-       "end background encoding";
-     check
-       (Float.equal (Int64.float_of_bits (Bytes.get_int64_le payload 12)) 999.)
-       "default start action border radius encoding";
-     check
-       (Float.equal (Int64.float_of_bits (Bytes.get_int64_le payload 20)) 12.)
-       "custom end action border radius encoding";
-     check
-       (Float.equal (Int64.float_of_bits (Bytes.get_int64_le payload 28)) 18.)
-       "host clip border radius encoding";
-     let start_length = Int32.to_int (Bytes.get_int32_le payload 36) in
-     let end_length = Int32.to_int (Bytes.get_int32_le payload 40) in
-     check (start_length = String.length "Archive") "start label byte length";
-     check (end_length = String.length "Mark unread ✓") "UTF-8 label byte length";
-     check
-       (Bytes.length payload = 44 + start_length + end_length)
-       "swipe action exact payload length";
-     check
-       (String.equal (Bytes.sub_string payload 44 start_length) "Archive")
-       "start label payload";
-     check
-       (String.equal
-          (Bytes.sub_string payload (44 + start_length) end_length)
-          "Mark unread ✓")
-       "end label payload"
-   | _ -> failwith "swipe action native props");
+     check (kind_id = native_kind_id 2) "slidable kind ID";
+     check (version = 3) "slidable schema version";
+     check (Int64.equal capabilities 7L) "slidable capabilities";
+     let props = S.For_testing.decode_props_exn payload in
+     check props.enabled "slidable enabled";
+     check (not props.close_on_scroll) "slidable close-on-scroll";
+     check (props.direction = Ui.Layout.Axis.Vertical) "slidable axis";
+     check (not props.use_text_direction) "slidable text-direction policy";
+     check (props.group_tag = Some "inbox-收件箱") "slidable UTF-8 group tag";
+     let start = Option.get props.start_action_pane in
+     check (start.motion = Drawer) "start pane motion";
+     check (Float.equal start.extent_ratio 0.4) "start pane extent";
+     check (start.open_threshold = Some 0.2) "start pane open threshold";
+     check (start.close_threshold = Some 0.1) "start pane close threshold";
+     let dismissible = Option.get start.dismissible in
+     check (Float.equal dismissible.dismiss_threshold 0.8) "dismiss threshold";
+     check (dismissible.dismissal_duration_ms = 240) "dismiss duration";
+     check (dismissible.resize_duration_ms = 180) "resize duration";
+     check dismissible.close_on_cancel "dismiss close-on-cancel";
+     check (List.length start.actions = 2) "start action count";
+     let second = List.nth start.actions 1 in
+     check (second.id = 2) "action ID";
+     check (second.flex = 2) "action flex";
+     check (not second.auto_close) "action auto-close";
+     check (second.foreground = Some slidable_foreground) "action foreground";
+     check (second.padding = Some padding) "action padding";
+     check (second.alignment = Some Ui.Layout.Alignment.Center_end) "action alignment";
+     let end_ = Option.get props.end_action_pane in
+     check (end_.motion = Stretch) "end pane motion";
+     check (not (List.hd end_.actions).enabled) "disabled action"
+   | _ -> failwith "slidable native props");
   let binding = view.event_bindings.(0) in
   Ui.Event.Handler.Private.invoke
     binding.handler
     (Native_event
        { kind_id = native_kind_id 2
-       ; version = 2
-       ; event_id = native_event_id 1
-       ; payload = Bytes.of_string "\000"
+       ; version = 3
+       ; event_id = S.action_pressed_event_id
+       ; payload = S.For_testing.encode_action_pressed 2
        });
-  check
-    (!received = Some Ui.Native_widget.Swipe_action.Start_to_end)
-    "start-to-end commit decoding";
   Ui.Event.Handler.Private.invoke
     binding.handler
     (Native_event
        { kind_id = native_kind_id 2
-       ; version = 2
-       ; event_id = native_event_id 1
-       ; payload = Bytes.of_string "\001"
+       ; version = 3
+       ; event_id = S.dismissed_event_id
+       ; payload = S.For_testing.encode_dismissed End
        });
   check
-    (!received = Some Ui.Native_widget.Swipe_action.End_to_start)
-    "end-to-start commit decoding"
+    (!events = [ S.Dismissed End; S.Action_pressed 2 ])
+    "slidable typed event decoding"
 ;;
 
-let test_swipe_action_omitted_direction_and_validation () =
-  let widget =
-    Ui.Native_widget.Swipe_action.create
-      ~start_action:(swipe_action Dismiss)
-      ~content:(Ui.Widget.text "Message")
-      ~on_commit:(fun _ -> ())
-      ()
-  in
-  let (Av view) = Ui.Widget.Private.view widget in
-  (match view.node with
-   | Native_widget { payload; _ } ->
-     check (Char.code (Bytes.get payload 0) = 1) "omitted end direction flag";
-     check
-       (Float.equal (Int64.float_of_bits (Bytes.get_int64_le payload 20)) 999.)
-       "omitted action keeps the encoded default border radius";
-     check
-       (Float.equal (Int64.float_of_bits (Bytes.get_int64_le payload 28)) 0.)
-       "host clip border radius defaults to square"
-   | _ -> failwith "swipe action native props");
-  check
-    (Ui.Widget.Private.kind_tag_equal
-       (let (Av v) = Ui.Widget.Private.view view.children.(2).widget in
-        Ui.Widget.Private.node_kind_tag v.node)
-       K_empty)
-    "omitted end action must use an empty icon child";
+let test_slidable_defaults_all_motions_and_validation () =
+  let module S = Ui.Native_widget.Slidable in
+  let action = slidable_action 1 in
+  List.iter
+    (fun motion ->
+       let widget =
+         S.create
+           ~key:(Ui.Key.int (Hashtbl.hash motion))
+           ~start_action_pane:(slidable_pane motion [ action ])
+           ~content:(Ui.Widget.empty ())
+           ~on_event:(fun _ -> ())
+           ()
+       in
+       let (Av view) = Ui.Widget.Private.view widget in
+       match view.node with
+       | Native_widget { payload; _ } ->
+         let props = S.For_testing.decode_props_exn payload in
+         check props.enabled "slidable enabled default";
+         check props.close_on_scroll "slidable close-on-scroll default";
+         check props.use_text_direction "slidable text direction default";
+         check (props.direction = Ui.Layout.Axis.Horizontal) "slidable axis default";
+         check ((Option.get props.start_action_pane).motion = motion) "pane motion"
+       | _ -> failwith "slidable native props")
+    [ Behind; Drawer; Scroll; Stretch ];
   expect_invalid_argument
     (fun () ->
        ignore
-         (Ui.Native_widget.Swipe_action.create
+         (S.create
+            ~key:(Ui.Key.string "none")
             ~content:(Ui.Widget.empty ())
-            ~on_commit:(fun _ -> ())
+            ~on_event:(fun _ -> ())
             ()))
-    "swipe action accepted no actions";
+    "slidable accepted no panes";
   expect_invalid_argument
-    (fun () -> ignore (swipe_action ~label:"" Dismiss))
-    "swipe action accepted an empty enabled label";
+    (fun () -> ignore (S.action_pane ~motion:Behind ~actions:[] ()))
+    "slidable accepted an empty pane";
   List.iter
-    (fun border_radius ->
+    (fun value ->
        expect_invalid_argument
-         (fun () -> ignore (swipe_action ~border_radius Dismiss))
-         "swipe action accepted an invalid action border radius";
+         (fun () -> ignore (slidable_pane ~extent_ratio:value Behind [ action ]))
+         "slidable accepted an invalid extent ratio";
+       expect_invalid_argument
+         (fun () -> ignore (slidable_pane ~open_threshold:value Behind [ action ]))
+         "slidable accepted an invalid open threshold";
+       expect_invalid_argument
+         (fun () -> ignore (slidable_pane ~close_threshold:value Behind [ action ]))
+         "slidable accepted an invalid close threshold";
+       expect_invalid_argument
+         (fun () -> ignore (S.dismissible ~dismiss_threshold:value ()))
+         "slidable accepted an invalid dismiss threshold")
+    [ 0.; -1.; Float.nan; Float.infinity ];
+  List.iter
+    (fun build -> expect_invalid_argument build "slidable accepted threshold 1")
+    [ (fun () -> ignore (slidable_pane ~open_threshold:1. Behind [ action ]))
+    ; (fun () -> ignore (slidable_pane ~close_threshold:1. Behind [ action ]))
+    ; (fun () -> ignore (S.dismissible ~dismiss_threshold:1. ()))
+    ];
+  List.iter
+    (fun id ->
+       expect_invalid_argument
+         (fun () -> ignore (slidable_action id))
+         "slidable accepted an invalid action ID")
+    [ 0; -1; 0x1_0000_0000 ];
+  expect_invalid_argument
+    (fun () -> ignore (slidable_action ~flex:0 1))
+    "slidable accepted zero flex";
+  List.iter
+    (fun radius ->
+       expect_invalid_argument
+         (fun () -> ignore (slidable_action ~border_radius:radius 1))
+         "slidable accepted an invalid action radius")
+    [ -1.; Float.nan; Float.infinity ];
+  List.iter
+    (fun spacing ->
        expect_invalid_argument
          (fun () ->
             ignore
-              (Ui.Native_widget.Swipe_action.create
-                 ~start_action:(swipe_action Dismiss)
-                 ~clip_border_radius:border_radius
-                 ~content:(Ui.Widget.empty ())
-                 ~on_commit:(fun _ -> ())
+              (S.icon_label_action
+                 ~id:1
+                 ~background:slidable_background
+                 ~spacing
+                 ~icon:(Ui.Widget.empty ())
+                 ~label:"Archive"
                  ()))
-         "swipe action accepted an invalid host clip border radius")
-    [ -1.; Float.nan; Float.infinity ]
+         "slidable accepted invalid icon-label spacing")
+    [ -1.; Float.nan; Float.infinity ];
+  expect_invalid_argument
+    (fun () ->
+       ignore
+         (S.icon_label_action
+            ~id:1
+            ~background:slidable_background
+            ~icon:(Ui.Widget.empty ())
+            ~label:""
+            ()))
+    "slidable accepted an empty icon-label label";
+  List.iter
+    (fun duration ->
+       expect_invalid_argument
+         (fun () -> ignore (S.dismissible ~dismissal_duration_ms:duration ()))
+         "slidable accepted an invalid dismiss duration";
+       expect_invalid_argument
+         (fun () -> ignore (S.dismissible ~resize_duration_ms:duration ()))
+         "slidable accepted an invalid resize duration")
+    [ -1; 0x1_0000_0000 ];
+  let duplicate = slidable_action 7 in
+  expect_invalid_argument
+    (fun () ->
+       ignore
+         (S.create
+            ~key:(Ui.Key.string "duplicate")
+            ~start_action_pane:(slidable_pane Behind [ duplicate ])
+            ~end_action_pane:(slidable_pane Scroll [ duplicate ])
+            ~content:(Ui.Widget.empty ())
+            ~on_event:(fun _ -> ())
+            ()))
+    "slidable accepted duplicate action IDs";
+  List.iter
+    (fun group_tag ->
+       expect_invalid_argument
+         (fun () ->
+            ignore
+              (S.create
+                 ~key:(Ui.Key.string "group")
+                 ~group_tag
+                 ~start_action_pane:(slidable_pane Behind [ action ])
+                 ~content:(Ui.Widget.empty ())
+                 ~on_event:(fun _ -> ())
+                 ()))
+         "slidable accepted an invalid group tag")
+    [ ""; "\255" ]
 ;;
 
-let test_swipe_action_event_filtering () =
+let test_slidable_event_filtering () =
+  let module S = Ui.Native_widget.Slidable in
   let received = ref [] in
   let widget =
-    Ui.Native_widget.Swipe_action.create
-      ~start_action:(swipe_action Dismiss)
+    S.create
+      ~key:(Ui.Key.string "events")
+      ~start_action_pane:(slidable_pane Behind [ slidable_action 1 ])
       ~content:(Ui.Widget.empty ())
-      ~on_commit:(fun direction -> received := direction :: !received)
+      ~on_event:(fun event -> received := event :: !received)
       ()
   in
   let binding =
-    (let (Av v) = Ui.Widget.Private.view widget in
-     v.event_bindings).(0)
+    (let (Av view) = Ui.Widget.Private.view widget in
+     view.event_bindings).(0)
   in
   let invoke kind_id version event_id payload =
     Ui.Event.Handler.Private.invoke
       binding.handler
       (Native_event { kind_id; version; event_id; payload })
   in
-  invoke (native_kind_id 99) 1 (native_event_id 1) (Bytes.of_string "\000");
-  invoke (native_kind_id 2) 1 (native_event_id 1) (Bytes.of_string "\000");
-  invoke (native_kind_id 2) 2 (native_event_id 2) (Bytes.of_string "\000");
-  invoke (native_kind_id 2) 2 (native_event_id 1) Bytes.empty;
-  invoke (native_kind_id 2) 2 (native_event_id 1) (Bytes.of_string "\002");
-  check (!received = []) "malformed swipe native event was not ignored";
-  invoke (native_kind_id 2) 2 (native_event_id 1) (Bytes.of_string "\000");
+  invoke (native_kind_id 99) 3 S.action_pressed_event_id (Bytes.make 4 '\000');
+  invoke (native_kind_id 2) 2 S.action_pressed_event_id (Bytes.make 4 '\000');
+  invoke (native_kind_id 2) 3 (native_event_id 99) (Bytes.make 4 '\000');
+  invoke (native_kind_id 2) 3 S.action_pressed_event_id Bytes.empty;
+  invoke (native_kind_id 2) 3 S.action_pressed_event_id (Bytes.make 5 '\000');
+  invoke (native_kind_id 2) 3 S.action_pressed_event_id (Bytes.make 4 '\000');
+  invoke (native_kind_id 2) 3 S.dismissed_event_id Bytes.empty;
+  invoke (native_kind_id 2) 3 S.dismissed_event_id (Bytes.of_string "\002");
+  check (!received = []) "malformed slidable event was not ignored";
+  invoke
+    (native_kind_id 2)
+    3
+    S.action_pressed_event_id
+    (S.For_testing.encode_action_pressed 1);
+  check (!received = [ S.Action_pressed 1 ]) "valid slidable event was filtered";
   check
-    (!received = [ Ui.Native_widget.Swipe_action.Start_to_end ])
-    "valid swipe event was filtered"
+    (S.event_of_payload
+       (Native_event
+          { kind_id = native_kind_id 2
+          ; version = 3
+          ; event_id = S.dismissed_event_id
+          ; payload = S.For_testing.encode_dismissed Start
+          })
+     = Some (S.Dismissed Start))
+    "slidable event_of_payload"
+;;
+
+let test_slidable_auto_close_behavior_contract () =
+  let module A = Ui.Native_widget.Slidable_auto_close_behavior in
+  let widget =
+    A.create
+      ~key:(Ui.Key.string "auto-close")
+      ~close_when_opened:false
+      ~close_when_tapped:true
+      ~child:(Ui.Widget.text "List")
+      ()
+  in
+  let (Av view) = Ui.Widget.Private.view widget in
+  check (Array.length view.children = 1) "auto-close behavior child count";
+  check
+    (Ui.Widget.For_testing.text_content view.children.(0).widget = Some "List")
+    "auto-close behavior child";
+  (match view.node with
+   | Native_widget { kind_id; version; capabilities; payload } ->
+     check (kind_id = native_kind_id 8) "auto-close behavior kind ID";
+     check (version = 1) "auto-close behavior schema version";
+     check (Int64.equal capabilities 1L) "auto-close behavior capabilities";
+     let props = A.For_testing.decode_props_exn payload in
+     check (not props.close_when_opened) "auto-close opened policy";
+     check props.close_when_tapped "auto-close tapped policy"
+   | _ -> failwith "auto-close behavior native props");
+  let default_widget = A.create ~child:(Ui.Widget.empty ()) () in
+  let (Av default_view) = Ui.Widget.Private.view default_widget in
+  match default_view.node with
+  | Native_widget { payload; _ } ->
+    let props = A.For_testing.decode_props_exn payload in
+    check props.close_when_opened "auto-close opened default";
+    check props.close_when_tapped "auto-close tapped default"
+  | _ -> failwith "auto-close behavior native props"
 ;;
 
 let test_navigation_shell_contract_and_events () =
@@ -1610,9 +1810,10 @@ let () =
   test_scroll_view_cache_extent_horizontal ();
   test_scroll_view_cache_extent_wire_validation ();
   test_morphing_surface_contract ();
-  test_swipe_action_props_contract ();
-  test_swipe_action_omitted_direction_and_validation ();
-  test_swipe_action_event_filtering ();
+  test_slidable_props_children_and_events ();
+  test_slidable_defaults_all_motions_and_validation ();
+  test_slidable_event_filtering ();
+  test_slidable_auto_close_behavior_contract ();
   test_navigation_shell_contract_and_events ();
   test_message_composer_contract_and_custom_buttons ();
   test_message_composer_validation_and_event_filtering ();

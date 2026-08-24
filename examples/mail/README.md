@@ -17,7 +17,7 @@ The example includes:
   an explicit Settings placeholder;
 - a fixed, accessible Mail, Chat, Spaces, and Meet bottom bar whose non-Mail
   destinations are explicit local placeholders;
-- stable keyed inbox rows with bidirectional swipe actions in collapsed and
+- stable keyed inbox rows with multi-action Slidable panes in collapsed and
   expanded states;
 - a single-open inline outliner card with deterministic two-level summaries;
 - renderer-local row press feedback and bidirectional row-to-card morphing;
@@ -36,10 +36,10 @@ and the row/card surface timeline. Reduced motion resolves those transitions
 directly to their committed targets. Only settled visible ranges and discrete
 actions cross the typed native-widget boundary.
 
-Swipe start-to-end to Archive a message. Swipe end-to-start to Mark read or
-Mark unread according to the current row state. Both actions are also exposed
-as custom accessibility actions. Scroll near the loaded tail to append another
-deterministic page without resetting the current offset.
+Open the start Slidable pane to Archive or move a message to Trash; a full
+start-side dismissal archives it. Open the end pane to Mark read or Mark
+unread according to the current row state. Scroll near the loaded tail to
+append another deterministic page without resetting the current offset.
 
 Tap a collapsed row outside its star control to expand it inline. Expansion is
 a preview action: it does not mark the message read or open a route. Only one

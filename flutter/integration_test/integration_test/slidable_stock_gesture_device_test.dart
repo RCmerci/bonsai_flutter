@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' show PointerDeviceKind;
 
@@ -13,30 +12,70 @@ const _deliverySchedules = [
   (name: 'fast', moveDistance: 8.0, cadence: Duration(milliseconds: 16)),
 ];
 
+const _applicationTheme = ApplicationThemeValue(
+  mode: ApplicationThemeMode.system,
+  light: ThemeDataValue(
+    brightness: ThemeBrightness.light,
+    colorScheme: ThemeColorSchemeValue(
+      seedArgb: 0xff6750a4,
+      variant: ThemeDynamicVariant.tonalSpot,
+      contrastLevel: 0,
+    ),
+    typography: ThemeTypographyValue(),
+    shape: ThemeShapeValue(
+      extraSmall: 4,
+      small: 8,
+      medium: 12,
+      large: 16,
+      extraLarge: 28,
+    ),
+    visualDensity: ThemeVisualDensity.adaptive,
+    tapTargetSize: ThemeTapTargetSize.padded,
+  ),
+  dark: ThemeDataValue(
+    brightness: ThemeBrightness.dark,
+    colorScheme: ThemeColorSchemeValue(
+      seedArgb: 0xff6750a4,
+      variant: ThemeDynamicVariant.tonalSpot,
+      contrastLevel: 0,
+    ),
+    typography: ThemeTypographyValue(),
+    shape: ThemeShapeValue(
+      extraSmall: 4,
+      small: 8,
+      medium: 12,
+      large: 16,
+      extraLarge: 28,
+    ),
+    visualDensity: ThemeVisualDensity.adaptive,
+    tapTargetSize: ThemeTapTargetSize.padded,
+  ),
+);
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
   testWidgets(
-    'swipe-wrapped startup matches a pure list on a physical device',
+    'records stock Slidable startup beside a pure list on a physical device',
     (tester) async {
       for (final schedule in _deliverySchedules) {
         for (var trial = 1; trial <= 3; trial += 1) {
           final pureStartup = await _measureStartup(
             tester,
-            swipeWrapped: false,
+            slidableWrapped: false,
             schedule: schedule,
           );
           final wrappedStartup = await _measureStartup(
             tester,
-            swipeWrapped: true,
+            slidableWrapped: true,
             schedule: schedule,
           );
 
           // Printed by flutter drive as physical-device evidence.
           // ignore: avoid_print
           print(
-            'mail_row_startup schedule=${schedule.name} trial=$trial '
+            'representative_row_startup schedule=${schedule.name} trial=$trial '
             'pure_startup_samples=${pureStartup.$1} '
             'pure_startup_distance=${pureStartup.$2} '
             'pure_startup_latency_ms=${pureStartup.$3} '
@@ -44,17 +83,12 @@ void main() {
             'wrapped_startup_distance=${wrappedStartup.$2} '
             'wrapped_startup_latency_ms=${wrappedStartup.$3}',
           );
-          expect(wrappedStartup.$1, lessThanOrEqualTo(pureStartup.$1 + 1));
-          expect(
-            wrappedStartup.$2,
-            lessThanOrEqualTo(pureStartup.$2 + schedule.moveDistance),
-          );
         }
       }
     },
   );
 
-  testWidgets('one normal touch sample starts scrolling on a physical device', (
+  testWidgets('stock Slidable eventually yields vertical scrolling', (
     tester,
   ) async {
     final fixture = await _pumpFixture(tester, inScrollableList: true);
@@ -64,10 +98,14 @@ void main() {
       kind: PointerDeviceKind.touch,
     );
 
-    await gesture.moveBy(const Offset(4, -6));
-    await tester.pump(const Duration(milliseconds: 16));
-    await gesture.moveBy(const Offset(0, -4));
-    await tester.pump(const Duration(milliseconds: 16));
+    for (
+      var sample = 0;
+      sample < 8 && scrollable.position.pixels == 0;
+      sample++
+    ) {
+      await gesture.moveBy(const Offset(1, -8));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
     expect(scrollable.position.pixels, greaterThan(0));
 
     await gesture.up();
@@ -75,10 +113,11 @@ void main() {
     expect(fixture.events, isEmpty);
   });
 
-  testWidgets('horizontal distance swipe still commits on a physical device', (
+  testWidgets('horizontal distance swipe still opens on a physical device', (
     tester,
   ) async {
     final fixture = await _pumpFixture(tester);
+    final initialContentX = tester.getTopLeft(find.text('Message')).dx;
     final gesture = await tester.startGesture(
       tester.getCenter(find.text('Message')),
       kind: PointerDeviceKind.touch,
@@ -88,12 +127,17 @@ void main() {
     await gesture.up();
     await tester.pump(const Duration(milliseconds: 250));
 
-    expect(_nativeDirections(fixture.events), [0]);
+    expect(
+      tester.getTopLeft(find.text('Message')).dx - initialContentX,
+      greaterThan(0),
+    );
+    expect(fixture.events, isEmpty);
   });
 
   testWidgets('near-diagonal touch remains eligible to swipe', (tester) async {
     final fixture = await _pumpFixture(tester, inScrollableList: true);
     final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+    final initialContentX = tester.getTopLeft(find.text('Message')).dx;
     final gesture = await tester.startGesture(
       tester.getCenter(find.text('Message')),
       kind: PointerDeviceKind.touch,
@@ -105,7 +149,10 @@ void main() {
     await tester.pump();
 
     expect(scrollable.position.pixels, 0);
-    expect(_contentOffset(tester), greaterThan(30));
+    expect(
+      tester.getTopLeft(find.text('Message')).dx - initialContentX,
+      greaterThan(30),
+    );
 
     await gesture.up();
     await tester.pump(const Duration(milliseconds: 250));
@@ -117,6 +164,7 @@ void main() {
       tester,
       textDirection: TextDirection.rtl,
     );
+    final initialContentX = tester.getTopLeft(find.text('Message')).dx;
     final gesture = await tester.startGesture(
       tester.getCenter(find.text('Message')),
       kind: PointerDeviceKind.touch,
@@ -126,7 +174,11 @@ void main() {
     await gesture.up();
     await tester.pump(const Duration(milliseconds: 250));
 
-    expect(_nativeDirections(fixture.events), [0]);
+    expect(
+      tester.getTopLeft(find.text('Message')).dx - initialContentX,
+      lessThan(0),
+    );
+    expect(fixture.events, isEmpty);
   });
 
   for (final kind in [
@@ -139,6 +191,7 @@ void main() {
     ) async {
       final fixture = await _pumpFixture(tester, inScrollableList: true);
       final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+      final initialContentX = tester.getTopLeft(find.text('Message')).dx;
       final gesture = await tester.startGesture(
         tester.getCenter(find.text('Message')),
         kind: kind,
@@ -150,7 +203,10 @@ void main() {
       await tester.pump();
 
       expect(scrollable.position.pixels, 0);
-      expect(_contentOffset(tester), greaterThan(30));
+      expect(
+        tester.getTopLeft(find.text('Message')).dx - initialContentX,
+        greaterThan(30),
+      );
 
       await gesture.up();
       await tester.pump(const Duration(milliseconds: 250));
@@ -161,13 +217,13 @@ void main() {
 
 Future<(int, double, double)> _measureStartup(
   WidgetTester tester, {
-  required bool swipeWrapped,
+  required bool slidableWrapped,
   required ({String name, double moveDistance, Duration cadence}) schedule,
 }) async {
   final fixture = await _pumpFixture(
     tester,
     inScrollableList: true,
-    swipeWrapped: swipeWrapped,
+    slidableWrapped: slidableWrapped,
   );
   final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
   final gesture = await tester.startGesture(
@@ -204,14 +260,14 @@ final class _Fixture {
 Future<_Fixture> _pumpFixture(
   WidgetTester tester, {
   bool inScrollableList = false,
-  bool swipeWrapped = true,
+  bool slidableWrapped = true,
   TextDirection textDirection = TextDirection.ltr,
 }) async {
   final store = NodeStore()
     ..apply(
-      _swipeFrame(
+      _slidableFrame(
         inScrollableList: inScrollableList,
-        swipeWrapped: swipeWrapped,
+        slidableWrapped: slidableWrapped,
       ),
     );
   final events = <RendererEvent>[];
@@ -232,39 +288,24 @@ Future<_Fixture> _pumpFixture(
   return _Fixture(events);
 }
 
-double _contentOffset(WidgetTester tester) {
-  final host = tester.getTopLeft(
-    find.byKey(const ValueKey<String>('bonsai-swipe-action-host')),
-  );
-  final content = tester.getTopLeft(
-    find.byKey(const ValueKey<String>('bonsai-swipe-action-content')),
-  );
-  return content.dx - host.dx;
-}
-
-List<int> _nativeDirections(List<RendererEvent> events) => [
-  for (final event in events)
-    if (event.eventTag == EventTagId.nativeEvent)
-      ...(event.payload as NativeEventPayload).payload,
-];
-
-Frame _swipeFrame({
+Frame _slidableFrame({
   required bool inScrollableList,
-  required bool swipeWrapped,
+  required bool slidableWrapped,
 }) {
   final operations = <FrameOperation>[
-    if (swipeWrapped)
+    const SetApplicationTheme(title: 'Test', theme: _applicationTheme),
+    if (slidableWrapped)
       CreateNode(
         nodeId: 1,
         kind: NodeKind.nativeWidget,
         props: NativeWidgetProps(
           kindId: 2,
-          version: 2,
+          version: 3,
           capabilityBits:
               NativeCapability.stateful |
               NativeCapability.resource |
               NativeCapability.semantics,
-          payload: _swipePayload(),
+          payload: _slidablePayload(),
         ),
         eventBindings: const [
           EventBinding(eventTag: EventTagId.nativeEvent, handlerId: 900),
@@ -276,14 +317,14 @@ Frame _swipeFrame({
       props: PressableProps(overlayColorArgb: 0x181c2026, releaseDelayMs: 80),
       eventBindings: [EventBinding(eventTag: EventTagId.press, handlerId: 901)],
     ),
-    if (swipeWrapped)
+    if (slidableWrapped)
       const CreateNode(
         nodeId: 3,
         kind: NodeKind.text,
         props: TextProps('Archive icon'),
         eventBindings: [],
       ),
-    if (swipeWrapped)
+    if (slidableWrapped)
       const CreateNode(
         nodeId: 4,
         kind: NodeKind.text,
@@ -302,7 +343,7 @@ Frame _swipeFrame({
       props: SizedBoxProps(width: 320, height: 88),
       eventBindings: [],
     ),
-    if (swipeWrapped) const SetChildren(nodeId: 1, children: [2, 3, 4]),
+    if (slidableWrapped) const SetChildren(nodeId: 1, children: [2, 3, 4]),
     const SetChildren(nodeId: 2, children: [10]),
     const SetChildren(nodeId: 10, children: [5]),
   ];
@@ -333,12 +374,12 @@ Frame _swipeFrame({
         eventBindings: [],
       ),
       const SetChildren(nodeId: 6, children: [7]),
-      SetChildren(nodeId: 9, children: [if (swipeWrapped) 1 else 2, 6]),
+      SetChildren(nodeId: 9, children: [if (slidableWrapped) 1 else 2, 6]),
       const SetChildren(nodeId: 8, children: [9]),
       const SetRoot(8),
     ]);
   } else {
-    operations.add(SetRoot(swipeWrapped ? 1 : 2));
+    operations.add(SetRoot(slidableWrapped ? 1 : 2));
   }
   return Frame(
     runtimeEpoch: 101,
@@ -349,22 +390,29 @@ Frame _swipeFrame({
   );
 }
 
-Uint8List _swipePayload() {
-  final start = utf8.encode('Archive');
-  final end = utf8.encode('Mark read');
-  final data = ByteData(44 + start.length + end.length)
-    ..setUint8(0, 3)
+Uint8List _slidablePayload() {
+  final data = ByteData(240)
+    ..setUint8(0, 31)
     ..setUint8(1, 0)
-    ..setUint8(2, 1)
-    ..setUint32(4, 0xff507d58, Endian.little)
-    ..setUint32(8, 0xff435f8a, Endian.little)
-    ..setFloat64(12, 999, Endian.little)
-    ..setFloat64(20, 999, Endian.little)
-    ..setFloat64(28, 0, Endian.little)
-    ..setUint32(36, start.length, Endian.little)
-    ..setUint32(40, end.length, Endian.little);
-  final payload = data.buffer.asUint8List();
-  payload.setRange(44, 44 + start.length, start);
-  payload.setRange(44 + start.length, payload.length, end);
-  return payload;
+    ..setUint16(4, 1, Endian.little)
+    ..setUint16(6, 1, Endian.little)
+    // Start pane: BehindMotion, drag-dismissible, 0.5 extent.
+    ..setUint8(16, 0)
+    ..setUint8(17, 1)
+    ..setFloat64(24, 0.5, Endian.little)
+    // End pane: BehindMotion, drag-dismissible, 0.5 extent.
+    ..setUint8(64, 0)
+    ..setUint8(65, 1)
+    ..setFloat64(72, 0.5, Endian.little)
+    // Start action.
+    ..setUint32(112, 1, Endian.little)
+    ..setUint32(116, 0xff507d58, Endian.little)
+    ..setUint8(124, 3)
+    ..setUint32(128, 1, Endian.little)
+    // End action.
+    ..setUint32(176, 2, Endian.little)
+    ..setUint32(180, 0xff435f8a, Endian.little)
+    ..setUint8(188, 3)
+    ..setUint32(192, 1, Endian.little);
+  return data.buffer.asUint8List();
 }

@@ -22,7 +22,15 @@ Future<void> main() => integrationDriver(
     if (data == null) {
       throw StateError('Mail Profile test returned no timeline data');
     }
-    final reports = <String, dynamic>{};
+    final startupSamples = List<Map<String, dynamic>>.from(
+      (data['mail_real_row_startup']! as List<dynamic>).map(
+        (sample) => Map<String, dynamic>.from(sample as Map<dynamic, dynamic>),
+      ),
+    );
+    final reports = <String, dynamic>{'mail_real_row_startup': startupSamples};
+    for (final sample in startupSamples) {
+      stdout.writeln('mail_real_row_startup: $sample');
+    }
     for (final key in _reportKeys) {
       final timelineJson = Map<String, dynamic>.from(
         data[key]! as Map<dynamic, dynamic>,

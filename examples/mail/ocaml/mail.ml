@@ -431,6 +431,7 @@ let text_secondary = color 91 99 110
 let unread_surface = color 239 246 255
 let star_color = color 218 154 34
 let archive_surface = color 80 125 88
+let trash_surface = color 179 55 62
 
 let style ?size ?weight ?height ?color () =
   Ui.Style.Text_style.create
@@ -915,11 +916,16 @@ let expanded_mail_content ~toggle_star ~collapse ~reply ~open_message ~notice me
   |> Ui.Widget.with_test_id (Ui.Test_id.string (Printf.sprintf "mail-card-%d" message.id))
 ;;
 
-let with_swipe_host ~swipe_action message content =
+let with_slidable_host ~slidable_event message content =
   let archive_icon =
     icon ~size:24. ~color:surface 0xe091
     |> Ui.Widget.with_test_id
          (Ui.Test_id.string (Printf.sprintf "mail-swipe-archive-%d" message.id))
+  in
+  let trash_icon =
+    icon ~size:24. ~color:surface 0xe1b9
+    |> Ui.Widget.with_test_id
+         (Ui.Test_id.string (Printf.sprintf "mail-swipe-trash-%d" message.id))
   in
   let end_label, end_test_id =
     if message.read
@@ -930,29 +936,60 @@ let with_swipe_host ~swipe_action message content =
     icon ~size:24. ~color:surface 0xe3d0
     |> Ui.Widget.with_test_id (Ui.Test_id.string end_test_id)
   in
-  let start_action =
-    Ui.Native_widget.Swipe_action.action
+  let archive_action =
+    Ui.Native_widget.Slidable.icon_label_action
+      ~id:1
       ~label:"Archive"
       ~background:archive_surface
       ~border_radius:0.
-      ~disposition:Dismiss
       ~icon:archive_icon
       ()
   in
+  let trash_action =
+    Ui.Native_widget.Slidable.icon_label_action
+      ~id:2
+      ~label:"Trash"
+      ~background:trash_surface
+      ~border_radius:0.
+      ~icon:trash_icon
+      ()
+  in
   let end_action =
-    Ui.Native_widget.Swipe_action.action
+    Ui.Native_widget.Slidable.icon_label_action
+      ~id:3
       ~label:end_label
       ~background:primary
       ~border_radius:0.
-      ~disposition:Rebound
       ~icon:end_icon
       ()
   in
-  Ui.Native_widget.Swipe_action.create_with_handler
-    ~start_action
-    ~end_action
+  let start_action_pane =
+    Ui.Native_widget.Slidable.action_pane
+      ~extent_ratio:0.5
+      ~motion:Drawer
+      ~dismissible:
+        (Ui.Native_widget.Slidable.dismissible
+           ~dismiss_threshold:0.3
+           ~dismissal_duration_ms:220
+           ~resize_duration_ms:0
+           ())
+      ~actions:[ archive_action; trash_action ]
+      ()
+  in
+  let end_action_pane =
+    Ui.Native_widget.Slidable.action_pane
+      ~extent_ratio:0.3
+      ~motion:Behind
+      ~actions:[ end_action ]
+      ()
+  in
+  Ui.Native_widget.Slidable.create_with_handler
+    ~key:(Ui.Key.int message.id)
+    ~group_tag:"mail-inbox"
+    ~start_action_pane
+    ~end_action_pane
     ~content
-    ~on_commit:swipe_action
+    ~on_event:slidable_event
     ()
   |> Ui.Widget.with_test_id
        (Ui.Test_id.string (Printf.sprintf "mail-swipe-%d" message.id))
@@ -964,7 +1001,7 @@ let render_mail_row
       ~collapse
       ~reply
       ~open_message
-      ~swipe_action
+      ~slidable_event
       ~expanded
       ~notice
       message
@@ -983,7 +1020,7 @@ let render_mail_row
            message)
       ()
   in
-  with_swipe_host ~swipe_action message content
+  with_slidable_host ~slidable_event message content
   |> Ui.Widget.Keyed.create ~key:(Ui.Key.int message.id)
 ;;
 
@@ -1066,24 +1103,30 @@ let mail_row handlers set_state message_id row_data _graph =
             })
         | _ -> Bonsai.Effect.Ignore)
   in
-  let swipe_action =
+  let slidable_event =
     Driver.Handler.create
       handlers
-      ~name:"mail-swipe-action"
+      ~name:"mail-slidable-event"
       ~equal:equal_dependencies
       dependencies
       ~f:(fun (set_state, message_id) payload ->
-        match Ui.Native_widget.Swipe_action.direction_of_payload payload with
+        match Ui.Native_widget.Slidable.event_of_payload payload with
         | None -> Bonsai.Effect.Ignore
-        | Some Start_to_end ->
+        | Some (Dismissed Start | Action_pressed 1) ->
           set_state (fun state ->
             update_message state message_id (fun message ->
               { message with mailbox = Archived })
             |> fun state -> clear_expansion_if state message_id)
-        | Some End_to_start ->
+        | Some (Action_pressed 2) ->
           set_state (fun state ->
             update_message state message_id (fun message ->
-              { message with read = not message.read })))
+              { message with mailbox = Trash })
+            |> fun state -> clear_expansion_if state message_id)
+        | Some (Action_pressed 3) ->
+          set_state (fun state ->
+            update_message state message_id (fun message ->
+              { message with read = not message.read }))
+        | Some (Dismissed End | Action_pressed _) -> Bonsai.Effect.Ignore)
   in
   let events =
     Bonsai.Cont.map2
@@ -1092,9 +1135,9 @@ let mail_row handlers set_state message_id row_data _graph =
          (Bonsai.Cont.both collapse reply)
          ~f:(fun (toggle_star, expand) (collapse, reply) ->
            toggle_star, expand, collapse, reply))
-      (Bonsai.Cont.both open_message swipe_action)
-      ~f:(fun (toggle_star, expand, collapse, reply) (open_message, swipe_action) ->
-        toggle_star, expand, collapse, reply, open_message, swipe_action)
+      (Bonsai.Cont.both open_message slidable_event)
+      ~f:(fun (toggle_star, expand, collapse, reply) (open_message, slidable_event) ->
+        toggle_star, expand, collapse, reply, open_message, slidable_event)
   in
   Bonsai.Cont.map2
     row_data
@@ -1102,7 +1145,7 @@ let mail_row handlers set_state message_id row_data _graph =
     ~f:
       (fun
         (message, expanded, notice)
-        (toggle_star, expand, collapse, reply, open_message, swipe_action)
+        (toggle_star, expand, collapse, reply, open_message, slidable_event)
       ->
       render_mail_row
         ~toggle_star
@@ -1110,7 +1153,7 @@ let mail_row handlers set_state message_id row_data _graph =
         ~collapse
         ~reply
         ~open_message
-        ~swipe_action
+        ~slidable_event
         ~expanded
         ~notice
         message)

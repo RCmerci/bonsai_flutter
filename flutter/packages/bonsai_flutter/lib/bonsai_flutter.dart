@@ -10,7 +10,7 @@ export 'src/native_widget/expandable_message_composer.dart';
 export 'src/native_widget/navigation_shell.dart';
 export 'src/native_widget/morphing_surface.dart';
 export 'src/native_widget/message_composer.dart';
-export 'src/native_widget/swipe_action.dart';
+export 'src/native_widget/slidable.dart';
 export 'src/protocol/binary_codec.dart';
 export 'src/protocol/event_batch.dart';
 export 'src/protocol/frame.dart';

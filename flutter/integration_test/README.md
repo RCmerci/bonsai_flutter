@@ -49,6 +49,28 @@ The driver performs two warm-up repetitions and measures twenty repetitions
 for each route and swipe interaction group. It writes the verified frame
 summary to `build/mail_profile_summary.json`.
 
+The Mail Profile run also records startup samples, distance, and latency for
+the real OCaml Mail row in `mail_real_row_startup`.
+
+Compare stock `flutter_slidable` gesture startup with a pure reference fixture
+on the same physical iPhone:
+
+```sh
+bonsai-flutter exec --profile=profile -- \
+  flutter drive --profile --no-dds \
+  -d <physical-device-id> \
+  --target integration_test/slidable_stock_gesture_device_test.dart \
+  --driver test_driver/slidable_stock_gesture_device_test.dart \
+  --timeout 600
+```
+
+The test records three trials for slow, normal, and fast vertical delivery
+schedules against otherwise identical pure and stock-Slidable-wrapped
+representative rows. It also verifies eventual vertical scrolling, horizontal
+and near-diagonal opening, RTL logical start, and non-touch pointer behavior.
+The emitted `representative_row_startup` lines complement the real Mail-row
+samples and are characterization evidence; parity is not a gate.
+
 Run the modal-sheet keyboard choreography gate in Profile mode on a physical
 iPhone:
 

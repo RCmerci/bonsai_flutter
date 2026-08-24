@@ -13,6 +13,7 @@ module Color : sig
   val rgb : red:int -> green:int -> blue:int -> t
 
   module Private : sig
+    val of_argb32 : int32 -> t
     val to_argb32 : t -> int32
   end
 end

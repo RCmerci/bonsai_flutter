@@ -111,8 +111,8 @@ typed extension decoder runs. Revision-scoped handler rules still reject stale
 or replaced handlers.
 
 The Gallery contains the complete custom card example and its real FFI test.
-Navigation shell, swipe action, and morphing surface use the extension
-boundary. Pressable and the virtual sliver family are core protocol nodes.
+Navigation shell, Slidable, and morphing surface use the extension boundary.
+Pressable and the virtual sliver family are core protocol nodes.
 
 ## Built-in varied-extent sliver
 
@@ -212,45 +212,52 @@ It emits the standard `Press` event with `Event.Payload.Unit` only after a
 completed activation. The host contributes one tap action while retaining
 descriptive child semantics and independent nested-button semantics.
 
-## Built-in swipe action
+## Built-in Slidable
 
-`Native_widget.Swipe_action` is built-in extension kind `2`, schema version
-`2`. It uses the Stateful, Resource, and Semantics capabilities and always
-receives three children in this order:
+`Native_widget.Slidable` is built-in extension kind `2`, schema version `3`.
+It uses the Stateful, Resource, and Semantics capabilities and is rendered with
+the stock `flutter_slidable` `4.0.3` package through its public API. Version `2`
+is unsupported; the previous custom swipe renderer has no compatibility path.
+
+A Slidable requires a stable application key and at least one action pane.
+Each pane has one of `Behind`, `Drawer`, `Scroll`, or `Stretch` motion, one or
+more actions, an extent ratio, optional open and close thresholds, and optional
+dismissal behavior. Actions have positive IDs unique across both panes and map
+to `CustomSlidableAction`. `action ~child` accepts arbitrary OCaml widget
+content. `icon_label_action ~icon ~label` builds the common vertical icon and
+label arrangement without introducing a separate wire type.
+
+Children always use this order:
 
 1. row content;
-2. start-direction icon;
-3. end-direction icon.
+2. start-pane action children in metadata order; and
+3. end-pane action children in metadata order.
 
-At least one direction must be enabled. Each enabled action supplies an
-accessibility label, ARGB background, non-negative finite border radius,
-`Dismiss` or `Rebound` disposition, and an icon child. The action border radius
-defaults to `999` for capsule actions; use `0` when the action surface must
-cover square row corners without gaps. The host also accepts a non-negative
-finite `clip_border_radius`, which defaults to `0` and clips the content, action
-surface, and translation animation together.
+The 16-byte header stores global flags, axis, two action counts, and the UTF-8
+group-tag length. Each present pane contributes a 48-byte record containing
+motion, dismissal and threshold flags, extent ratio, optional thresholds,
+dismiss threshold, and dismissal and resize durations. Each action contributes
+a 64-byte record containing its ID, background and optional foreground colors,
+enabled and auto-close flags, optional alignment and padding, flex, and border
+radius. Pane and action records precede the optional group tag. Both decoders
+reject unknown flags and enums, nonzero reserved data, invalid numbers,
+duplicate or zero action IDs, malformed UTF-8, inconsistent pane counts,
+incorrect child counts, truncation, and trailing bytes.
 
-The fixed payload header stores enabled flags, both dispositions, a reserved
-byte, two colors, both action border radii, the host clip border radius, and two
-UTF-8 byte lengths; the labels follow the 44-byte header. Both decoders reject
-unknown flags or dispositions, nonzero reserved data, invalid radii, invalid
-UTF-8, empty enabled labels, incorrect exact lengths, and incorrect child
-counts.
+Native event `1` carries a positive little-endian `uint32` action ID. Native
+event `2` carries one logical dismissal-side byte (`0` start, `1` end).
+`event_of_payload` validates kind, version, event ID, and exact event length
+before exposing `Action_pressed` or `Dismissed`. Dropping a host suppresses a
+late dismissal callback.
 
-Flutter owns all pointer deltas, gesture-arena arbitration, clipping, action
-geometry, threshold haptics, and settle frames. No drag delta crosses FFI. The
-active action surface fills the host and remains fixed beneath the translated
-foreground, without an inset between the two layers. Its icon stays centered
-in a fixed 96-pixel edge zone. The translated foreground rounds only the
-physical edge exposed by the active action. Action content paints at 72 percent
-scale below the commit threshold and at full scale after crossing it, in sync
-with the one-shot threshold haptic.
-After a dismiss or rebound reaches its commit point, Flutter emits native event
-`1` with a one-byte logical direction (`0` start-to-end, `1` end-to-start).
-Dropping the node disposes its controller and suppresses late emission.
+Flutter owns package controllers, gesture arbitration, motion, auto-close,
+dismissal, and settle frames locally; drag progress does not cross FFI. The
+first release intentionally omits imperative controllers, ratio notifications,
+and asynchronous `confirmDismiss`. It uses the stock package gesture behavior,
+including its accepted iPhone vertical-scroll startup regression.
 
-The host exposes the same actions through custom Semantics actions. Decorative
-action icons are excluded from independent semantics and hit testing.
-`create_with_handler` attaches a driver-managed raw handler for Bonsai effects;
-`direction_of_payload` performs the same kind, version, event, length, and
-direction validation before application state is updated.
+`Native_widget.Slidable_auto_close_behavior` is built-in extension kind `8`,
+schema version `1`, with the Stateful capability. It receives exactly one child
+and maps its two policy flags to `SlidableAutoCloseBehavior.closeWhenOpened`
+and `closeWhenTapped`. Descendant Slidables coordinate through their optional
+group tags. This wrapper emits no events.

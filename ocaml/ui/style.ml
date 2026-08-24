@@ -29,6 +29,7 @@ module Color = struct
   let rgb ~red ~green ~blue = argb ~alpha:255 ~red ~green ~blue
 
   module Private = struct
+    let of_argb32 value = value
     let to_argb32 t = t
   end
 end

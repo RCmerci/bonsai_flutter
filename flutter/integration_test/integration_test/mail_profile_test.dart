@@ -8,6 +8,12 @@ import 'package:integration_test/integration_test.dart';
 
 const _iterations = 20;
 const _interactionY = 180.0;
+const _startupTrials = 3;
+const _startupSchedules = [
+  (name: 'slow', moveDistance: 1.0, cadence: Duration(milliseconds: 16)),
+  (name: 'normal', moveDistance: 4.0, cadence: Duration(milliseconds: 16)),
+  (name: 'fast', moveDistance: 8.0, cadence: Duration(milliseconds: 16)),
+];
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized()
@@ -21,6 +27,10 @@ void main() {
     );
     await _waitForPresent(tester, find.text('Juniper Works'));
     await tester.pumpAndSettle();
+
+    binding.reportData ??= <String, dynamic>{};
+    binding.reportData!['mail_real_row_startup'] =
+        await _recordRealMailRowStartup(tester);
 
     await _warmInteractions(tester);
 
@@ -82,6 +92,52 @@ void main() {
       }
     }, reportKey: 'mail_virtual_append');
   });
+}
+
+Future<List<Map<String, Object>>> _recordRealMailRowStartup(
+  WidgetTester tester,
+) async {
+  final samples = <Map<String, Object>>[];
+  final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+
+  for (final schedule in _startupSchedules) {
+    for (var trial = 1; trial <= _startupTrials; trial += 1) {
+      scrollable.position.jumpTo(0);
+      await tester.pump();
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('Juniper Works')),
+      );
+      final stopwatch = Stopwatch()..start();
+      var startupSample = -1;
+      var startupDistance = 0.0;
+
+      for (var sample = 1; sample <= 48; sample += 1) {
+        await gesture.moveBy(Offset(0, -schedule.moveDistance));
+        await tester.pump(schedule.cadence);
+        startupDistance += schedule.moveDistance;
+        if (scrollable.position.pixels > 0) {
+          startupSample = sample;
+          break;
+        }
+      }
+
+      stopwatch.stop();
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(startupSample, greaterThan(0));
+      samples.add({
+        'schedule': schedule.name,
+        'trial': trial,
+        'startup_samples': startupSample,
+        'startup_distance': startupDistance,
+        'startup_latency_ms': stopwatch.elapsedMicroseconds / 1000,
+      });
+    }
+  }
+
+  scrollable.position.jumpTo(0);
+  await tester.pumpAndSettle();
+  return samples;
 }
 
 Future<void> _warmInteractions(WidgetTester tester) async {
@@ -173,8 +229,11 @@ Future<void> _commitRowSwipe(WidgetTester tester) async {
   await gesture.moveBy(const Offset(-120, 0));
   await tester.pump();
   await gesture.up();
-  await _waitForPresent(tester, find.text('Juniper Works'));
+  final action = find.textContaining('Mark ');
+  await _waitForPresent(tester, action);
+  await tester.tap(action);
   await tester.pumpAndSettle();
+  expect(find.text('Juniper Works'), findsOneWidget);
 }
 
 Future<void> _cancelDrawer(WidgetTester tester) async {

@@ -14,7 +14,7 @@ import 'sliver_virtual_host.dart';
 import '../native_widget/morphing_surface.dart';
 import '../native_widget/message_composer.dart';
 import '../native_widget/navigation_shell.dart';
-import '../native_widget/swipe_action.dart';
+import '../native_widget/slidable.dart';
 import '../navigation/navigation_host.dart';
 import '../protocol/event_batch.dart';
 import '../protocol/frame.dart';
@@ -53,7 +53,8 @@ final class WidgetRegistry {
         NativeWidgetRegistry(capabilityBits: NativeCapability.core);
     if (nativeWidgets == null) {
       registerMorphingSurface(extensions);
-      registerSwipeAction(extensions);
+      registerSlidable(extensions);
+      registerSlidableAutoCloseBehavior(extensions);
       registerNavigationShell(extensions);
       registerMessageComposer(extensions);
       registerExpandableMessageComposer(extensions);

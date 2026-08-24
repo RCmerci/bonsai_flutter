@@ -7,11 +7,12 @@ import '../renderer/renderer_resource_store.dart';
 import '../store/node_store.dart';
 
 abstract final class NativeWidgetKind {
-  static const int swipeAction = 2;
+  static const int slidable = 2;
   static const int navigationShell = 3;
   static const int morphingSurface = 5;
   static const int messageComposer = 6;
   static const int expandableMessageComposer = 7;
+  static const int slidableAutoCloseBehavior = 8;
 }
 
 abstract final class NativeCapability {
