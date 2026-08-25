@@ -41,7 +41,7 @@ On 2026-08-24, the user confirmed that no out-of-repository workflow invokes
 `tool/eio_worker_spike/build_macos_complete_object.sh` directly. The final
 unknown external consumer is therefore resolved.
 
-## Proposal
+## Decision
 
 Delete the five host-only files:
 
@@ -86,27 +86,24 @@ requires redesigning the probe closure and deciding which production service
 behaviors belong in the physical-device gate. That broader testing decision is
 not required to remove the unreachable host chain.
 
-## Acceptance criteria
+## Consequences
 
-- The five host-only files listed in the proposal no longer exist.
-- All iPhoneOS files currently under `tool/eio_worker_spike` remain unchanged
-  and `tool/test_ios_deployment_target_contract.sh` passes.
-- `ocaml/test/worker_runtime_tests.ml`,
-  `ocaml/test/bounded_mailbox_tests.ml`,
-  `ocaml/test/worker_eio_service_tests.ml`, and
-  `ocaml/test/worker_eio_phase3_tests.ml` continue to pass through the normal
-  OCaml test gate.
-- `make ci-contract`, `make ci-ocaml`, and `spec-dev-tool check --all` pass.
-- No replacement script, compatibility path, or generated artifact is added.
-
-## Risks
-
+- The five host-only files named in the decision are removed. No replacement
+  script, compatibility path, migration layer, or generated artifact is added.
+- The retained Eio backend, provider, device callback, C and Objective-C hosts,
+  iPhoneOS build scripts, and iPhoneOS test scripts remain unchanged.
+- The viewport compile fixture now constructs the required Material color
+  scheme and passes the required brightness and color-scheme arguments to
+  `Ui.Theme.material`. This repairs an unrelated stale fixture exposed by the
+  repository verification sweep without changing the public API.
+- `tool/test_ios_deployment_target_contract.sh`, `make ci-contract`,
+  `dune build @all`, `dune runtest`, the viewport type check, formatting and
+  protocol-generation checks, the release benchmark build, opam lint, and all
+  eleven example consumer build and test gates pass after removal.
+- `make ci-ocaml` is not invoked directly because its installation prerequisite
+  executes `opam install .`, which violates the repository's Git-pin safety
+  rule. Every non-install command owned by the target passes when run directly.
 - Developers lose a small standalone macOS reproduction for the original Eio
   backend and provider prototype.
 - The retained iPhoneOS probe continues to validate prototype modules rather
   than the production Worker implementation.
-
-## Questions
-
-- None. On 2026-08-24, the user confirmed that no out-of-repository workflow
-  invokes the two host scripts directly.

@@ -4,6 +4,12 @@ let handler = Ui.Event.Handler.create (fun _ -> ())
 let row = Ui.Widget.text "Row"
 let keyed_row = Ui.Widget.Keyed.create ~key:(Ui.Key.string "row") row
 
+let color_scheme =
+  Ui.Theme.Color_scheme.from_seed
+    ~color:(Ui.Style.Color.rgb ~red:32 ~green:96 ~blue:160)
+    ()
+;;
+
 let vertical =
   Ui.Widget.Scroll_view.vertical ~on_scroll:handler [ Ui.Widget.Sliver.list [ row ] ] ()
   |> Ui.Widget.Viewport.Vertical.padding ~insets:(Ui.Layout.Edge_insets.all 8.)
@@ -11,7 +17,8 @@ let vertical =
   |> Ui.Widget.Viewport.Vertical.semantics
        ~properties:(Ui.Semantics.create ~label:"Feed" ())
   |> Ui.Widget.Viewport.Vertical.safe_area ~minimum:(Ui.Layout.Edge_insets.all 4.)
-  |> Ui.Widget.Viewport.Vertical.theme ~data:(Ui.Theme.material ())
+  |> Ui.Widget.Viewport.Vertical.theme
+       ~data:(Ui.Theme.material ~brightness:Ui.Style.Brightness.Light ~color_scheme ())
 ;;
 
 let horizontal =

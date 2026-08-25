@@ -1653,9 +1653,13 @@ end
 
 module Expandable_message_composer = struct
   let kind_id = ID.Native_widget.Kind_id.of_int 7
-  let version = 1
+  let version = 2
   let text_changed_event_id = ID.Native_widget.Event_id.of_int 1
   let button_pressed_event_id = ID.Native_widget.Event_id.of_int 2
+
+  type fab_presentation =
+    | Extended
+    | Compact
 
   type button_position =
     | Leading
@@ -1693,6 +1697,7 @@ module Expandable_message_composer = struct
 
   type props =
     { enabled : bool
+    ; fab_presentation : fab_presentation
     ; fab_label : string
     ; fab_tooltip : string
     ; animation_duration_ms : int
@@ -1773,6 +1778,11 @@ module Expandable_message_composer = struct
     | Ease_in_out -> 3
   ;;
 
+  let presentation_byte = function
+    | Extended -> 0
+    | Compact -> 1
+  ;;
+
   let position_byte = function
     | Leading -> 0
     | Trailing -> 1
@@ -1813,6 +1823,7 @@ module Expandable_message_composer = struct
     Little_endian.set_u32 payload 8 label_length;
     Little_endian.set_u32 payload 12 fab_tooltip_length;
     Little_endian.set_u32 payload 16 hint_length;
+    Bytes.set payload 20 (Char.chr (presentation_byte props.fab_presentation));
     let offset = 24 in
     Bytes.blit_string props.fab_label 0 payload offset label_length;
     let offset = offset + label_length in
@@ -1863,15 +1874,25 @@ module Expandable_message_composer = struct
       let label_length = Little_endian.get_u32_unsigned payload 8 in
       let fab_tooltip_length = Little_endian.get_u32_unsigned payload 12 in
       let hint_length = Little_endian.get_u32_unsigned payload 16 in
+      let presentation_value = Char.code (Bytes.get payload 20) in
       if flags land lnot 1 <> 0
       then Error "expandable message composer flags contain unknown bits"
-      else if Bytes.get_int32_le payload 20 <> 0l
+      else if
+        Bytes.get_uint8 payload 21 <> 0
+        || Bytes.get_uint8 payload 22 <> 0
+        || Bytes.get_uint8 payload 23 <> 0
       then Error "expandable message composer reserved bytes must be zero"
       else if max_lines = 0
       then Error "expandable message composer max_lines must be positive"
       else if button_count > 0xfffe
       then Error "expandable message composer button count exceeds child bound"
       else
+        let* fab_presentation =
+          decode_enum
+            presentation_value
+            [ 0, Extended; 1, Compact ]
+            "invalid expandable message composer FAB presentation"
+        in
         let* curve =
           decode_enum
             curve_value
@@ -1975,6 +1996,7 @@ module Expandable_message_composer = struct
             let* buttons = decode_buttons button_count offset [] [] in
             Ok
               { enabled = flags land 1 <> 0
+              ; fab_presentation
               ; fab_label
               ; fab_tooltip
               ; animation_duration_ms = duration
@@ -2020,6 +2042,7 @@ module Expandable_message_composer = struct
 
   let make_props
         enabled
+        fab_presentation
         fab_label
         fab_tooltip
         animation_duration_ms
@@ -2030,6 +2053,7 @@ module Expandable_message_composer = struct
     =
     let props =
       { enabled
+      ; fab_presentation
       ; fab_label
       ; fab_tooltip
       ; animation_duration_ms
@@ -2050,6 +2074,7 @@ module Expandable_message_composer = struct
   let create
         ?key
         ?(enabled = true)
+        ~fab_presentation
         ~fab_label
         ~fab_tooltip
         ~fab_icon
@@ -2067,6 +2092,7 @@ module Expandable_message_composer = struct
       ~props:
         (make_props
            enabled
+           fab_presentation
            fab_label
            fab_tooltip
            animation_duration_ms
@@ -2082,6 +2108,7 @@ module Expandable_message_composer = struct
   let create_with_handler
         ?key
         ?(enabled = true)
+        ~fab_presentation
         ~fab_label
         ~fab_tooltip
         ~fab_icon
@@ -2099,6 +2126,7 @@ module Expandable_message_composer = struct
       ~props:
         (make_props
            enabled
+           fab_presentation
            fab_label
            fab_tooltip
            animation_duration_ms
@@ -2130,6 +2158,7 @@ module Expandable_message_composer = struct
 
     type nonrec props = props =
       { enabled : bool
+      ; fab_presentation : fab_presentation
       ; fab_label : string
       ; fab_tooltip : string
       ; animation_duration_ms : int

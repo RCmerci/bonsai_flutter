@@ -382,6 +382,10 @@ module Message_composer : sig
 end
 
 module Expandable_message_composer : sig
+  type fab_presentation =
+    | Extended
+    | Compact
+
   type button_position =
     | Leading
     | Trailing
@@ -408,8 +412,8 @@ module Expandable_message_composer : sig
   val text_changed_event_id : Bonsai_flutter_spec.Id.Native_widget.event_id
   val button_pressed_event_id : Bonsai_flutter_spec.Id.Native_widget.event_id
 
-  (** Defines one composer action. The extended-FAB icon is always the first
-      native child; button children follow this metadata order. *)
+  (** Defines one composer action. The FAB icon is always the first native
+      child; button children follow this metadata order. *)
   val button
     :  id:int
     -> tooltip:string
@@ -421,16 +425,22 @@ module Expandable_message_composer : sig
     -> unit
     -> button
 
-  (** Creates a native-local extended FAB for
-      [Material.scaffold ~floating_action_button]. The scaffold owns placement;
-      its default is [End_float], and callers may select another standard
+  (** Creates a native-local FAB for
+      [Material.scaffold ~floating_action_button]. [Extended] renders an
+      extended FAB; [Compact] renders the standard icon-only FAB, not the small
+      FAB. [fab_label] remains required for both presentations, and
+      [fab_tooltip] is their accessible label. The scaffold owns placement; its
+      default is [End_float], and callers may select another standard
       floating-action-button location. The composer occupies the scaffold's
       single floating-action-button slot and presents a modal bottom-sheet
-      message composer when pressed. Presentation and dismissal never require
-      an OCaml frame. Duration zero is the reduced-motion contract. *)
+      message composer when pressed. With a stable logical key, changing only
+      the presentation retains the modal route, exact draft, controller, and
+      focus state. Presentation and dismissal never require an OCaml frame.
+      Duration zero is the reduced-motion contract. *)
   val create
     :  ?key:Key.t
     -> ?enabled:bool
+    -> fab_presentation:fab_presentation
     -> fab_label:string
     -> fab_tooltip:string
     -> fab_icon:Widget.t
@@ -446,6 +456,7 @@ module Expandable_message_composer : sig
   val create_with_handler
     :  ?key:Key.t
     -> ?enabled:bool
+    -> fab_presentation:fab_presentation
     -> fab_label:string
     -> fab_tooltip:string
     -> fab_icon:Widget.t
@@ -472,6 +483,7 @@ module Expandable_message_composer : sig
 
     type props =
       { enabled : bool
+      ; fab_presentation : fab_presentation
       ; fab_label : string
       ; fab_tooltip : string
       ; animation_duration_ms : int

@@ -116,6 +116,7 @@ void main() {
         find.byType(FloatingActionButton),
       );
       expect(fab.isExtended, isTrue);
+      expect(fab.heroTag, isNull);
       expect(fab.onPressed, isNotNull);
       expect(
         tester
@@ -124,6 +125,87 @@ void main() {
             .hasAction(SemanticsAction.tap),
         isTrue,
       );
+    },
+  );
+
+  testWidgets(
+    'compact presentation is one standard icon-only FAB with shared semantics',
+    (tester) async {
+      await tester.pumpWidget(
+        _app(
+          child: _composer(
+            fabPresentation: ExpandableMessageComposerFabPresentation.compact,
+          ),
+        ),
+      );
+
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+      expect(find.byIcon(Icons.add), findsOneWidget);
+      expect(find.text('Capture'), findsNothing);
+      expect(find.byType(TextField), findsNothing);
+      final fab = tester.widget<FloatingActionButton>(
+        find.byType(FloatingActionButton),
+      );
+      expect(fab.isExtended, isFalse);
+      expect(fab.mini, isFalse);
+      expect(fab.heroTag, isNull);
+      expect(
+        tester.getSize(find.byType(FloatingActionButton)),
+        const Size(56, 56),
+      );
+      final semantics = tester
+          .getSemantics(find.byType(FloatingActionButton))
+          .getSemanticsData();
+      expect(semantics.label, 'Open capture');
+      expect(semantics.hasAction(SemanticsAction.tap), isTrue);
+    },
+  );
+
+  testWidgets(
+    'same-key collapsed presentation updates retain State without side effects',
+    (tester) async {
+      var presentation = ExpandableMessageComposerFabPresentation.extended;
+      final changes = <String>[];
+      late StateSetter setHostState;
+      await tester.pumpWidget(
+        _app(
+          child: StatefulBuilder(
+            builder: (context, setState) {
+              setHostState = setState;
+              return _composer(
+                fabPresentation: presentation,
+                onChanged: changes.add,
+              );
+            },
+          ),
+        ),
+      );
+      final composerState = tester.state(
+        find.byType(ExpandableMessageComposer),
+      );
+
+      for (final next in [
+        ExpandableMessageComposerFabPresentation.compact,
+        ExpandableMessageComposerFabPresentation.extended,
+        ExpandableMessageComposerFabPresentation.compact,
+        ExpandableMessageComposerFabPresentation.extended,
+      ]) {
+        setHostState(() => presentation = next);
+        await tester.pump();
+        expect(
+          tester.state(find.byType(ExpandableMessageComposer)),
+          same(composerState),
+        );
+        expect(find.byType(FloatingActionButton), findsOneWidget);
+        expect(
+          tester
+              .widget<FloatingActionButton>(find.byType(FloatingActionButton))
+              .isExtended,
+          next == ExpandableMessageComposerFabPresentation.extended,
+        );
+        expect(find.byType(BottomSheet), findsNothing);
+      }
+      expect(changes, isEmpty);
     },
   );
 
@@ -523,6 +605,94 @@ void main() {
     },
   );
 
+  testWidgets(
+    'presentation update during the modal retains route draft controller focus and actions',
+    (tester) async {
+      var presentation = ExpandableMessageComposerFabPresentation.extended;
+      final changes = <String>[];
+      final presses = <(int, String)>[];
+      late StateSetter setHostState;
+      await tester.pumpWidget(
+        _app(
+          child: StatefulBuilder(
+            builder: (context, setState) {
+              setHostState = setState;
+              return _composer(
+                fabPresentation: presentation,
+                animationDuration: Duration.zero,
+                buttons: const [
+                  MessageComposerButton(
+                    id: 1,
+                    tooltip: 'Send exact draft',
+                    style: MessageComposerButtonStyle.filled,
+                    child: Text('SEND'),
+                  ),
+                ],
+                onChanged: changes.add,
+                onButtonPressed: (id, text) => presses.add((id, text)),
+              );
+            },
+          ),
+        ),
+      );
+      final composerState = tester.state(
+        find.byType(ExpandableMessageComposer),
+      );
+      await _expand(tester);
+      const draft = '  保留 👩🏽‍💻\nexact whitespace  ';
+      await tester.enterText(find.byType(TextField), draft);
+      await tester.pump();
+      final textField = tester.widget<TextField>(find.byType(TextField));
+      final controller = textField.controller;
+      final focusNode = textField.focusNode;
+      final route = ModalRoute.of(tester.element(find.byType(MessageComposer)));
+      expect(route, isNotNull);
+      expect(focusNode!.hasFocus, isTrue);
+      expect(changes, [draft]);
+
+      setHostState(
+        () => presentation = ExpandableMessageComposerFabPresentation.compact,
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        tester.state(find.byType(ExpandableMessageComposer)),
+        same(composerState),
+      );
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(
+        ModalRoute.of(tester.element(find.byType(MessageComposer))),
+        same(route),
+      );
+      final updatedTextField = tester.widget<TextField>(find.byType(TextField));
+      expect(updatedTextField.controller, same(controller));
+      expect(updatedTextField.focusNode, same(focusNode));
+      expect(updatedTextField.controller!.text, draft);
+      expect(updatedTextField.focusNode!.hasFocus, isTrue);
+      expect(
+        tester
+            .widget<IconButton>(find.widgetWithText(IconButton, 'SEND'))
+            .onPressed,
+        isNotNull,
+      );
+      expect(changes, [draft]);
+      expect(presses, isEmpty);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+      expect(
+        tester
+            .widget<FloatingActionButton>(find.byType(FloatingActionButton))
+            .isExtended,
+        isFalse,
+      );
+      expect(find.text('Capture'), findsNothing);
+    },
+  );
+
   testWidgets('changing the widget key resets local state and draft', (
     tester,
   ) async {
@@ -691,6 +861,7 @@ void main() {
   ) async {
     final props = ExpandableMessageComposerProps(
       enabled: true,
+      fabPresentation: ExpandableMessageComposerFabPresentation.extended,
       fabLabel: 'Capture',
       fabTooltip: 'Open capture',
       animationDurationMilliseconds: 0,
@@ -744,9 +915,111 @@ void main() {
     expect(utf8.decode(payload.sublist(4)), '  native 🚀  ');
   });
 
+  testWidgets(
+    'registry presentation-only UpdateProps retains the same composer State',
+    (tester) async {
+      ExpandableMessageComposerProps propsFor(
+        ExpandableMessageComposerFabPresentation presentation,
+      ) => ExpandableMessageComposerProps(
+        enabled: true,
+        fabPresentation: presentation,
+        fabLabel: 'Capture',
+        fabTooltip: 'Open capture',
+        animationDurationMilliseconds: 0,
+        animationCurve: AnimationCurveValue.easeOut,
+        maxLines: 5,
+        hintText: 'Ask from OCaml',
+        buttons: const [],
+      );
+
+      final extended = propsFor(
+        ExpandableMessageComposerFabPresentation.extended,
+      );
+      final compact = propsFor(
+        ExpandableMessageComposerFabPresentation.compact,
+      );
+      final store = _nativeStore(extended, children: const [(2, 'OCAML ICON')]);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            floatingActionButton: BonsaiFlutterView(
+              store: store,
+              registry: WidgetRegistry.standard(),
+            ),
+          ),
+        ),
+      );
+      final composerState = tester.state(
+        find.byType(ExpandableMessageComposer),
+      );
+      expect(
+        tester
+            .widget<FloatingActionButton>(find.byType(FloatingActionButton))
+            .isExtended,
+        isTrue,
+      );
+
+      store.apply(
+        Frame(
+          runtimeEpoch: 1,
+          baseRevision: store.revision,
+          targetRevision: store.revision + 1,
+          kind: FrameKind.incremental,
+          operations: [
+            UpdateProps(nodeId: 1, props: compact.toNativeWidgetProps()),
+          ],
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        tester.state(find.byType(ExpandableMessageComposer)),
+        same(composerState),
+      );
+      expect(
+        tester
+            .widget<FloatingActionButton>(find.byType(FloatingActionButton))
+            .isExtended,
+        isFalse,
+      );
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+    },
+  );
+
+  testWidgets('registry accepts only schema version 2', (tester) async {
+    final props = ExpandableMessageComposerProps(
+      enabled: true,
+      fabPresentation: ExpandableMessageComposerFabPresentation.extended,
+      fabLabel: 'Capture',
+      fabTooltip: 'Open capture',
+      animationDurationMilliseconds: 0,
+      animationCurve: AnimationCurveValue.easeOut,
+      maxLines: 5,
+      hintText: '',
+      buttons: const [],
+    );
+    expect(props.toNativeWidgetProps().version, 2);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BonsaiFlutterView(
+          store: _nativeStore(
+            props,
+            children: const [(2, 'OCAML ICON')],
+            schemaVersion: 1,
+          ),
+          registry: WidgetRegistry.standard(),
+        ),
+      ),
+    );
+    expect(find.byType(UnsupportedNativeWidget), findsOneWidget);
+    expect(find.textContaining('version 1'), findsOneWidget);
+  });
+
   testWidgets('registry rejects child-count mismatch', (tester) async {
     final props = ExpandableMessageComposerProps(
       enabled: true,
+      fabPresentation: ExpandableMessageComposerFabPresentation.extended,
       fabLabel: 'Capture',
       fabTooltip: 'Open capture',
       animationDurationMilliseconds: 200,
@@ -772,6 +1045,7 @@ void main() {
     () {
       const props = ExpandableMessageComposerProps(
         enabled: false,
+        fabPresentation: ExpandableMessageComposerFabPresentation.compact,
         fabLabel: '捕获 ✨',
         fabTooltip: '打开 🚀',
         animationDurationMilliseconds: 65535,
@@ -790,6 +1064,32 @@ void main() {
         ],
       );
       expect(ExpandableMessageComposerProps.decode(props.encode()), props);
+      expect(props.encode()[20], 1);
+      expect(
+        props,
+        isNot(
+          const ExpandableMessageComposerProps(
+            enabled: false,
+            fabPresentation: ExpandableMessageComposerFabPresentation.extended,
+            fabLabel: '捕获 ✨',
+            fabTooltip: '打开 🚀',
+            animationDurationMilliseconds: 65535,
+            animationCurve: AnimationCurveValue.easeInOut,
+            maxLines: 65535,
+            hintText: '写点什么 👋',
+            buttons: [
+              MessageComposerButtonProps(
+                id: 0xffffffff,
+                tooltip: '发送 🚀',
+                position: MessageComposerButtonPosition.leading,
+                visibility: MessageComposerButtonVisibility.whenNonEmpty,
+                style: MessageComposerButtonStyle.filled,
+                enabled: false,
+              ),
+            ],
+          ),
+        ),
+      );
       final valid = props.encode();
       final malformed = <Uint8List>[
         Uint8List(23),
@@ -798,7 +1098,10 @@ void main() {
         Uint8List.fromList(valid)
           ..[4] = 0
           ..[5] = 0,
-        Uint8List.fromList(valid)..[20] = 1,
+        Uint8List.fromList(valid)..[20] = 2,
+        Uint8List.fromList(valid)..[21] = 1,
+        Uint8List.fromList(valid)..[22] = 1,
+        Uint8List.fromList(valid)..[23] = 1,
         Uint8List.fromList(valid)..[24] = 0xff,
         Uint8List.fromList([...valid, 0]),
         Uint8List.fromList(valid.sublist(0, valid.length - 1)),
@@ -812,6 +1115,7 @@ void main() {
       expect(
         () => ExpandableMessageComposerProps(
           enabled: true,
+          fabPresentation: ExpandableMessageComposerFabPresentation.extended,
           fabLabel: '',
           fabTooltip: '',
           animationDurationMilliseconds: -1,
@@ -828,6 +1132,7 @@ void main() {
   test('direct widget rejects invalid public constructor values', () {
     expect(
       () => ExpandableMessageComposer(
+        fabPresentation: ExpandableMessageComposerFabPresentation.extended,
         fabLabel: '',
         fabTooltip: 'Open',
         fabIcon: const Icon(Icons.add),
@@ -837,6 +1142,7 @@ void main() {
     );
     expect(
       () => ExpandableMessageComposer(
+        fabPresentation: ExpandableMessageComposerFabPresentation.extended,
         fabLabel: 'Capture',
         fabTooltip: '',
         fabIcon: const Icon(Icons.add),
@@ -847,6 +1153,7 @@ void main() {
     );
     expect(
       () => ExpandableMessageComposer(
+        fabPresentation: ExpandableMessageComposerFabPresentation.extended,
         fabLabel: 'Capture',
         fabTooltip: 'Open',
         fabIcon: const Icon(Icons.add),
@@ -861,6 +1168,8 @@ void main() {
 ExpandableMessageComposer _composer({
   Key? key = _outerKey,
   bool enabled = true,
+  ExpandableMessageComposerFabPresentation fabPresentation =
+      ExpandableMessageComposerFabPresentation.extended,
   String fabLabel = 'Capture',
   Duration animationDuration = const Duration(milliseconds: 200),
   List<MessageComposerButton> buttons = const [],
@@ -869,6 +1178,7 @@ ExpandableMessageComposer _composer({
 }) => ExpandableMessageComposer(
   key: key,
   enabled: enabled,
+  fabPresentation: fabPresentation,
   fabLabel: fabLabel,
   fabTooltip: 'Open capture',
   fabIcon: const Icon(Icons.add),
@@ -903,13 +1213,23 @@ FocusNode _editorFocus(WidgetTester tester) =>
 NodeStore _nativeStore(
   ExpandableMessageComposerProps props, {
   required List<(int, String)> children,
+  int? schemaVersion,
 }) {
+  final encodedProps = props.toNativeWidgetProps();
+  final nativeProps = schemaVersion == null
+      ? encodedProps
+      : NativeWidgetProps(
+          kindId: encodedProps.kindId,
+          version: schemaVersion,
+          capabilityBits: encodedProps.capabilityBits,
+          payload: encodedProps.payload,
+        );
   final operations = <FrameOperation>[
     const SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
     CreateNode(
       nodeId: 1,
       kind: NodeKind.nativeWidget,
-      props: props.toNativeWidgetProps(),
+      props: nativeProps,
       eventBindings: const [
         EventBinding(eventTag: EventTagId.nativeEvent, handlerId: 9),
       ],

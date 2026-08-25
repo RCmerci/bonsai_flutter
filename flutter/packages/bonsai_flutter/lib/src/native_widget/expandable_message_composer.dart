@@ -10,10 +10,13 @@ import 'message_composer.dart';
 import 'message_composer_surface_scope.dart';
 import 'native_widget_registry.dart';
 
+enum ExpandableMessageComposerFabPresentation { extended, compact }
+
 @immutable
 final class ExpandableMessageComposerProps {
   const ExpandableMessageComposerProps({
     required this.enabled,
+    required this.fabPresentation,
     required this.fabLabel,
     required this.fabTooltip,
     required this.animationDurationMilliseconds,
@@ -27,6 +30,7 @@ final class ExpandableMessageComposerProps {
   static const _buttonHeaderLength = 12;
 
   final bool enabled;
+  final ExpandableMessageComposerFabPresentation fabPresentation;
   final String fabLabel;
   final String fabTooltip;
   final int animationDurationMilliseconds;
@@ -61,7 +65,8 @@ final class ExpandableMessageComposerProps {
       ..setUint16(6, buttons.length, Endian.little)
       ..setUint32(8, label.length, Endian.little)
       ..setUint32(12, fabTooltipBytes.length, Endian.little)
-      ..setUint32(16, hint.length, Endian.little);
+      ..setUint32(16, hint.length, Endian.little)
+      ..setUint8(20, fabPresentation.index);
     var offset = _headerLength;
     payload.setRange(offset, offset + label.length, label);
     offset += label.length;
@@ -88,7 +93,7 @@ final class ExpandableMessageComposerProps {
 
   NativeWidgetProps toNativeWidgetProps() => NativeWidgetProps(
     kindId: NativeWidgetKind.expandableMessageComposer,
-    version: 1,
+    version: 2,
     capabilityBits: NativeCapability.stateful | NativeCapability.semantics,
     payload: encode(),
   );
@@ -124,7 +129,14 @@ final class ExpandableMessageComposerProps {
         'Expandable message composer button count exceeds child bound',
       );
     }
-    if (data.getUint32(20, Endian.little) != 0) {
+    final fabPresentation = _enumValue(
+      ExpandableMessageComposerFabPresentation.values,
+      data.getUint8(20),
+      'FAB presentation',
+    );
+    if (data.getUint8(21) != 0 ||
+        data.getUint8(22) != 0 ||
+        data.getUint8(23) != 0) {
       throw const FormatException(
         'Expandable message composer reserved bytes must be zero',
       );
@@ -227,6 +239,7 @@ final class ExpandableMessageComposerProps {
     }
     return ExpandableMessageComposerProps(
       enabled: flags & 1 != 0,
+      fabPresentation: fabPresentation,
       fabLabel: fabLabel,
       fabTooltip: fabTooltip,
       animationDurationMilliseconds: duration,
@@ -296,6 +309,7 @@ final class ExpandableMessageComposerProps {
   bool operator ==(Object other) =>
       other is ExpandableMessageComposerProps &&
       other.enabled == enabled &&
+      other.fabPresentation == fabPresentation &&
       other.fabLabel == fabLabel &&
       other.fabTooltip == fabTooltip &&
       other.animationDurationMilliseconds == animationDurationMilliseconds &&
@@ -307,6 +321,7 @@ final class ExpandableMessageComposerProps {
   @override
   int get hashCode => Object.hash(
     enabled,
+    fabPresentation,
     fabLabel,
     fabTooltip,
     animationDurationMilliseconds,
@@ -340,8 +355,8 @@ void registerExpandableMessageComposer(NativeWidgetRegistry registry) {
   registry.register<ExpandableMessageComposerProps>(
     NativeWidgetRegistration(
       kindId: NativeWidgetKind.expandableMessageComposer,
-      minVersion: 1,
-      maxVersion: 1,
+      minVersion: 2,
+      maxVersion: 2,
       capabilityBits: NativeCapability.stateful | NativeCapability.semantics,
       decodeProps: ExpandableMessageComposerProps.decode,
       factory: (context) {
@@ -354,6 +369,7 @@ void registerExpandableMessageComposer(NativeWidgetRegistry registry) {
         }
         return ExpandableMessageComposer(
           enabled: context.props.enabled,
+          fabPresentation: context.props.fabPresentation,
           fabLabel: context.props.fabLabel,
           fabTooltip: context.props.fabTooltip,
           fabIcon: context.children.first,
@@ -396,10 +412,14 @@ void registerExpandableMessageComposer(NativeWidgetRegistry registry) {
   );
 }
 
-/// An extended FAB for [Scaffold.floatingActionButton] that presents a modal
-/// message composer.
+/// An extended or standard icon-only FAB for [Scaffold.floatingActionButton]
+/// that presents a modal message composer.
+///
+/// [fabLabel] remains required for both presentations. Compact presentation
+/// uses the standard icon-only FAB rather than [FloatingActionButton.small].
 final class ExpandableMessageComposer extends StatefulWidget {
   ExpandableMessageComposer({
+    required this.fabPresentation,
     required this.fabLabel,
     required this.fabTooltip,
     required this.fabIcon,
@@ -456,6 +476,7 @@ final class ExpandableMessageComposer extends StatefulWidget {
   }
 
   final bool enabled;
+  final ExpandableMessageComposerFabPresentation fabPresentation;
   final String fabLabel;
   final String fabTooltip;
   final Widget fabIcon;
@@ -592,15 +613,10 @@ final class _ExpandableMessageComposerState
   Widget build(BuildContext context) =>
       _sheetRoute == null ? _buildFab() : const SizedBox.shrink();
 
-  Widget _buildFab() => Tooltip(
-    message: widget.fabTooltip,
-    child: Semantics(
-      label: widget.fabTooltip,
-      button: true,
-      enabled: widget.enabled,
-      onTap: widget.enabled ? _beginExpansion : null,
-      child: ExcludeSemantics(
-        child: FloatingActionButton.extended(
+  Widget _buildFab() {
+    final fab = switch (widget.fabPresentation) {
+      ExpandableMessageComposerFabPresentation.extended =>
+        FloatingActionButton.extended(
           heroTag: null,
           onPressed: widget.enabled ? _beginExpansion : null,
           icon: widget.fabIcon,
@@ -609,9 +625,23 @@ final class _ExpandableMessageComposerState
             child: Text(widget.fabLabel, maxLines: 1),
           ),
         ),
+      ExpandableMessageComposerFabPresentation.compact => FloatingActionButton(
+        heroTag: null,
+        onPressed: widget.enabled ? _beginExpansion : null,
+        child: widget.fabIcon,
       ),
-    ),
-  );
+    };
+    return Tooltip(
+      message: widget.fabTooltip,
+      child: Semantics(
+        label: widget.fabTooltip,
+        button: true,
+        enabled: widget.enabled,
+        onTap: widget.enabled ? _beginExpansion : null,
+        child: ExcludeSemantics(child: fab),
+      ),
+    );
+  }
 }
 
 final class _ExpandableComposerSheet extends StatefulWidget {

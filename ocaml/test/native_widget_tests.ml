@@ -1559,12 +1559,50 @@ let expandable_message_composer_button
     ()
 ;;
 
+let (_ :
+      ?key:Ui.Key.t
+      -> ?enabled:bool
+      -> fab_presentation:Ui.Native_widget.Expandable_message_composer.fab_presentation
+      -> fab_label:string
+      -> fab_tooltip:string
+      -> fab_icon:Ui.Widget.t
+      -> ?animation_duration_ms:int
+      -> ?animation_curve:Ui.Animation.Curve.t
+      -> ?max_lines:int
+      -> ?hint_text:string
+      -> buttons:Ui.Native_widget.Expandable_message_composer.button list
+      -> on_event:(Ui.Native_widget.Expandable_message_composer.event -> unit)
+      -> unit
+      -> Ui.Widget.t)
+  =
+  Ui.Native_widget.Expandable_message_composer.create
+;;
+
+let (_ :
+      ?key:Ui.Key.t
+      -> ?enabled:bool
+      -> fab_presentation:Ui.Native_widget.Expandable_message_composer.fab_presentation
+      -> fab_label:string
+      -> fab_tooltip:string
+      -> fab_icon:Ui.Widget.t
+      -> ?animation_duration_ms:int
+      -> ?animation_curve:Ui.Animation.Curve.t
+      -> ?max_lines:int
+      -> ?hint_text:string
+      -> buttons:Ui.Native_widget.Expandable_message_composer.button list
+      -> on_event:Ui.Event.Handler.t
+      -> unit
+      -> Ui.Widget.t)
+  =
+  Ui.Native_widget.Expandable_message_composer.create_with_handler
+;;
+
 let expandable_message_composer_payload widget =
   let (Av view) = Ui.Widget.Private.view widget in
   match view.node with
   | Native_widget { kind_id; version; capabilities; payload } ->
     check (kind_id = native_kind_id 7) "expandable composer kind ID";
-    check (version = 1) "expandable composer schema version";
+    check (version = 2) "expandable composer schema version";
     check (Int64.equal capabilities 5L) "expandable composer capabilities";
     payload
   | _ -> failwith "expandable composer native props"
@@ -1591,6 +1629,7 @@ let test_expandable_message_composer_contract_and_events () =
     Ui.Native_widget.Expandable_message_composer.create
       ~key:(Ui.Key.string "expandable-composer")
       ~enabled:false
+      ~fab_presentation:Extended
       ~fab_label:"Capture ✨"
       ~fab_tooltip:"Open capture 🚀"
       ~fab_icon:(Ui.Widget.text "capture-icon")
@@ -1621,6 +1660,7 @@ let test_expandable_message_composer_contract_and_events () =
     |> Ui.Native_widget.Expandable_message_composer.For_testing.decode_props_exn
   in
   check (not props.enabled) "expandable composer enabled";
+  check (props.fab_presentation = Extended) "expandable FAB presentation";
   check (String.equal props.fab_label "Capture ✨") "expandable FAB label";
   check (String.equal props.fab_tooltip "Open capture 🚀") "expandable FAB tooltip";
   check (props.animation_duration_ms = 375) "expandable animation duration";
@@ -1642,7 +1682,7 @@ let test_expandable_message_composer_contract_and_events () =
   in
   invoke
     (native_kind_id 7)
-    1
+    2
     Ui.Native_widget.Expandable_message_composer.text_changed_event_id
     (Bytes.of_string "  hello 👋  ");
   let button_payload = Bytes.make 16 (Char.chr 0) in
@@ -1650,7 +1690,7 @@ let test_expandable_message_composer_contract_and_events () =
   Bytes.blit_string "  send  🚀" 0 button_payload 4 12;
   invoke
     (native_kind_id 7)
-    1
+    2
     Ui.Native_widget.Expandable_message_composer.button_pressed_event_id
     button_payload;
   check
@@ -1662,7 +1702,7 @@ let test_expandable_message_composer_contract_and_events () =
     "expandable composer typed raw-text events";
   let payload_event event_id payload =
     Ui.Native_widget.Expandable_message_composer.event_of_payload
-      (Native_event { kind_id = native_kind_id 7; version = 1; event_id; payload })
+      (Native_event { kind_id = native_kind_id 7; version = 2; event_id; payload })
   in
   check
     (payload_event
@@ -1672,13 +1712,14 @@ let test_expandable_message_composer_contract_and_events () =
     "expandable event_of_payload";
   List.iter
     (fun (kind_id, version, event_id, payload) -> invoke kind_id version event_id payload)
-    [ native_kind_id 6, 1, native_event_id 1, Bytes.of_string "wrong kind"
-    ; native_kind_id 7, 2, native_event_id 1, Bytes.of_string "wrong version"
-    ; native_kind_id 7, 1, native_event_id 9, Bytes.empty
-    ; native_kind_id 7, 1, native_event_id 2, Bytes.make 3 (Char.chr 0)
-    ; native_kind_id 7, 1, native_event_id 2, Bytes.make 4 (Char.chr 0)
+    [ native_kind_id 6, 2, native_event_id 1, Bytes.of_string "wrong kind"
+    ; native_kind_id 7, 1, native_event_id 1, Bytes.of_string "old version"
+    ; native_kind_id 7, 3, native_event_id 1, Bytes.of_string "wrong version"
+    ; native_kind_id 7, 2, native_event_id 9, Bytes.empty
+    ; native_kind_id 7, 2, native_event_id 2, Bytes.make 3 (Char.chr 0)
+    ; native_kind_id 7, 2, native_event_id 2, Bytes.make 4 (Char.chr 0)
     ; ( native_kind_id 7
-      , 1
+      , 2
       , native_event_id 1
       , Bytes.of_string (String.make 1 (Char.chr 255)) )
     ];
@@ -1687,6 +1728,7 @@ let test_expandable_message_composer_contract_and_events () =
 
 let test_expandable_message_composer_validation_and_malformed_props () =
   let create
+        ?(fab_presentation = Ui.Native_widget.Expandable_message_composer.Extended)
         ?(fab_label = "Capture")
         ?(fab_tooltip = "Open capture")
         ?(animation_duration_ms = 200)
@@ -1697,6 +1739,7 @@ let test_expandable_message_composer_validation_and_malformed_props () =
         ()
     =
     Ui.Native_widget.Expandable_message_composer.create
+      ~fab_presentation
       ~fab_label
       ~fab_tooltip
       ~fab_icon:(Ui.Widget.empty ())
@@ -1752,6 +1795,33 @@ let test_expandable_message_composer_validation_and_malformed_props () =
     (fun () -> ignore (create ~buttons:[ duplicate; duplicate ] ()))
     "expandable composer accepted duplicate button IDs";
   let valid = expandable_message_composer_payload (create ()) in
+  let compact =
+    expandable_message_composer_payload (create ~fab_presentation:Compact ())
+  in
+  let compact_props =
+    Ui.Native_widget.Expandable_message_composer.For_testing.decode_props_exn compact
+  in
+  check (Bytes.get_uint8 valid 20 = 0) "extended presentation byte";
+  check (Bytes.get_uint8 compact 20 = 1) "compact presentation byte";
+  check (compact_props.fab_presentation = Compact) "compact presentation round trip";
+  let handler_widget =
+    Ui.Native_widget.Expandable_message_composer.create_with_handler
+      ~fab_presentation:Compact
+      ~fab_label:"Capture"
+      ~fab_tooltip:"Open capture"
+      ~fab_icon:(Ui.Widget.empty ())
+      ~buttons:[]
+      ~on_event:(Ui.Event.Handler.create (fun _ -> ()))
+      ()
+  in
+  let handler_props =
+    handler_widget
+    |> expandable_message_composer_payload
+    |> Ui.Native_widget.Expandable_message_composer.For_testing.decode_props_exn
+  in
+  check
+    (handler_props.fab_presentation = Compact)
+    "create_with_handler compact presentation";
   let invalid_payloads =
     [ Bytes.sub valid 0 23
     ; Bytes.cat valid (Bytes.make 1 (Char.chr 0))
@@ -1762,7 +1832,16 @@ let test_expandable_message_composer_validation_and_malformed_props () =
        Bytes.set bytes 1 (Char.chr 4);
        bytes)
     ; (let bytes = Bytes.copy valid in
-       Bytes.set bytes 20 (Char.chr 1);
+       Bytes.set bytes 20 (Char.chr 2);
+       bytes)
+    ; (let bytes = Bytes.copy valid in
+       Bytes.set bytes 21 (Char.chr 1);
+       bytes)
+    ; (let bytes = Bytes.copy valid in
+       Bytes.set bytes 22 (Char.chr 1);
+       bytes)
+    ; (let bytes = Bytes.copy valid in
+       Bytes.set bytes 23 (Char.chr 1);
        bytes)
     ; (let bytes = Bytes.copy valid in
        Bytes.set bytes 4 (Char.chr 0);

@@ -164,11 +164,15 @@ Dropping an open shell cancels pending post-frame work.
 ## Built-in expandable message composer
 
 `Native_widget.Expandable_message_composer` is built-in extension kind `7`,
-schema version `1`, with Stateful and Semantics capabilities. It starts as one
-real Material extended FAB and presents `MessageComposer` in a Material 3 modal
-bottom sheet without an OCaml event or frame. The native Flutter `State` owns
-the modal route, text controller, focus node, staged draft, dismissal lifecycle,
-renderer-resource propagation, and background pointer and semantics gating.
+schema version `2`, with Stateful and Semantics capabilities. The required
+`fab_presentation` selects `Extended`, a real Material extended FAB, or
+`Compact`, the standard icon-only FAB (not the small FAB). Both presentations
+open `MessageComposer` in a Material 3 modal bottom sheet without an OCaml event
+or frame. `fab_label` remains required, non-empty, and encoded for both
+presentations; `fab_tooltip` is their accessible label. The native Flutter
+`State` owns the modal route, text controller, focus node, staged draft,
+dismissal lifecycle, renderer-resource propagation, and background pointer and
+semantics gating.
 
 Pass the widget to `Material.scaffold ~floating_action_button`; do not use
 `bottom_navigation_bar`. The scaffold owns the button's margins, safe-area
@@ -179,20 +183,22 @@ docked location. The composer occupies the scaffold's single FAB slot. If a
 page has another FAB, product code must explicitly choose which action owns the
 slot; multi-action composition is a separate component concern.
 
-The first logical child is always the extended-FAB icon. Each remaining child
+The first logical child is always the FAB icon. Each remaining child
 corresponds in order to one encoded composer button. Both protocol boundaries
 require exactly `1 + button_count` children. Native event `1` carries the exact
 UTF-8 editor text. Event `2` carries a positive little-endian `uint32` button ID
 followed by the exact UTF-8 editor text; the framework never trims whitespace.
 
-The version-1 payload begins with a 24-byte header: enabled flags, animation
+The version-2 payload begins with a 24-byte header: enabled flags, animation
 curve, `uint16` duration in milliseconds, positive `uint16` maximum lines,
 `uint16` button count, three `uint32` byte lengths for FAB label, FAB tooltip,
-and hint text, then four reserved zero bytes. Those three UTF-8 strings follow,
-then each button uses a 12-byte ID/position/visibility/style/enabled/tooltip-
-length header followed by its UTF-8 tooltip. Both decoders reject unknown flags
-or enums, nonzero reserved data, invalid or empty required strings, invalid or
-duplicate button IDs, truncation, child-count mismatch, and trailing bytes.
+and hint text, one FAB-presentation byte (`0` extended, `1` compact), and three
+reserved zero bytes. Those three UTF-8 strings follow, then each button uses a
+12-byte ID/position/visibility/style/enabled/tooltip-length header followed by
+its UTF-8 tooltip. Version `1` is not registered or decoded. Both version-2
+decoders reject unknown flags or enums, nonzero reserved data, invalid or empty
+required strings, invalid or duplicate button IDs, truncation, child-count
+mismatch, and trailing bytes.
 
 Standard motion defaults to 200 milliseconds with an ease-out curve and
 requests focus only after the bottom-sheet entrance completes. Duration zero
@@ -202,6 +208,11 @@ maximum width, and keyboard/safe-area padding. Downward swipe, scrim tap, and
 Escape dismiss and unfocus without clearing the controller draft. Disablement
 dismisses to the disabled FAB, while a changed logical key removes the old
 route and creates fresh native-local state.
+
+Changing only `fab_presentation` with a stable logical key updates the collapsed
+FAB descendant without replacing the outer composer State. An active route,
+exact draft, controller, and focus node remain mounted; the selected collapsed
+presentation appears after dismissal.
 
 The modal sheet is the sole visible compose surface. Its embedded
 `MessageComposer` paints no additional background, outline, or rounded card;
