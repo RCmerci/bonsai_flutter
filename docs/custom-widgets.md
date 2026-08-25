@@ -170,6 +170,15 @@ bottom sheet without an OCaml event or frame. The native Flutter `State` owns
 the modal route, text controller, focus node, staged draft, dismissal lifecycle,
 renderer-resource propagation, and background pointer and semantics gating.
 
+Pass the widget to `Material.scaffold ~floating_action_button`; do not use
+`bottom_navigation_bar`. The scaffold owns the button's margins, safe-area
+avoidance, directionality, and relationship with a real bottom navigation bar.
+The default location is `End_float`, and callers may use the existing
+`floating_action_button_location` parameter for another standard floating or
+docked location. The composer occupies the scaffold's single FAB slot. If a
+page has another FAB, product code must explicitly choose which action owns the
+slot; multi-action composition is a separate component concern.
+
 The first logical child is always the extended-FAB icon. Each remaining child
 corresponds in order to one encoded composer button. Both protocol boundaries
 require exactly `1 + button_count` children. Native event `1` carries the exact

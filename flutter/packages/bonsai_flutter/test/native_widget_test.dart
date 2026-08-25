@@ -128,7 +128,6 @@ void main() {
     final decoded = EventBatchCodec.decode(EventBatchCodec.encode(batch));
     expect(decoded.events.single.payload, batch.events.single.payload);
   });
-
 }
 
 Frame _nativeFrame({int capabilityBits = 0, Uint8List? payload}) => Frame(

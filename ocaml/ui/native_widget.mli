@@ -421,9 +421,13 @@ module Expandable_message_composer : sig
     -> unit
     -> button
 
-  (** Creates a native-local extended FAB that presents a modal bottom-sheet
-      message composer. Presentation and dismissal never require an OCaml
-      frame. Duration zero is the reduced-motion contract. *)
+  (** Creates a native-local extended FAB for
+      [Material.scaffold ~floating_action_button]. The scaffold owns placement;
+      its default is [End_float], and callers may select another standard
+      floating-action-button location. The composer occupies the scaffold's
+      single floating-action-button slot and presents a modal bottom-sheet
+      message composer when pressed. Presentation and dismissal never require
+      an OCaml frame. Duration zero is the reduced-motion contract. *)
   val create
     :  ?key:Key.t
     -> ?enabled:bool

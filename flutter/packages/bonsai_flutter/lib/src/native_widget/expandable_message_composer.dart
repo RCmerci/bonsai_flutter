@@ -396,7 +396,8 @@ void registerExpandableMessageComposer(NativeWidgetRegistry registry) {
   );
 }
 
-/// A framework-owned extended FAB that presents a modal message composer.
+/// An extended FAB for [Scaffold.floatingActionButton] that presents a modal
+/// message composer.
 final class ExpandableMessageComposer extends StatefulWidget {
   ExpandableMessageComposer({
     required this.fabLabel,
@@ -588,19 +589,8 @@ final class _ExpandableMessageComposerState
   }
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom),
-    child: SizedBox(
-      height: 72,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Align(
-          alignment: AlignmentDirectional.bottomEnd,
-          child: _sheetRoute == null ? _buildFab() : const SizedBox.shrink(),
-        ),
-      ),
-    ),
-  );
+  Widget build(BuildContext context) =>
+      _sheetRoute == null ? _buildFab() : const SizedBox.shrink();
 
   Widget _buildFab() => Tooltip(
     message: widget.fabTooltip,

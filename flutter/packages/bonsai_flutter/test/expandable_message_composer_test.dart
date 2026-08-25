@@ -14,6 +14,97 @@ const _outerKey = ValueKey('expandable-composer');
 
 void main() {
   testWidgets(
+    'collapsed composer occupies only its FAB and does not reserve body space',
+    (tester) async {
+      const viewport = Size(390, 844);
+      const bodyKey = ValueKey('full-scaffold-body');
+      await tester.binding.setSurfaceSize(viewport);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: const SizedBox.expand(key: bodyKey),
+            floatingActionButton: _composer(),
+          ),
+        ),
+      );
+
+      expect(tester.getBottomRight(find.byKey(bodyKey)).dy, viewport.height);
+      expect(
+        tester.getRect(find.byKey(_outerKey)),
+        tester.getRect(find.byType(FloatingActionButton)),
+      );
+    },
+  );
+
+  testWidgets(
+    'scaffold owns every FAB location above a real bottom navigation bar',
+    (tester) async {
+      const viewport = Size(390, 844);
+      const navigationHeight = 80.0;
+      const bodyKey = ValueKey('body-above-navigation');
+      const navigationKey = ValueKey('real-bottom-navigation');
+      const standardFabKey = ValueKey('standard-extended-fab');
+      await tester.binding.setSurfaceSize(viewport);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      Widget host({
+        required Widget floatingActionButton,
+        required FloatingActionButtonLocation location,
+      }) => MaterialApp(
+        home: Scaffold(
+          body: const SizedBox.expand(key: bodyKey),
+          floatingActionButton: floatingActionButton,
+          floatingActionButtonLocation: location,
+          bottomNavigationBar: const SizedBox(
+            key: navigationKey,
+            height: navigationHeight,
+          ),
+        ),
+      );
+
+      for (final location in [
+        FloatingActionButtonLocation.startFloat,
+        FloatingActionButtonLocation.centerFloat,
+        FloatingActionButtonLocation.endFloat,
+        FloatingActionButtonLocation.startDocked,
+        FloatingActionButtonLocation.centerDocked,
+        FloatingActionButtonLocation.endDocked,
+      ]) {
+        await tester.pumpWidget(
+          host(
+            floatingActionButton: FloatingActionButton.extended(
+              key: standardFabKey,
+              heroTag: null,
+              onPressed: () {},
+              icon: const Icon(Icons.add),
+              label: const Text('Capture'),
+            ),
+            location: location,
+          ),
+        );
+        await tester.pumpAndSettle();
+        final standardRect = tester.getRect(find.byKey(standardFabKey));
+
+        await tester.pumpWidget(
+          host(floatingActionButton: _composer(), location: location),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          tester.getRect(find.byType(FloatingActionButton)),
+          standardRect,
+          reason: '$location must be owned entirely by Scaffold',
+        );
+        expect(
+          tester.getBottomRight(find.byKey(bodyKey)).dy,
+          tester.getTopLeft(find.byKey(navigationKey)).dy,
+        );
+      }
+    },
+  );
+
+  testWidgets(
     'collapsed state is one real enabled extended FAB without editor',
     (tester) async {
       await tester.pumpWidget(_app(child: _composer()));
@@ -111,7 +202,9 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: theme,
-        home: Scaffold(body: _composer(animationDuration: Duration.zero)),
+        home: Scaffold(
+          floatingActionButton: _composer(animationDuration: Duration.zero),
+        ),
       ),
     );
 
@@ -484,7 +577,7 @@ void main() {
         child: MaterialApp(
           home: Scaffold(
             body: const SizedBox.expand(),
-            bottomNavigationBar: _composer(),
+            floatingActionButton: _composer(),
           ),
         ),
       );
@@ -536,7 +629,7 @@ void main() {
                     alignment: Alignment.bottomCenter,
                     child: Text('FINAL BODY ROW'),
                   ),
-                  bottomNavigationBar: _composer(
+                  floatingActionButton: _composer(
                     key: ValueKey(direction),
                     fabLabel: 'Capture a very long message',
                     animationDuration: Duration.zero,
@@ -546,6 +639,7 @@ void main() {
             ),
           ),
         );
+        await tester.pumpAndSettle();
         final bodyHeight = tester
             .getSize(find.byKey(const ValueKey('adaptive-body')))
             .height;
@@ -794,9 +888,7 @@ Widget _app({
   theme: ThemeData(useMaterial3: true),
   home: Directionality(
     textDirection: direction,
-    child: Scaffold(
-      body: Align(alignment: Alignment.bottomCenter, child: child),
-    ),
+    child: Scaffold(floatingActionButton: child),
   ),
 );
 
