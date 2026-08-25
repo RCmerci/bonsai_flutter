@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../protocol/frame.dart';
 import '../renderer/renderer_resource_store.dart';
@@ -494,11 +495,15 @@ final class ExpandableMessageComposer extends StatefulWidget {
 }
 
 final class _ExpandableMessageComposerState
-    extends State<ExpandableMessageComposer> {
+    extends State<ExpandableMessageComposer>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   late final ValueNotifier<ExpandableMessageComposer> _sheetConfiguration;
+  late final AnimationController _fabPresentationController;
   ModalBottomSheetRoute<void>? _sheetRoute;
+  Size? _extendedFabSize;
+  bool _disableAnimations = false;
   int _routeGeneration = 0;
   int _configurationGeneration = 0;
 
@@ -506,11 +511,40 @@ final class _ExpandableMessageComposerState
   void initState() {
     super.initState();
     _sheetConfiguration = ValueNotifier(widget);
+    _fabPresentationController = AnimationController(
+      vsync: this,
+      value: _fabTarget,
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final disableAnimations =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (disableAnimations == _disableAnimations) return;
+    _disableAnimations = disableAnimations;
+    if (disableAnimations) _settleFabPresentation();
   }
 
   @override
   void didUpdateWidget(ExpandableMessageComposer oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.fabLabel != widget.fabLabel ||
+        !identical(oldWidget.fabIcon, widget.fabIcon)) {
+      _extendedFabSize = null;
+    }
+    final presentationChanged =
+        oldWidget.fabPresentation != widget.fabPresentation;
+    final motionChanged =
+        oldWidget.animationDuration != widget.animationDuration ||
+        oldWidget.animationCurve != widget.animationCurve;
+    if (_sheetRoute != null || _effectiveFabDuration == Duration.zero) {
+      _settleFabPresentation();
+    } else if (presentationChanged ||
+        (motionChanged && _fabPresentationController.isAnimating)) {
+      _animateFabPresentation();
+    }
     final configuration = widget;
     final generation = ++_configurationGeneration;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -530,12 +564,14 @@ final class _ExpandableMessageComposerState
     }
     _controller.dispose();
     _focusNode.dispose();
+    _fabPresentationController.dispose();
     _sheetConfiguration.dispose();
     super.dispose();
   }
 
   void _beginExpansion() {
     if (!widget.enabled || _sheetRoute != null) return;
+    _settleFabPresentation();
     final navigator = Navigator.of(context);
     final localizations = MaterialLocalizations.of(context);
     final rendererResources = RendererResourceScope.maybeOf(context);
@@ -610,27 +646,119 @@ final class _ExpandableMessageComposerState
   }
 
   @override
-  Widget build(BuildContext context) =>
-      _sheetRoute == null ? _buildFab() : const SizedBox.shrink();
+  Widget build(BuildContext context) => _sheetRoute == null
+      ? AnimatedBuilder(
+          animation: _fabPresentationController,
+          builder: (context, child) =>
+              _buildFab(_fabPresentationController.value),
+        )
+      : const SizedBox.shrink();
 
-  Widget _buildFab() {
-    final fab = switch (widget.fabPresentation) {
-      ExpandableMessageComposerFabPresentation.extended =>
-        FloatingActionButton.extended(
-          heroTag: null,
-          onPressed: widget.enabled ? _beginExpansion : null,
-          icon: widget.fabIcon,
-          label: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(widget.fabLabel, maxLines: 1),
-          ),
-        ),
-      ExpandableMessageComposerFabPresentation.compact => FloatingActionButton(
+  double get _fabTarget =>
+      widget.fabPresentation ==
+          ExpandableMessageComposerFabPresentation.extended
+      ? 1
+      : 0;
+
+  Duration get _effectiveFabDuration =>
+      _disableAnimations ? Duration.zero : widget.animationDuration;
+
+  void _settleFabPresentation() {
+    _fabPresentationController.stop();
+    _fabPresentationController.value = _fabTarget;
+  }
+
+  void _animateFabPresentation() {
+    final target = _fabTarget;
+    final distance = (target - _fabPresentationController.value).abs();
+    if (distance == 0) return;
+    final duration = _effectiveFabDuration * distance;
+    if (duration == Duration.zero) {
+      _settleFabPresentation();
+      return;
+    }
+    unawaited(
+      _fabPresentationController.animateTo(
+        target,
+        duration: duration,
+        curve: widget.animationCurve,
+      ),
+    );
+  }
+
+  Widget _buildFab(double progress) {
+    final Widget fab;
+    if (progress <= 0) {
+      fab = FloatingActionButton(
         heroTag: null,
         onPressed: widget.enabled ? _beginExpansion : null,
         child: widget.fabIcon,
-      ),
-    };
+      );
+    } else if (progress >= 1) {
+      fab = _FabSizeReporter(
+        onSize: (size) => _extendedFabSize = size,
+        child: FloatingActionButton.extended(
+          heroTag: null,
+          onPressed: widget.enabled ? _beginExpansion : null,
+          icon: widget.fabIcon,
+          label: _fabLabel(),
+        ),
+      );
+    } else {
+      final theme = Theme.of(context);
+      final fabTheme = FloatingActionButtonTheme.of(context);
+      final direction = Directionality.of(context);
+      final extendedSize =
+          _extendedFabSize ?? _estimateExtendedFabSize(context);
+      final compactSize =
+          fabTheme.sizeConstraints?.smallest ?? const Size.square(56);
+      final compactShape =
+          fabTheme.shape ??
+          (theme.useMaterial3
+              ? const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(16)),
+                )
+              : const CircleBorder());
+      final extendedShape =
+          fabTheme.shape ??
+          (theme.useMaterial3
+              ? const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(16)),
+                )
+              : const StadiumBorder());
+      final iconSize = fabTheme.iconSize ?? 24;
+      final compactPadding = EdgeInsets.all(
+        (compactSize.width - iconSize).clamp(0, double.infinity) / 2,
+      );
+      final extendedPadding =
+          (fabTheme.extendedPadding ??
+                  const EdgeInsetsDirectional.only(start: 16, end: 20))
+              .resolve(direction);
+      final padding = EdgeInsets.lerp(
+        compactPadding,
+        extendedPadding,
+        progress,
+      );
+      fab = SizedBox(
+        width: _lerp(compactSize.width, extendedSize.width, progress),
+        height: _lerp(compactSize.height, extendedSize.height, progress),
+        child: FloatingActionButton.extended(
+          heroTag: null,
+          onPressed: widget.enabled ? _beginExpansion : null,
+          shape: ShapeBorder.lerp(compactShape, extendedShape, progress),
+          extendedPadding: padding,
+          extendedIconLabelSpacing:
+              (fabTheme.extendedIconLabelSpacing ?? 8) * progress,
+          icon: widget.fabIcon,
+          label: ClipRect(
+            child: Align(
+              widthFactor: progress,
+              child: Opacity(opacity: progress, child: _fabLabel()),
+            ),
+          ),
+        ),
+      );
+    }
     return Tooltip(
       message: widget.fabTooltip,
       child: Semantics(
@@ -641,6 +769,70 @@ final class _ExpandableMessageComposerState
         child: ExcludeSemantics(child: fab),
       ),
     );
+  }
+
+  Widget _fabLabel() => FittedBox(
+    fit: BoxFit.scaleDown,
+    child: Text(widget.fabLabel, maxLines: 1),
+  );
+
+  Size _estimateExtendedFabSize(BuildContext context) {
+    final theme = Theme.of(context);
+    final fabTheme = FloatingActionButtonTheme.of(context);
+    final textStyle = fabTheme.extendedTextStyle ?? theme.textTheme.labelLarge!;
+    final textPainter = TextPainter(
+      text: TextSpan(text: widget.fabLabel, style: textStyle),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final padding =
+        (fabTheme.extendedPadding ??
+                const EdgeInsetsDirectional.only(start: 16, end: 20))
+            .resolve(Directionality.of(context));
+    final width =
+        padding.horizontal +
+        (fabTheme.iconSize ?? 24) +
+        (fabTheme.extendedIconLabelSpacing ?? 8) +
+        textPainter.width;
+    final constraints = fabTheme.extendedSizeConstraints;
+    return Size(
+      constraints?.constrainWidth(width) ?? width,
+      constraints?.constrainHeight() ?? (theme.useMaterial3 ? 56 : 48),
+    );
+  }
+}
+
+double _lerp(double start, double end, double progress) =>
+    start + (end - start) * progress;
+
+final class _FabSizeReporter extends SingleChildRenderObjectWidget {
+  const _FabSizeReporter({required this.onSize, required super.child});
+
+  final ValueChanged<Size> onSize;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderFabSizeReporter(onSize);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant _RenderFabSizeReporter renderObject,
+  ) {
+    renderObject.onSize = onSize;
+  }
+}
+
+final class _RenderFabSizeReporter extends RenderProxyBox {
+  _RenderFabSizeReporter(this.onSize);
+
+  ValueChanged<Size> onSize;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    onSize(size);
   }
 }
 

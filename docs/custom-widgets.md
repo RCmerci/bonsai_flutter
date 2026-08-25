@@ -210,9 +210,14 @@ dismisses to the disabled FAB, while a changed logical key removes the old
 route and creates fresh native-local state.
 
 Changing only `fab_presentation` with a stable logical key updates the collapsed
-FAB descendant without replacing the outer composer State. An active route,
-exact draft, controller, and focus node remain mounted; the selected collapsed
-presentation appears after dismissal.
+FAB without replacing the outer composer State. The existing State owns one
+interruptible morph that continuously changes width, label opacity and occupied
+space, and resolved shape while retaining one literal Flutter FAB, tooltip, and
+button semantics node. Reversals and duration or curve changes continue from
+the painted progress. Duration zero or `MediaQuery.disableAnimations` settles
+the target immediately. An active route, exact draft, controller, and focus
+node remain mounted; hidden presentation changes settle without replaying after
+dismissal.
 
 The modal sheet is the sole visible compose surface. Its embedded
 `MessageComposer` paints no additional background, outline, or rounded card;

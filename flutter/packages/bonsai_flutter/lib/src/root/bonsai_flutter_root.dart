@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' show FrameTiming;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../application_platform/application_platform.dart';
 import '../application_platform/application_platform_dispatcher.dart';
@@ -483,6 +484,9 @@ final class _BonsaiFlutterRootState extends State<BonsaiFlutterRoot> {
               Text('Bonsai runtime error: $error');
     return MaterialApp(
       title: store.applicationTitle ?? '',
+      supportedLocales: _supportedLocales,
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      localeListResolutionCallback: _resolveLocale,
       theme: light,
       darkTheme: dark,
       highContrastTheme: highContrastLight,
@@ -491,6 +495,26 @@ final class _BonsaiFlutterRootState extends State<BonsaiFlutterRoot> {
       home: home,
     );
   }
+}
+
+final List<Locale> _supportedLocales = List.unmodifiable(
+  (kMaterialSupportedLanguages.toList()..sort()).map(Locale.new),
+);
+
+const Locale _fallbackLocale = Locale('en', 'US');
+
+Locale _resolveLocale(
+  List<Locale>? preferredLocales,
+  Iterable<Locale> supportedLocales,
+) {
+  if (preferredLocales != null) {
+    for (final preferred in preferredLocales) {
+      if (kMaterialSupportedLanguages.contains(preferred.languageCode)) {
+        return preferred;
+      }
+    }
+  }
+  return _fallbackLocale;
 }
 
 bool _bytesEqual(Uint8List left, Uint8List right) {

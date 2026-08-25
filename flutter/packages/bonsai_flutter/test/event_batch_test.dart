@@ -662,46 +662,219 @@ void main() {
       expect(queue.pendingCount, 0);
     });
 
+    test('compacts only adjacent same-direction scroll travel runs', () {
+      final queue = EventBatchQueue(
+        runtimeEpoch: 21,
+        displayedRevision: () => 8,
+        maxPendingEvents: 12,
+      );
+      void scroll(double pixels, double delta, {int? sourceRevision}) =>
+          queue.enqueue(
+            RendererEvent(
+              nodeId: 3,
+              eventTag: EventTagId.scrollNotification,
+              handlerId: 9001,
+              payload: ScrollEventPayload(pixels: pixels, delta: delta),
+              sourceRevision: sourceRevision,
+            ),
+          );
+
+      scroll(23, 23);
+      scroll(24, 1);
+      scroll(24, 0);
+      scroll(20, -4);
+      queue.enqueue(
+        rendererEvent(
+          eventTag: EventTagId.press,
+          payload: const UnitEventPayload(),
+        ),
+      );
+      scroll(40, 20);
+      scroll(44, 4, sourceRevision: 9);
+
+      final events = queue.takeBatch()!.events;
+      expect(events.map((event) => event.eventTag), [
+        EventTagId.scrollNotification,
+        EventTagId.scrollNotification,
+        EventTagId.scrollNotification,
+        EventTagId.press,
+        EventTagId.scrollNotification,
+        EventTagId.scrollNotification,
+      ]);
+      expect(events.map((event) => event.payload), const [
+        ScrollEventPayload(pixels: 24, delta: 24),
+        ScrollEventPayload(pixels: 24, delta: 0),
+        ScrollEventPayload(pixels: 20, delta: -4),
+        UnitEventPayload(),
+        ScrollEventPayload(pixels: 40, delta: 20),
+        ScrollEventPayload(pixels: 44, delta: 4),
+      ]);
+      expect(events.map((event) => event.displayedRevision), [
+        8,
+        8,
+        8,
+        8,
+        8,
+        9,
+      ]);
+      expect(queue.coalescedCount, 1);
+      expect(queue.droppedCount, 0);
+    });
+
     test(
-      'coalesces high-frequency state events without reordering presses',
+      'scroll compaction matches lossless travel at every flush boundary',
+      () {
+        const streams = <List<double>>[
+          [23, 1],
+          [24, 0],
+          [20, -4],
+          [20, -4, 20, 4],
+          [100],
+          [-23, -1],
+        ];
+
+        List<double> queuedRuns(List<double> deltas, Set<int> flushAfter) {
+          final queue = EventBatchQueue(
+            runtimeEpoch: 21,
+            displayedRevision: () => 8,
+          );
+          final result = <double>[];
+          var pixels = 0.0;
+          for (var index = 0; index < deltas.length; index += 1) {
+            pixels += deltas[index];
+            queue.enqueue(
+              rendererEvent(
+                eventTag: EventTagId.scrollNotification,
+                payload: ScrollEventPayload(
+                  pixels: pixels,
+                  delta: deltas[index],
+                ),
+              ),
+            );
+            if (flushAfter.contains(index)) {
+              result.addAll(
+                queue.takeBatch()!.events.map(
+                  (event) => (event.payload as ScrollEventPayload).delta,
+                ),
+              );
+            }
+          }
+          final finalBatch = queue.takeBatch();
+          if (finalBatch != null) {
+            result.addAll(
+              finalBatch.events.map(
+                (event) => (event.payload as ScrollEventPayload).delta,
+              ),
+            );
+          }
+          return result;
+        }
+
+        List<(int, double)> boundaries(List<double> deltas) {
+          var direction = 0;
+          var travel = 0.0;
+          final result = <(int, double)>[];
+          for (final delta in deltas) {
+            final nextDirection = delta.sign.toInt();
+            if (nextDirection == 0 ||
+                (direction != 0 && nextDirection != direction)) {
+              if (direction != 0) result.add((direction, travel));
+              if (nextDirection == 0) result.add((0, 0));
+              travel = 0;
+            }
+            if (nextDirection != 0) {
+              direction = nextDirection;
+              travel += delta;
+            } else {
+              direction = 0;
+            }
+          }
+          if (direction != 0) result.add((direction, travel));
+          return result;
+        }
+
+        for (final stream in streams) {
+          final expected = boundaries(stream);
+          final boundaryCount = 1 << stream.length;
+          for (var mask = 0; mask < boundaryCount; mask += 1) {
+            final flushAfter = <int>{
+              for (var index = 0; index < stream.length; index += 1)
+                if ((mask & (1 << index)) != 0) index,
+            };
+            expect(
+              boundaries(queuedRuns(stream, flushAfter)),
+              expected,
+              reason: 'stream=$stream flushAfter=$flushAfter',
+            );
+          }
+        }
+      },
+    );
+
+    test(
+      'prepared scroll prefix stays immutable while later travel enqueues',
       () {
         final queue = EventBatchQueue(
           runtimeEpoch: 21,
           displayedRevision: () => 8,
-          maxPendingEvents: 3,
         );
         queue.enqueue(
           rendererEvent(
             eventTag: EventTagId.scrollNotification,
-            payload: const ScrollEventPayload(pixels: 10, delta: 1),
+            payload: const ScrollEventPayload(pixels: 10, delta: 10),
           ),
         );
-        queue.enqueue(
-          rendererEvent(
-            eventTag: EventTagId.press,
-            payload: const UnitEventPayload(),
-          ),
-        );
+        final prepared = queue.prepareBatch();
+
         queue.enqueue(
           rendererEvent(
             eventTag: EventTagId.scrollNotification,
-            payload: const ScrollEventPayload(pixels: 20, delta: 2),
+            payload: const ScrollEventPayload(pixels: 15, delta: 5),
           ),
         );
 
-        final events = queue.takeBatch()!.events;
-        expect(events.map((event) => event.eventTag), [
-          EventTagId.press,
-          EventTagId.scrollNotification,
-        ]);
         expect(
-          events[1].payload,
-          const ScrollEventPayload(pixels: 20, delta: 2),
+          (EventBatchCodec.decode(prepared.encodedBytes).events.single.payload
+                  as ScrollEventPayload)
+              .delta,
+          10,
         );
-        expect(events.map((event) => event.sequence), [2, 3]);
-        expect(queue.coalescedCount, 1);
+        queue.commit(prepared);
+        expect(
+          (queue.takeBatch()!.events.single.payload as ScrollEventPayload)
+              .delta,
+          5,
+        );
       },
     );
+
+    test('non-compactable scroll travel applies explicit backpressure', () {
+      final queue = EventBatchQueue(
+        runtimeEpoch: 21,
+        displayedRevision: () => 8,
+        maxPendingEvents: 2,
+      );
+      for (final delta in const [1.0, -1.0]) {
+        queue.enqueue(
+          rendererEvent(
+            eventTag: EventTagId.scrollNotification,
+            payload: ScrollEventPayload(pixels: delta, delta: delta),
+          ),
+        );
+      }
+
+      expect(
+        () => queue.enqueue(
+          rendererEvent(
+            eventTag: EventTagId.scrollNotification,
+            payload: const ScrollEventPayload(pixels: 0, delta: 0),
+          ),
+        ),
+        throwsA(isA<EventQueueBackpressureException>()),
+      );
+      expect(queue.pendingCount, 2);
+      expect(queue.droppedCount, 0);
+    });
 
     test('drops only coalescible input when ordered events fill the bound', () {
       final queue = EventBatchQueue(

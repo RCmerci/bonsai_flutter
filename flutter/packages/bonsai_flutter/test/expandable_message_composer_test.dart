@@ -174,6 +174,7 @@ void main() {
               setHostState = setState;
               return _composer(
                 fabPresentation: presentation,
+                animationDuration: Duration.zero,
                 onChanged: changes.add,
               );
             },
@@ -206,6 +207,267 @@ void main() {
         expect(find.byType(BottomSheet), findsNothing);
       }
       expect(changes, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'presentation morph is continuous interruptible and curve configurable',
+    (tester) async {
+      var presentation = ExpandableMessageComposerFabPresentation.extended;
+      var duration = const Duration(milliseconds: 400);
+      var curve = Curves.linear;
+      late StateSetter setHostState;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(useMaterial3: false),
+          home: Scaffold(
+            floatingActionButton: StatefulBuilder(
+              builder: (context, setState) {
+                setHostState = setState;
+                return _composer(
+                  fabPresentation: presentation,
+                  animationDuration: duration,
+                  animationCurve: curve,
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      final composerState = tester.state(
+        find.byType(ExpandableMessageComposer),
+      );
+      final extendedWidth = tester
+          .getSize(find.byType(FloatingActionButton))
+          .width;
+      final extendedShape = tester
+          .widget<RawMaterialButton>(find.byType(RawMaterialButton))
+          .shape;
+
+      setHostState(
+        () => presentation = ExpandableMessageComposerFabPresentation.compact,
+      );
+      await tester.pump();
+      expect(
+        tester.getSize(find.byType(FloatingActionButton)).width,
+        extendedWidth,
+      );
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+      expect(find.bySemanticsLabel('Open capture'), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 100));
+      final quarterWidth = tester
+          .getSize(find.byType(FloatingActionButton))
+          .width;
+      expect(quarterWidth, inExclusiveRange(56, extendedWidth));
+      final labelOpacity = tester.widget<Opacity>(
+        find.ancestor(of: find.text('Capture'), matching: find.byType(Opacity)),
+      );
+      expect(labelOpacity.opacity, inExclusiveRange(0, 1));
+      final intermediateShape = tester
+          .widget<RawMaterialButton>(find.byType(RawMaterialButton))
+          .shape;
+      expect(intermediateShape, isNot(equals(extendedShape)));
+      expect(intermediateShape, isNot(isA<CircleBorder>()));
+
+      setHostState(
+        () => presentation = ExpandableMessageComposerFabPresentation.extended,
+      );
+      await tester.pump();
+      expect(
+        tester.getSize(find.byType(FloatingActionButton)).width,
+        closeTo(quarterWidth, 0.01),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      final reversedWidth = tester
+          .getSize(find.byType(FloatingActionButton))
+          .width;
+      expect(reversedWidth, greaterThan(quarterWidth));
+      expect(reversedWidth, lessThan(extendedWidth));
+
+      setHostState(() {
+        duration = const Duration(milliseconds: 100);
+        curve = Curves.easeOut;
+      });
+      await tester.pump();
+      expect(
+        tester.getSize(find.byType(FloatingActionButton)).width,
+        closeTo(reversedWidth, 0.01),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(
+        tester.getSize(find.byType(FloatingActionButton)).width,
+        extendedWidth,
+      );
+      expect(
+        tester.state(find.byType(ExpandableMessageComposer)),
+        same(composerState),
+      );
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+    },
+  );
+
+  testWidgets('configured curve changes sampled presentation progress', (
+    tester,
+  ) async {
+    Future<double> midpointWidth(Curve curve, Key key) async {
+      var presentation = ExpandableMessageComposerFabPresentation.extended;
+      late StateSetter setHostState;
+      await tester.pumpWidget(
+        _app(
+          child: StatefulBuilder(
+            builder: (context, setState) {
+              setHostState = setState;
+              return _composer(
+                key: key,
+                fabPresentation: presentation,
+                animationDuration: const Duration(milliseconds: 200),
+                animationCurve: curve,
+              );
+            },
+          ),
+        ),
+      );
+      setHostState(
+        () => presentation = ExpandableMessageComposerFabPresentation.compact,
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      return tester.getSize(find.byType(FloatingActionButton)).width;
+    }
+
+    final linearWidth = await midpointWidth(
+      Curves.linear,
+      const ValueKey('linear'),
+    );
+    final easeInWidth = await midpointWidth(
+      Curves.easeIn,
+      const ValueKey('ease-in'),
+    );
+    expect(easeInWidth, greaterThan(linearWidth));
+  });
+
+  testWidgets('zero duration and reduced motion settle without later frames', (
+    tester,
+  ) async {
+    for (final reducedMotion in [false, true]) {
+      var presentation = ExpandableMessageComposerFabPresentation.extended;
+      late StateSetter setHostState;
+      await tester.pumpWidget(
+        _app(
+          child: MediaQuery(
+            data: MediaQueryData(disableAnimations: reducedMotion),
+            child: StatefulBuilder(
+              builder: (context, setState) {
+                setHostState = setState;
+                return _composer(
+                  key: ValueKey(reducedMotion),
+                  fabPresentation: presentation,
+                  animationDuration: reducedMotion
+                      ? const Duration(milliseconds: 400)
+                      : Duration.zero,
+                );
+              },
+            ),
+          ),
+        ),
+      );
+
+      setHostState(
+        () => presentation = ExpandableMessageComposerFabPresentation.compact,
+      );
+      await tester.pump();
+      expect(
+        tester.getSize(find.byType(FloatingActionButton)),
+        const Size(56, 56),
+      );
+      expect(find.text('Capture'), findsNothing);
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(
+        tester.getSize(find.byType(FloatingActionButton)),
+        const Size(56, 56),
+      );
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+    }
+  });
+
+  testWidgets(
+    'morph preserves scaffold placement anchors in LTR RTL and every location',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(500, 700));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      for (final direction in TextDirection.values) {
+        for (final location in [
+          FloatingActionButtonLocation.startFloat,
+          FloatingActionButtonLocation.centerFloat,
+          FloatingActionButtonLocation.endFloat,
+          FloatingActionButtonLocation.startDocked,
+          FloatingActionButtonLocation.centerDocked,
+          FloatingActionButtonLocation.endDocked,
+        ]) {
+          var presentation = ExpandableMessageComposerFabPresentation.extended;
+          late StateSetter setHostState;
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: ThemeData(
+                useMaterial3: true,
+                floatingActionButtonTheme: const FloatingActionButtonThemeData(
+                  extendedIconLabelSpacing: 12,
+                ),
+              ),
+              home: MediaQuery(
+                data: const MediaQueryData(textScaler: TextScaler.linear(3.2)),
+                child: Directionality(
+                  textDirection: direction,
+                  child: Scaffold(
+                    floatingActionButtonLocation: location,
+                    floatingActionButton: StatefulBuilder(
+                      builder: (context, setState) {
+                        setHostState = setState;
+                        return _composer(
+                          enabled: false,
+                          fabPresentation: presentation,
+                          animationDuration: const Duration(milliseconds: 200),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          final before = tester.getRect(find.byType(FloatingActionButton));
+          setHostState(
+            () =>
+                presentation = ExpandableMessageComposerFabPresentation.compact,
+          );
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 100));
+          final during = tester.getRect(find.byType(FloatingActionButton));
+          final locationName = location.toString();
+          if (locationName.contains('center')) {
+            expect(during.center.dx, closeTo(before.center.dx, 0.01));
+          } else {
+            final physicallyLeft =
+                locationName.contains('start') ==
+                (direction == TextDirection.ltr);
+            expect(
+              physicallyLeft ? during.left : during.right,
+              closeTo(physicallyLeft ? before.left : before.right, 0.01),
+              reason: '$direction $location',
+            );
+          }
+          expect(find.byType(FloatingActionButton), findsOneWidget);
+          expect(
+            tester
+                .getSemantics(find.byType(FloatingActionButton))
+                .getSemanticsData()
+                .hasAction(SemanticsAction.tap),
+            isFalse,
+          );
+        }
+      }
     },
   );
 
@@ -1172,6 +1434,7 @@ ExpandableMessageComposer _composer({
       ExpandableMessageComposerFabPresentation.extended,
   String fabLabel = 'Capture',
   Duration animationDuration = const Duration(milliseconds: 200),
+  Curve animationCurve = Curves.easeOut,
   List<MessageComposerButton> buttons = const [],
   ValueChanged<String>? onChanged,
   MessageComposerButtonCallback? onButtonPressed,
@@ -1183,7 +1446,7 @@ ExpandableMessageComposer _composer({
   fabTooltip: 'Open capture',
   fabIcon: const Icon(Icons.add),
   animationDuration: animationDuration,
-  animationCurve: Curves.easeOut,
+  animationCurve: animationCurve,
   maxLines: 5,
   hintText: 'Ask anything',
   buttons: buttons,

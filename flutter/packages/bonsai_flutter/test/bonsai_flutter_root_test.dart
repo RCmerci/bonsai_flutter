@@ -6,6 +6,7 @@ import 'dart:isolate';
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:bonsai_flutter/src/runtime/foreground_frame_loop.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/pump_bonsai.dart';
@@ -50,6 +51,135 @@ void main() {
       expect(app.darkTheme!.brightness, Brightness.dark);
       expect(identical(app.highContrastTheme, app.theme), isTrue);
       expect(identical(app.highContrastDarkTheme, app.darkTheme), isTrue);
+    },
+  );
+
+  testWidgets(
+    'root owns full-tag locale resolution directionality and environment reporting',
+    (tester) async {
+      final runtime = _OrderedRuntimeSession();
+      addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
+      tester.binding.platformDispatcher.localesTestValue = const [
+        Locale('en', 'US'),
+      ];
+
+      await tester.pumpWidget(
+        BonsaiFlutterRoot(
+          config: Uint8List(0),
+          runtimeStarter: (_) async => runtime,
+        ),
+      );
+      await tester.pump();
+      runtime.emitCycle(
+        presentationId: 920,
+        revision: 1,
+        bytes: FrameCodec.encode(counterWidgetSnapshot()),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      final rootState = tester.state(find.byType(BonsaiFlutterRoot));
+      final rendererState = tester.state(find.byType(BonsaiFlutterView));
+      final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+      expect(
+        app.localizationsDelegates,
+        containsAll(const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+        ]),
+      );
+      expect(
+        app.supportedLocales.map((locale) => locale.languageCode),
+        containsAll(['ar', 'fa', 'he', 'ur', 'fr']),
+      );
+      runtime.emitCycle(presentationId: 919, revision: 1, bytes: Uint8List(0));
+      await tester.pump();
+      await tester.pump();
+
+      Future<EnvironmentSnapshot> resolveAndFlush(
+        Locale requested, {
+        required int presentationId,
+      }) async {
+        tester.binding.platformDispatcher.localesTestValue = [requested];
+        await tester.pump();
+        await tester.pump();
+
+        final textContext = tester.element(find.text('Count: 0'));
+        final expected =
+            const {'ar', 'fa', 'he', 'ur'}.contains(requested.languageCode)
+            ? TextDirection.rtl
+            : TextDirection.ltr;
+        expect(Directionality.of(textContext), expected);
+        expect(tester.state(find.byType(BonsaiFlutterRoot)), same(rootState));
+        expect(
+          tester.state(find.byType(BonsaiFlutterView)),
+          same(rendererState),
+        );
+
+        runtime.emitCycle(
+          presentationId: presentationId,
+          revision: 1,
+          bytes: Uint8List(0),
+        );
+        await tester.pump();
+        await tester.pump();
+        final events = EventBatchCodec.decode(
+          runtime.successes.last.eventBatch,
+        ).events;
+        final environment = events
+            .where((event) => event.eventTag == EventTagId.environmentChanged)
+            .single;
+        return (environment.payload as EnvironmentEventPayload).snapshot;
+      }
+
+      for (final entry in const <(Locale, String)>[
+        (Locale('ar', 'SA'), 'ar-SA'),
+        (Locale('fa', 'IR'), 'fa-IR'),
+        (Locale('he', 'IL'), 'he-IL'),
+        (Locale('ur', 'PK'), 'ur-PK'),
+        (Locale('fr', 'CA'), 'fr-CA'),
+        (
+          Locale.fromSubtags(
+            languageCode: 'zh',
+            scriptCode: 'Hans',
+            countryCode: 'CN',
+          ),
+          'zh-Hans-CN',
+        ),
+      ]) {
+        final snapshot = await resolveAndFlush(
+          entry.$1,
+          presentationId: 921 + runtime.successes.length,
+        );
+        expect(
+          Localizations.localeOf(tester.element(find.text('Count: 0'))),
+          entry.$1,
+        );
+        expect(snapshot.locale, entry.$2);
+      }
+
+      final unsupported = await resolveAndFlush(
+        const Locale('tlh', 'QO'),
+        presentationId: 940,
+      );
+      expect(
+        Localizations.localeOf(tester.element(find.text('Count: 0'))),
+        const Locale('en', 'US'),
+      );
+      expect(unsupported.locale, 'en-US');
+
+      tester.binding.platformDispatcher.localesTestValue = const [
+        Locale('en', 'US'),
+      ];
+      await tester.pump();
+      await tester.pump();
+      runtime.emitCycle(presentationId: 941, revision: 1, bytes: Uint8List(0));
+      await tester.pump();
+      await tester.pump();
+      expect(runtime.successes.last.eventBatch, isEmpty);
+      expect(tester.state(find.byType(BonsaiFlutterRoot)), same(rootState));
+      expect(tester.state(find.byType(BonsaiFlutterView)), same(rendererState));
     },
   );
 

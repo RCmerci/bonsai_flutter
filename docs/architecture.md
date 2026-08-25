@@ -397,13 +397,23 @@ Dart work; driver shutdown clears OCaml continuations and unsent requests.
 The environment reporter derives viewport, scale, locale, brightness, insets,
 accessibility, orientation, and pointer capabilities from Flutter. It compares
 complete snapshots and sends only semantic changes. The driver writes accepted
-snapshots to `Environment.value`, a Bonsai dynamic input.
+snapshots to `Environment.value`, a Bonsai dynamic input. After the first
+accepted presentation, the root's internal `MaterialApp` installs Flutter's
+global Material, Cupertino, and Widgets localization delegates. It preserves
+the full tag of the first platform-preferred locale whose language is supported
+by `GlobalMaterialLocalizations`, falls back to `en-US`, and uses that same
+effective locale for native resources, directionality, and the environment
+snapshot.
 
 Renderer events enter a bounded `EventBatchQueue`. Ordered events such as
 Button presses are never coalesced and exert explicit backpressure when the
-bound is full. Scroll and visible-range state updates replace an older pending
-update for the same node, handler, and tag; a coalescible update is the only
-kind that may be dropped. Accepted events receive monotonic sequences.
+bound is full. Adjacent nonzero scroll notifications compact only when node,
+handler, tag, source revision, and sign match; the run keeps the latest pixels
+and summed travel. Zero deltas, reversals, revision changes, and intervening
+events remain ordered boundaries, and a full non-compactable scroll queue
+applies explicit backpressure. Visible-range and bounded text-limit state may
+still replace or drop coalescible pending state. Accepted events receive
+monotonic sequences.
 `NodeHost` uses the latest presented revision when the callback's handler ID still
 matches the committed node. If the binding has changed before Flutter rebuilds
 an existing stateful host, it uses the revision captured by the build that
