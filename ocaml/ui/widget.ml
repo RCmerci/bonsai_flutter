@@ -49,6 +49,7 @@ type kind_tag =
   | K_material_floating_action_button
   | K_material_navigation_bar
   | K_material_radio_group
+  | K_material_segmented_button
   | K_material_slider
   | K_material_range_slider
   | K_material_action_chip
@@ -62,6 +63,7 @@ type kind_tag =
   | K_material_divider
   | K_material_card
   | K_material_circular_progress_indicator
+  | K_material_linear_progress_indicator
   | K_cupertino_button
   | K_cupertino_switch
   | K_text_input
@@ -124,6 +126,7 @@ let kind_tag_to_string = function
   | K_material_floating_action_button -> "Material_floating_action_button"
   | K_material_navigation_bar -> "Material_navigation_bar"
   | K_material_radio_group -> "Material_radio_group"
+  | K_material_segmented_button -> "Material_segmented_button"
   | K_material_slider -> "Material_slider"
   | K_material_range_slider -> "Material_range_slider"
   | K_material_action_chip -> "Material_action_chip"
@@ -137,6 +140,7 @@ let kind_tag_to_string = function
   | K_material_divider -> "Material_divider"
   | K_material_card -> "Material_card"
   | K_material_circular_progress_indicator -> "Material_circular_progress_indicator"
+  | K_material_linear_progress_indicator -> "Material_linear_progress_indicator"
   | K_cupertino_button -> "Cupertino_button"
   | K_cupertino_switch -> "Cupertino_switch"
   | K_text_input -> "Text_input"
@@ -200,6 +204,14 @@ type material_navigation_destination =
 type material_radio_option =
   { option_id : int64
   ; enabled : bool
+  ; has_label : bool
+  }
+
+type material_segment =
+  { segment_id : int64
+  ; enabled : bool
+  ; tooltip : string option
+  ; has_icon : bool
   ; has_label : bool
   }
 
@@ -478,6 +490,18 @@ module Private_types = struct
         ; options : material_radio_option list
         }
         -> [ `Material_radio_group ] node
+    | Material_segmented_button :
+        { selected_ids : int64 list
+        ; enabled : bool
+        ; direction : Layout.Axis.t
+        ; multi_selection_enabled : bool
+        ; empty_selection_allowed : bool
+        ; expanded_insets : (float * float * float * float) option
+        ; show_selected_icon : bool
+        ; has_selected_icon : bool
+        ; segments : material_segment list
+        }
+        -> [ `Material_segmented_button ] node
     | Material_slider :
         { value : float
         ; min : float
@@ -574,6 +598,9 @@ module Private_types = struct
     | Material_circular_progress_indicator :
         { value : float option }
         -> [ `Material_circular_progress_indicator ] node
+    | Material_linear_progress_indicator :
+        { value : float option }
+        -> [ `Material_linear_progress_indicator ] node
     | Cupertino_button : { enabled : bool } -> [ `Cupertino_button ] node
     | Cupertino_switch :
         { value : bool
@@ -714,6 +741,7 @@ let node_kind_tag (type k) (n : k node) : kind_tag =
   | Material_floating_action_button _ -> K_material_floating_action_button
   | Material_navigation_bar _ -> K_material_navigation_bar
   | Material_radio_group _ -> K_material_radio_group
+  | Material_segmented_button _ -> K_material_segmented_button
   | Material_slider _ -> K_material_slider
   | Material_range_slider _ -> K_material_range_slider
   | Material_action_chip _ -> K_material_action_chip
@@ -727,6 +755,7 @@ let node_kind_tag (type k) (n : k node) : kind_tag =
   | Material_divider _ -> K_material_divider
   | Material_card _ -> K_material_card
   | Material_circular_progress_indicator _ -> K_material_circular_progress_indicator
+  | Material_linear_progress_indicator _ -> K_material_linear_progress_indicator
   | Cupertino_button _ -> K_cupertino_button
   | Cupertino_switch _ -> K_cupertino_switch
   | Text_input _ -> K_text_input
@@ -927,6 +956,24 @@ let node_equal (type k1 k2) (a : k1 node) (b : k2 node) : bool =
             && Bool.equal left.has_label right.has_label)
          x.options
          y.options
+  | Material_segmented_button x, Material_segmented_button y ->
+    List.equal Int64.equal x.selected_ids y.selected_ids
+    && Bool.equal x.enabled y.enabled
+    && x.direction = y.direction
+    && Bool.equal x.multi_selection_enabled y.multi_selection_enabled
+    && Bool.equal x.empty_selection_allowed y.empty_selection_allowed
+    && Option.equal ( = ) x.expanded_insets y.expanded_insets
+    && Bool.equal x.show_selected_icon y.show_selected_icon
+    && Bool.equal x.has_selected_icon y.has_selected_icon
+    && List.equal
+         (fun left right ->
+            Int64.equal left.segment_id right.segment_id
+            && Bool.equal left.enabled right.enabled
+            && Option.equal String.equal left.tooltip right.tooltip
+            && Bool.equal left.has_icon right.has_icon
+            && Bool.equal left.has_label right.has_label)
+         x.segments
+         y.segments
   | Material_slider x, Material_slider y ->
     Float.equal x.value y.value
     && Float.equal x.min y.min
@@ -999,6 +1046,8 @@ let node_equal (type k1 k2) (a : k1 node) (b : k2 node) : bool =
   | Material_divider x, Material_divider y -> Float.equal x.thickness y.thickness
   | Material_card x, Material_card y -> Float.equal x.elevation y.elevation
   | Material_circular_progress_indicator x, Material_circular_progress_indicator y ->
+    Option.equal Float.equal x.value y.value
+  | Material_linear_progress_indicator x, Material_linear_progress_indicator y ->
     Option.equal Float.equal x.value y.value
   | Cupertino_button x, Cupertino_button y -> Bool.equal x.enabled y.enabled
   | Cupertino_switch x, Cupertino_switch y ->
@@ -1962,6 +2011,41 @@ let material_radio_group ?key ~selected_id ~options ~children ~on_select () =
     ~children:(plain_children children)
 ;;
 
+let material_segmented_button
+      ?key
+      ~selected_ids
+      ~enabled
+      ~direction
+      ~multi_selection_enabled
+      ~empty_selection_allowed
+      ~expanded_insets
+      ~show_selected_icon
+      ~has_selected_icon
+      ~segments
+      ~children
+      ~on_selection_changed
+      ()
+  =
+  create_typed
+    ~key
+    ~node:
+      (Material_segmented_button
+         { selected_ids
+         ; enabled
+         ; direction
+         ; multi_selection_enabled
+         ; empty_selection_allowed
+         ; expanded_insets
+         ; show_selected_icon
+         ; has_selected_icon
+         ; segments
+         })
+    ~event_bindings:
+      [| { tag = Event.Tag.Segmented_selection_changed; handler = on_selection_changed }
+      |]
+    ~children:(plain_children children)
+;;
+
 let material_slider
       ?key
       ~value
@@ -2212,7 +2296,7 @@ let material_card ?key ?(elevation = 1.) child =
     ~children:(plain_children [ child ])
 ;;
 
-let material_progress ?key ?value () =
+let material_progress_value name value =
   let value =
     Option.map
       (fun value ->
@@ -2222,13 +2306,27 @@ let material_progress ?key ?value () =
            || Float.compare value 1. > 0
          then
            invalid_arg
-             "Material.circular_progress_indicator: value must be finite and in 0..1";
+             (Printf.sprintf "Material.%s: value must be finite and in 0..1" name);
          value)
       value
   in
+  value
+;;
+
+let material_circular_progress ?key ?value () =
+  let value = material_progress_value "circular_progress_indicator" value in
   create_typed
     ~key
     ~node:(Material_circular_progress_indicator { value })
+    ~event_bindings:[||]
+    ~children:[||]
+;;
+
+let material_linear_progress ?key ?value () =
+  let value = material_progress_value "linear_progress_indicator" value in
+  create_typed
+    ~key
+    ~node:(Material_linear_progress_indicator { value })
     ~event_bindings:[||]
     ~children:[||]
 ;;
@@ -2769,6 +2867,7 @@ module Private = struct
     | K_material_floating_action_button
     | K_material_navigation_bar
     | K_material_radio_group
+    | K_material_segmented_button
     | K_material_slider
     | K_material_range_slider
     | K_material_action_chip
@@ -2782,6 +2881,7 @@ module Private = struct
     | K_material_divider
     | K_material_card
     | K_material_circular_progress_indicator
+    | K_material_linear_progress_indicator
     | K_cupertino_button
     | K_cupertino_switch
     | K_text_input
@@ -2853,6 +2953,14 @@ module Private = struct
     ; has_label : bool
     }
 
+  type nonrec material_segment = material_segment =
+    { segment_id : int64
+    ; enabled : bool
+    ; tooltip : string option
+    ; has_icon : bool
+    ; has_label : bool
+    }
+
   type nonrec material_chip_variant = material_chip_variant =
     | Action
     | Filter
@@ -2889,6 +2997,7 @@ module Private = struct
   let material_floating_action_button = material_floating_action_button
   let material_navigation_bar = material_navigation_bar
   let material_radio_group = material_radio_group
+  let material_segmented_button = material_segmented_button
   let material_slider = material_slider
   let material_range_slider = material_range_slider
   let material_chip = material_chip
@@ -2897,7 +3006,8 @@ module Private = struct
   let material_list_tile = material_list_tile
   let material_divider = material_divider
   let material_card = material_card
-  let material_progress = material_progress
+  let material_circular_progress = material_circular_progress
+  let material_linear_progress = material_linear_progress
   let cupertino_button = cupertino_button
   let cupertino_switch = cupertino_switch
   let native_widget = native_widget

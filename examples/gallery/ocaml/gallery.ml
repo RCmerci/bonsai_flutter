@@ -11,6 +11,8 @@ type model =
   ; document_revision : ID.Text_input.document_revision
   ; accepted_local_revision : ID.Text_input.local_revision
   ; interaction_status : string
+  ; segmented_single_ids : int64 list
+  ; segmented_multi_ids : int64 list
   }
 
 type handlers =
@@ -22,6 +24,8 @@ type handlers =
   ; interaction : Ui.Event.Handler.t
   ; native : Ui.Event.Handler.t
   ; scroll : Ui.Event.Handler.t
+  ; segmented_single : Ui.Event.Handler.t
+  ; segmented_multi : Ui.Event.Handler.t
   }
 
 let equal_model left right =
@@ -34,6 +38,8 @@ let equal_model left right =
        left.accepted_local_revision
        right.accepted_local_revision
   && String.equal left.interaction_status right.interaction_status
+  && List.equal Int64.equal left.segmented_single_ids right.segmented_single_ids
+  && List.equal Int64.equal left.segmented_multi_ids right.segmented_multi_ids
 ;;
 
 let initial_model =
@@ -44,6 +50,8 @@ let initial_model =
   ; document_revision = ID.Text_input.Document_revision.zero
   ; accepted_local_revision = ID.Text_input.Local_revision.zero
   ; interaction_status = "Move, focus, tap, or press a key"
+  ; segmented_single_ids = [ 1L ]
+  ; segmented_multi_ids = []
   }
 ;;
 
@@ -140,6 +148,20 @@ let make_handlers registry set_model =
         { model with interaction_status = Printf.sprintf "Scroll offset: %.0f" pixels }
       | _ -> model)
   in
+  let segmented_single =
+    update "gallery-segmented-single" (fun model payload ->
+      match payload with
+      | Ui.Event.Payload.Int64_list segmented_single_ids ->
+        { model with segmented_single_ids }
+      | _ -> model)
+  in
+  let segmented_multi =
+    update "gallery-segmented-multi" (fun model payload ->
+      match payload with
+      | Ui.Event.Payload.Int64_list segmented_multi_ids ->
+        { model with segmented_multi_ids }
+      | _ -> model)
+  in
   let first_pair = Bonsai.Cont.map2 press toggle ~f:(fun press toggle -> press, toggle) in
   let second_pair =
     Bonsai.Cont.map2 text_edit text_submit ~f:(fun text_edit text_submit ->
@@ -166,13 +188,28 @@ let make_handlers registry set_model =
       ~f:(fun (focus_changed, interaction) (native, scroll) ->
         focus_changed, interaction, native, scroll)
   in
+  let existing =
+    Bonsai.Cont.map2
+      first_half
+      second_half
+      ~f:
+        (fun
+          (press, toggle, text_edit, text_submit)
+          (focus_changed, interaction, native, scroll)
+        ->
+        press, toggle, text_edit, text_submit, focus_changed, interaction, native, scroll)
+  in
+  let segmented =
+    Bonsai.Cont.map2 segmented_single segmented_multi ~f:(fun single multi ->
+      single, multi)
+  in
   Bonsai.Cont.map2
-    first_half
-    second_half
+    existing
+    segmented
     ~f:
       (fun
-        (press, toggle, text_edit, text_submit)
-        (focus_changed, interaction, native, scroll)
+        (press, toggle, text_edit, text_submit, focus_changed, interaction, native, scroll)
+        (segmented_single, segmented_multi)
       ->
       { press
       ; toggle
@@ -182,6 +219,8 @@ let make_handlers registry set_model =
       ; interaction
       ; native
       ; scroll
+      ; segmented_single
+      ; segmented_multi
       })
 ;;
 
@@ -273,6 +312,26 @@ let material_section model handlers =
     ; Ui.Material.Radio_group.option ~id:2L ~label:(Ui.Widget.text "Second") ()
     ]
   in
+  let segmented_options =
+    [ Ui.Material.Segmented_button.segment
+        ~id:1L
+        ~icon:(icon 0xe8ef)
+        ~label:(Ui.Widget.text "List")
+        ~tooltip:"List view"
+        ()
+    ; Ui.Material.Segmented_button.segment
+        ~id:2L
+        ~icon:(icon 0xe3ec)
+        ~label:(Ui.Widget.text "Grid")
+        ~tooltip:"Grid view"
+        ()
+    ; Ui.Material.Segmented_button.segment
+        ~id:3L
+        ~enabled:false
+        ~label:(Ui.Widget.text "Disabled")
+        ()
+    ]
+  in
   section
     "Material"
     [ Ui.Material.filled_button
@@ -329,6 +388,27 @@ let material_section model handlers =
         ~selected_id:(Some 1L)
         ~on_select:handlers.press
         radio_options
+        ()
+    ; Ui.Material.Segmented_button.create
+        ~expanded_insets:(Ui.Layout.Edge_insets.symmetric ~horizontal:12. ())
+        ~selected_ids:model.segmented_single_ids
+        ~on_selection_changed:handlers.segmented_single
+        segmented_options
+        ()
+    ; Ui.Material.Segmented_button.create
+        ~direction:Ui.Layout.Axis.Vertical
+        ~multi_selection_enabled:true
+        ~empty_selection_allowed:true
+        ~selected_icon:(icon 0xe876)
+        ~selected_ids:model.segmented_multi_ids
+        ~on_selection_changed:handlers.segmented_multi
+        segmented_options
+        ()
+    ; Ui.Material.Segmented_button.create
+        ~enabled:false
+        ~selected_ids:[ 1L ]
+        ~on_selection_changed:handlers.segmented_single
+        segmented_options
         ()
     ; Ui.Material.slider
         ~value:0.35
@@ -400,6 +480,14 @@ let material_section model handlers =
     ; Ui.Widget.row
         [ Ui.Material.circular_progress_indicator ~value:0.68 ()
         ; Ui.Cupertino.button handlers.press ~child:(Ui.Widget.text "Cupertino button") ()
+        ]
+    ; Ui.Widget.column
+        [ Ui.Widget.text "Determinate linear progress"
+        ; Ui.Widget.sized_box
+            ~width:240.
+            (Ui.Material.linear_progress_indicator ~value:0.68 ())
+        ; Ui.Widget.text "Indeterminate linear progress"
+        ; Ui.Widget.sized_box ~width:240. (Ui.Material.linear_progress_indicator ())
         ]
     ]
 ;;

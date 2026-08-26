@@ -1825,6 +1825,30 @@ let test_complete_material_protocol_round_trip () =
             ; { option_id = 9L; enabled = false; has_label = false }
             ]
         }
+    ; Material_segmented_button_props
+        { selected_ids = [ -7L; 9L ]
+        ; enabled = true
+        ; direction = Vertical
+        ; multi_selection_enabled = true
+        ; empty_selection_allowed = true
+        ; expanded_insets = Some (8., 4., 8., 4.)
+        ; show_selected_icon = true
+        ; has_selected_icon = true
+        ; segments =
+            [ { segment_id = -7L
+              ; enabled = true
+              ; tooltip = Some "List view"
+              ; has_icon = true
+              ; has_label = true
+              }
+            ; { segment_id = 9L
+              ; enabled = false
+              ; tooltip = None
+              ; has_icon = false
+              ; has_label = true
+              }
+            ]
+        }
     ; Material_slider_props
         { value = 0.25
         ; min = 0.
@@ -1855,6 +1879,7 @@ let test_complete_material_protocol_round_trip () =
         ; has_on_selected = true
         ; has_on_delete = true
         }
+    ; Material_linear_progress_props { value = Some 0.5 }
     ; modal_dialog
     ]
   in
@@ -1899,11 +1924,89 @@ let test_complete_material_protocol_round_trip () =
        expect (decoded = frame) "complete Material protocol round trip changed")
 ;;
 
+let test_linear_progress_protocol_boundaries () =
+  let props value = Wire_frame.Material_linear_progress_props { value } in
+  List.iter
+    (fun value ->
+       expect_frame_round_trip
+         "linear progress value boundary"
+         (props_frame (props value)))
+    [ None; Some 0.; Some 0.5; Some 1. ];
+  List.iter
+    (fun invalid ->
+       expect_invalid_props_encode
+         "invalid linear progress encode"
+         (props_frame (props (Some invalid))))
+    [ -0.01; 1.01; Float.nan; Float.infinity; Float.neg_infinity ];
+  let encoded =
+    match Binary_codec.encode (props_frame (props (Some 0.375))) with
+    | Ok bytes -> bytes
+    | Error error -> fail "valid linear progress failed to encode: %s" error.message
+  in
+  List.iter
+    (fun invalid ->
+       expect_invalid_props_decode
+         "invalid linear progress decode"
+         (replace_float64 encoded 0.375 invalid))
+    [ -0.01; 1.01; Float.nan; Float.infinity; Float.neg_infinity ]
+;;
+
+let test_segmented_button_protocol_validation () =
+  let open Wire_frame in
+  let segment id =
+    { segment_id = id
+    ; enabled = true
+    ; tooltip = None
+    ; has_icon = false
+    ; has_label = true
+    }
+  in
+  let props
+        ?(selected_ids = [ 1L ])
+        ?(segments = [ segment 1L ])
+        ?(multi_selection_enabled = false)
+        ?(empty_selection_allowed = false)
+        ?(show_selected_icon = true)
+        ?(has_selected_icon = false)
+        ()
+    =
+    Material_segmented_button_props
+      { selected_ids
+      ; enabled = true
+      ; direction = Horizontal
+      ; multi_selection_enabled
+      ; empty_selection_allowed
+      ; expanded_insets = None
+      ; show_selected_icon
+      ; has_selected_icon
+      ; segments
+      }
+  in
+  expect_frame_round_trip "segmented button props" (props_frame (props ()));
+  [ props ~segments:[] ()
+  ; props ~segments:[ segment 1L; segment 1L ] ()
+  ; props ~segments:[ { (segment 1L) with has_label = false } ] ()
+  ; props ~selected_ids:[ 1L; 1L ] ()
+  ; props ~selected_ids:[ 2L ] ()
+  ; props
+      ~selected_ids:[ 2L; 1L ]
+      ~segments:[ segment 1L; segment 2L ]
+      ~multi_selection_enabled:true
+      ()
+  ; props ~selected_ids:[ 1L; 2L ] ~segments:[ segment 1L; segment 2L ] ()
+  ; props ~selected_ids:[] ()
+  ; props ~show_selected_icon:false ~has_selected_icon:true ()
+  ]
+  |> List.iter (fun invalid ->
+    expect_invalid_props_encode "invalid segmented button" (props_frame invalid))
+;;
+
 let test_material_typed_event_payload_round_trip () =
   let open Inbound_event in
   let events =
     [ Generated_protocol.Event_tag.navigation_destination_selected, Int64 2L
     ; Generated_protocol.Event_tag.radio_selected, Int64 (-9L)
+    ; Generated_protocol.Event_tag.segmented_selection_changed, Int64_list [ -9L; 2L ]
     ; Generated_protocol.Event_tag.slider_changed, Float 0.25
     ; Generated_protocol.Event_tag.slider_change_end, Float 0.75
     ; ( Generated_protocol.Event_tag.range_slider_changed
@@ -1973,6 +2076,8 @@ let () =
   test_scroll_view_cache_extent_validation ();
   test_sliver_app_bar_codec_validation ();
   test_complete_material_protocol_round_trip ();
+  test_linear_progress_protocol_boundaries ();
+  test_segmented_button_protocol_validation ();
   test_material_typed_event_payload_round_trip ();
   print_endline "protocol tests passed"
 ;;

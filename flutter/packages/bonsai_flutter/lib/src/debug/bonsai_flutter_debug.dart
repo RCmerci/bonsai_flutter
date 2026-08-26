@@ -97,6 +97,8 @@ String _kindName(NodeKind kind) => switch (kind) {
   NodeKind.materialCard => 'MaterialCard',
   NodeKind.materialCircularProgressIndicator =>
     'MaterialCircularProgressIndicator',
+  NodeKind.materialLinearProgressIndicator => 'MaterialLinearProgressIndicator',
+  NodeKind.materialSegmentedButton => 'MaterialSegmentedButton',
   NodeKind.cupertinoButton => 'CupertinoButton',
   NodeKind.cupertinoSwitch => 'CupertinoSwitch',
   NodeKind.textInput => 'TextInput',

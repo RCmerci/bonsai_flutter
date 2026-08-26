@@ -30,6 +30,7 @@ module Tag = struct
     | Range_slider_changed
     | Range_slider_change_end
     | Delete
+    | Segmented_selection_changed
 
   let compare left right = Stdlib.compare left right
   let equal left right = compare left right = 0
@@ -63,6 +64,7 @@ module Tag = struct
     | Range_slider_changed -> "range_slider_changed"
     | Range_slider_change_end -> "range_slider_change_end"
     | Delete -> "delete"
+    | Segmented_selection_changed -> "segmented_selection_changed"
   ;;
 end
 
@@ -153,6 +155,7 @@ module Payload = struct
     | Text of string
     | Text_edit of text_edit
     | Int64 of int64
+    | Int64_list of int64 list
     | Float of float
     | Float_range of
         { start : float

@@ -334,7 +334,7 @@ declarative modal presentations
 layouts. Version 1.4 adds the NativeWidget envelope, capability declarations,
 opaque typed properties, and typed native events. Later compatible minors
 extend the typed surface; current producers and consumers report protocol
-1.21. The Dart decoder's output is accepted by the same atomic `NodeStore`.
+1.22. The Dart decoder's output is accepted by the same atomic `NodeStore`.
 Checksum negotiation, the remaining widget families, and supported-platform
 packaging remain later vertical slices.
 

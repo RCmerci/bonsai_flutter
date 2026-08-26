@@ -64,6 +64,8 @@ type node_kind =
   | Material_divider
   | Material_card
   | Material_circular_progress_indicator
+  | Material_linear_progress_indicator
+  | Material_segmented_button
   | Cupertino_button
   | Cupertino_switch
   | Text_input
@@ -378,6 +380,14 @@ type material_radio_option =
   ; has_label : bool
   }
 
+type material_segment =
+  { segment_id : int64
+  ; enabled : bool
+  ; tooltip : string option
+  ; has_icon : bool
+  ; has_label : bool
+  }
+
 type material_chip_variant =
   | Action_chip
   | Filter_chip
@@ -627,7 +637,19 @@ type props =
       }
   | Material_divider_props of { thickness : float }
   | Material_card_props of { elevation : float }
-  | Material_progress_props of { value : float option }
+  | Material_circular_progress_props of { value : float option }
+  | Material_linear_progress_props of { value : float option }
+  | Material_segmented_button_props of
+      { selected_ids : int64 list
+      ; enabled : bool
+      ; direction : axis
+      ; multi_selection_enabled : bool
+      ; empty_selection_allowed : bool
+      ; expanded_insets : (float * float * float * float) option
+      ; show_selected_icon : bool
+      ; has_selected_icon : bool
+      ; segments : material_segment list
+      }
   | Cupertino_button_props of { enabled : bool }
   | Cupertino_switch_props of
       { value : bool

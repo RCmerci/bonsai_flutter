@@ -152,8 +152,62 @@ let test_text_edit_dispatch () =
   | None -> fail "text edit handler was not invoked"
 ;;
 
+let test_segmented_selection_dispatch () =
+  let received = ref None in
+  let handler =
+    Ui.Event.Handler.create ~name:"segmented-selection" (function
+      | Int64_list selected_ids -> received := Some selected_ids
+      | _ -> fail "segmented selection delivered the wrong payload")
+  in
+  let frame =
+    Runtime.Handler_registry.Frame.Private.create
+      ~revision:(ID.Runtime.Renderer_revision.of_int64 1L)
+      [ { node_id = Runtime.Node_id.Private.of_int64 5L
+        ; event_tag = Ui.Event.Tag.Segmented_selection_changed
+        ; handler_id = Runtime.Handler_id.Private.of_int64 45L
+        ; handler
+        }
+      ]
+  in
+  let registry =
+    Runtime.Handler_registry.create ~runtime_epoch:(ID.Runtime.Epoch.of_int64 23L)
+  in
+  (match Runtime.Handler_registry.install registry frame with
+   | Ok () -> ()
+   | Error error -> fail "install failed: %s" (Runtime.Runtime_error.to_string error));
+  (match
+     Runtime.Handler_registry.commit_displayed_revision
+       registry
+       ~revision:(ID.Runtime.Renderer_revision.of_int64 1L)
+   with
+   | Ok () -> ()
+   | Error error ->
+     fail "frame presentation failed: %s" (Runtime.Runtime_error.to_string error));
+  let batch =
+    Protocol.Inbound_event.
+      { runtime_epoch = ID.Runtime.Epoch.of_int64 23L
+      ; events =
+          [ { sequence = ID.Runtime.Event_sequence.of_int64 1L
+            ; displayed_revision = ID.Runtime.Renderer_revision.of_int64 1L
+            ; node_id = ID.Ui.Node_id.of_int64 5L
+            ; handler_id = ID.Ui.Handler_id.of_int64 45L
+            ; event_tag = Protocol.Generated_protocol.Event_tag.segmented_selection_changed
+            ; payload = Int64_list [ 1L; 2L ]
+            }
+          ]
+      }
+  in
+  (match Runtime.Event_dispatcher.dispatch_batch registry batch with
+   | Ok () -> ()
+   | Error _ -> fail "segmented selection dispatch failed");
+  expect
+    (Option.equal (List.equal Int64.equal) !received (Some [ 1L; 2L ]))
+    "segmented selection payload changed"
+;;
+
 let () =
   test_counter_press_dispatch ();
   test_text_edit_dispatch ();
+  test_segmented_selection_dispatch ();
   print_endline "event dispatch tests passed"
 ;;

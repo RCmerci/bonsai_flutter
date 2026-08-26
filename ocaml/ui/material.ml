@@ -178,6 +178,107 @@ module Radio_group = struct
   ;;
 end
 
+module Segmented_button = struct
+  type segment =
+    { id : int64
+    ; enabled : bool
+    ; icon : Widget.t option
+    ; label : Widget.t option
+    ; tooltip : string option
+    }
+
+  let segment ~id ?(enabled = true) ?icon ?label ?tooltip () =
+    if Option.is_none icon && Option.is_none label
+    then invalid_arg "Material.Segmented_button.segment: icon or label is required";
+    { id; enabled; icon; label; tooltip }
+  ;;
+
+  let create
+        ?key
+        ?(enabled = true)
+        ?(direction = Layout.Axis.Horizontal)
+        ?(multi_selection_enabled = false)
+        ?(empty_selection_allowed = false)
+        ?expanded_insets
+        ?(show_selected_icon = true)
+        ?selected_icon
+        ~selected_ids
+        ~on_selection_changed
+        segments
+        ()
+    =
+    if List.is_empty segments
+    then invalid_arg "Material.Segmented_button.create: segments must not be empty";
+    if Option.is_some selected_icon && not show_selected_icon
+    then
+      invalid_arg
+        "Material.Segmented_button.create: selected_icon requires show_selected_icon";
+    let segment_ids = Hashtbl.create (List.length segments) in
+    List.iter
+      (fun segment ->
+         if Hashtbl.mem segment_ids segment.id
+         then invalid_arg "Material.Segmented_button.create: segment IDs must be unique";
+         Hashtbl.add segment_ids segment.id ())
+      segments;
+    let selected_ids = List.sort Int64.compare selected_ids in
+    let rec reject_duplicates = function
+      | [] | [ _ ] -> ()
+      | left :: (right :: _ as tail) ->
+        if Int64.equal left right
+        then invalid_arg "Material.Segmented_button.create: selected IDs must be unique";
+        reject_duplicates tail
+    in
+    reject_duplicates selected_ids;
+    List.iter
+      (fun id ->
+         if not (Hashtbl.mem segment_ids id)
+         then
+           invalid_arg "Material.Segmented_button.create: selected IDs must name segments")
+      selected_ids;
+    if (not multi_selection_enabled) && List.length selected_ids > 1
+    then
+      invalid_arg
+        "Material.Segmented_button.create: single-selection mode accepts at most one ID";
+    if (not empty_selection_allowed) && List.is_empty selected_ids
+    then invalid_arg "Material.Segmented_button.create: selection must not be empty";
+    let expanded_insets =
+      Option.map Layout.Edge_insets.Private.to_sides expanded_insets
+    in
+    let metadata =
+      List.map
+        (fun segment ->
+           Widget.Private.
+             { segment_id = segment.id
+             ; enabled = segment.enabled
+             ; tooltip = segment.tooltip
+             ; has_icon = Option.is_some segment.icon
+             ; has_label = Option.is_some segment.label
+             })
+        segments
+    in
+    let children =
+      Option.to_list selected_icon
+      @ List.concat_map
+          (fun segment -> Option.to_list segment.icon @ Option.to_list segment.label)
+          segments
+    in
+    Widget.Private.material_segmented_button
+      ?key
+      ~selected_ids
+      ~enabled
+      ~direction
+      ~multi_selection_enabled
+      ~empty_selection_allowed
+      ~expanded_insets
+      ~show_selected_icon
+      ~has_selected_icon:(Option.is_some selected_icon)
+      ~segments:metadata
+      ~children
+      ~on_selection_changed
+      ()
+  ;;
+end
+
 module Range = struct
   type t =
     { start : float
@@ -336,4 +437,5 @@ let text_field = Widget.text_input
 let list_tile = Widget.Private.material_list_tile
 let divider = Widget.Private.material_divider
 let card = Widget.Private.material_card
-let circular_progress_indicator = Widget.Private.material_progress
+let circular_progress_indicator = Widget.Private.material_circular_progress
+let linear_progress_indicator = Widget.Private.material_linear_progress

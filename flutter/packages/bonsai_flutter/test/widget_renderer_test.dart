@@ -760,7 +760,7 @@ void main() {
             CreateNode(
               nodeId: 12,
               kind: NodeKind.materialCircularProgressIndicator,
-              props: MaterialProgressProps(value: 0.5),
+              props: MaterialCircularProgressProps(value: 0.5),
               eventBindings: [],
             ),
             SetChildren(nodeId: 1, children: [2, 4]),
@@ -784,6 +784,356 @@ void main() {
     expect(find.byType(ListTile), findsOneWidget);
     expect(find.byType(Divider), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
+  });
+
+  testWidgets(
+    'renders determinate and indeterminate Material linear progress and updates value',
+    (tester) async {
+      final store = NodeStore()
+        ..apply(
+          const Frame(
+            runtimeEpoch: 26,
+            baseRevision: 0,
+            targetRevision: 1,
+            kind: FrameKind.fullSnapshot,
+            operations: [
+              SetApplicationTheme(
+                title: 'Linear progress',
+                theme: testApplicationTheme,
+              ),
+              CreateNode(
+                nodeId: 1,
+                kind: NodeKind.column,
+                props: LinearProps(),
+                eventBindings: [],
+              ),
+              CreateNode(
+                nodeId: 2,
+                kind: NodeKind.materialLinearProgressIndicator,
+                props: MaterialLinearProgressProps(value: 0.4),
+                eventBindings: [],
+              ),
+              CreateNode(
+                nodeId: 3,
+                kind: NodeKind.materialLinearProgressIndicator,
+                props: MaterialLinearProgressProps(),
+                eventBindings: [],
+              ),
+              SetChildren(nodeId: 1, children: [2, 3]),
+              SetRoot(1),
+            ],
+          ),
+        );
+
+      await tester.pumpWidget(
+        MaterialApp(home: BonsaiFlutterView(store: store)),
+      );
+
+      final indicators = tester
+          .widgetList<LinearProgressIndicator>(
+            find.byType(LinearProgressIndicator),
+          )
+          .toList();
+      expect(indicators, hasLength(2));
+      expect(indicators[0].value, 0.4);
+      expect(indicators[1].value, isNull);
+
+      store.apply(
+        const Frame(
+          runtimeEpoch: 26,
+          baseRevision: 1,
+          targetRevision: 2,
+          kind: FrameKind.incremental,
+          operations: [
+            UpdateProps(
+              nodeId: 2,
+              props: MaterialLinearProgressProps(value: 0.8),
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        tester
+            .widgetList<LinearProgressIndicator>(
+              find.byType(LinearProgressIndicator),
+            )
+            .first
+            .value,
+        0.8,
+      );
+    },
+  );
+
+  testWidgets('Material linear progress rejects logical children', (
+    tester,
+  ) async {
+    final store = NodeStore()
+      ..apply(
+        const Frame(
+          runtimeEpoch: 27,
+          baseRevision: 0,
+          targetRevision: 1,
+          kind: FrameKind.fullSnapshot,
+          operations: [
+            SetApplicationTheme(
+              title: 'Invalid linear progress',
+              theme: testApplicationTheme,
+            ),
+            CreateNode(
+              nodeId: 1,
+              kind: NodeKind.materialLinearProgressIndicator,
+              props: MaterialLinearProgressProps(value: 0.5),
+              eventBindings: [],
+            ),
+            CreateNode(
+              nodeId: 2,
+              kind: NodeKind.text,
+              props: TextProps('Invalid child'),
+              eventBindings: [],
+            ),
+            SetChildren(nodeId: 1, children: [2]),
+            SetRoot(1),
+          ],
+        ),
+      );
+
+    await tester.pumpWidget(MaterialApp(home: BonsaiFlutterView(store: store)));
+
+    final reported = tester.takeException();
+    expect(reported, isA<RendererBoundaryError>());
+    final error = reported! as RendererBoundaryError;
+    expect(error.kind, NodeKind.materialLinearProgressIndicator);
+    expect(find.byType(BonsaiRendererErrorWidget), findsOneWidget);
+  });
+
+  testWidgets(
+    'renders native Material segmented button and emits canonical selection',
+    (tester) async {
+      final events = <RendererEvent>[];
+      final store = NodeStore()
+        ..apply(
+          const Frame(
+            runtimeEpoch: 28,
+            baseRevision: 0,
+            targetRevision: 1,
+            kind: FrameKind.fullSnapshot,
+            operations: [
+              SetApplicationTheme(
+                title: 'Segmented button',
+                theme: testApplicationTheme,
+              ),
+              CreateNode(
+                nodeId: 1,
+                kind: NodeKind.materialSegmentedButton,
+                props: MaterialSegmentedButtonProps(
+                  selectedIds: [-7],
+                  enabled: true,
+                  direction: ScrollAxis.vertical,
+                  multiSelectionEnabled: true,
+                  emptySelectionAllowed: true,
+                  expandedInsets: EdgeInsetsValue(
+                    left: 8,
+                    top: 4,
+                    right: 8,
+                    bottom: 4,
+                  ),
+                  showSelectedIcon: true,
+                  hasSelectedIcon: true,
+                  segments: [
+                    MaterialSegmentProps(
+                      id: -7,
+                      enabled: true,
+                      tooltip: 'List view',
+                      hasIcon: true,
+                      hasLabel: true,
+                    ),
+                    MaterialSegmentProps(
+                      id: 9,
+                      enabled: false,
+                      tooltip: null,
+                      hasIcon: false,
+                      hasLabel: true,
+                    ),
+                  ],
+                ),
+                eventBindings: [
+                  EventBinding(
+                    eventTag: EventTagId.segmentedSelectionChanged,
+                    handlerId: 61,
+                  ),
+                ],
+              ),
+              CreateNode(
+                nodeId: 2,
+                kind: NodeKind.text,
+                props: TextProps('Selected icon'),
+                eventBindings: [],
+              ),
+              CreateNode(
+                nodeId: 3,
+                kind: NodeKind.text,
+                props: TextProps('List icon'),
+                eventBindings: [],
+              ),
+              CreateNode(
+                nodeId: 4,
+                kind: NodeKind.text,
+                props: TextProps('List'),
+                eventBindings: [],
+              ),
+              CreateNode(
+                nodeId: 5,
+                kind: NodeKind.text,
+                props: TextProps('Grid'),
+                eventBindings: [],
+              ),
+              SetChildren(nodeId: 1, children: [2, 3, 4, 5]),
+              SetRoot(1),
+            ],
+          ),
+        );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BonsaiFlutterView(store: store, onEvent: events.add),
+          ),
+        ),
+      );
+
+      final finder = find.byType(SegmentedButton<int>);
+      expect(finder, findsOneWidget);
+      final before = tester.element(finder);
+      final rendered = tester.widget<SegmentedButton<int>>(finder);
+      expect(rendered.selected, {-7});
+      expect(rendered.direction, Axis.vertical);
+      expect(rendered.multiSelectionEnabled, isTrue);
+      expect(rendered.emptySelectionAllowed, isTrue);
+      expect(rendered.expandedInsets, const EdgeInsets.fromLTRB(8, 4, 8, 4));
+      expect(rendered.showSelectedIcon, isTrue);
+      expect(rendered.selectedIcon, isNotNull);
+      expect(find.text('Selected icon'), findsOneWidget);
+      expect(rendered.segments, hasLength(2));
+      expect(rendered.segments.first.value, -7);
+      expect(rendered.segments.first.enabled, isTrue);
+      expect(rendered.segments.first.tooltip, 'List view');
+      expect(rendered.segments.last.enabled, isFalse);
+
+      rendered.onSelectionChanged!({9, -7});
+      expect(events, hasLength(1));
+      expect(events.single.eventTag, EventTagId.segmentedSelectionChanged);
+      expect(events.single.payload, const Int64ListEventPayload([-7, 9]));
+
+      store.apply(
+        const Frame(
+          runtimeEpoch: 28,
+          baseRevision: 1,
+          targetRevision: 2,
+          kind: FrameKind.incremental,
+          operations: [
+            UpdateProps(
+              nodeId: 1,
+              props: MaterialSegmentedButtonProps(
+                selectedIds: [9],
+                enabled: false,
+                direction: ScrollAxis.vertical,
+                multiSelectionEnabled: true,
+                emptySelectionAllowed: true,
+                expandedInsets: EdgeInsetsValue(
+                  left: 8,
+                  top: 4,
+                  right: 8,
+                  bottom: 4,
+                ),
+                showSelectedIcon: true,
+                hasSelectedIcon: true,
+                segments: [
+                  MaterialSegmentProps(
+                    id: -7,
+                    enabled: true,
+                    tooltip: 'List view',
+                    hasIcon: true,
+                    hasLabel: true,
+                  ),
+                  MaterialSegmentProps(
+                    id: 9,
+                    enabled: false,
+                    tooltip: null,
+                    hasIcon: false,
+                    hasLabel: true,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
+
+      expect(identical(tester.element(finder), before), isTrue);
+      final disabled = tester.widget<SegmentedButton<int>>(finder);
+      expect(disabled.selected, {9});
+      expect(disabled.onSelectionChanged, isNull);
+    },
+  );
+
+  testWidgets('Material segmented button rejects mismatched child metadata', (
+    tester,
+  ) async {
+    final store = NodeStore()
+      ..apply(
+        const Frame(
+          runtimeEpoch: 29,
+          baseRevision: 0,
+          targetRevision: 1,
+          kind: FrameKind.fullSnapshot,
+          operations: [
+            SetApplicationTheme(
+              title: 'Invalid segmented button',
+              theme: testApplicationTheme,
+            ),
+            CreateNode(
+              nodeId: 1,
+              kind: NodeKind.materialSegmentedButton,
+              props: MaterialSegmentedButtonProps(
+                selectedIds: [1],
+                enabled: true,
+                direction: ScrollAxis.horizontal,
+                multiSelectionEnabled: false,
+                emptySelectionAllowed: false,
+                expandedInsets: null,
+                showSelectedIcon: true,
+                hasSelectedIcon: false,
+                segments: [
+                  MaterialSegmentProps(
+                    id: 1,
+                    enabled: true,
+                    tooltip: null,
+                    hasIcon: true,
+                    hasLabel: true,
+                  ),
+                ],
+              ),
+              eventBindings: [],
+            ),
+            CreateNode(
+              nodeId: 2,
+              kind: NodeKind.text,
+              props: TextProps('Only one child'),
+              eventBindings: [],
+            ),
+            SetChildren(nodeId: 1, children: [2]),
+            SetRoot(1),
+          ],
+        ),
+      );
+
+    await tester.pumpWidget(MaterialApp(home: BonsaiFlutterView(store: store)));
+
+    expect(tester.takeException(), isA<RendererBoundaryError>());
+    expect(find.byType(BonsaiRendererErrorWidget), findsOneWidget);
   });
 
   testWidgets('renders native Cupertino semantic widgets', (tester) async {

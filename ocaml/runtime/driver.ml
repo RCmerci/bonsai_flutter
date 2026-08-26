@@ -279,6 +279,7 @@ let wire_node_kind = function
   | K_material_floating_action_button -> Ok Material_floating_action_button
   | K_material_navigation_bar -> Ok Material_navigation_bar
   | K_material_radio_group -> Ok Material_radio_group
+  | K_material_segmented_button -> Ok Material_segmented_button
   | K_material_slider -> Ok Material_slider
   | K_material_range_slider -> Ok Material_range_slider
   | K_material_action_chip -> Ok Material_action_chip
@@ -292,6 +293,7 @@ let wire_node_kind = function
   | K_material_divider -> Ok Material_divider
   | K_material_card -> Ok Material_card
   | K_material_circular_progress_indicator -> Ok Material_circular_progress_indicator
+  | K_material_linear_progress_indicator -> Ok Material_linear_progress_indicator
   | K_cupertino_button -> Ok Cupertino_button
   | K_cupertino_switch -> Ok Cupertino_switch
   | K_text_input -> Ok Text_input
@@ -738,6 +740,44 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
                     })
                options
          })
+  | Material_segmented_button
+      { selected_ids
+      ; enabled
+      ; direction
+      ; multi_selection_enabled
+      ; empty_selection_allowed
+      ; expanded_insets
+      ; show_selected_icon
+      ; has_selected_icon
+      ; segments
+      } ->
+    let direction =
+      match direction with
+      | Ui.Layout.Axis.Horizontal -> Protocol.Wire_frame.Horizontal
+      | Vertical -> Vertical
+    in
+    Ok
+      (Material_segmented_button_props
+         { selected_ids
+         ; enabled
+         ; direction
+         ; multi_selection_enabled
+         ; empty_selection_allowed
+         ; expanded_insets
+         ; show_selected_icon
+         ; has_selected_icon
+         ; segments =
+             List.map
+               (fun (segment : Ui.Widget.Private.material_segment) ->
+                  Protocol.Wire_frame.
+                    { segment_id = segment.segment_id
+                    ; enabled = segment.enabled
+                    ; tooltip = segment.tooltip
+                    ; has_icon = segment.has_icon
+                    ; has_label = segment.has_label
+                    })
+               segments
+         })
   | Material_slider { value; min; max; divisions; label; enabled; has_on_change } ->
     Ok
       (Material_slider_props { value; min; max; divisions; label; enabled; has_on_change })
@@ -816,7 +856,9 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
   | Material_divider { thickness } -> Ok (Material_divider_props { thickness })
   | Material_card { elevation } -> Ok (Material_card_props { elevation })
   | Material_circular_progress_indicator { value } ->
-    Ok (Material_progress_props { value })
+    Ok (Material_circular_progress_props { value })
+  | Material_linear_progress_indicator { value } ->
+    Ok (Material_linear_progress_props { value })
   | Cupertino_button { enabled } -> Ok (Cupertino_button_props { enabled })
   | Cupertino_switch { value; enabled } -> Ok (Cupertino_switch_props { value; enabled })
   | Text_input
@@ -1042,6 +1084,7 @@ let wire_event_tag =
   | Range_slider_changed -> Tag.range_slider_changed
   | Range_slider_change_end -> Tag.range_slider_change_end
   | Delete -> Tag.delete
+  | Segmented_selection_changed -> Tag.segmented_selection_changed
 ;;
 
 let wire_bindings bindings =
@@ -1451,6 +1494,8 @@ let payload_summary = function
       (ID.Text_input.Document_revision.to_int64 edit.base_document_revision)
       (String.length edit.text)
   | Int64 value -> Printf.sprintf "int64(%Ld)" value
+  | Int64_list values ->
+    Printf.sprintf "int64_list(%s)" (String.concat "," (List.map Int64.to_string values))
   | Tap tap ->
     Printf.sprintf
       "tap(local=%g,%g global=%g,%g pointer=%s)"

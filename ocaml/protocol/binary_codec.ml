@@ -750,6 +750,15 @@ let validate_slider ~value ~min ~max ~divisions =
   | None | Some _ -> ()
 ;;
 
+let validate_progress_value = function
+  | None -> ()
+  | Some value
+    when Float.is_finite value
+         && Float.compare value 0. >= 0
+         && Float.compare value 1. <= 0 -> ()
+  | Some _ -> fail Invalid_props "progress value must be finite and in 0..1"
+;;
+
 let validate_navigation ~selected_index destinations =
   if List.length destinations < 2
   then fail Invalid_props "navigation bar requires at least two destinations";
@@ -774,6 +783,108 @@ let validate_radio_group ~selected_id options =
   | Some selected_id when not (Hashtbl.mem ids selected_id) ->
     fail Invalid_props "selected radio ID must be present in options"
   | None | Some _ -> ()
+;;
+
+let validate_segmented_button
+      ~selected_ids
+      ~multi_selection_enabled
+      ~empty_selection_allowed
+      ~expanded_insets
+      ~show_selected_icon
+      ~has_selected_icon
+      segments
+  =
+  if List.is_empty segments
+  then fail Invalid_props "segmented button requires at least one segment";
+  let ids = Hashtbl.create (List.length segments) in
+  List.iter
+    (fun (segment : Wire_frame.material_segment) ->
+       if not (segment.has_icon || segment.has_label)
+       then fail Invalid_props "segmented button segment requires an icon or label";
+       if Hashtbl.mem ids segment.segment_id
+       then fail Invalid_props "segmented button segment IDs must be unique";
+       Hashtbl.add ids segment.segment_id ())
+    segments;
+  let rec validate_selected = function
+    | [] -> ()
+    | [ value ] ->
+      if not (Hashtbl.mem ids value)
+      then fail Invalid_props "segmented selected ID must name a segment"
+    | left :: (right :: _ as tail) ->
+      if not (Hashtbl.mem ids left)
+      then fail Invalid_props "segmented selected ID must name a segment";
+      if Int64.compare left right >= 0
+      then fail Invalid_props "segmented selected IDs must be sorted and unique";
+      validate_selected tail
+  in
+  validate_selected selected_ids;
+  if (not multi_selection_enabled) && List.length selected_ids > 1
+  then fail Invalid_props "segmented single-selection mode accepts at most one ID";
+  if (not empty_selection_allowed) && List.is_empty selected_ids
+  then fail Invalid_props "segmented selection must not be empty";
+  if has_selected_icon && not show_selected_icon
+  then fail Invalid_props "segmented selected icon cannot be supplied while hidden";
+  Option.iter
+    (fun (left, top, right, bottom) ->
+       List.iter
+         (fun value ->
+            if (not (Float.is_finite value)) || Float.compare value 0. < 0
+            then
+              fail
+                Invalid_props
+                "segmented expanded insets must be finite and non-negative")
+         [ left; top; right; bottom ])
+    expanded_insets
+;;
+
+let write_segmented_button
+      writer
+      ~selected_ids
+      ~enabled
+      ~direction
+      ~multi_selection_enabled
+      ~empty_selection_allowed
+      ~expanded_insets
+      ~show_selected_icon
+      ~has_selected_icon
+      ~segments
+  =
+  validate_segmented_button
+    ~selected_ids
+    ~multi_selection_enabled
+    ~empty_selection_allowed
+    ~expanded_insets
+    ~show_selected_icon
+    ~has_selected_icon
+    segments;
+  check_u16 "segmented selected ID count" (List.length selected_ids);
+  Writer.u16 writer (List.length selected_ids);
+  List.iter (Writer.u64 writer) selected_ids;
+  write_bool writer enabled;
+  Writer.u8
+    writer
+    (match direction with
+     | Horizontal -> 0
+     | Vertical -> 1);
+  write_bool writer multi_selection_enabled;
+  write_bool writer empty_selection_allowed;
+  (match expanded_insets with
+   | None -> Writer.u8 writer 0
+   | Some (left, top, right, bottom) ->
+     Writer.u8 writer 1;
+     List.iter (Writer.f64 writer) [ left; top; right; bottom ]);
+  write_bool writer show_selected_icon;
+  write_bool writer has_selected_icon;
+  check_u16 "segmented segment count" (List.length segments);
+  Writer.u16 writer (List.length segments);
+  List.iter
+    (fun (segment : Wire_frame.material_segment) ->
+       Writer.u64 writer segment.segment_id;
+       write_bool writer segment.enabled;
+       write_optional_string writer segment.tooltip;
+       write_bool writer segment.has_icon;
+       write_bool writer segment.has_label)
+    segments
 ;;
 
 let is_utf16_boundary text target =
@@ -887,6 +998,9 @@ let node_kind_id = function
   | Material_card -> Generated_protocol.Node_kind.material_card
   | Material_circular_progress_indicator ->
     Generated_protocol.Node_kind.material_circular_progress_indicator
+  | Material_linear_progress_indicator ->
+    Generated_protocol.Node_kind.material_linear_progress_indicator
+  | Material_segmented_button -> Generated_protocol.Node_kind.material_segmented_button
   | Cupertino_button -> Generated_protocol.Node_kind.cupertino_button
   | Cupertino_switch -> Generated_protocol.Node_kind.cupertino_switch
   | Text_input -> Generated_protocol.Node_kind.text_input
@@ -1223,8 +1337,24 @@ let write_props writer kind props =
     write_bool writer has_trailing
   | Material_divider, Material_divider_props { thickness } -> Writer.f64 writer thickness
   | Material_card, Material_card_props { elevation } -> Writer.f64 writer elevation
-  | Material_circular_progress_indicator, Material_progress_props { value } ->
+  | Material_circular_progress_indicator, Material_circular_progress_props { value } ->
+    validate_progress_value value;
     write_optional_f64 writer value
+  | Material_linear_progress_indicator, Material_linear_progress_props { value } ->
+    validate_progress_value value;
+    write_optional_f64 writer value
+  | Material_segmented_button, Material_segmented_button_props fields ->
+    write_segmented_button
+      writer
+      ~selected_ids:fields.selected_ids
+      ~enabled:fields.enabled
+      ~direction:fields.direction
+      ~multi_selection_enabled:fields.multi_selection_enabled
+      ~empty_selection_allowed:fields.empty_selection_allowed
+      ~expanded_insets:fields.expanded_insets
+      ~show_selected_icon:fields.show_selected_icon
+      ~has_selected_icon:fields.has_selected_icon
+      ~segments:fields.segments
   | Cupertino_button, Cupertino_button_props { enabled } -> write_bool writer enabled
   | Cupertino_switch, Cupertino_switch_props { value; enabled } ->
     write_bool writer value;
@@ -1383,8 +1513,12 @@ let props_kind_id = function
   | Material_list_tile_props _ -> Generated_protocol.Node_kind.material_list_tile
   | Material_divider_props _ -> Generated_protocol.Node_kind.material_divider
   | Material_card_props _ -> Generated_protocol.Node_kind.material_card
-  | Material_progress_props _ ->
+  | Material_circular_progress_props _ ->
     Generated_protocol.Node_kind.material_circular_progress_indicator
+  | Material_linear_progress_props _ ->
+    Generated_protocol.Node_kind.material_linear_progress_indicator
+  | Material_segmented_button_props _ ->
+    Generated_protocol.Node_kind.material_segmented_button
   | Cupertino_button_props _ -> Generated_protocol.Node_kind.cupertino_button
   | Cupertino_switch_props _ -> Generated_protocol.Node_kind.cupertino_switch
   | Text_input_props _ -> Generated_protocol.Node_kind.text_input
@@ -1713,8 +1847,25 @@ let changed_fields = function
   | Material_divider_props _ ->
     field_mask Generated_protocol.Material_divider_prop.thickness
   | Material_card_props _ -> field_mask Generated_protocol.Material_card_prop.elevation
-  | Material_progress_props _ ->
+  | Material_circular_progress_props _ ->
     field_mask Generated_protocol.Material_circular_progress_indicator_prop.value
+  | Material_linear_progress_props _ ->
+    field_mask Generated_protocol.Material_linear_progress_indicator_prop.value
+  | Material_segmented_button_props _ ->
+    let module P = Generated_protocol.Material_segmented_button_prop in
+    List.fold_left
+      Int64.logor
+      0L
+      [ field_mask P.selected_ids
+      ; field_mask P.enabled
+      ; field_mask P.direction
+      ; field_mask P.multi_selection_enabled
+      ; field_mask P.empty_selection_allowed
+      ; field_mask P.expanded_insets
+      ; field_mask P.show_selected_icon
+      ; field_mask P.has_selected_icon
+      ; field_mask P.segments
+      ]
   | Cupertino_button_props _ ->
     field_mask Generated_protocol.Cupertino_button_prop.enabled
   | Cupertino_switch_props _ ->
@@ -2086,7 +2237,24 @@ let write_update_props writer props =
     write_bool writer has_trailing
   | Material_divider_props { thickness } -> Writer.f64 writer thickness
   | Material_card_props { elevation } -> Writer.f64 writer elevation
-  | Material_progress_props { value } -> write_optional_f64 writer value
+  | Material_circular_progress_props { value } ->
+    validate_progress_value value;
+    write_optional_f64 writer value
+  | Material_linear_progress_props { value } ->
+    validate_progress_value value;
+    write_optional_f64 writer value
+  | Material_segmented_button_props fields ->
+    write_segmented_button
+      writer
+      ~selected_ids:fields.selected_ids
+      ~enabled:fields.enabled
+      ~direction:fields.direction
+      ~multi_selection_enabled:fields.multi_selection_enabled
+      ~empty_selection_allowed:fields.empty_selection_allowed
+      ~expanded_insets:fields.expanded_insets
+      ~show_selected_icon:fields.show_selected_icon
+      ~has_selected_icon:fields.has_selected_icon
+      ~segments:fields.segments
   | Cupertino_button_props { enabled } -> write_bool writer enabled
   | Cupertino_switch_props { value; enabled } ->
     write_bool writer value;
@@ -3161,6 +3329,10 @@ let read_node_kind reader =
   | value when value = Generated_protocol.Node_kind.material_card -> Material_card
   | value when value = Generated_protocol.Node_kind.material_circular_progress_indicator
     -> Material_circular_progress_indicator
+  | value when value = Generated_protocol.Node_kind.material_linear_progress_indicator ->
+    Material_linear_progress_indicator
+  | value when value = Generated_protocol.Node_kind.material_segmented_button ->
+    Material_segmented_button
   | value when value = Generated_protocol.Node_kind.cupertino_button -> Cupertino_button
   | value when value = Generated_protocol.Node_kind.cupertino_switch -> Cupertino_switch
   | value when value = Generated_protocol.Node_kind.text_input -> Text_input
@@ -3613,7 +3785,65 @@ let read_props reader kind ~protocol_minor =
   | Material_divider -> Material_divider_props { thickness = read_finite_f64 reader }
   | Material_card -> Material_card_props { elevation = read_finite_f64 reader }
   | Material_circular_progress_indicator ->
-    Material_progress_props { value = read_optional_f64 reader }
+    let value = read_optional_f64 reader in
+    validate_progress_value value;
+    Material_circular_progress_props { value }
+  | Material_linear_progress_indicator ->
+    let value = read_optional_f64 reader in
+    validate_progress_value value;
+    Material_linear_progress_props { value }
+  | Material_segmented_button ->
+    let selected_ids = List.init (Reader.u16 reader) (fun _ -> Reader.u64 reader) in
+    let enabled = read_bool reader in
+    let direction =
+      match Reader.u8 reader with
+      | 0 -> Wire_frame.Horizontal
+      | 1 -> Vertical
+      | value -> fail Invalid_props "invalid segmented button direction %d" value
+    in
+    let multi_selection_enabled = read_bool reader in
+    let empty_selection_allowed = read_bool reader in
+    let expanded_insets =
+      match Reader.u8 reader with
+      | 0 -> None
+      | 1 ->
+        let left = read_finite_f64 reader in
+        let top = read_finite_f64 reader in
+        let right = read_finite_f64 reader in
+        let bottom = read_finite_f64 reader in
+        Some (left, top, right, bottom)
+      | value -> fail Invalid_props "invalid segmented expanded insets tag %d" value
+    in
+    let show_selected_icon = read_bool reader in
+    let has_selected_icon = read_bool reader in
+    let segments =
+      List.init (Reader.u16 reader) (fun _ ->
+        let segment_id = Reader.u64 reader in
+        let enabled = read_bool reader in
+        let tooltip = read_optional_string reader in
+        let has_icon = read_bool reader in
+        let has_label = read_bool reader in
+        Wire_frame.{ segment_id; enabled; tooltip; has_icon; has_label })
+    in
+    validate_segmented_button
+      ~selected_ids
+      ~multi_selection_enabled
+      ~empty_selection_allowed
+      ~expanded_insets
+      ~show_selected_icon
+      ~has_selected_icon
+      segments;
+    Material_segmented_button_props
+      { selected_ids
+      ; enabled
+      ; direction
+      ; multi_selection_enabled
+      ; empty_selection_allowed
+      ; expanded_insets
+      ; show_selected_icon
+      ; has_selected_icon
+      ; segments
+      }
   | Cupertino_button -> Cupertino_button_props { enabled = read_bool reader }
   | Cupertino_switch ->
     Cupertino_switch_props { value = read_bool reader; enabled = read_bool reader }

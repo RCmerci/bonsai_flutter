@@ -1645,6 +1645,111 @@ let test_layout_material_and_semantics_widgets_are_incremental () =
   apply_and_compare ~old_snapshot:(Some (Mounted_tree.snapshot first.mounted_tree)) second
 ;;
 
+let test_linear_progress_indicator_reconciles_value_and_kind () =
+  let reconciler = Reconciler.create ~runtime_epoch:591L in
+  let key = Key.string "progress" in
+  let first =
+    reconcile_exn
+      reconciler
+      ~base_revision:0L
+      ~target_revision:1L
+      ~old:None
+      (Ui.Material.linear_progress_indicator ~key ~value:0.25 ())
+  in
+  let second =
+    reconcile_exn
+      reconciler
+      ~base_revision:1L
+      ~target_revision:2L
+      ~old:(Some first.mounted_tree)
+      (Ui.Material.linear_progress_indicator ~key ())
+  in
+  check_int
+    ~expected:1
+    ~actual:(count_operations second.frame_patch is_update_props)
+    "linear progress value update";
+  check_int ~expected:0 ~actual:(count_operations second.frame_patch is_create) "creates";
+  check_int ~expected:0 ~actual:(count_operations second.frame_patch is_drop) "drops";
+  apply_and_compare ~old_snapshot:(Some (Mounted_tree.snapshot first.mounted_tree)) second;
+  let third =
+    reconcile_exn
+      reconciler
+      ~base_revision:2L
+      ~target_revision:3L
+      ~old:(Some second.mounted_tree)
+      (Ui.Material.circular_progress_indicator ~key ())
+  in
+  check_int
+    ~expected:1
+    ~actual:(count_operations third.frame_patch is_create)
+    "linear-to-circular replacement creates";
+  check_int
+    ~expected:1
+    ~actual:(count_operations third.frame_patch is_drop)
+    "linear-to-circular replacement drops";
+  apply_and_compare ~old_snapshot:(Some (Mounted_tree.snapshot second.mounted_tree)) third
+;;
+
+let test_segmented_button_reconciles_controlled_selection_and_dispatches () =
+  let reconciler = Reconciler.create ~runtime_epoch:592L in
+  let key = Key.string "segmented" in
+  let received = ref None in
+  let on_selection_changed =
+    Event.Handler.create ~name:"segmented-change" (function
+      | Event.Payload.Int64_list ids -> received := Some ids
+      | _ -> ())
+  in
+  let segments =
+    [ Ui.Material.Segmented_button.segment ~id:1L ~label:(Widget.text "One") ()
+    ; Ui.Material.Segmented_button.segment ~id:2L ~label:(Widget.text "Two") ()
+    ]
+  in
+  let tree selected_ids =
+    Ui.Material.Segmented_button.create
+      ~key
+      ~multi_selection_enabled:true
+      ~selected_ids
+      ~on_selection_changed
+      segments
+      ()
+  in
+  let first =
+    reconcile_exn reconciler ~base_revision:0L ~target_revision:1L ~old:None (tree [ 1L ])
+  in
+  let second =
+    reconcile_exn
+      reconciler
+      ~base_revision:1L
+      ~target_revision:2L
+      ~old:(Some first.mounted_tree)
+      (tree [ 2L; 1L ])
+  in
+  check_int
+    ~expected:1
+    ~actual:(count_operations second.frame_patch is_update_props)
+    "segmented selection prop updates";
+  check_int ~expected:0 ~actual:(count_operations second.frame_patch is_create) "creates";
+  check_int ~expected:0 ~actual:(count_operations second.frame_patch is_drop) "drops";
+  apply_and_compare ~old_snapshot:(Some (Mounted_tree.snapshot first.mounted_tree)) second;
+  let node = node_by_key (Mounted_tree.snapshot second.mounted_tree) key in
+  let binding = binding_exn node Event.Tag.Segmented_selection_changed in
+  let registry = Handler_registry.create ~runtime_epoch:592L in
+  ok (Handler_registry.install registry second.handler_frame);
+  ok (Handler_registry.commit_displayed_revision registry ~revision:2L);
+  ok
+    (Handler_registry.dispatch
+       registry
+       { runtime_epoch = epoch 592L
+       ; displayed_revision = revision 2L
+       ; node_id = node.node_id
+       ; event_tag = Event.Tag.Segmented_selection_changed
+       ; handler_id = binding.handler_id
+       ; event_sequence = event_sequence 1L
+       ; payload = Event.Payload.Int64_list [ 1L; 2L ]
+       });
+  check (!received = Some [ 1L; 2L ]) "segmented button lost typed selected IDs"
+;;
+
 let test_text_input_props_and_typed_edit_are_incremental () =
   let reconciler = Reconciler.create ~runtime_epoch:60L in
   let edits = ref [] in
@@ -1843,6 +1948,10 @@ let tests =
   ; "randomized patch invariant", test_randomized_patch_invariant
   ; ( "layout, Material, and semantics widgets update incrementally"
     , test_layout_material_and_semantics_widgets_are_incremental )
+  ; ( "linear progress indicator reconciles value and kind"
+    , test_linear_progress_indicator_reconciles_value_and_kind )
+  ; ( "segmented button reconciles and dispatches controlled selection"
+    , test_segmented_button_reconciles_controlled_selection_and_dispatches )
   ; ( "text input props and typed edit are incremental"
     , test_text_input_props_and_typed_edit_are_incremental )
   ; "text input UTF-8 limit contract", test_text_input_utf8_limit_contract

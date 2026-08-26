@@ -109,6 +109,8 @@ module Node_kind : sig
   val material_choice_chip : Bonsai_flutter_spec.Id.Protocol.node_kind
   val material_input_chip : Bonsai_flutter_spec.Id.Protocol.node_kind
   val material_alert_dialog : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val material_linear_progress_indicator : Bonsai_flutter_spec.Id.Protocol.node_kind
+  val material_segmented_button : Bonsai_flutter_spec.Id.Protocol.node_kind
   val native_widget : Bonsai_flutter_spec.Id.Protocol.node_kind
   val debug_name : Bonsai_flutter_spec.Id.Protocol.node_kind -> string option
 end
@@ -148,6 +150,7 @@ module Event_tag : sig
   val range_slider_changed : Bonsai_flutter_spec.Id.Protocol.event_tag
   val range_slider_change_end : Bonsai_flutter_spec.Id.Protocol.event_tag
   val delete : Bonsai_flutter_spec.Id.Protocol.event_tag
+  val segmented_selection_changed : Bonsai_flutter_spec.Id.Protocol.event_tag
   val debug_name : Bonsai_flutter_spec.Id.Protocol.event_tag -> string option
 end
 
@@ -585,6 +588,24 @@ end
 
 module Material_circular_progress_indicator_prop : sig
   val value : Bonsai_flutter_spec.Id.Protocol.property
+  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
+end
+
+module Material_linear_progress_indicator_prop : sig
+  val value : Bonsai_flutter_spec.Id.Protocol.property
+  val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
+end
+
+module Material_segmented_button_prop : sig
+  val selected_ids : Bonsai_flutter_spec.Id.Protocol.property
+  val enabled : Bonsai_flutter_spec.Id.Protocol.property
+  val direction : Bonsai_flutter_spec.Id.Protocol.property
+  val multi_selection_enabled : Bonsai_flutter_spec.Id.Protocol.property
+  val empty_selection_allowed : Bonsai_flutter_spec.Id.Protocol.property
+  val expanded_insets : Bonsai_flutter_spec.Id.Protocol.property
+  val show_selected_icon : Bonsai_flutter_spec.Id.Protocol.property
+  val has_selected_icon : Bonsai_flutter_spec.Id.Protocol.property
+  val segments : Bonsai_flutter_spec.Id.Protocol.property
   val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
 end
 

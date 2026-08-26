@@ -408,6 +408,7 @@ bool _isCoreSliverKind(NodeKind kind) => switch (kind) {
   NodeKind.materialFloatingActionButton ||
   NodeKind.materialNavigationBar ||
   NodeKind.materialRadioGroup ||
+  NodeKind.materialSegmentedButton ||
   NodeKind.materialSlider ||
   NodeKind.materialRangeSlider ||
   NodeKind.materialActionChip ||
@@ -421,6 +422,7 @@ bool _isCoreSliverKind(NodeKind kind) => switch (kind) {
   NodeKind.materialDivider ||
   NodeKind.materialCard ||
   NodeKind.materialCircularProgressIndicator ||
+  NodeKind.materialLinearProgressIndicator ||
   NodeKind.cupertinoButton ||
   NodeKind.cupertinoSwitch ||
   NodeKind.textInput ||

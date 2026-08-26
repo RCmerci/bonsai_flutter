@@ -201,6 +201,32 @@ void main() {
             MaterialRadioOptionProps(id: 9, enabled: false, hasLabel: false),
           ],
         ),
+        MaterialSegmentedButtonProps(
+          selectedIds: [-7, 9],
+          enabled: true,
+          direction: ScrollAxis.vertical,
+          multiSelectionEnabled: true,
+          emptySelectionAllowed: true,
+          expandedInsets: EdgeInsetsValue(left: 8, top: 4, right: 8, bottom: 4),
+          showSelectedIcon: true,
+          hasSelectedIcon: true,
+          segments: [
+            MaterialSegmentProps(
+              id: -7,
+              enabled: true,
+              tooltip: 'List view',
+              hasIcon: true,
+              hasLabel: true,
+            ),
+            MaterialSegmentProps(
+              id: 9,
+              enabled: false,
+              tooltip: null,
+              hasIcon: false,
+              hasLabel: true,
+            ),
+          ],
+        ),
         MaterialSliderProps(
           value: 0.25,
           min: 0,
@@ -231,6 +257,7 @@ void main() {
           hasOnSelected: true,
           hasOnDelete: true,
         ),
+        MaterialLinearProgressProps(value: 0.5),
       ];
       final operations = <FrameOperation>[
         for (var index = 0; index < props.length; index += 1)
@@ -290,7 +317,13 @@ void main() {
       expect((decoded.operations[3] as UpdateProps).props, props[3]);
       expect((decoded.operations[8] as UpdateProps).props, props[8]);
       expect(
-        (decoded.operations[9] as UpdateProps).props,
+        ((decoded.operations[10] as UpdateProps).props
+                as MaterialLinearProgressProps)
+            .value,
+        0.5,
+      );
+      expect(
+        (decoded.operations[11] as UpdateProps).props,
         const PageProps(
           pageKey: 'confirm',
           presentation: ModalDialogPresentation(
@@ -340,6 +373,32 @@ void main() {
             MaterialRadioOptionProps(id: 1, enabled: true, hasLabel: false),
           ],
         ),
+        const MaterialSegmentedButtonProps(
+          selectedIds: [2, 1],
+          enabled: true,
+          direction: ScrollAxis.horizontal,
+          multiSelectionEnabled: true,
+          emptySelectionAllowed: false,
+          expandedInsets: null,
+          showSelectedIcon: true,
+          hasSelectedIcon: false,
+          segments: [
+            MaterialSegmentProps(
+              id: 1,
+              enabled: true,
+              tooltip: null,
+              hasIcon: false,
+              hasLabel: true,
+            ),
+            MaterialSegmentProps(
+              id: 2,
+              enabled: true,
+              tooltip: null,
+              hasIcon: false,
+              hasLabel: true,
+            ),
+          ],
+        ),
         const MaterialSliderProps(
           value: double.nan,
           min: 0,
@@ -370,6 +429,61 @@ void main() {
         );
       }
     });
+
+    test(
+      'round trips linear progress modes and rejects invalid values at the wire boundary',
+      () {
+        Frame frame(double? value) => Frame(
+          runtimeEpoch: 78,
+          baseRevision: 0,
+          targetRevision: 1,
+          kind: FrameKind.fullSnapshot,
+          operations: [
+            CreateNode(
+              nodeId: 1,
+              kind: NodeKind.materialLinearProgressIndicator,
+              props: MaterialLinearProgressProps(value: value),
+              eventBindings: const [],
+            ),
+            const SetRoot(1),
+          ],
+        );
+
+        for (final value in <double?>[null, 0, 0.375, 1]) {
+          final decoded = FrameCodec.decode(FrameCodec.encode(frame(value)));
+          final node = decoded.operations.first as CreateNode;
+          final props = node.props as MaterialLinearProgressProps;
+          expect(props.value, value);
+        }
+
+        for (final invalid in const [
+          -0.01,
+          1.01,
+          double.nan,
+          double.infinity,
+          double.negativeInfinity,
+        ]) {
+          expect(
+            () => FrameCodec.encode(frame(invalid)),
+            throwsProtocolCode(ProtocolErrorCode.invalidProps),
+          );
+        }
+
+        final valid = FrameCodec.encode(frame(0.375));
+        for (final invalid in const [
+          -0.01,
+          1.01,
+          double.nan,
+          double.infinity,
+          double.negativeInfinity,
+        ]) {
+          expectDecodeError(
+            replaceFloat64(valid, 0.375, invalid),
+            ProtocolErrorCode.invalidProps,
+          );
+        }
+      },
+    );
 
     test('round trips every styled text property', () {
       const props = TextProps(

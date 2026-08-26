@@ -136,6 +136,34 @@ module Radio_group : sig
     -> Widget.t
 end
 
+module Segmented_button : sig
+  type segment
+
+  val segment
+    :  id:int64
+    -> ?enabled:bool
+    -> ?icon:Widget.t
+    -> ?label:Widget.t
+    -> ?tooltip:string
+    -> unit
+    -> segment
+
+  val create
+    :  ?key:Key.t
+    -> ?enabled:bool
+    -> ?direction:Layout.Axis.t
+    -> ?multi_selection_enabled:bool
+    -> ?empty_selection_allowed:bool
+    -> ?expanded_insets:Layout.Edge_insets.t
+    -> ?show_selected_icon:bool
+    -> ?selected_icon:Widget.t
+    -> selected_ids:int64 list
+    -> on_selection_changed:Event.Handler.t
+    -> segment list
+    -> unit
+    -> Widget.t
+end
+
 module Range : sig
   type t
 
@@ -272,3 +300,4 @@ val list_tile
 val divider : ?key:Key.t -> ?thickness:float -> unit -> Widget.t
 val card : ?key:Key.t -> ?elevation:float -> Widget.t -> Widget.t
 val circular_progress_indicator : ?key:Key.t -> ?value:float -> unit -> Widget.t
+val linear_progress_indicator : ?key:Key.t -> ?value:float -> unit -> Widget.t

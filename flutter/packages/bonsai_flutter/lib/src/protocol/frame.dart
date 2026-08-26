@@ -61,6 +61,8 @@ enum NodeKind {
   materialDivider,
   materialCard,
   materialCircularProgressIndicator,
+  materialLinearProgressIndicator,
+  materialSegmentedButton,
   cupertinoButton,
   cupertinoSwitch,
   textInput,
@@ -1552,6 +1554,84 @@ final class MaterialRadioGroupProps extends UiProps {
   int get hashCode => Object.hash(selectedId, Object.hashAll(options));
 }
 
+final class MaterialSegmentProps {
+  const MaterialSegmentProps({
+    required this.id,
+    required this.enabled,
+    required this.tooltip,
+    required this.hasIcon,
+    required this.hasLabel,
+  });
+
+  final int id;
+  final bool enabled;
+  final String? tooltip;
+  final bool hasIcon;
+  final bool hasLabel;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialSegmentProps &&
+      other.id == id &&
+      other.enabled == enabled &&
+      other.tooltip == tooltip &&
+      other.hasIcon == hasIcon &&
+      other.hasLabel == hasLabel;
+
+  @override
+  int get hashCode => Object.hash(id, enabled, tooltip, hasIcon, hasLabel);
+}
+
+final class MaterialSegmentedButtonProps extends UiProps {
+  const MaterialSegmentedButtonProps({
+    required this.selectedIds,
+    required this.enabled,
+    required this.direction,
+    required this.multiSelectionEnabled,
+    required this.emptySelectionAllowed,
+    required this.expandedInsets,
+    required this.showSelectedIcon,
+    required this.hasSelectedIcon,
+    required this.segments,
+  });
+
+  final List<int> selectedIds;
+  final bool enabled;
+  final ScrollAxis direction;
+  final bool multiSelectionEnabled;
+  final bool emptySelectionAllowed;
+  final EdgeInsetsValue? expandedInsets;
+  final bool showSelectedIcon;
+  final bool hasSelectedIcon;
+  final List<MaterialSegmentProps> segments;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialSegmentedButtonProps &&
+      _listEquals(other.selectedIds, selectedIds) &&
+      other.enabled == enabled &&
+      other.direction == direction &&
+      other.multiSelectionEnabled == multiSelectionEnabled &&
+      other.emptySelectionAllowed == emptySelectionAllowed &&
+      other.expandedInsets == expandedInsets &&
+      other.showSelectedIcon == showSelectedIcon &&
+      other.hasSelectedIcon == hasSelectedIcon &&
+      _listEquals(other.segments, segments);
+
+  @override
+  int get hashCode => Object.hash(
+    Object.hashAll(selectedIds),
+    enabled,
+    direction,
+    multiSelectionEnabled,
+    emptySelectionAllowed,
+    expandedInsets,
+    showSelectedIcon,
+    hasSelectedIcon,
+    Object.hashAll(segments),
+  );
+}
+
 final class MaterialSliderProps extends UiProps {
   const MaterialSliderProps({
     required this.value,
@@ -1743,8 +1823,14 @@ final class MaterialCardProps extends UiProps {
   final double elevation;
 }
 
-final class MaterialProgressProps extends UiProps {
-  const MaterialProgressProps({this.value});
+final class MaterialCircularProgressProps extends UiProps {
+  const MaterialCircularProgressProps({this.value});
+
+  final double? value;
+}
+
+final class MaterialLinearProgressProps extends UiProps {
+  const MaterialLinearProgressProps({this.value});
 
   final double? value;
 }

@@ -503,6 +503,7 @@ module Private : sig
     | K_material_floating_action_button
     | K_material_navigation_bar
     | K_material_radio_group
+    | K_material_segmented_button
     | K_material_slider
     | K_material_range_slider
     | K_material_action_chip
@@ -516,6 +517,7 @@ module Private : sig
     | K_material_divider
     | K_material_card
     | K_material_circular_progress_indicator
+    | K_material_linear_progress_indicator
     | K_cupertino_button
     | K_cupertino_switch
     | K_text_input
@@ -582,6 +584,14 @@ module Private : sig
   type material_radio_option =
     { option_id : int64
     ; enabled : bool
+    ; has_label : bool
+    }
+
+  type material_segment =
+    { segment_id : int64
+    ; enabled : bool
+    ; tooltip : string option
+    ; has_icon : bool
     ; has_label : bool
     }
 
@@ -806,6 +816,18 @@ module Private : sig
         ; options : material_radio_option list
         }
         -> [ `Material_radio_group ] node
+    | Material_segmented_button :
+        { selected_ids : int64 list
+        ; enabled : bool
+        ; direction : Layout.Axis.t
+        ; multi_selection_enabled : bool
+        ; empty_selection_allowed : bool
+        ; expanded_insets : (float * float * float * float) option
+        ; show_selected_icon : bool
+        ; has_selected_icon : bool
+        ; segments : material_segment list
+        }
+        -> [ `Material_segmented_button ] node
     | Material_slider :
         { value : float
         ; min : float
@@ -902,6 +924,9 @@ module Private : sig
     | Material_circular_progress_indicator :
         { value : float option }
         -> [ `Material_circular_progress_indicator ] node
+    | Material_linear_progress_indicator :
+        { value : float option }
+        -> [ `Material_linear_progress_indicator ] node
     | Cupertino_button : { enabled : bool } -> [ `Cupertino_button ] node
     | Cupertino_switch :
         { value : bool
@@ -1048,6 +1073,22 @@ module Private : sig
     -> unit
     -> t
 
+  val material_segmented_button
+    :  ?key:Key.t
+    -> selected_ids:int64 list
+    -> enabled:bool
+    -> direction:Layout.Axis.t
+    -> multi_selection_enabled:bool
+    -> empty_selection_allowed:bool
+    -> expanded_insets:(float * float * float * float) option
+    -> show_selected_icon:bool
+    -> has_selected_icon:bool
+    -> segments:material_segment list
+    -> children:t list
+    -> on_selection_changed:Event.Handler.t
+    -> unit
+    -> t
+
   val material_slider
     :  ?key:Key.t
     -> value:float
@@ -1121,7 +1162,8 @@ module Private : sig
 
   val material_divider : ?key:Key.t -> ?thickness:float -> unit -> t
   val material_card : ?key:Key.t -> ?elevation:float -> t -> t
-  val material_progress : ?key:Key.t -> ?value:float -> unit -> t
+  val material_circular_progress : ?key:Key.t -> ?value:float -> unit -> t
+  val material_linear_progress : ?key:Key.t -> ?value:float -> unit -> t
 
   val cupertino_button
     :  ?key:Key.t

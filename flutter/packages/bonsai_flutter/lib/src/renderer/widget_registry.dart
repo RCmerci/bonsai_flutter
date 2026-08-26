@@ -106,6 +106,7 @@ final class WidgetRegistry {
       NodeKind.materialFloatingActionButton: _buildMaterialFloatingActionButton,
       NodeKind.materialNavigationBar: _buildMaterialNavigationBar,
       NodeKind.materialRadioGroup: _buildMaterialRadioGroup,
+      NodeKind.materialSegmentedButton: _buildMaterialSegmentedButton,
       NodeKind.materialSlider: _buildMaterialSlider,
       NodeKind.materialRangeSlider: _buildMaterialRangeSlider,
       NodeKind.materialActionChip: _buildMaterialChip,
@@ -118,7 +119,9 @@ final class WidgetRegistry {
       NodeKind.materialListTile: _buildMaterialListTile,
       NodeKind.materialDivider: _buildMaterialDivider,
       NodeKind.materialCard: _buildMaterialCard,
-      NodeKind.materialCircularProgressIndicator: _buildMaterialProgress,
+      NodeKind.materialCircularProgressIndicator:
+          _buildMaterialCircularProgress,
+      NodeKind.materialLinearProgressIndicator: _buildMaterialLinearProgress,
       NodeKind.cupertinoButton: _buildCupertinoButton,
       NodeKind.cupertinoSwitch: _buildCupertinoSwitch,
       NodeKind.textInput: _buildTextInput,
@@ -1484,6 +1487,74 @@ Widget _buildMaterialRadioGroup(
   );
 }
 
+Widget _buildMaterialSegmentedButton(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  final props = _expectProps<MaterialSegmentedButtonProps>(node);
+  final expected =
+      (props.hasSelectedIcon ? 1 : 0) +
+      props.segments.fold<int>(
+        0,
+        (count, segment) =>
+            count + (segment.hasIcon ? 1 : 0) + (segment.hasLabel ? 1 : 0),
+      );
+  _expectChildCount(node, children, expected);
+  var childIndex = 0;
+  final selectedIcon = props.hasSelectedIcon ? children[childIndex++] : null;
+  final segments = <ButtonSegment<int>>[];
+  for (final segment in props.segments) {
+    final icon = segment.hasIcon ? children[childIndex++] : null;
+    final label = segment.hasLabel ? children[childIndex++] : null;
+    segments.add(
+      ButtonSegment<int>(
+        value: segment.id,
+        icon: icon,
+        label: label,
+        tooltip: segment.tooltip,
+        enabled: segment.enabled,
+      ),
+    );
+  }
+  final binding = _binding(node, EventTagId.segmentedSelectionChanged);
+  return SegmentedButton<int>(
+    segments: segments,
+    selected: props.selectedIds.toSet(),
+    onSelectionChanged: !props.enabled || binding == null || onEvent == null
+        ? null
+        : (selection) {
+            final selectedIds = selection.toList()..sort();
+            onEvent(
+              RendererEvent(
+                nodeId: node.id,
+                eventTag: binding.eventTag,
+                handlerId: binding.handlerId,
+                payload: Int64ListEventPayload(selectedIds),
+              ),
+            );
+          },
+    multiSelectionEnabled: props.multiSelectionEnabled,
+    emptySelectionAllowed: props.emptySelectionAllowed,
+    direction: switch (props.direction) {
+      ScrollAxis.horizontal => Axis.horizontal,
+      ScrollAxis.vertical => Axis.vertical,
+    },
+    expandedInsets: switch (props.expandedInsets) {
+      null => null,
+      final insets => EdgeInsets.fromLTRB(
+        insets.left,
+        insets.top,
+        insets.right,
+        insets.bottom,
+      ),
+    },
+    showSelectedIcon: props.showSelectedIcon,
+    selectedIcon: selectedIcon,
+  );
+}
+
 Widget _buildMaterialSlider(
   BuildContext context,
   UiNode node,
@@ -1819,15 +1890,26 @@ Widget _buildMaterialCard(
   return Card(elevation: props.elevation, child: children.single);
 }
 
-Widget _buildMaterialProgress(
+Widget _buildMaterialCircularProgress(
   BuildContext context,
   UiNode node,
   List<Widget> children,
   RendererEventCallback? onEvent,
 ) {
   _expectChildCount(node, children, 0);
-  final props = _expectProps<MaterialProgressProps>(node);
+  final props = _expectProps<MaterialCircularProgressProps>(node);
   return CircularProgressIndicator(value: props.value);
+}
+
+Widget _buildMaterialLinearProgress(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  _expectChildCount(node, children, 0);
+  final props = _expectProps<MaterialLinearProgressProps>(node);
+  return LinearProgressIndicator(value: props.value);
 }
 
 Widget _buildCupertinoButton(

@@ -1,7 +1,7 @@
 ((protocol
   (name bonsai_flutter)
   (major 1)
-  (minor 21)
+  (minor 23)
   (endianness little)
   (header_bytes 48)
   (max_frame_bytes 16777216)
@@ -103,6 +103,8 @@
    (material_choice_chip 121)
    (material_input_chip 122)
    (material_alert_dialog 123)
+   (material_linear_progress_indicator 124)
+   (material_segmented_button 125)
    (native_widget 128)))
 
  (common_props
@@ -348,6 +350,18 @@
     ((elevation 1 f64)))
    (material_circular_progress_indicator
     ((value 1 optional_f64)))
+   (material_linear_progress_indicator
+    ((value 1 optional_f64)))
+   (material_segmented_button
+    ((selected_ids 1 i64_list)
+     (enabled 2 bool)
+     (direction 3 axis)
+     (multi_selection_enabled 4 bool)
+     (empty_selection_allowed 5 bool)
+     (expanded_insets 6 optional_edge_insets)
+     (show_selected_icon 7 bool)
+     (has_selected_icon 8 bool)
+     (segments 9 material_segments)))
    (cupertino_button
     ((enabled 1 bool)))
    (cupertino_switch
@@ -447,7 +461,8 @@
    (slider_change_end 31 f64)
    (range_slider_changed 32 f64_range)
    (range_slider_change_end 33 f64_range)
-   (delete 34 unit)))
+   (delete 34 unit)
+   (segmented_selection_changed 35 i64_list)))
 
  (host_requests
   ((clipboard_read 1 unit string_result)

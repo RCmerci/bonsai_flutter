@@ -712,6 +712,11 @@ abstract final class FrameCodec {
             ..uint8(option.enabled ? 1 : 0)
             ..uint8(option.hasLabel ? 1 : 0);
         }
+      case (
+        NodeKind.materialSegmentedButton,
+        final MaterialSegmentedButtonProps props,
+      ):
+        _writeMaterialSegmentedButton(writer, props);
       case (NodeKind.materialSlider, final MaterialSliderProps props):
         _validateMaterialSlider(props);
         writer
@@ -807,8 +812,15 @@ abstract final class FrameCodec {
         writer.float64(elevation);
       case (
         NodeKind.materialCircularProgressIndicator,
-        MaterialProgressProps(:final value),
+        MaterialCircularProgressProps(:final value),
       ):
+        _validateProgressValue(value);
+        writer.optionalFloat64(value);
+      case (
+        NodeKind.materialLinearProgressIndicator,
+        MaterialLinearProgressProps(:final value),
+      ):
+        _validateProgressValue(value);
         writer.optionalFloat64(value);
       case (NodeKind.cupertinoButton, CupertinoButtonProps(:final enabled)):
         writer.uint8(enabled ? 1 : 0);
@@ -1187,6 +1199,11 @@ abstract final class FrameCodec {
           ..uint16(NodeKindId.materialRadioGroup)
           ..uint64(_changedFields(props));
         _writeCreateProps(writer, NodeKind.materialRadioGroup, props);
+      case final MaterialSegmentedButtonProps props:
+        writer
+          ..uint16(NodeKindId.materialSegmentedButton)
+          ..uint64(_changedFields(props));
+        _writeMaterialSegmentedButton(writer, props);
       case final MaterialSliderProps props:
         writer
           ..uint16(NodeKindId.materialSlider)
@@ -1253,9 +1270,16 @@ abstract final class FrameCodec {
           ..uint16(NodeKindId.materialCard)
           ..uint64(_changedFields(props))
           ..float64(elevation);
-      case MaterialProgressProps(:final value):
+      case MaterialCircularProgressProps(:final value):
+        _validateProgressValue(value);
         writer
           ..uint16(NodeKindId.materialCircularProgressIndicator)
+          ..uint64(_changedFields(props))
+          ..optionalFloat64(value);
+      case MaterialLinearProgressProps(:final value):
+        _validateProgressValue(value);
+        writer
+          ..uint16(NodeKindId.materialLinearProgressIndicator)
           ..uint64(_changedFields(props))
           ..optionalFloat64(value);
       case CupertinoButtonProps(:final enabled):
@@ -1493,6 +1517,7 @@ abstract final class FrameCodec {
     ),
     NodeKind.materialNavigationBar => _readMaterialNavigationBar(reader),
     NodeKind.materialRadioGroup => _readMaterialRadioGroup(reader),
+    NodeKind.materialSegmentedButton => _readMaterialSegmentedButton(reader),
     NodeKind.materialSlider => _readMaterialSlider(reader),
     NodeKind.materialRangeSlider => _readMaterialRangeSlider(reader),
     NodeKind.materialActionChip => _readMaterialChip(
@@ -1538,8 +1563,11 @@ abstract final class FrameCodec {
     NodeKind.materialCard => MaterialCardProps(
       elevation: reader.finiteFloat64(),
     ),
-    NodeKind.materialCircularProgressIndicator => MaterialProgressProps(
-      value: reader.optionalFloat64(),
+    NodeKind.materialCircularProgressIndicator => MaterialCircularProgressProps(
+      value: _readProgressValue(reader),
+    ),
+    NodeKind.materialLinearProgressIndicator => MaterialLinearProgressProps(
+      value: _readProgressValue(reader),
     ),
     NodeKind.cupertinoButton => CupertinoButtonProps(enabled: reader.boolean()),
     NodeKind.cupertinoSwitch => CupertinoSwitchProps(
@@ -1667,6 +1695,7 @@ abstract final class FrameCodec {
       NodeKindId.materialFloatingActionButton,
     NodeKind.materialNavigationBar => NodeKindId.materialNavigationBar,
     NodeKind.materialRadioGroup => NodeKindId.materialRadioGroup,
+    NodeKind.materialSegmentedButton => NodeKindId.materialSegmentedButton,
     NodeKind.materialSlider => NodeKindId.materialSlider,
     NodeKind.materialRangeSlider => NodeKindId.materialRangeSlider,
     NodeKind.materialActionChip => NodeKindId.materialActionChip,
@@ -1681,6 +1710,8 @@ abstract final class FrameCodec {
     NodeKind.materialCard => NodeKindId.materialCard,
     NodeKind.materialCircularProgressIndicator =>
       NodeKindId.materialCircularProgressIndicator,
+    NodeKind.materialLinearProgressIndicator =>
+      NodeKindId.materialLinearProgressIndicator,
     NodeKind.cupertinoButton => NodeKindId.cupertinoButton,
     NodeKind.cupertinoSwitch => NodeKindId.cupertinoSwitch,
     NodeKind.textInput => NodeKindId.textInput,
@@ -1795,6 +1826,12 @@ abstract final class FrameCodec {
     if (value == NodeKindId.materialCard) return NodeKind.materialCard;
     if (value == NodeKindId.materialCircularProgressIndicator) {
       return NodeKind.materialCircularProgressIndicator;
+    }
+    if (value == NodeKindId.materialLinearProgressIndicator) {
+      return NodeKind.materialLinearProgressIndicator;
+    }
+    if (value == NodeKindId.materialSegmentedButton) {
+      return NodeKind.materialSegmentedButton;
     }
     if (value == NodeKindId.cupertinoButton) return NodeKind.cupertinoButton;
     if (value == NodeKindId.cupertinoSwitch) return NodeKind.cupertinoSwitch;
@@ -2340,6 +2377,16 @@ int _changedFields(UiProps props) => switch (props) {
   MaterialRadioGroupProps() =>
     _fieldMask(MaterialRadioGroupPropId.selectedId) |
         _fieldMask(MaterialRadioGroupPropId.options),
+  MaterialSegmentedButtonProps() =>
+    _fieldMask(MaterialSegmentedButtonPropId.selectedIds) |
+        _fieldMask(MaterialSegmentedButtonPropId.enabled) |
+        _fieldMask(MaterialSegmentedButtonPropId.direction) |
+        _fieldMask(MaterialSegmentedButtonPropId.multiSelectionEnabled) |
+        _fieldMask(MaterialSegmentedButtonPropId.emptySelectionAllowed) |
+        _fieldMask(MaterialSegmentedButtonPropId.expandedInsets) |
+        _fieldMask(MaterialSegmentedButtonPropId.showSelectedIcon) |
+        _fieldMask(MaterialSegmentedButtonPropId.hasSelectedIcon) |
+        _fieldMask(MaterialSegmentedButtonPropId.segments),
   MaterialSliderProps() =>
     _fieldMask(MaterialSliderPropId.value) |
         _fieldMask(MaterialSliderPropId.min) |
@@ -2385,8 +2432,11 @@ int _changedFields(UiProps props) => switch (props) {
         _fieldMask(MaterialListTilePropId.hasTrailing),
   MaterialDividerProps() => _fieldMask(MaterialDividerPropId.thickness),
   MaterialCardProps() => _fieldMask(MaterialCardPropId.elevation),
-  MaterialProgressProps() => _fieldMask(
+  MaterialCircularProgressProps() => _fieldMask(
     MaterialCircularProgressIndicatorPropId.value,
+  ),
+  MaterialLinearProgressProps() => _fieldMask(
+    MaterialLinearProgressIndicatorPropId.value,
   ),
   CupertinoButtonProps() => _fieldMask(CupertinoButtonPropId.enabled),
   CupertinoSwitchProps() =>
@@ -2590,6 +2640,118 @@ void _validateMaterialRadio(
   }
 }
 
+void _validateMaterialSegmentedButton(MaterialSegmentedButtonProps props) {
+  if (props.segments.isEmpty) {
+    _fail(ProtocolErrorCode.invalidProps, 'SegmentedButton needs a segment');
+  }
+  final segmentIds = <int>{};
+  for (final segment in props.segments) {
+    if (!segment.hasIcon && !segment.hasLabel) {
+      _fail(
+        ProtocolErrorCode.invalidProps,
+        'SegmentedButton segment needs an icon or label',
+      );
+    }
+    if (!segmentIds.add(segment.id)) {
+      _fail(
+        ProtocolErrorCode.invalidProps,
+        'SegmentedButton segment IDs must be unique',
+      );
+    }
+  }
+  for (var index = 0; index < props.selectedIds.length; index += 1) {
+    final id = props.selectedIds[index];
+    if (!segmentIds.contains(id)) {
+      _fail(
+        ProtocolErrorCode.invalidProps,
+        'SegmentedButton selected ID is absent',
+      );
+    }
+    if (index > 0 && props.selectedIds[index - 1] >= id) {
+      _fail(
+        ProtocolErrorCode.invalidProps,
+        'SegmentedButton selected IDs must be sorted and unique',
+      );
+    }
+  }
+  if (!props.multiSelectionEnabled && props.selectedIds.length > 1) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'SegmentedButton single-selection mode has multiple IDs',
+    );
+  }
+  if (!props.emptySelectionAllowed && props.selectedIds.isEmpty) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'SegmentedButton selection must not be empty',
+    );
+  }
+  if (props.hasSelectedIcon && !props.showSelectedIcon) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'SegmentedButton selected icon cannot be supplied while hidden',
+    );
+  }
+  final insets = props.expandedInsets;
+  if (insets != null &&
+      [
+        insets.left,
+        insets.top,
+        insets.right,
+        insets.bottom,
+      ].any((value) => !value.isFinite || value < 0)) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'SegmentedButton expanded insets must be finite and non-negative',
+    );
+  }
+}
+
+void _writeMaterialSegmentedButton(
+  _Writer writer,
+  MaterialSegmentedButtonProps props,
+) {
+  _validateMaterialSegmentedButton(props);
+  if (props.selectedIds.length > 0xffff || props.segments.length > 0xffff) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'SegmentedButton counts must fit uint16',
+    );
+  }
+  writer.uint16(props.selectedIds.length);
+  for (final id in props.selectedIds) {
+    writer.int64(id);
+  }
+  writer
+    ..uint8(props.enabled ? 1 : 0)
+    ..uint8(props.direction.index)
+    ..uint8(props.multiSelectionEnabled ? 1 : 0)
+    ..uint8(props.emptySelectionAllowed ? 1 : 0);
+  final insets = props.expandedInsets;
+  if (insets == null) {
+    writer.uint8(0);
+  } else {
+    writer
+      ..uint8(1)
+      ..float64(insets.left)
+      ..float64(insets.top)
+      ..float64(insets.right)
+      ..float64(insets.bottom);
+  }
+  writer
+    ..uint8(props.showSelectedIcon ? 1 : 0)
+    ..uint8(props.hasSelectedIcon ? 1 : 0)
+    ..uint16(props.segments.length);
+  for (final segment in props.segments) {
+    writer
+      ..int64(segment.id)
+      ..uint8(segment.enabled ? 1 : 0)
+      ..optionalString(segment.tooltip)
+      ..uint8(segment.hasIcon ? 1 : 0)
+      ..uint8(segment.hasLabel ? 1 : 0);
+  }
+}
+
 void _validateMaterialSlider(MaterialSliderProps props) {
   if (!props.value.isFinite || !props.min.isFinite || !props.max.isFinite) {
     _fail(ProtocolErrorCode.invalidProps, 'Slider values must be finite');
@@ -2602,6 +2764,21 @@ void _validateMaterialSlider(MaterialSliderProps props) {
   if (props.divisions case final divisions? when divisions <= 0) {
     _fail(ProtocolErrorCode.invalidProps, 'Slider divisions must be positive');
   }
+}
+
+void _validateProgressValue(double? value) {
+  if (value != null && (!value.isFinite || value < 0 || value > 1)) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Progress value must be finite and in 0..1',
+    );
+  }
+}
+
+double? _readProgressValue(_Reader reader) {
+  final value = reader.optionalFloat64();
+  _validateProgressValue(value);
+  return value;
 }
 
 void _validateMaterialRangeSlider(MaterialRangeSliderProps props) {
@@ -2668,6 +2845,59 @@ MaterialRadioGroupProps _readMaterialRadioGroup(_Reader reader) {
   );
   _validateMaterialRadio(selectedId, options);
   return MaterialRadioGroupProps(selectedId: selectedId, options: options);
+}
+
+MaterialSegmentedButtonProps _readMaterialSegmentedButton(_Reader reader) {
+  final selectedIds = List<int>.generate(
+    reader.uint16(),
+    (_) => reader.int64(),
+  );
+  final enabled = reader.boolean();
+  final direction = _enumValue(
+    ScrollAxis.values,
+    reader.uint8(),
+    'segmented button direction',
+  );
+  final multiSelectionEnabled = reader.boolean();
+  final emptySelectionAllowed = reader.boolean();
+  final expandedInsets = switch (reader.uint8()) {
+    0 => null,
+    1 => EdgeInsetsValue(
+      left: reader.finiteFloat64(),
+      top: reader.finiteFloat64(),
+      right: reader.finiteFloat64(),
+      bottom: reader.finiteFloat64(),
+    ),
+    final value => _fail(
+      ProtocolErrorCode.invalidProps,
+      'Invalid segmented expanded insets tag $value',
+    ),
+  };
+  final showSelectedIcon = reader.boolean();
+  final hasSelectedIcon = reader.boolean();
+  final segments = List<MaterialSegmentProps>.generate(
+    reader.uint16(),
+    (_) => MaterialSegmentProps(
+      id: reader.int64(),
+      enabled: reader.boolean(),
+      tooltip: reader.optionalString(),
+      hasIcon: reader.boolean(),
+      hasLabel: reader.boolean(),
+    ),
+  );
+  final props = MaterialSegmentedButtonProps(
+    selectedIds: selectedIds,
+    enabled: enabled,
+    direction: direction,
+    multiSelectionEnabled: multiSelectionEnabled,
+    emptySelectionAllowed: emptySelectionAllowed,
+    expandedInsets: expandedInsets,
+    showSelectedIcon: showSelectedIcon,
+    hasSelectedIcon: hasSelectedIcon,
+    segments: segments,
+  );
+  _validateMaterialSegmentedButton(props);
+  return props;
 }
 
 MaterialSliderProps _readMaterialSlider(_Reader reader) {

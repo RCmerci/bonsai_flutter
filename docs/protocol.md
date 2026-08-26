@@ -116,13 +116,28 @@ implemented kind-specific property layouts are:
 | Overlay | `alignment:u8`, `dismissible:bool` |
 | Navigator | `restoration_scope_id:optional string` |
 | Page | `page_key:string`, standard transition `u8`, `can_pop:bool`, `restoration_id:optional string`, presentation `u8`, typed modal flags and values |
-| Material controls | Typed Scaffold slots, button/FAB variants, navigation and radio metadata, slider values, chip roles, and AlertDialog child-presence fields |
+| Material controls | Typed Scaffold slots, button/FAB variants, navigation, radio and segmented-button metadata, slider values, chip roles, and AlertDialog child-presence fields |
 | Pressable | `overlay_color:u32 ARGB`, `release_delay_ms:u16` |
 
 `Update_props` carries the exact generated field mask expected for its full
 typed property value. Empty and linear values use mask zero; multi-property
 values set each implemented field bit. Future fields extend the
 kind-specific generated layout rather than inserting a dynamic property map.
+Protocol 1.22 adds node kind 124 for Material linear progress with one optional
+finite `f64` value. An absent value selects indeterminate progress; a present
+value must be in the inclusive range `0.0` through `1.0`. OCaml and Dart both
+reject non-finite and out-of-range values at their wire boundaries.
+Protocol 1.23 adds node kind 125 for Material segmented buttons and event tag
+35 for complete selection changes. Selected IDs use a `u16` count followed by
+signed `i64` values in strictly ascending order. Segment metadata uses a `u16`
+count followed by stable ID, enabled flag, optional tooltip, and icon/label
+presence flags. Optional expanded insets contain four finite non-negative
+`f64` values. The canonical child order is the optional custom selected icon,
+then each segment's optional icon and optional label in segment order. Both
+decoders reject empty segment collections, duplicate segment IDs, segments
+without icon or label, non-canonical or unknown selected IDs, invalid single-
+or empty-selection policies, hidden custom selected icons, and invalid child
+shapes.
 Protocol 1.21 adds `Set_application_theme`. Every current-protocol full
 snapshot contains exactly one such operation; an incremental frame contains
 one only when the logical application theme or title changes. Its bounded

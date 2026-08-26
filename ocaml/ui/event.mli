@@ -30,6 +30,7 @@ module Tag : sig
     | Range_slider_changed
     | Range_slider_change_end
     | Delete
+    | Segmented_selection_changed
 
   val compare : t -> t -> int
   val equal : t -> t -> bool
@@ -123,6 +124,7 @@ module Payload : sig
     | Text of string
     | Text_edit of text_edit
     | Int64 of int64
+    | Int64_list of int64 list
     | Float of float
     | Float_range of
         { start : float

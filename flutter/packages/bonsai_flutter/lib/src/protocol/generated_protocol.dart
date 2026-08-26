@@ -2,7 +2,7 @@
 
 abstract final class ProtocolVersion {
   static const int protocolMajor = 1;
-  static const int protocolMinor = 21;
+  static const int protocolMinor = 23;
 }
 
 abstract final class ProtocolLimits {
@@ -134,6 +134,8 @@ abstract final class NodeKindId {
   static const int materialChoiceChip = 121;
   static const int materialInputChip = 122;
   static const int materialAlertDialog = 123;
+  static const int materialLinearProgressIndicator = 124;
+  static const int materialSegmentedButton = 125;
   static const int nativeWidget = 128;
 
   static String? debugName(int id) => switch (id) {
@@ -208,6 +210,8 @@ abstract final class NodeKindId {
     121 => 'material_choice_chip',
     122 => 'material_input_chip',
     123 => 'material_alert_dialog',
+    124 => 'material_linear_progress_indicator',
+    125 => 'material_segmented_button',
     128 => 'native_widget',
     _ => null,
   };
@@ -248,6 +252,7 @@ abstract final class EventTagId {
   static const int rangeSliderChanged = 32;
   static const int rangeSliderChangeEnd = 33;
   static const int delete = 34;
+  static const int segmentedSelectionChanged = 35;
 
   static String? debugName(int id) => switch (id) {
     1 => 'press',
@@ -284,6 +289,7 @@ abstract final class EventTagId {
     32 => 'range_slider_changed',
     33 => 'range_slider_change_end',
     34 => 'delete',
+    35 => 'segmented_selection_changed',
     _ => null,
   };
 }
@@ -1101,6 +1107,40 @@ abstract final class MaterialCircularProgressIndicatorPropId {
 
   static String? debugName(int id) => switch (id) {
     1 => 'value',
+    _ => null,
+  };
+}
+
+abstract final class MaterialLinearProgressIndicatorPropId {
+  static const int value = 1;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'value',
+    _ => null,
+  };
+}
+
+abstract final class MaterialSegmentedButtonPropId {
+  static const int selectedIds = 1;
+  static const int enabled = 2;
+  static const int direction = 3;
+  static const int multiSelectionEnabled = 4;
+  static const int emptySelectionAllowed = 5;
+  static const int expandedInsets = 6;
+  static const int showSelectedIcon = 7;
+  static const int hasSelectedIcon = 8;
+  static const int segments = 9;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'selected_ids',
+    2 => 'enabled',
+    3 => 'direction',
+    4 => 'multi_selection_enabled',
+    5 => 'empty_selection_allowed',
+    6 => 'expanded_insets',
+    7 => 'show_selected_icon',
+    8 => 'has_selected_icon',
+    9 => 'segments',
     _ => null,
   };
 }

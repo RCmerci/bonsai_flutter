@@ -2,7 +2,7 @@
 
 # Protocol IDs
 
-Protocol version: `1.21`
+Protocol version: `1.23`
 
 ## Frame kind
 
@@ -106,6 +106,8 @@ Protocol version: `1.21`
 | `material_choice_chip` | 121 |
 | `material_input_chip` | 122 |
 | `material_alert_dialog` | 123 |
+| `material_linear_progress_indicator` | 124 |
+| `material_segmented_button` | 125 |
 | `native_widget` | 128 |
 
 ## Event tag
@@ -146,6 +148,7 @@ Protocol version: `1.21`
 | `range_slider_changed` | 32 |
 | `range_slider_change_end` | 33 |
 | `delete` | 34 |
+| `segmented_selection_changed` | 35 |
 
 ## Host request
 
@@ -639,6 +642,26 @@ Protocol version: `1.21`
 | Name | ID | Encoding |
 |---|---:|---|
 | `value` | 1 | `optional_f64` |
+
+## Material linear progress indicator properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `value` | 1 | `optional_f64` |
+
+## Material segmented button properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `selected_ids` | 1 | `i64_list` |
+| `enabled` | 2 | `bool` |
+| `direction` | 3 | `axis` |
+| `multi_selection_enabled` | 4 | `bool` |
+| `empty_selection_allowed` | 5 | `bool` |
+| `expanded_insets` | 6 | `optional_edge_insets` |
+| `show_selected_icon` | 7 | `bool` |
+| `has_selected_icon` | 8 | `bool` |
+| `segments` | 9 | `material_segments` |
 
 ## Cupertino button properties
 

@@ -364,6 +364,22 @@ let read_payload reader event_tag =
     event_tag = Generated_protocol.Event_tag.navigation_destination_selected
     || event_tag = Generated_protocol.Event_tag.radio_selected
   then Int64 (Reader.i64 reader)
+  else if event_tag = Generated_protocol.Event_tag.segmented_selection_changed
+  then (
+    let count = Reader.u16 reader in
+    let rec read index previous reversed =
+      if index = count
+      then Inbound_event.Int64_list (List.rev reversed)
+      else (
+        let value = Reader.i64 reader in
+        Option.iter
+          (fun previous ->
+             if Int64.compare previous value >= 0
+             then fail Invalid_payload "segmented selected IDs must be sorted and unique")
+          previous;
+        read (index + 1) (Some value) (value :: reversed))
+    in
+    read 0 None [])
   else if
     event_tag = Generated_protocol.Event_tag.slider_changed
     || event_tag = Generated_protocol.Event_tag.slider_change_end
@@ -647,6 +663,21 @@ let write_payload writer event_tag payload =
       || event_tag = Generated_protocol.Event_tag.semantics_action
     then check_u64 "event int64" value;
     Writer.u64 writer value
+  | Int64_list values ->
+    if event_tag <> Generated_protocol.Event_tag.segmented_selection_changed
+    then fail Invalid_payload "int64 list payload does not match event tag";
+    if List.length values > 0xffff
+    then fail Invalid_payload "segmented selected ID count must fit uint16";
+    let rec validate = function
+      | [] | [ _ ] -> ()
+      | left :: (right :: _ as tail) ->
+        if Int64.compare left right >= 0
+        then fail Invalid_payload "segmented selected IDs must be sorted and unique";
+        validate tail
+    in
+    validate values;
+    Writer.u16 writer (List.length values);
+    List.iter (Writer.u64 writer) values
   | Float value ->
     if
       event_tag <> Generated_protocol.Event_tag.slider_changed

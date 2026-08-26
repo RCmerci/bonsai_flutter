@@ -83,6 +83,7 @@ void main() {
       const payloads = <(int, EventPayload)>[
         (EventTagId.navigationDestinationSelected, Int64EventPayload(2)),
         (EventTagId.radioSelected, Int64EventPayload(-9)),
+        (EventTagId.segmentedSelectionChanged, Int64ListEventPayload([-9, 2])),
         (EventTagId.sliderChanged, FloatEventPayload(0.25)),
         (EventTagId.sliderChangeEnd, FloatEventPayload(0.75)),
         (
@@ -142,6 +143,37 @@ void main() {
           ),
         ),
       );
+    });
+
+    test('rejects non-canonical segmented selection payloads', () {
+      for (final values in const <List<int>>[
+        [2, 1],
+        [1, 1],
+      ]) {
+        final batch = EventBatch(
+          runtimeEpoch: 21,
+          events: [
+            UiEvent(
+              sequence: 1,
+              displayedRevision: 4,
+              nodeId: 8,
+              handlerId: 20,
+              eventTag: EventTagId.segmentedSelectionChanged,
+              payload: Int64ListEventPayload(values),
+            ),
+          ],
+        );
+        expect(
+          () => EventBatchCodec.encode(batch),
+          throwsA(
+            isA<ProtocolException>().having(
+              (error) => error.code,
+              'code',
+              ProtocolErrorCode.invalidProps,
+            ),
+          ),
+        );
+      }
     });
 
     test('matches the shared Counter press fixture byte for byte', () {

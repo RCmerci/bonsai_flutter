@@ -105,6 +105,28 @@ final class Int64EventPayload extends EventPayload {
   int get hashCode => Object.hash(Int64EventPayload, value);
 }
 
+final class Int64ListEventPayload extends EventPayload {
+  const Int64ListEventPayload(this.values);
+
+  final List<int> values;
+
+  @override
+  bool operator ==(Object other) {
+    if (other is! Int64ListEventPayload ||
+        other.values.length != values.length) {
+      return false;
+    }
+    for (var index = 0; index < values.length; index += 1) {
+      if (other.values[index] != values[index]) return false;
+    }
+    return true;
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(Int64ListEventPayload, Object.hashAll(values));
+}
+
 final class FloatEventPayload extends EventPayload {
   const FloatEventPayload(this.value);
 
@@ -854,6 +876,21 @@ abstract final class EventBatchCodec {
       writer.int64(payload.value);
       return;
     }
+    if (eventTag == EventTagId.segmentedSelectionChanged &&
+        payload is Int64ListEventPayload) {
+      _validateCanonicalInt64List(payload.values, 'segmented selected IDs');
+      if (payload.values.length > 0xffff) {
+        _eventFail(
+          ProtocolErrorCode.invalidProps,
+          'Segmented selected ID count must fit uint16',
+        );
+      }
+      writer.uint16(payload.values.length);
+      for (final value in payload.values) {
+        writer.int64(value);
+      }
+      return;
+    }
     if ((eventTag == EventTagId.sliderChanged ||
             eventTag == EventTagId.sliderChangeEnd) &&
         payload is FloatEventPayload) {
@@ -1115,6 +1152,11 @@ abstract final class EventBatchCodec {
     if (eventTag == EventTagId.navigationDestinationSelected ||
         eventTag == EventTagId.radioSelected) {
       return Int64EventPayload(reader.int64());
+    }
+    if (eventTag == EventTagId.segmentedSelectionChanged) {
+      final values = List<int>.generate(reader.uint16(), (_) => reader.int64());
+      _validateCanonicalInt64List(values, 'segmented selected IDs');
+      return Int64ListEventPayload(values);
     }
     if (eventTag == EventTagId.sliderChanged ||
         eventTag == EventTagId.sliderChangeEnd) {
@@ -1573,6 +1615,17 @@ final class _EventReader {
 
 Never _eventFail(ProtocolErrorCode code, String message) =>
     throw ProtocolException(code, message);
+
+void _validateCanonicalInt64List(List<int> values, String label) {
+  for (var index = 1; index < values.length; index += 1) {
+    if (values[index - 1] >= values[index]) {
+      _eventFail(
+        ProtocolErrorCode.invalidProps,
+        '$label must be sorted and unique',
+      );
+    }
+  }
+}
 
 void _checkEventUint32(String label, int value) {
   if (value < 0 || value > 0xffffffff) {

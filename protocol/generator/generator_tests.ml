@@ -28,7 +28,7 @@ let load_schema () =
 let test_schema_values () =
   let schema = load_schema () in
   expect (schema.major = 1) "unexpected protocol major";
-  expect (schema.minor = 21) "unexpected protocol minor";
+  expect (schema.minor = 23) "unexpected protocol minor";
   expect (schema.limits.header_bytes = 48) "unexpected header size";
   expect
     (schema.limits.max_application_payload_bytes = 1_048_576)
@@ -45,6 +45,24 @@ let test_schema_values () =
           String.equal entry.name "reserved_node_kind_107" && entry.id = 107)
        schema.node_kinds)
     "reserved node kind ID was not parsed";
+  expect
+    (List.exists
+       (fun (entry : Schema.entry) ->
+          String.equal entry.name "material_linear_progress_indicator" && entry.id = 124)
+       schema.node_kinds)
+    "linear progress node kind ID was not parsed";
+  expect
+    (List.exists
+       (fun (entry : Schema.entry) ->
+          String.equal entry.name "material_segmented_button" && entry.id = 125)
+       schema.node_kinds)
+    "segmented button node kind ID was not parsed";
+  expect
+    (List.exists
+       (fun (entry : Schema.entry) ->
+          String.equal entry.name "segmented_selection_changed" && entry.id = 35)
+       schema.event_tags)
+    "segmented selection event tag was not parsed";
   let padding =
     List.find
       (fun (group : Schema.property_group) -> String.equal group.name "padding")
@@ -128,6 +146,12 @@ let test_all_targets_are_rendered_from_one_model () =
     "val reserved_node_kind_107 : Bonsai_flutter_spec.Id.Protocol.node_kind";
   expect_contains
     outputs.ocaml_interface
+    "val material_linear_progress_indicator : Bonsai_flutter_spec.Id.Protocol.node_kind";
+  expect_contains
+    outputs.ocaml_interface
+    "val material_segmented_button : Bonsai_flutter_spec.Id.Protocol.node_kind";
+  expect_contains
+    outputs.ocaml_interface
     "val host_response : Bonsai_flutter_spec.Id.Protocol.event_tag";
   expect_contains
     outputs.ocaml_interface
@@ -154,6 +178,9 @@ let test_all_targets_are_rendered_from_one_model () =
   expect_contains outputs.ocaml_implementation "module Material_checkbox_prop = struct";
   expect_contains outputs.dart "static const int protocolMajor = 1;";
   expect_contains outputs.dart "static const int reservedNodeKind107 = 107;";
+  expect_contains outputs.dart "static const int materialLinearProgressIndicator = 124;";
+  expect_contains outputs.dart "static const int materialSegmentedButton = 125;";
+  expect_contains outputs.dart "static const int segmentedSelectionChanged = 35;";
   expect_contains outputs.dart "abstract final class PaddingPropId";
   expect_contains outputs.dart "abstract final class MaterialCheckboxPropId";
   expect_contains outputs.dart "static const int acceptedLocalRevision = 9;";

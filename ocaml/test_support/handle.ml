@@ -222,6 +222,7 @@ let protocol_tag =
   | Range_slider_changed -> Tag.range_slider_changed
   | Range_slider_change_end -> Tag.range_slider_change_end
   | Delete -> Tag.delete
+  | Segmented_selection_changed -> Tag.segmented_selection_changed
 ;;
 
 let dispatch t query tag payload =

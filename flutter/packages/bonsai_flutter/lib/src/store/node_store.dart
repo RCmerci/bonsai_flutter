@@ -587,6 +587,7 @@ final class NodeStore {
         props is MaterialFloatingActionButtonProps,
       NodeKind.materialNavigationBar => props is MaterialNavigationBarProps,
       NodeKind.materialRadioGroup => props is MaterialRadioGroupProps,
+      NodeKind.materialSegmentedButton => props is MaterialSegmentedButtonProps,
       NodeKind.materialSlider => props is MaterialSliderProps,
       NodeKind.materialRangeSlider => props is MaterialRangeSliderProps,
       NodeKind.materialActionChip ||
@@ -600,7 +601,9 @@ final class NodeStore {
       NodeKind.materialDivider => props is MaterialDividerProps,
       NodeKind.materialCard => props is MaterialCardProps,
       NodeKind.materialCircularProgressIndicator =>
-        props is MaterialProgressProps,
+        props is MaterialCircularProgressProps,
+      NodeKind.materialLinearProgressIndicator =>
+        props is MaterialLinearProgressProps,
       NodeKind.cupertinoButton => props is CupertinoButtonProps,
       NodeKind.cupertinoSwitch => props is CupertinoSwitchProps,
       NodeKind.textInput => props is TextInputProps,

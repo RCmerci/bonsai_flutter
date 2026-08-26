@@ -52,6 +52,8 @@ let convert_tag tag =
   then Ok Navigation_destination_selected
   else if tag = Id.radio_selected
   then Ok Radio_selected
+  else if tag = Id.segmented_selection_changed
+  then Ok Segmented_selection_changed
   else if tag = Id.slider_changed
   then Ok Slider_changed
   else if tag = Id.slider_change_end
@@ -132,6 +134,7 @@ let convert_payload tag payload =
   | Int64 value when tag = Id.animation_completed -> Ok (Int64 value)
   | Int64 value when tag = Id.navigation_destination_selected || tag = Id.radio_selected
     -> Ok (Int64 value)
+  | Int64_list values when tag = Id.segmented_selection_changed -> Ok (Int64_list values)
   | Float value when tag = Id.slider_changed || tag = Id.slider_change_end ->
     Ok (Float value)
   | Float_range { start; end_ }

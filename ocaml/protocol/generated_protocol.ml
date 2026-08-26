@@ -3,7 +3,7 @@
 module ID = Bonsai_flutter_spec.Id
 
 let protocol_major = 1
-let protocol_minor = 21
+let protocol_minor = 23
 
 module Limits = struct
   let header_bytes = 48
@@ -136,6 +136,8 @@ module Node_kind = struct
   let material_choice_chip = ID.Protocol.Node_kind.of_int 121
   let material_input_chip = ID.Protocol.Node_kind.of_int 122
   let material_alert_dialog = ID.Protocol.Node_kind.of_int 123
+  let material_linear_progress_indicator = ID.Protocol.Node_kind.of_int 124
+  let material_segmented_button = ID.Protocol.Node_kind.of_int 125
   let native_widget = ID.Protocol.Node_kind.of_int 128
 
   let debug_name id =
@@ -211,6 +213,8 @@ module Node_kind = struct
     | 121 -> Some "material_choice_chip"
     | 122 -> Some "material_input_chip"
     | 123 -> Some "material_alert_dialog"
+    | 124 -> Some "material_linear_progress_indicator"
+    | 125 -> Some "material_segmented_button"
     | 128 -> Some "native_widget"
     | _ -> None
   ;;
@@ -251,6 +255,7 @@ module Event_tag = struct
   let range_slider_changed = ID.Protocol.Event_tag.of_int 32
   let range_slider_change_end = ID.Protocol.Event_tag.of_int 33
   let delete = ID.Protocol.Event_tag.of_int 34
+  let segmented_selection_changed = ID.Protocol.Event_tag.of_int 35
 
   let debug_name id =
     match ID.Protocol.Event_tag.to_int id with
@@ -288,6 +293,7 @@ module Event_tag = struct
     | 32 -> Some "range_slider_changed"
     | 33 -> Some "range_slider_change_end"
     | 34 -> Some "delete"
+    | 35 -> Some "segmented_selection_changed"
     | _ -> None
   ;;
 end
@@ -1161,6 +1167,42 @@ module Material_circular_progress_indicator_prop = struct
   let debug_name id =
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "value"
+    | _ -> None
+  ;;
+end
+
+module Material_linear_progress_indicator_prop = struct
+  let value = ID.Protocol.Property.of_int 1
+
+  let debug_name id =
+    match ID.Protocol.Property.to_int id with
+    | 1 -> Some "value"
+    | _ -> None
+  ;;
+end
+
+module Material_segmented_button_prop = struct
+  let selected_ids = ID.Protocol.Property.of_int 1
+  let enabled = ID.Protocol.Property.of_int 2
+  let direction = ID.Protocol.Property.of_int 3
+  let multi_selection_enabled = ID.Protocol.Property.of_int 4
+  let empty_selection_allowed = ID.Protocol.Property.of_int 5
+  let expanded_insets = ID.Protocol.Property.of_int 6
+  let show_selected_icon = ID.Protocol.Property.of_int 7
+  let has_selected_icon = ID.Protocol.Property.of_int 8
+  let segments = ID.Protocol.Property.of_int 9
+
+  let debug_name id =
+    match ID.Protocol.Property.to_int id with
+    | 1 -> Some "selected_ids"
+    | 2 -> Some "enabled"
+    | 3 -> Some "direction"
+    | 4 -> Some "multi_selection_enabled"
+    | 5 -> Some "empty_selection_allowed"
+    | 6 -> Some "expanded_insets"
+    | 7 -> Some "show_selected_icon"
+    | 8 -> Some "has_selected_icon"
+    | 9 -> Some "segments"
     | _ -> None
   ;;
 end

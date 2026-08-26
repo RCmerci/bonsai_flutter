@@ -575,4 +575,68 @@ void main() {
       expect(store.revision, 1);
     }
   });
+
+  test('linear progress uses its dedicated props type', () {
+    final store = NodeStore()
+      ..apply(
+        const Frame(
+          runtimeEpoch: 2,
+          baseRevision: 0,
+          targetRevision: 1,
+          kind: FrameKind.fullSnapshot,
+          operations: [
+            SetApplicationTheme(
+              title: 'Linear progress',
+              theme: testApplicationTheme,
+            ),
+            CreateNode(
+              nodeId: 1,
+              kind: NodeKind.materialLinearProgressIndicator,
+              props: MaterialLinearProgressProps(value: 0.5),
+              eventBindings: [],
+            ),
+            SetRoot(1),
+          ],
+        ),
+      );
+    expect(
+      store.nodes[1]!.props,
+      isA<MaterialLinearProgressProps>().having(
+        (props) => props.value,
+        'value',
+        0.5,
+      ),
+    );
+
+    expect(
+      () => NodeStore().apply(
+        const Frame(
+          runtimeEpoch: 3,
+          baseRevision: 0,
+          targetRevision: 1,
+          kind: FrameKind.fullSnapshot,
+          operations: [
+            SetApplicationTheme(
+              title: 'Wrong progress props',
+              theme: testApplicationTheme,
+            ),
+            CreateNode(
+              nodeId: 1,
+              kind: NodeKind.materialLinearProgressIndicator,
+              props: MaterialCircularProgressProps(value: 0.5),
+              eventBindings: [],
+            ),
+            SetRoot(1),
+          ],
+        ),
+      ),
+      throwsA(
+        isA<FrameApplyException>().having(
+          (error) => error.code,
+          'code',
+          FrameErrorCode.invalidProps,
+        ),
+      ),
+    );
+  });
 }

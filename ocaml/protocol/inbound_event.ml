@@ -130,6 +130,7 @@ type payload =
   | Text of string
   | Text_edit of text_edit
   | Int64 of int64
+  | Int64_list of int64 list
   | Float of float
   | Float_range of
       { start : float
