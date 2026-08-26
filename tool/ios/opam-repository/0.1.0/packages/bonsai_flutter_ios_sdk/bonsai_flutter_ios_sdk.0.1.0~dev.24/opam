@@ -16,7 +16,7 @@ extra-source "bonsai_flutter.tar.gz" {
 }
 extra-files: [
   ["build-installed-framework.sh" "sha256=d2fff4c8b8a84fcf6de75d2583416a837b94d221ffbd33b89157615c555c097c"]
-  ["manifest.sexp" "sha256=6f6a0216197ec9a553ea782337d44f5aa09e7e7b4382b473ae1856c811228e14"]
+  ["manifest.sexp" "sha256=a36dfcc2fe602215ed6e5b3f0ce740ad6172d0ab1da46d1ca89d5713a8261136"]
   ["package-lock.sexp" "sha256=4679dae342accba63c87ac4401e888412eb6c8d7eb587b84ea6fd5e0ff1d1aca"]
 ]
 depends: [

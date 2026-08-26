@@ -1,7 +1,7 @@
 (repository
  (format_version 1)
  (repository_version 0.1.0)
- (repository_snapshot_sha256 6f43180eb0b5c34c757997a9e5dd044e562cbe31a1d1408bdd7c4a64f994c545)
+ (repository_snapshot_sha256 7498a3f613a4399d2d65a79c9b48deaf3d0a33a8ac41517373cc17fe3b9dc648)
  (source_lock
   vendor/opam-ios/runtime-closure.lock
   48731cde1da271f7ee36aee7485f4e20dccbbb72df3d64bde78593a28af54113)
@@ -18,4 +18,4 @@
   https://github.com/ocaml-cross/opam-cross-ios.git
   8380b52b0154752c26c6e221c04fbced3320aa48)
  (compiler ocaml-base-compiler 5.1.1)
- (sdk_package bonsai_flutter_ios_sdk 0.1.0~dev.23))
+ (sdk_package bonsai_flutter_ios_sdk 0.1.0~dev.24))
