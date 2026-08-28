@@ -987,6 +987,135 @@ void main() {
   });
 
   testWidgets(
+    'route completion keeps the collapsed FAB hidden until the keyboard inset is zero',
+    (tester) async {
+      const viewport = Size(390, 844);
+      const safeAreaBottom = 34.0;
+      const keyboardHeight = 300.0;
+      var keyboardVisible = false;
+      late StateSetter setHostState;
+      await tester.binding.setSurfaceSize(viewport);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatefulBuilder(
+            builder: (context, setState) {
+              setHostState = setState;
+              return MediaQuery(
+                data: MediaQueryData(
+                  size: viewport,
+                  padding: EdgeInsets.only(
+                    bottom: keyboardVisible ? 0 : safeAreaBottom,
+                  ),
+                  viewPadding: const EdgeInsets.only(bottom: safeAreaBottom),
+                  viewInsets: EdgeInsets.only(
+                    bottom: keyboardVisible ? keyboardHeight : 0,
+                  ),
+                ),
+                child: Scaffold(
+                  body: const SizedBox.expand(),
+                  floatingActionButton: _composer(
+                    animationDuration: Duration.zero,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+      final stableFabRect = tester.getRect(find.byType(FloatingActionButton));
+      await _expand(tester);
+
+      setHostState(() => keyboardVisible = true);
+      await tester.pump();
+      expect(find.byType(BottomSheet), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.byType(FloatingActionButton), findsNothing);
+      expect(find.bySemanticsLabel('Open capture'), findsNothing);
+
+      setHostState(() => keyboardVisible = false);
+      await tester.pump();
+
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+      expect(tester.getRect(find.byType(FloatingActionButton)), stableFabRect);
+    },
+  );
+
+  testWidgets(
+    'keyed replacement keeps the collapsed FAB hidden until the keyboard inset is zero',
+    (tester) async {
+      const viewport = Size(390, 844);
+      const safeAreaBottom = 34.0;
+      const keyboardHeight = 300.0;
+      var generation = 1;
+      var keyboardVisible = false;
+      late StateSetter setHostState;
+      await tester.binding.setSurfaceSize(viewport);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatefulBuilder(
+            builder: (context, setState) {
+              setHostState = setState;
+              return MediaQuery(
+                data: MediaQueryData(
+                  size: viewport,
+                  padding: EdgeInsets.only(
+                    bottom: keyboardVisible ? 0 : safeAreaBottom,
+                  ),
+                  viewPadding: const EdgeInsets.only(bottom: safeAreaBottom),
+                  viewInsets: EdgeInsets.only(
+                    bottom: keyboardVisible ? keyboardHeight : 0,
+                  ),
+                ),
+                child: Scaffold(
+                  body: const SizedBox.expand(),
+                  floatingActionButton: _composer(
+                    key: ValueKey(generation),
+                    animationDuration: Duration.zero,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+      final stableFabRect = tester.getRect(find.byType(FloatingActionButton));
+      final oldComposerState = tester.state(
+        find.byType(ExpandableMessageComposer),
+      );
+      await _expand(tester);
+
+      setHostState(() => keyboardVisible = true);
+      await tester.pump();
+      expect(find.byType(BottomSheet), findsOneWidget);
+
+      setHostState(() => generation += 1);
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.state(find.byType(ExpandableMessageComposer)),
+        isNot(same(oldComposerState)),
+      );
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.byType(FloatingActionButton), findsNothing);
+      expect(find.bySemanticsLabel('Open capture'), findsNothing);
+
+      setHostState(() => keyboardVisible = false);
+      await tester.pump();
+
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+      expect(tester.getRect(find.byType(FloatingActionButton)), stableFabRect);
+    },
+  );
+
+  testWidgets(
     'expanded surface follows the iOS keyboard inset and returns to safe area',
     (tester) async {
       const viewport = Size(390, 844);
@@ -1044,41 +1173,44 @@ void main() {
     (tester) async {
       for (final direction in TextDirection.values) {
         await tester.binding.setSurfaceSize(const Size(320, 640));
-        await tester.pumpWidget(
-          MediaQuery(
-            data: const MediaQueryData(
-              size: Size(320, 640),
-              textScaler: TextScaler.linear(3.2),
-              padding: EdgeInsets.only(bottom: 24),
-              viewInsets: EdgeInsets.only(bottom: 180),
-            ),
-            child: Directionality(
-              textDirection: direction,
-              child: MaterialApp(
-                home: Scaffold(
-                  body: const Align(
-                    key: ValueKey('adaptive-body'),
-                    alignment: Alignment.bottomCenter,
-                    child: Text('FINAL BODY ROW'),
-                  ),
-                  floatingActionButton: _composer(
-                    key: ValueKey(direction),
-                    fabLabel: 'Capture a very long message',
-                    animationDuration: Duration.zero,
-                  ),
+        Widget host({required bool keyboardVisible}) => MediaQuery(
+          data: MediaQueryData(
+            size: const Size(320, 640),
+            textScaler: const TextScaler.linear(3.2),
+            padding: EdgeInsets.only(bottom: keyboardVisible ? 0 : 24),
+            viewPadding: const EdgeInsets.only(bottom: 24),
+            viewInsets: EdgeInsets.only(bottom: keyboardVisible ? 180 : 0),
+          ),
+          child: Directionality(
+            textDirection: direction,
+            child: MaterialApp(
+              home: Scaffold(
+                body: const Align(
+                  key: ValueKey('adaptive-body'),
+                  alignment: Alignment.bottomCenter,
+                  child: Text('FINAL BODY ROW'),
+                ),
+                floatingActionButton: _composer(
+                  key: ValueKey(direction),
+                  fabLabel: 'Capture a very long message',
+                  animationDuration: Duration.zero,
                 ),
               ),
             ),
           ),
         );
+        await tester.pumpWidget(host(keyboardVisible: false));
         await tester.pumpAndSettle();
+        await tester.tap(find.byType(FloatingActionButton));
+        await tester.pump();
+        expect(find.byType(BottomSheet), findsOneWidget);
+
+        await tester.pumpWidget(host(keyboardVisible: true));
+        await tester.pump();
         final bodyHeight = tester
             .getSize(find.byKey(const ValueKey('adaptive-body')))
             .height;
         expect(bodyHeight, greaterThan(100));
-        await tester.tap(find.byType(FloatingActionButton));
-        await tester.pump();
-        expect(find.byType(BottomSheet), findsOneWidget);
         await tester.enterText(
           find.byType(TextField),
           'one\ntwo\nthree\nfour\nfive',

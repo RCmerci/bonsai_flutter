@@ -646,7 +646,8 @@ final class _ExpandableMessageComposerState
   }
 
   @override
-  Widget build(BuildContext context) => _sheetRoute == null
+  Widget build(BuildContext context) =>
+      _sheetRoute == null && MediaQuery.viewInsetsOf(context).bottom == 0
       ? AnimatedBuilder(
           animation: _fabPresentationController,
           builder: (context, child) =>
