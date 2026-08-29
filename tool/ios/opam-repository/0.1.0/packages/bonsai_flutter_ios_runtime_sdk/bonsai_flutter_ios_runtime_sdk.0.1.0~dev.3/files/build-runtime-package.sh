@@ -169,6 +169,25 @@ if test ! -f "$source_marker"; then
       -p1 \
       <"$SDK_ASSET_ROOT/patches/jst-config-host-discover.patch"
   fi
+  if test "$package_name" = datascript-ocaml-native; then
+    datascript_sqlite_dune="$source_directory/sqlite/dune"
+    unpatched_sqlite_flags='(:standard -L%{env:DATASCRIPT_SQLITE_LIB_DIR=.} -lsqlite3)'
+    patched_sqlite_flags='(:standard -lsqlite3)'
+    if grep -F "$unpatched_sqlite_flags" "$datascript_sqlite_dune" >/dev/null; then
+      patch \
+        --batch \
+        --forward \
+        -d "$source_directory" \
+        -p1 \
+        <"$SDK_ASSET_ROOT/patches/datascript-system-sqlite.patch"
+    elif ! grep -F "$patched_sqlite_flags" "$datascript_sqlite_dune" >/dev/null; then
+      fail "DataScript SQLite source declaration changed upstream"
+    fi
+    grep -F 'DATASCRIPT_SQLITE_LIB_DIR' "$datascript_sqlite_dune" >/dev/null &&
+      fail "DataScript SQLite still configures an explicit library path"
+    grep -F "$patched_sqlite_flags" "$datascript_sqlite_dune" >/dev/null ||
+      fail "DataScript SQLite does not link the system sqlite3 library"
+  fi
   : >"$source_marker"
 fi
 

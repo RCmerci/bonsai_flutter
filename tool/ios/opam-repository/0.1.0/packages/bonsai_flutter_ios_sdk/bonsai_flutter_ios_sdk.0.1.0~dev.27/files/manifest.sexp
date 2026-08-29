@@ -2,9 +2,9 @@
  (format_version 1)
  (bonsai_flutter_version 0.1.0~dev)
  (bonsai_flutter_source
-  87383e652b944851a5e303960521ada64b7b238b
+  cd525a362e70892f8e0547bc22bff20d384e2710
   sha256
-  729783cae0d14478021b500a3fe01b3644c4f57640759f87119c2605b15a9f7d)
+  089c155243a38bbb11ce0ddcd948d57a9d3b11e45d03f43ce59d2562b675b92f)
  (abi_version 2)
  (ocaml_version 5.1.1)
  (dune_version_range 3.17 4.0)
@@ -13,11 +13,11 @@
  (architecture arm64)
  (platform iphoneos)
  (minimum_deployment_target 15.0)
- (package_universe_digest 54bf6d6f2263d3af2834470c042992d5baa05913352244288fb0819fa1d87eba)
+ (package_universe_digest 3967eccdead8b8c38d520165398b4234b8e432aad5ac9d7d68d7914f483c21cb)
  (target_components_digest 549fb4be9d99a3f37cb074312d888a862390a587ffe99cd52e4335b566114941)
  (required_frameworks Foundation Security)
  (required_system_libraries sqlite3)
- (build_recipe_revision 3)
+ (build_recipe_revision 4)
  (packages
   (abstract_algebra v0.17.0)
   (angstrom 0.16.1)

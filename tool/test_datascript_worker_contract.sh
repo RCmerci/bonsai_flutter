@@ -170,9 +170,9 @@ reject_file \
   "$transit_repository/melange-transit-native/melange-transit-native.0.1.0"
 
 sdk_repository_lock=$(cat tool/ios/sdk_repository.lock 2>/dev/null)
-require_text "$sdk_repository_lock" "SDK_RUNTIME_PACKAGE_VERSION='0.1.0~dev.2'" \
+require_text "$sdk_repository_lock" "SDK_RUNTIME_PACKAGE_VERSION='0.1.0~dev.3'" \
   "DataScript runtime SDK version"
-require_text "$sdk_repository_lock" "SDK_PACKAGE_VERSION='0.1.0~dev.26'" \
+require_text "$sdk_repository_lock" "SDK_PACKAGE_VERSION='0.1.0~dev.27'" \
   "DataScript framework SDK version"
 
 fixture_dune=$(cat "$fixture/app.dune")

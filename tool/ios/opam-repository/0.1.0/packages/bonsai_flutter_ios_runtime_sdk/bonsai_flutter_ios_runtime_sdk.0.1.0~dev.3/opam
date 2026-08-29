@@ -420,16 +420,17 @@ extra-source "runtime-zarith-5db9dcbd939153942a08581fabd846d0f3f2b8c67fe68b85512
 }
 extra-files: [
   ["build-runtime-closure.sh" "sha256=658a2834d34376e6cb399b0e09ad9ccadc5a163f34135a1480e478c681a4f65b"]
-  ["build-runtime-package.sh" "sha256=f167f27e1f662045bbb4abbb24bb0cb3f781380d3d7d8179f53995d28f71f25f"]
+  ["build-runtime-package.sh" "sha256=f3d7d79f4cf82a7bf0d3bd030e4038fe139235fe22897c22e55e9c117a250d90"]
   ["build-runtime-sdk.sh" "sha256=da505454ee80ca4771ce1b7377388cab51a6a09e4d9f7e25abb80afe30dca387"]
   ["patches/base-host-generator.patch" "sha256=d66da45798d7fd09df4d5e1a2789428f2343670f212ddf36dabf1ffa2e9d5ada"]
+  ["patches/datascript-system-sqlite.patch" "sha256=25671b3a84772c8a6b6c9fae3c8c2e0efa1b7d88c9ca2edb274b2ce40de481a4"]
   ["patches/eio-posix-darwin-protocol-zero.patch" "sha256=b6a158f56db6bc1c1e19ad2412625f2d7941a5004274e3a45fe58f6c89e5b963"]
   ["patches/eio-posix-darwin-socktype-hints.patch" "sha256=8b5eb1ecc716afeac54f6ebc0792f14df5107dbdac5ebb81da3ea0a31e187e17"]
   ["patches/jst-config-host-discover.patch" "sha256=ee279c4935234e295cb432e67d02cbab47f5655da7b335585678bef2a2eb62a9"]
   ["patches/mirage-crypto-rng-apple-entropy.patch" "sha256=da840f6ac6b44892f7e3cdbf6b931d557caa44697d21292fbadd5f1f95c60994"]
   ["pkgconfig/iphoneos/sqlite3.pc" "sha256=8b5b586f38ac603b9ac45c7193805a728934d489000dfb578b345733c41ed3ad"]
   ["supported-closure.lock" "sha256=549fb4be9d99a3f37cb074312d888a862390a587ffe99cd52e4335b566114941"]
-  ["toolchain.lock" "sha256=6516a7553c762d5b9f56eedb6a05c1f5fb5b9197cedcb7327689c744594cecba"]
+  ["toolchain.lock" "sha256=8228a4b35f40ee151c480a372737725d3630d8bebbaa1534d670fc69f409be41"]
   ["verify_macho.sh" "sha256=e6d2083e03ac5f883f236e35b7e9e539759e8cc36eb403dd76d5b8136f7f9076"]
 ]
 depends: [
