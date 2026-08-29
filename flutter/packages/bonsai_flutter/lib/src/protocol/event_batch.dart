@@ -127,6 +127,30 @@ final class Int64ListEventPayload extends EventPayload {
       Object.hash(Int64ListEventPayload, Object.hashAll(values));
 }
 
+final class Int64BoolEventPayload extends EventPayload {
+  const Int64BoolEventPayload({required this.id, required this.value});
+  final int id;
+  final bool value;
+  @override
+  bool operator ==(Object other) =>
+      other is Int64BoolEventPayload && other.id == id && other.value == value;
+  @override
+  int get hashCode => Object.hash(Int64BoolEventPayload, id, value);
+}
+
+final class Int64PairEventPayload extends EventPayload {
+  const Int64PairEventPayload({required this.first, required this.second});
+  final int first;
+  final int second;
+  @override
+  bool operator ==(Object other) =>
+      other is Int64PairEventPayload &&
+      other.first == first &&
+      other.second == second;
+  @override
+  int get hashCode => Object.hash(Int64PairEventPayload, first, second);
+}
+
 final class FloatEventPayload extends EventPayload {
   const FloatEventPayload(this.value);
 
@@ -772,7 +796,10 @@ abstract final class EventBatchCodec {
             eventTag == EventTagId.longPress ||
             eventTag == EventTagId.resyncRequested ||
             eventTag == EventTagId.textLimitReached ||
-            eventTag == EventTagId.delete) &&
+            eventTag == EventTagId.delete ||
+            eventTag == EventTagId.tooltipTriggered ||
+            eventTag == EventTagId.stepContinue ||
+            eventTag == EventTagId.stepCancel) &&
         payload is UnitEventPayload) {
       return;
     }
@@ -809,7 +836,8 @@ abstract final class EventBatchCodec {
       return;
     }
     if ((eventTag == EventTagId.focusChanged ||
-            eventTag == EventTagId.valueChanged) &&
+            eventTag == EventTagId.valueChanged ||
+            eventTag == EventTagId.tableSelectAll) &&
         payload is BoolEventPayload) {
       writer.uint8(payload.value ? 1 : 0);
       return;
@@ -871,12 +899,15 @@ abstract final class EventBatchCodec {
       return;
     }
     if ((eventTag == EventTagId.navigationDestinationSelected ||
-            eventTag == EventTagId.radioSelected) &&
+            eventTag == EventTagId.radioSelected ||
+            eventTag == EventTagId.stepSelected ||
+            eventTag == EventTagId.dialogOptionSelected) &&
         payload is Int64EventPayload) {
       writer.int64(payload.value);
       return;
     }
-    if (eventTag == EventTagId.segmentedSelectionChanged &&
+    if ((eventTag == EventTagId.segmentedSelectionChanged ||
+            eventTag == EventTagId.expansionChanged) &&
         payload is Int64ListEventPayload) {
       _validateCanonicalInt64List(payload.values, 'segmented selected IDs');
       if (payload.values.length > 0xffff) {
@@ -889,6 +920,21 @@ abstract final class EventBatchCodec {
       for (final value in payload.values) {
         writer.int64(value);
       }
+      return;
+    }
+    if ((eventTag == EventTagId.tableSortRequested ||
+            eventTag == EventTagId.tableRowSelected) &&
+        payload is Int64BoolEventPayload) {
+      writer
+        ..int64(payload.id)
+        ..uint8(payload.value ? 1 : 0);
+      return;
+    }
+    if (eventTag == EventTagId.tableCellActivated &&
+        payload is Int64PairEventPayload) {
+      writer
+        ..int64(payload.first)
+        ..int64(payload.second);
       return;
     }
     if ((eventTag == EventTagId.sliderChanged ||
@@ -1067,7 +1113,10 @@ abstract final class EventBatchCodec {
         eventTag == EventTagId.longPress ||
         eventTag == EventTagId.resyncRequested ||
         eventTag == EventTagId.textLimitReached ||
-        eventTag == EventTagId.delete) {
+        eventTag == EventTagId.delete ||
+        eventTag == EventTagId.tooltipTriggered ||
+        eventTag == EventTagId.stepContinue ||
+        eventTag == EventTagId.stepCancel) {
       return const UnitEventPayload();
     }
     if (eventTag == EventTagId.tap || eventTag == EventTagId.doubleTap) {
@@ -1097,7 +1146,8 @@ abstract final class EventBatchCodec {
       );
     }
     if (eventTag == EventTagId.focusChanged ||
-        eventTag == EventTagId.valueChanged) {
+        eventTag == EventTagId.valueChanged ||
+        eventTag == EventTagId.tableSelectAll) {
       return BoolEventPayload(reader.boolean());
     }
     if (eventTag == EventTagId.textEdit) {
@@ -1150,13 +1200,29 @@ abstract final class EventBatchCodec {
       return Int64EventPayload(reader.uint64());
     }
     if (eventTag == EventTagId.navigationDestinationSelected ||
-        eventTag == EventTagId.radioSelected) {
+        eventTag == EventTagId.radioSelected ||
+        eventTag == EventTagId.stepSelected ||
+        eventTag == EventTagId.dialogOptionSelected) {
       return Int64EventPayload(reader.int64());
     }
-    if (eventTag == EventTagId.segmentedSelectionChanged) {
+    if (eventTag == EventTagId.segmentedSelectionChanged ||
+        eventTag == EventTagId.expansionChanged) {
       final values = List<int>.generate(reader.uint16(), (_) => reader.int64());
       _validateCanonicalInt64List(values, 'segmented selected IDs');
       return Int64ListEventPayload(values);
+    }
+    if (eventTag == EventTagId.tableSortRequested ||
+        eventTag == EventTagId.tableRowSelected) {
+      return Int64BoolEventPayload(
+        id: reader.int64(),
+        value: reader.uint8() == 1,
+      );
+    }
+    if (eventTag == EventTagId.tableCellActivated) {
+      return Int64PairEventPayload(
+        first: reader.int64(),
+        second: reader.int64(),
+      );
     }
     if (eventTag == EventTagId.sliderChanged ||
         eventTag == EventTagId.sliderChangeEnd) {

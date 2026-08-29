@@ -31,6 +31,16 @@ module Tag = struct
     | Range_slider_change_end
     | Delete
     | Segmented_selection_changed
+    | Tooltip_triggered
+    | Table_sort_requested
+    | Table_row_selected
+    | Table_select_all
+    | Table_cell_activated
+    | Step_selected
+    | Step_continue
+    | Step_cancel
+    | Expansion_changed
+    | Dialog_option_selected
 
   let compare left right = Stdlib.compare left right
   let equal left right = compare left right = 0
@@ -65,6 +75,16 @@ module Tag = struct
     | Range_slider_change_end -> "range_slider_change_end"
     | Delete -> "delete"
     | Segmented_selection_changed -> "segmented_selection_changed"
+    | Tooltip_triggered -> "tooltip_triggered"
+    | Table_sort_requested -> "table_sort_requested"
+    | Table_row_selected -> "table_row_selected"
+    | Table_select_all -> "table_select_all"
+    | Table_cell_activated -> "table_cell_activated"
+    | Step_selected -> "step_selected"
+    | Step_continue -> "step_continue"
+    | Step_cancel -> "step_cancel"
+    | Expansion_changed -> "expansion_changed"
+    | Dialog_option_selected -> "dialog_option_selected"
   ;;
 end
 
@@ -156,6 +176,14 @@ module Payload = struct
     | Text_edit of text_edit
     | Int64 of int64
     | Int64_list of int64 list
+    | Int64_bool of
+        { id : int64
+        ; value : bool
+        }
+    | Int64_pair of
+        { first : int64
+        ; second : int64
+        }
     | Float of float
     | Float_range of
         { start : float

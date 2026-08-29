@@ -595,6 +595,15 @@ final class NodeStore {
       NodeKind.materialChoiceChip ||
       NodeKind.materialInputChip => props is MaterialChipProps,
       NodeKind.materialAlertDialog => props is MaterialAlertDialogProps,
+      NodeKind.materialSearchBar => props is MaterialSearchBarProps,
+      NodeKind.materialTooltip => props is MaterialTooltipProps,
+      NodeKind.materialDataTable => props is MaterialDataTableProps,
+      NodeKind.materialStepper => props is MaterialStepperProps,
+      NodeKind.materialExpansionPanelList =>
+        props is MaterialExpansionPanelListProps,
+      NodeKind.materialSimpleDialog => props is MaterialSimpleDialogProps,
+      NodeKind.materialFullscreenDialog =>
+        props is MaterialFullscreenDialogProps,
       NodeKind.materialCheckbox => props is MaterialCheckboxProps,
       NodeKind.materialSwitch => props is MaterialSwitchProps,
       NodeKind.materialListTile => props is MaterialListTileProps,

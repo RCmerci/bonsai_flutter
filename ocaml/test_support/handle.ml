@@ -223,6 +223,16 @@ let protocol_tag =
   | Range_slider_change_end -> Tag.range_slider_change_end
   | Delete -> Tag.delete
   | Segmented_selection_changed -> Tag.segmented_selection_changed
+  | Tooltip_triggered -> Tag.tooltip_triggered
+  | Table_sort_requested -> Tag.table_sort_requested
+  | Table_row_selected -> Tag.table_row_selected
+  | Table_select_all -> Tag.table_select_all
+  | Table_cell_activated -> Tag.table_cell_activated
+  | Step_selected -> Tag.step_selected
+  | Step_continue -> Tag.step_continue
+  | Step_cancel -> Tag.step_cancel
+  | Expansion_changed -> Tag.expansion_changed
+  | Dialog_option_selected -> Tag.dialog_option_selected
 ;;
 
 let dispatch t query tag payload =

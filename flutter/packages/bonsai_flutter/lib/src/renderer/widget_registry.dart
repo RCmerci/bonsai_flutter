@@ -114,6 +114,13 @@ final class WidgetRegistry {
       NodeKind.materialChoiceChip: _buildMaterialChip,
       NodeKind.materialInputChip: _buildMaterialChip,
       NodeKind.materialAlertDialog: _buildMaterialAlertDialog,
+      NodeKind.materialSearchBar: _buildMaterialSearchBar,
+      NodeKind.materialTooltip: _buildMaterialTooltip,
+      NodeKind.materialDataTable: _buildMaterialDataTable,
+      NodeKind.materialStepper: _buildMaterialStepper,
+      NodeKind.materialExpansionPanelList: _buildMaterialExpansionPanelList,
+      NodeKind.materialSimpleDialog: _buildMaterialSimpleDialog,
+      NodeKind.materialFullscreenDialog: _buildMaterialFullscreenDialog,
       NodeKind.materialCheckbox: _buildMaterialCheckbox,
       NodeKind.materialSwitch: _buildMaterialSwitch,
       NodeKind.materialListTile: _buildMaterialListTile,
@@ -1618,17 +1625,43 @@ Widget _buildMaterialChip(
         )
       : null;
   return switch (props.variant) {
+    MaterialChipVariant.action
+        when props.presentation == MaterialChipPresentation.elevated =>
+      ActionChip.elevated(
+        avatar: avatar,
+        label: label,
+        onPressed: unitCallback(
+          pressBinding,
+          props.enabled && props.hasOnPress,
+        ),
+      ),
     MaterialChipVariant.action => ActionChip(
       avatar: avatar,
       label: label,
       onPressed: unitCallback(pressBinding, props.enabled && props.hasOnPress),
     ),
+    MaterialChipVariant.filter
+        when props.presentation == MaterialChipPresentation.elevated =>
+      FilterChip.elevated(
+        avatar: avatar,
+        label: label,
+        selected: props.selected,
+        onSelected: onSelected,
+      ),
     MaterialChipVariant.filter => FilterChip(
       avatar: avatar,
       label: label,
       selected: props.selected,
       onSelected: onSelected,
     ),
+    MaterialChipVariant.choice
+        when props.presentation == MaterialChipPresentation.elevated =>
+      ChoiceChip.elevated(
+        avatar: avatar,
+        label: label,
+        selected: props.selected,
+        onSelected: onSelected,
+      ),
     MaterialChipVariant.choice => ChoiceChip(
       avatar: avatar,
       label: label,
@@ -1681,6 +1714,414 @@ Widget _buildMaterialAlertDialog(
     content: content,
     actions: children.sublist(childIndex),
   );
+}
+
+void _emitMaterialEvent(
+  UiNode node,
+  int tag,
+  EventPayload payload,
+  RendererEventCallback? onEvent,
+) {
+  final binding = _binding(node, tag);
+  if (binding == null || onEvent == null) return;
+  onEvent(
+    RendererEvent(
+      nodeId: node.id,
+      eventTag: tag,
+      handlerId: binding.handlerId,
+      payload: payload,
+    ),
+  );
+}
+
+TextInputType _materialKeyboardType(TextKeyboardType type) => switch (type) {
+  TextKeyboardType.text => TextInputType.text,
+  TextKeyboardType.multiline => TextInputType.multiline,
+  TextKeyboardType.number => TextInputType.number,
+  TextKeyboardType.email => TextInputType.emailAddress,
+  TextKeyboardType.phone => TextInputType.phone,
+  TextKeyboardType.url => TextInputType.url,
+};
+
+TextInputAction _materialInputAction(TextInputActionKind action) =>
+    switch (action) {
+      TextInputActionKind.done => TextInputAction.done,
+      TextInputActionKind.newline => TextInputAction.newline,
+      TextInputActionKind.next => TextInputAction.next,
+      TextInputActionKind.previous => TextInputAction.previous,
+      TextInputActionKind.search => TextInputAction.search,
+      TextInputActionKind.send => TextInputAction.send,
+      TextInputActionKind.go => TextInputAction.go,
+    };
+
+Widget _buildMaterialSearchBar(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  final props = _expectProps<MaterialSearchBarProps>(node);
+  _expectChildCount(
+    node,
+    children,
+    (props.hasLeading ? 1 : 0) + props.trailingCount,
+  );
+  var index = 0;
+  final leading = props.hasLeading ? children[index++] : null;
+  final trailing = children.sublist(index);
+  final textProps = TextInputProps(
+    sessionId: props.sessionId,
+    documentRevision: props.documentRevision,
+    value: props.value,
+    enabled: props.enabled,
+    readOnly: props.readOnly,
+    obscureText: false,
+    keyboardType: props.keyboardType,
+    inputAction: props.inputAction,
+    acceptedLocalRevision: props.acceptedLocalRevision,
+    updateMode: props.updateMode,
+    autofocus: props.autofocus,
+    maxUtf8Bytes: props.maxUtf8Bytes,
+  );
+  return TextInputHost(
+    node: node,
+    props: textProps,
+    resources: RendererResourceScope.of(context),
+    onEvent: onEvent,
+    builder: (context, controller, focusNode, onSubmitted) => SearchBar(
+      controller: controller,
+      focusNode: focusNode,
+      leading: leading,
+      trailing: trailing,
+      hintText: props.hintText,
+      enabled: props.enabled,
+      readOnly: props.readOnly,
+      keyboardType: _materialKeyboardType(props.keyboardType),
+      textInputAction: _materialInputAction(props.inputAction),
+      onSubmitted: onSubmitted,
+      onTap: !props.hasOnTap
+          ? null
+          : () => _emitMaterialEvent(
+              node,
+              EventTagId.press,
+              const UnitEventPayload(),
+              onEvent,
+            ),
+    ),
+  );
+}
+
+Widget _buildMaterialTooltip(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  _expectChildCount(node, children, 1);
+  final props = _expectProps<MaterialTooltipProps>(node);
+  if (!props.enabled) return children.single;
+  return Tooltip(
+    message: props.message,
+    excludeFromSemantics: props.excludeFromSemantics,
+    preferBelow: props.preferBelow,
+    triggerMode: props.triggerMode == MaterialTooltipTriggerMode.tap
+        ? TooltipTriggerMode.tap
+        : TooltipTriggerMode.longPress,
+    waitDuration: Duration(milliseconds: props.waitDurationMs),
+    showDuration: Duration(milliseconds: props.showDurationMs),
+    exitDuration: Duration(milliseconds: props.exitDurationMs),
+    enableTapToDismiss: props.enableTapToDismiss,
+    enableFeedback: props.enableFeedback,
+    onTriggered: !props.hasOnTriggered
+        ? null
+        : () => _emitMaterialEvent(
+            node,
+            EventTagId.tooltipTriggered,
+            const UnitEventPayload(),
+            onEvent,
+          ),
+    child: children.single,
+  );
+}
+
+Widget _buildMaterialDataTable(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  final props = _expectProps<MaterialDataTableProps>(node);
+  final expected =
+      props.columns.length +
+      props.rows.fold<int>(0, (sum, row) => sum + row.cells.length);
+  _expectChildCount(node, children, expected);
+  var child = 0;
+  final sortIndex = props.sortColumnId == null
+      ? null
+      : props.columns.indexWhere((column) => column.id == props.sortColumnId);
+  final columns = <DataColumn>[];
+  for (final column in props.columns) {
+    final id = column.id;
+    columns.add(
+      DataColumn(
+        label: children[child++],
+        tooltip: column.tooltip,
+        numeric: column.numeric,
+        onSort: !column.sortable || !props.hasOnSort
+            ? null
+            : (_, ascending) => _emitMaterialEvent(
+                node,
+                EventTagId.tableSortRequested,
+                Int64BoolEventPayload(id: id, value: ascending),
+                onEvent,
+              ),
+      ),
+    );
+  }
+  final selected = props.selectedRowIds.toSet();
+  final rows = <DataRow>[];
+  for (final row in props.rows) {
+    final cells = <DataCell>[];
+    for (var columnIndex = 0; columnIndex < row.cells.length; columnIndex++) {
+      final cell = row.cells[columnIndex];
+      final columnId = props.columns[columnIndex].id;
+      cells.add(
+        DataCell(
+          children[child++],
+          placeholder: cell.placeholder,
+          showEditIcon: cell.showEditIcon,
+          onTap: !cell.activatable || !props.hasOnCellActivate
+              ? null
+              : () => _emitMaterialEvent(
+                  node,
+                  EventTagId.tableCellActivated,
+                  Int64PairEventPayload(first: row.id, second: columnId),
+                  onEvent,
+                ),
+        ),
+      );
+    }
+    rows.add(
+      DataRow(
+        selected: selected.contains(row.id),
+        cells: cells,
+        onSelectChanged: !row.selectionEnabled || !props.hasOnRowSelected
+            ? null
+            : (value) {
+                if (value != null) {
+                  _emitMaterialEvent(
+                    node,
+                    EventTagId.tableRowSelected,
+                    Int64BoolEventPayload(id: row.id, value: value),
+                    onEvent,
+                  );
+                }
+              },
+      ),
+    );
+  }
+  return DataTable(
+    columns: columns,
+    rows: rows,
+    sortColumnIndex: sortIndex == -1 ? null : sortIndex,
+    sortAscending: props.sortAscending,
+    onSelectAll: !props.hasOnSelectAll
+        ? null
+        : (value) {
+            if (value != null) {
+              _emitMaterialEvent(
+                node,
+                EventTagId.tableSelectAll,
+                BoolEventPayload(value),
+                onEvent,
+              );
+            }
+          },
+  );
+}
+
+Widget _buildMaterialStepper(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  final props = _expectProps<MaterialStepperProps>(node);
+  final expected = props.steps.fold<int>(
+    0,
+    (sum, step) =>
+        sum + 2 + (step.hasSubtitle ? 1 : 0) + (step.hasLabel ? 1 : 0),
+  );
+  _expectChildCount(node, children, expected);
+  var child = 0;
+  final steps = <Step>[];
+  for (final step in props.steps) {
+    final title = children[child++];
+    final content = children[child++];
+    final subtitle = step.hasSubtitle ? children[child++] : null;
+    final label = step.hasLabel ? children[child++] : null;
+    steps.add(
+      Step(
+        title: title,
+        content: content,
+        subtitle: subtitle,
+        label: label,
+        isActive: step.active,
+        state: StepState.values[step.state.index],
+      ),
+    );
+  }
+  final current = props.steps.indexWhere(
+    (step) => step.id == props.currentStepId,
+  );
+  return KeyedSubtree(
+    key: ValueKey(
+      _MaterialStepperIdentity(props.steps.map((step) => step.id).toList()),
+    ),
+    child: Stepper(
+      type: props.orientation == MaterialStepperOrientation.horizontal
+          ? StepperType.horizontal
+          : StepperType.vertical,
+      currentStep: current,
+      steps: steps,
+      onStepTapped: _binding(node, EventTagId.stepSelected) == null
+          ? null
+          : (index) => _emitMaterialEvent(
+              node,
+              EventTagId.stepSelected,
+              Int64EventPayload(props.steps[index].id),
+              onEvent,
+            ),
+      onStepContinue: _binding(node, EventTagId.stepContinue) == null
+          ? null
+          : () => _emitMaterialEvent(
+              node,
+              EventTagId.stepContinue,
+              const UnitEventPayload(),
+              onEvent,
+            ),
+      onStepCancel: _binding(node, EventTagId.stepCancel) == null
+          ? null
+          : () => _emitMaterialEvent(
+              node,
+              EventTagId.stepCancel,
+              const UnitEventPayload(),
+              onEvent,
+            ),
+    ),
+  );
+}
+
+final class _MaterialStepperIdentity {
+  _MaterialStepperIdentity(List<int> stepIds)
+    : stepIds = List.unmodifiable(stepIds);
+
+  final List<int> stepIds;
+
+  @override
+  bool operator ==(Object other) {
+    if (other is! _MaterialStepperIdentity ||
+        other.stepIds.length != stepIds.length) {
+      return false;
+    }
+    for (var index = 0; index < stepIds.length; index += 1) {
+      if (other.stepIds[index] != stepIds[index]) return false;
+    }
+    return true;
+  }
+
+  @override
+  int get hashCode => Object.hashAll(stepIds);
+}
+
+Widget _buildMaterialExpansionPanelList(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  final props = _expectProps<MaterialExpansionPanelListProps>(node);
+  _expectChildCount(node, children, props.panels.length * 2);
+  final expanded = props.expandedIds.toSet();
+  var child = 0;
+  final panels = props.panels.map((panel) {
+    final header = children[child++];
+    final body = children[child++];
+    return ExpansionPanel(
+      headerBuilder: (_, _) => header,
+      body: body,
+      isExpanded: expanded.contains(panel.id),
+      canTapOnHeader: panel.enabled && panel.canTapOnHeader,
+    );
+  }).toList();
+  return SingleChildScrollView(
+    child: ExpansionPanelList(
+      children: panels,
+      expansionCallback: (index, isExpanded) {
+        final panel = props.panels[index];
+        if (!panel.enabled) return;
+        final next = expanded.toSet();
+        if (isExpanded) {
+          next.remove(panel.id);
+        } else {
+          if (props.policy == MaterialExpansionPanelPolicy.single) next.clear();
+          next.add(panel.id);
+        }
+        final canonical = next.toList()..sort();
+        _emitMaterialEvent(
+          node,
+          EventTagId.expansionChanged,
+          Int64ListEventPayload(canonical),
+          onEvent,
+        );
+      },
+    ),
+  );
+}
+
+Widget _buildMaterialSimpleDialog(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  final props = _expectProps<MaterialSimpleDialogProps>(node);
+  _expectChildCount(
+    node,
+    children,
+    props.options.length + (props.hasTitle ? 1 : 0),
+  );
+  var child = 0;
+  final title = props.hasTitle ? children[child++] : null;
+  final options = <Widget>[];
+  for (final option in props.options) {
+    final label = children[child++];
+    options.add(
+      SimpleDialogOption(
+        onPressed: !option.enabled
+            ? null
+            : () => _emitMaterialEvent(
+                node,
+                EventTagId.dialogOptionSelected,
+                Int64EventPayload(option.id),
+                onEvent,
+              ),
+        child: label,
+      ),
+    );
+  }
+  return SimpleDialog(title: title, children: options);
+}
+
+Widget _buildMaterialFullscreenDialog(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  _expectChildCount(node, children, 1);
+  _expectProps<MaterialFullscreenDialogProps>(node);
+  return Dialog.fullscreen(child: children.single);
 }
 
 final class _MaterialSliderHost extends StatefulWidget {
@@ -1876,7 +2317,19 @@ Widget _buildMaterialDivider(
 ) {
   _expectChildCount(node, children, 0);
   final props = _expectProps<MaterialDividerProps>(node);
-  return Divider(thickness: props.thickness);
+  return props.orientation == MaterialDividerOrientation.horizontal
+      ? Divider(
+          height: props.spacing,
+          thickness: props.thickness,
+          indent: props.indent,
+          endIndent: props.endIndent,
+        )
+      : VerticalDivider(
+          width: props.spacing,
+          thickness: props.thickness,
+          indent: props.indent,
+          endIndent: props.endIndent,
+        );
 }
 
 Widget _buildMaterialCard(
@@ -1887,7 +2340,20 @@ Widget _buildMaterialCard(
 ) {
   _expectChildCount(node, children, 1);
   final props = _expectProps<MaterialCardProps>(node);
-  return Card(elevation: props.elevation, child: children.single);
+  return switch (props.variant) {
+    MaterialCardVariant.elevated => Card(
+      elevation: props.elevation,
+      child: children.single,
+    ),
+    MaterialCardVariant.filled => Card.filled(
+      elevation: props.elevation,
+      child: children.single,
+    ),
+    MaterialCardVariant.outlined => Card.outlined(
+      elevation: props.elevation,
+      child: children.single,
+    ),
+  };
 }
 
 Widget _buildMaterialCircularProgress(

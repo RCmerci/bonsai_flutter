@@ -191,7 +191,8 @@ let test_segmented_selection_dispatch () =
             ; displayed_revision = ID.Runtime.Renderer_revision.of_int64 1L
             ; node_id = ID.Ui.Node_id.of_int64 5L
             ; handler_id = ID.Ui.Handler_id.of_int64 45L
-            ; event_tag = Protocol.Generated_protocol.Event_tag.segmented_selection_changed
+            ; event_tag =
+                Protocol.Generated_protocol.Event_tag.segmented_selection_changed
             ; payload = Int64_list [ 1L; 2L ]
             }
           ]

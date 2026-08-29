@@ -131,6 +131,14 @@ type payload =
   | Text_edit of text_edit
   | Int64 of int64
   | Int64_list of int64 list
+  | Int64_bool of
+      { id : int64
+      ; value : bool
+      }
+  | Int64_pair of
+      { first : int64
+      ; second : int64
+      }
   | Float of float
   | Float_range of
       { start : float

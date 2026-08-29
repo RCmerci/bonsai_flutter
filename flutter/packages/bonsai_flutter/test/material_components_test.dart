@@ -375,6 +375,315 @@ void main() {
     },
   );
 
+  testWidgets('chip, card, and divider variants map to Material constructors', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      render(
+        _node(
+          NodeKind.materialActionChip,
+          const MaterialChipProps(
+            variant: MaterialChipVariant.action,
+            presentation: MaterialChipPresentation.elevated,
+            enabled: true,
+            selected: false,
+            hasAvatar: false,
+            hasDeleteIcon: false,
+            hasOnPress: true,
+            hasOnSelected: false,
+            hasOnDelete: false,
+          ),
+          bindings: const [
+            EventBinding(eventTag: EventTagId.press, handlerId: 70),
+          ],
+        ),
+        const [Text('Assist')],
+        events: <RendererEvent>[],
+      ),
+    );
+    final chipMaterial = tester.widget<Material>(
+      find
+          .descendant(
+            of: find.byType(ActionChip),
+            matching: find.byType(Material),
+          )
+          .first,
+    );
+    expect(chipMaterial.elevation, greaterThan(0));
+
+    await tester.pumpWidget(
+      render(
+        _node(
+          NodeKind.materialCard,
+          const MaterialCardProps(
+            variant: MaterialCardVariant.outlined,
+            elevation: 2,
+          ),
+        ),
+        const [Text('Card')],
+      ),
+    );
+    final cardMaterial = tester.widget<Material>(
+      find
+          .descendant(of: find.byType(Card), matching: find.byType(Material))
+          .first,
+    );
+    expect((cardMaterial.shape! as OutlinedBorder).side.width, greaterThan(0));
+
+    await tester.pumpWidget(
+      render(
+        _node(
+          NodeKind.materialDivider,
+          const MaterialDividerProps(
+            orientation: MaterialDividerOrientation.vertical,
+            thickness: 2,
+            spacing: 20,
+            indent: 3,
+            endIndent: 4,
+          ),
+        ),
+        const [],
+      ),
+    );
+    final divider = tester.widget<VerticalDivider>(
+      find.byType(VerticalDivider),
+    );
+    expect(divider.width, 20);
+    expect(divider.thickness, 2);
+    expect(divider.indent, 3);
+    expect(divider.endIndent, 4);
+  });
+
+  testWidgets('tooltip and dialog family map child slots and typed events', (
+    tester,
+  ) async {
+    final events = <RendererEvent>[];
+    await tester.pumpWidget(
+      render(
+        _node(
+          NodeKind.materialTooltip,
+          const MaterialTooltipProps(
+            message: 'Details',
+            enabled: true,
+            excludeFromSemantics: false,
+            preferBelow: false,
+            triggerMode: MaterialTooltipTriggerMode.tap,
+            waitDurationMs: 10,
+            showDurationMs: 1000,
+            exitDurationMs: 100,
+            enableTapToDismiss: true,
+            enableFeedback: true,
+            hasOnTriggered: true,
+          ),
+          bindings: const [
+            EventBinding(eventTag: EventTagId.tooltipTriggered, handlerId: 71),
+          ],
+        ),
+        const [Text('Info')],
+        events: events,
+      ),
+    );
+    final tooltip = tester.widget<Tooltip>(find.byType(Tooltip));
+    expect(tooltip.preferBelow, isFalse);
+    tooltip.onTriggered!();
+    expect(events.single.eventTag, EventTagId.tooltipTriggered);
+
+    await tester.pumpWidget(
+      render(
+        _node(
+          NodeKind.materialSimpleDialog,
+          const MaterialSimpleDialogProps(
+            hasTitle: true,
+            options: [MaterialSimpleDialogOptionProps(id: -5, enabled: true)],
+          ),
+          bindings: const [
+            EventBinding(
+              eventTag: EventTagId.dialogOptionSelected,
+              handlerId: 72,
+            ),
+          ],
+        ),
+        const [Text('Choose'), Text('Option')],
+        events: events,
+      ),
+    );
+    expect(find.byType(SimpleDialog), findsOneWidget);
+    await tester.tap(find.text('Option'));
+    expect(events.last.payload, const Int64EventPayload(-5));
+
+    await tester.pumpWidget(
+      render(
+        _node(
+          NodeKind.materialFullscreenDialog,
+          const MaterialFullscreenDialogProps(),
+        ),
+        const [Text('Fullscreen')],
+      ),
+    );
+    expect(find.byType(Dialog), findsOneWidget);
+  });
+
+  testWidgets('table, stepper, and expansion panels emit stable IDs', (
+    tester,
+  ) async {
+    final events = <RendererEvent>[];
+    await tester.pumpWidget(
+      render(
+        _node(
+          NodeKind.materialDataTable,
+          const MaterialDataTableProps(
+            columns: [
+              MaterialDataTableColumnProps(
+                id: 10,
+                tooltip: null,
+                numeric: false,
+                sortable: true,
+              ),
+            ],
+            rows: [
+              MaterialDataTableRowProps(
+                id: 20,
+                selected: false,
+                selectionEnabled: true,
+                cells: [
+                  MaterialDataTableCellProps(
+                    placeholder: false,
+                    showEditIcon: false,
+                    activatable: true,
+                  ),
+                ],
+              ),
+            ],
+            sortColumnId: 10,
+            sortAscending: true,
+            selectedRowIds: [],
+          ),
+          bindings: const [
+            EventBinding(
+              eventTag: EventTagId.tableSortRequested,
+              handlerId: 80,
+            ),
+            EventBinding(eventTag: EventTagId.tableRowSelected, handlerId: 81),
+            EventBinding(
+              eventTag: EventTagId.tableCellActivated,
+              handlerId: 82,
+            ),
+          ],
+        ),
+        const [Text('Name'), Text('Ada')],
+        events: events,
+      ),
+    );
+    final table = tester.widget<DataTable>(find.byType(DataTable));
+    table.columns.single.onSort!(0, false);
+    expect(
+      events.last.payload,
+      const Int64BoolEventPayload(id: 10, value: false),
+    );
+    table.rows.single.onSelectChanged!(true);
+    expect(
+      events.last.payload,
+      const Int64BoolEventPayload(id: 20, value: true),
+    );
+    table.rows.single.cells.single.onTap!();
+    expect(
+      events.last.payload,
+      const Int64PairEventPayload(first: 20, second: 10),
+    );
+
+    await tester.pumpWidget(
+      render(
+        _node(
+          NodeKind.materialStepper,
+          const MaterialStepperProps(
+            orientation: MaterialStepperOrientation.vertical,
+            currentStepId: 2,
+            steps: [
+              MaterialStepProps(
+                id: 2,
+                active: true,
+                state: MaterialStepState.indexed,
+                hasSubtitle: false,
+                hasLabel: false,
+              ),
+            ],
+          ),
+          bindings: const [
+            EventBinding(eventTag: EventTagId.stepSelected, handlerId: 83),
+          ],
+        ),
+        const [Text('Title'), Text('Content')],
+        events: events,
+      ),
+    );
+    tester.widget<Stepper>(find.byType(Stepper)).onStepTapped!(0);
+    expect(events.last.payload, const Int64EventPayload(2));
+
+    await tester.pumpWidget(
+      render(
+        _node(
+          NodeKind.materialExpansionPanelList,
+          const MaterialExpansionPanelListProps(
+            policy: MaterialExpansionPanelPolicy.multiple,
+            expandedIds: [7],
+            panels: [
+              MaterialExpansionPanelProps(
+                id: 7,
+                enabled: true,
+                canTapOnHeader: true,
+              ),
+            ],
+          ),
+          bindings: const [
+            EventBinding(eventTag: EventTagId.expansionChanged, handlerId: 84),
+          ],
+        ),
+        const [Text('Header'), Text('Body')],
+        events: events,
+      ),
+    );
+    tester
+        .widget<ExpansionPanelList>(find.byType(ExpansionPanelList))
+        .expansionCallback!(0, true);
+    expect(events.last.payload, const Int64ListEventPayload([]));
+  });
+
+  testWidgets('stepper replaces Flutter state when ordered IDs change', (
+    tester,
+  ) async {
+    UiNode stepper(int id, {required bool active}) => _node(
+      NodeKind.materialStepper,
+      MaterialStepperProps(
+        orientation: MaterialStepperOrientation.vertical,
+        currentStepId: id,
+        steps: [
+          MaterialStepProps(
+            id: id,
+            active: active,
+            state: MaterialStepState.indexed,
+            hasSubtitle: false,
+            hasLabel: false,
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      render(stepper(1, active: false), const [Text('One'), Text('Body')]),
+    );
+    final initialState = tester.state(find.byType(Stepper));
+
+    await tester.pumpWidget(
+      render(stepper(1, active: true), const [Text('One'), Text('Updated')]),
+    );
+    expect(tester.state(find.byType(Stepper)), same(initialState));
+
+    await tester.pumpWidget(
+      render(stepper(2, active: true), const [Text('Two'), Text('Body')]),
+    );
+    expect(tester.state(find.byType(Stepper)), isNot(same(initialState)));
+  });
+
   testWidgets('renderer rejects malformed Material child slot ordering', (
     tester,
   ) async {

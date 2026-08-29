@@ -58,6 +58,13 @@ type node_kind =
   | Material_choice_chip
   | Material_input_chip
   | Material_alert_dialog
+  | Material_search_bar
+  | Material_tooltip
+  | Material_data_table
+  | Material_stepper
+  | Material_expansion_panel_list
+  | Material_simple_dialog
+  | Material_fullscreen_dialog
   | Material_checkbox
   | Material_switch
   | Material_list_tile
@@ -394,6 +401,69 @@ type material_chip_variant =
   | Choice_chip
   | Input_chip
 
+type material_chip_presentation =
+  | Flat_chip
+  | Elevated_chip
+
+type material_card_variant =
+  | Elevated_card
+  | Filled_card
+  | Outlined_card
+
+type material_tooltip_trigger_mode =
+  | Tooltip_long_press
+  | Tooltip_tap
+
+type material_data_table_column =
+  { column_id : int64
+  ; tooltip : string option
+  ; numeric : bool
+  ; sortable : bool
+  }
+
+type material_data_table_cell =
+  { placeholder : bool
+  ; show_edit_icon : bool
+  ; activatable : bool
+  }
+
+type material_data_table_row =
+  { row_id : int64
+  ; selected : bool
+  ; selection_enabled : bool
+  ; cells : material_data_table_cell list
+  }
+
+type material_step_state =
+  | Step_indexed
+  | Step_editing
+  | Step_complete
+  | Step_disabled
+  | Step_error
+
+type material_step =
+  { step_id : int64
+  ; active : bool
+  ; state : material_step_state
+  ; has_subtitle : bool
+  ; has_label : bool
+  }
+
+type material_expansion_panel_policy =
+  | Multiple_panels
+  | Single_panel
+
+type material_expansion_panel =
+  { panel_id : int64
+  ; enabled : bool
+  ; can_tap_on_header : bool
+  }
+
+type material_simple_dialog_option =
+  { option_id : int64
+  ; enabled : bool
+  }
+
 type key_policy =
   | Handled
   | Ignored
@@ -606,6 +676,7 @@ type props =
       }
   | Material_chip_props of
       { variant : material_chip_variant
+      ; presentation : material_chip_presentation
       ; enabled : bool
       ; selected : bool
       ; has_avatar : bool
@@ -620,6 +691,62 @@ type props =
       ; has_content : bool
       ; action_count : int
       }
+  | Material_search_bar_props of
+      { session_id : ID.Text_input.session_id
+      ; document_revision : ID.Text_input.document_revision
+      ; value : text_editing_value
+      ; enabled : bool
+      ; read_only : bool
+      ; keyboard_type : text_keyboard_type
+      ; input_action : text_input_action
+      ; accepted_local_revision : ID.Text_input.local_revision
+      ; update_mode : text_update_mode
+      ; autofocus : bool
+      ; max_utf8_bytes : int option
+      ; has_leading : bool
+      ; trailing_count : int
+      ; hint_text : string option
+      ; has_on_tap : bool
+      }
+  | Material_tooltip_props of
+      { message : string
+      ; enabled : bool
+      ; exclude_from_semantics : bool
+      ; prefer_below : bool
+      ; trigger_mode : material_tooltip_trigger_mode
+      ; wait_duration_ms : int
+      ; show_duration_ms : int
+      ; exit_duration_ms : int
+      ; enable_tap_to_dismiss : bool
+      ; enable_feedback : bool
+      ; has_on_triggered : bool
+      }
+  | Material_data_table_props of
+      { columns : material_data_table_column list
+      ; rows : material_data_table_row list
+      ; sort_column_id : int64 option
+      ; sort_ascending : bool
+      ; selected_row_ids : int64 list
+      ; has_on_sort : bool
+      ; has_on_row_selected : bool
+      ; has_on_select_all : bool
+      ; has_on_cell_activate : bool
+      }
+  | Material_stepper_props of
+      { orientation : axis
+      ; current_step_id : int64
+      ; steps : material_step list
+      }
+  | Material_expansion_panel_list_props of
+      { policy : material_expansion_panel_policy
+      ; expanded_ids : int64 list
+      ; panels : material_expansion_panel list
+      }
+  | Material_simple_dialog_props of
+      { has_title : bool
+      ; options : material_simple_dialog_option list
+      }
+  | Material_fullscreen_dialog_props
   | Material_checkbox_props of
       { value : bool
       ; enabled : bool
@@ -635,8 +762,17 @@ type props =
       ; has_leading : bool
       ; has_trailing : bool
       }
-  | Material_divider_props of { thickness : float }
-  | Material_card_props of { elevation : float }
+  | Material_divider_props of
+      { orientation : axis
+      ; thickness : float
+      ; spacing : float
+      ; indent : float
+      ; end_indent : float
+      }
+  | Material_card_props of
+      { variant : material_card_variant
+      ; elevation : float
+      }
   | Material_circular_progress_props of { value : float option }
   | Material_linear_progress_props of { value : float option }
   | Material_segmented_button_props of

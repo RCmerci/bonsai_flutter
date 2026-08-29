@@ -3,7 +3,7 @@
 module ID = Bonsai_flutter_spec.Id
 
 let protocol_major = 1
-let protocol_minor = 23
+let protocol_minor = 24
 
 module Limits = struct
   let header_bytes = 48
@@ -139,6 +139,13 @@ module Node_kind = struct
   let material_linear_progress_indicator = ID.Protocol.Node_kind.of_int 124
   let material_segmented_button = ID.Protocol.Node_kind.of_int 125
   let native_widget = ID.Protocol.Node_kind.of_int 128
+  let material_search_bar = ID.Protocol.Node_kind.of_int 129
+  let material_tooltip = ID.Protocol.Node_kind.of_int 130
+  let material_data_table = ID.Protocol.Node_kind.of_int 131
+  let material_stepper = ID.Protocol.Node_kind.of_int 132
+  let material_expansion_panel_list = ID.Protocol.Node_kind.of_int 133
+  let material_simple_dialog = ID.Protocol.Node_kind.of_int 134
+  let material_fullscreen_dialog = ID.Protocol.Node_kind.of_int 135
 
   let debug_name id =
     match ID.Protocol.Node_kind.to_int id with
@@ -216,6 +223,13 @@ module Node_kind = struct
     | 124 -> Some "material_linear_progress_indicator"
     | 125 -> Some "material_segmented_button"
     | 128 -> Some "native_widget"
+    | 129 -> Some "material_search_bar"
+    | 130 -> Some "material_tooltip"
+    | 131 -> Some "material_data_table"
+    | 132 -> Some "material_stepper"
+    | 133 -> Some "material_expansion_panel_list"
+    | 134 -> Some "material_simple_dialog"
+    | 135 -> Some "material_fullscreen_dialog"
     | _ -> None
   ;;
 end
@@ -256,6 +270,16 @@ module Event_tag = struct
   let range_slider_change_end = ID.Protocol.Event_tag.of_int 33
   let delete = ID.Protocol.Event_tag.of_int 34
   let segmented_selection_changed = ID.Protocol.Event_tag.of_int 35
+  let tooltip_triggered = ID.Protocol.Event_tag.of_int 36
+  let table_sort_requested = ID.Protocol.Event_tag.of_int 37
+  let table_row_selected = ID.Protocol.Event_tag.of_int 38
+  let table_select_all = ID.Protocol.Event_tag.of_int 39
+  let table_cell_activated = ID.Protocol.Event_tag.of_int 40
+  let step_selected = ID.Protocol.Event_tag.of_int 41
+  let step_continue = ID.Protocol.Event_tag.of_int 42
+  let step_cancel = ID.Protocol.Event_tag.of_int 43
+  let expansion_changed = ID.Protocol.Event_tag.of_int 44
+  let dialog_option_selected = ID.Protocol.Event_tag.of_int 45
 
   let debug_name id =
     match ID.Protocol.Event_tag.to_int id with
@@ -294,6 +318,16 @@ module Event_tag = struct
     | 33 -> Some "range_slider_change_end"
     | 34 -> Some "delete"
     | 35 -> Some "segmented_selection_changed"
+    | 36 -> Some "tooltip_triggered"
+    | 37 -> Some "table_sort_requested"
+    | 38 -> Some "table_row_selected"
+    | 39 -> Some "table_select_all"
+    | 40 -> Some "table_cell_activated"
+    | 41 -> Some "step_selected"
+    | 42 -> Some "step_continue"
+    | 43 -> Some "step_cancel"
+    | 44 -> Some "expansion_changed"
+    | 45 -> Some "dialog_option_selected"
     | _ -> None
   ;;
 end
@@ -1003,6 +1037,7 @@ module Material_action_chip_prop = struct
   let has_on_press = ID.Protocol.Property.of_int 5
   let has_on_selected = ID.Protocol.Property.of_int 6
   let has_on_delete = ID.Protocol.Property.of_int 7
+  let presentation = ID.Protocol.Property.of_int 8
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
@@ -1013,6 +1048,7 @@ module Material_action_chip_prop = struct
     | 5 -> Some "has_on_press"
     | 6 -> Some "has_on_selected"
     | 7 -> Some "has_on_delete"
+    | 8 -> Some "presentation"
     | _ -> None
   ;;
 end
@@ -1025,6 +1061,7 @@ module Material_filter_chip_prop = struct
   let has_on_press = ID.Protocol.Property.of_int 5
   let has_on_selected = ID.Protocol.Property.of_int 6
   let has_on_delete = ID.Protocol.Property.of_int 7
+  let presentation = ID.Protocol.Property.of_int 8
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
@@ -1035,6 +1072,7 @@ module Material_filter_chip_prop = struct
     | 5 -> Some "has_on_press"
     | 6 -> Some "has_on_selected"
     | 7 -> Some "has_on_delete"
+    | 8 -> Some "presentation"
     | _ -> None
   ;;
 end
@@ -1047,6 +1085,7 @@ module Material_choice_chip_prop = struct
   let has_on_press = ID.Protocol.Property.of_int 5
   let has_on_selected = ID.Protocol.Property.of_int 6
   let has_on_delete = ID.Protocol.Property.of_int 7
+  let presentation = ID.Protocol.Property.of_int 8
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
@@ -1057,6 +1096,7 @@ module Material_choice_chip_prop = struct
     | 5 -> Some "has_on_press"
     | 6 -> Some "has_on_selected"
     | 7 -> Some "has_on_delete"
+    | 8 -> Some "presentation"
     | _ -> None
   ;;
 end
@@ -1069,6 +1109,7 @@ module Material_input_chip_prop = struct
   let has_on_press = ID.Protocol.Property.of_int 5
   let has_on_selected = ID.Protocol.Property.of_int 6
   let has_on_delete = ID.Protocol.Property.of_int 7
+  let presentation = ID.Protocol.Property.of_int 8
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
@@ -1079,6 +1120,7 @@ module Material_input_chip_prop = struct
     | 5 -> Some "has_on_press"
     | 6 -> Some "has_on_selected"
     | 7 -> Some "has_on_delete"
+    | 8 -> Some "presentation"
     | _ -> None
   ;;
 end
@@ -1143,20 +1185,30 @@ end
 
 module Material_divider_prop = struct
   let thickness = ID.Protocol.Property.of_int 1
+  let orientation = ID.Protocol.Property.of_int 2
+  let spacing = ID.Protocol.Property.of_int 3
+  let indent = ID.Protocol.Property.of_int 4
+  let end_indent = ID.Protocol.Property.of_int 5
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "thickness"
+    | 2 -> Some "orientation"
+    | 3 -> Some "spacing"
+    | 4 -> Some "indent"
+    | 5 -> Some "end_indent"
     | _ -> None
   ;;
 end
 
 module Material_card_prop = struct
   let elevation = ID.Protocol.Property.of_int 1
+  let variant = ID.Protocol.Property.of_int 2
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "elevation"
+    | 2 -> Some "variant"
     | _ -> None
   ;;
 end
@@ -1203,6 +1255,147 @@ module Material_segmented_button_prop = struct
     | 7 -> Some "show_selected_icon"
     | 8 -> Some "has_selected_icon"
     | 9 -> Some "segments"
+    | _ -> None
+  ;;
+end
+
+module Material_search_bar_prop = struct
+  let session_id = ID.Protocol.Property.of_int 1
+  let document_revision = ID.Protocol.Property.of_int 2
+  let value = ID.Protocol.Property.of_int 3
+  let enabled = ID.Protocol.Property.of_int 4
+  let read_only = ID.Protocol.Property.of_int 5
+  let keyboard_type = ID.Protocol.Property.of_int 6
+  let input_action = ID.Protocol.Property.of_int 7
+  let accepted_local_revision = ID.Protocol.Property.of_int 8
+  let update_mode = ID.Protocol.Property.of_int 9
+  let autofocus = ID.Protocol.Property.of_int 10
+  let max_utf8_bytes = ID.Protocol.Property.of_int 11
+  let has_leading = ID.Protocol.Property.of_int 12
+  let trailing_count = ID.Protocol.Property.of_int 13
+  let hint_text = ID.Protocol.Property.of_int 14
+  let has_on_tap = ID.Protocol.Property.of_int 15
+
+  let debug_name id =
+    match ID.Protocol.Property.to_int id with
+    | 1 -> Some "session_id"
+    | 2 -> Some "document_revision"
+    | 3 -> Some "value"
+    | 4 -> Some "enabled"
+    | 5 -> Some "read_only"
+    | 6 -> Some "keyboard_type"
+    | 7 -> Some "input_action"
+    | 8 -> Some "accepted_local_revision"
+    | 9 -> Some "update_mode"
+    | 10 -> Some "autofocus"
+    | 11 -> Some "max_utf8_bytes"
+    | 12 -> Some "has_leading"
+    | 13 -> Some "trailing_count"
+    | 14 -> Some "hint_text"
+    | 15 -> Some "has_on_tap"
+    | _ -> None
+  ;;
+end
+
+module Material_tooltip_prop = struct
+  let message = ID.Protocol.Property.of_int 1
+  let enabled = ID.Protocol.Property.of_int 2
+  let exclude_from_semantics = ID.Protocol.Property.of_int 3
+  let prefer_below = ID.Protocol.Property.of_int 4
+  let trigger_mode = ID.Protocol.Property.of_int 5
+  let wait_duration_ms = ID.Protocol.Property.of_int 6
+  let show_duration_ms = ID.Protocol.Property.of_int 7
+  let exit_duration_ms = ID.Protocol.Property.of_int 8
+  let enable_tap_to_dismiss = ID.Protocol.Property.of_int 9
+  let enable_feedback = ID.Protocol.Property.of_int 10
+  let has_on_triggered = ID.Protocol.Property.of_int 11
+
+  let debug_name id =
+    match ID.Protocol.Property.to_int id with
+    | 1 -> Some "message"
+    | 2 -> Some "enabled"
+    | 3 -> Some "exclude_from_semantics"
+    | 4 -> Some "prefer_below"
+    | 5 -> Some "trigger_mode"
+    | 6 -> Some "wait_duration_ms"
+    | 7 -> Some "show_duration_ms"
+    | 8 -> Some "exit_duration_ms"
+    | 9 -> Some "enable_tap_to_dismiss"
+    | 10 -> Some "enable_feedback"
+    | 11 -> Some "has_on_triggered"
+    | _ -> None
+  ;;
+end
+
+module Material_data_table_prop = struct
+  let columns = ID.Protocol.Property.of_int 1
+  let rows = ID.Protocol.Property.of_int 2
+  let sort_column_id = ID.Protocol.Property.of_int 3
+  let sort_ascending = ID.Protocol.Property.of_int 4
+  let selected_row_ids = ID.Protocol.Property.of_int 5
+  let has_on_sort = ID.Protocol.Property.of_int 6
+  let has_on_row_selected = ID.Protocol.Property.of_int 7
+  let has_on_select_all = ID.Protocol.Property.of_int 8
+  let has_on_cell_activate = ID.Protocol.Property.of_int 9
+
+  let debug_name id =
+    match ID.Protocol.Property.to_int id with
+    | 1 -> Some "columns"
+    | 2 -> Some "rows"
+    | 3 -> Some "sort_column_id"
+    | 4 -> Some "sort_ascending"
+    | 5 -> Some "selected_row_ids"
+    | 6 -> Some "has_on_sort"
+    | 7 -> Some "has_on_row_selected"
+    | 8 -> Some "has_on_select_all"
+    | 9 -> Some "has_on_cell_activate"
+    | _ -> None
+  ;;
+end
+
+module Material_stepper_prop = struct
+  let orientation = ID.Protocol.Property.of_int 1
+  let current_step_id = ID.Protocol.Property.of_int 2
+  let steps = ID.Protocol.Property.of_int 3
+
+  let debug_name id =
+    match ID.Protocol.Property.to_int id with
+    | 1 -> Some "orientation"
+    | 2 -> Some "current_step_id"
+    | 3 -> Some "steps"
+    | _ -> None
+  ;;
+end
+
+module Material_expansion_panel_list_prop = struct
+  let policy = ID.Protocol.Property.of_int 1
+  let expanded_ids = ID.Protocol.Property.of_int 2
+  let panels = ID.Protocol.Property.of_int 3
+
+  let debug_name id =
+    match ID.Protocol.Property.to_int id with
+    | 1 -> Some "policy"
+    | 2 -> Some "expanded_ids"
+    | 3 -> Some "panels"
+    | _ -> None
+  ;;
+end
+
+module Material_simple_dialog_prop = struct
+  let has_title = ID.Protocol.Property.of_int 1
+  let options = ID.Protocol.Property.of_int 2
+
+  let debug_name id =
+    match ID.Protocol.Property.to_int id with
+    | 1 -> Some "has_title"
+    | 2 -> Some "options"
+    | _ -> None
+  ;;
+end
+
+module Material_fullscreen_dialog_prop = struct
+  let debug_name id =
+    match ID.Protocol.Property.to_int id with
     | _ -> None
   ;;
 end

@@ -341,7 +341,7 @@ let test_navigation_constructors () =
     (String.equal (Ui.Widget.For_testing.kind_name overlay) "Overlay")
     "overlay kind is not typed";
   let dialog =
-    Ui.Material.alert_dialog ~content:(Ui.Widget.text "Confirm") ~actions:[] ()
+    Ui.Material.Dialog.alert ~content:(Ui.Widget.text "Confirm") ~actions:[] ()
   in
   check
     (String.equal (Ui.Widget.For_testing.kind_name dialog) "Material_alert_dialog")

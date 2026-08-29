@@ -95,7 +95,7 @@ let component handlers graph =
                  ; Ui.Widget.overlay
                      ~alignment:Ui.Navigation.Center
                      [ Ui.Widget.text "Overlay owned by OCaml" ]
-                 ; Ui.Material.alert_dialog
+                 ; Ui.Material.Dialog.alert
                      ~content:(Ui.Widget.text "Dialog owned by OCaml")
                      ~actions:[]
                      ()

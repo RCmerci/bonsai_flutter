@@ -1818,6 +1818,83 @@ let test_complete_material_protocol_round_trip () =
         }
     ; Material_alert_dialog_props
         { has_icon = true; has_title = true; has_content = true; action_count = 2 }
+    ; Material_search_bar_props
+        { session_id = session 3L
+        ; document_revision = document_revision 8L
+        ; value =
+            { text = "find"
+            ; selection = { start_utf16 = 1; end_utf16 = 4 }
+            ; composing = Some { start_utf16 = 0; end_utf16 = 4 }
+            }
+        ; enabled = true
+        ; read_only = false
+        ; keyboard_type = Keyboard_text
+        ; input_action = Search
+        ; accepted_local_revision = local_revision 5L
+        ; update_mode = Correction
+        ; autofocus = true
+        ; max_utf8_bytes = Some 64
+        ; has_leading = true
+        ; trailing_count = 2
+        ; hint_text = Some "Search"
+        ; has_on_tap = true
+        }
+    ; Material_tooltip_props
+        { message = "Details"
+        ; enabled = true
+        ; exclude_from_semantics = false
+        ; prefer_below = false
+        ; trigger_mode = Tooltip_tap
+        ; wait_duration_ms = 20
+        ; show_duration_ms = 1500
+        ; exit_duration_ms = 100
+        ; enable_tap_to_dismiss = true
+        ; enable_feedback = false
+        ; has_on_triggered = true
+        }
+    ; Material_data_table_props
+        { columns =
+            [ { column_id = 11L; tooltip = Some "Name"; numeric = false; sortable = true }
+            ; { column_id = 12L; tooltip = None; numeric = true; sortable = false }
+            ]
+        ; rows =
+            [ { row_id = 21L
+              ; selected = true
+              ; selection_enabled = true
+              ; cells =
+                  [ { placeholder = false; show_edit_icon = true; activatable = true }
+                  ; { placeholder = false; show_edit_icon = false; activatable = false }
+                  ]
+              }
+            ]
+        ; sort_column_id = Some 11L
+        ; sort_ascending = false
+        ; selected_row_ids = [ 21L ]
+        ; has_on_sort = true
+        ; has_on_row_selected = true
+        ; has_on_select_all = true
+        ; has_on_cell_activate = true
+        }
+    ; Material_stepper_props
+        { orientation = Horizontal
+        ; current_step_id = 31L
+        ; steps =
+            [ { step_id = 31L
+              ; active = true
+              ; state = Step_editing
+              ; has_subtitle = true
+              ; has_label = true
+              }
+            ]
+        }
+    ; Material_expansion_panel_list_props
+        { policy = Single_panel
+        ; expanded_ids = [ 41L ]
+        ; panels = [ { panel_id = 41L; enabled = true; can_tap_on_header = true } ]
+        }
+    ; Material_simple_dialog_props
+        { has_title = true; options = [ { option_id = 51L; enabled = true } ] }
+    ; Material_fullscreen_dialog_props
     ; Material_radio_group_props
         { selected_id = Some (-7L)
         ; options =
@@ -1871,6 +1948,7 @@ let test_complete_material_protocol_round_trip () =
         }
     ; Material_chip_props
         { variant = Input_chip
+        ; presentation = Flat_chip
         ; enabled = true
         ; selected = true
         ; has_avatar = true
@@ -1878,6 +1956,25 @@ let test_complete_material_protocol_round_trip () =
         ; has_on_press = true
         ; has_on_selected = true
         ; has_on_delete = true
+        }
+    ; Material_chip_props
+        { variant = Action_chip
+        ; presentation = Elevated_chip
+        ; enabled = true
+        ; selected = false
+        ; has_avatar = true
+        ; has_delete_icon = false
+        ; has_on_press = true
+        ; has_on_selected = false
+        ; has_on_delete = false
+        }
+    ; Material_card_props { variant = Filled_card; elevation = 2. }
+    ; Material_divider_props
+        { orientation = Vertical
+        ; thickness = 2.
+        ; spacing = 24.
+        ; indent = 4.
+        ; end_indent = 8.
         }
     ; Material_linear_progress_props { value = Some 0.5 }
     ; modal_dialog
@@ -2001,6 +2098,72 @@ let test_segmented_button_protocol_validation () =
     expect_invalid_props_encode "invalid segmented button" (props_frame invalid))
 ;;
 
+let test_additional_material_protocol_validation () =
+  let open Wire_frame in
+  let column id = { column_id = id; tooltip = None; numeric = false; sortable = false } in
+  let row id cells = { row_id = id; selected = false; selection_enabled = true; cells } in
+  let panel id = { panel_id = id; enabled = true; can_tap_on_header = false } in
+  let invalid =
+    [ Material_chip_props
+        { variant = Input_chip
+        ; presentation = Elevated_chip
+        ; enabled = true
+        ; selected = false
+        ; has_avatar = false
+        ; has_delete_icon = false
+        ; has_on_press = false
+        ; has_on_selected = false
+        ; has_on_delete = false
+        }
+    ; Material_tooltip_props
+        { message = " "
+        ; enabled = true
+        ; exclude_from_semantics = false
+        ; prefer_below = true
+        ; trigger_mode = Tooltip_long_press
+        ; wait_duration_ms = 0
+        ; show_duration_ms = 1
+        ; exit_duration_ms = 0
+        ; enable_tap_to_dismiss = true
+        ; enable_feedback = true
+        ; has_on_triggered = false
+        }
+    ; Material_data_table_props
+        { columns = [ column 1L ]
+        ; rows = [ row 2L [] ]
+        ; sort_column_id = None
+        ; sort_ascending = true
+        ; selected_row_ids = []
+        ; has_on_sort = false
+        ; has_on_row_selected = false
+        ; has_on_select_all = false
+        ; has_on_cell_activate = false
+        }
+    ; Material_stepper_props { orientation = Vertical; current_step_id = 1L; steps = [] }
+    ; Material_expansion_panel_list_props
+        { policy = Single_panel
+        ; expanded_ids = [ 1L; 2L ]
+        ; panels = [ panel 1L; panel 2L ]
+        }
+    ; Material_simple_dialog_props { has_title = false; options = [] }
+    ; Material_card_props { variant = Outlined_card; elevation = -1. }
+    ; Material_divider_props
+        { orientation = Vertical
+        ; thickness = 1.
+        ; spacing = -1.
+        ; indent = 0.
+        ; end_indent = 0.
+        }
+    ]
+  in
+  List.iteri
+    (fun index props ->
+       expect_invalid_props_encode
+         (Printf.sprintf "invalid additional Material props %d" index)
+         (props_frame props))
+    invalid
+;;
+
 let test_material_typed_event_payload_round_trip () =
   let open Inbound_event in
   let events =
@@ -2013,6 +2176,19 @@ let test_material_typed_event_payload_round_trip () =
       , Float_range { start = 0.1; end_ = 0.9 } )
     ; ( Generated_protocol.Event_tag.range_slider_change_end
       , Float_range { start = 0.2; end_ = 0.8 } )
+    ; Generated_protocol.Event_tag.tooltip_triggered, Unit
+    ; ( Generated_protocol.Event_tag.table_sort_requested
+      , Int64_bool { id = 11L; value = false } )
+    ; ( Generated_protocol.Event_tag.table_row_selected
+      , Int64_bool { id = 21L; value = true } )
+    ; Generated_protocol.Event_tag.table_select_all, Bool true
+    ; ( Generated_protocol.Event_tag.table_cell_activated
+      , Int64_pair { first = 21L; second = 11L } )
+    ; Generated_protocol.Event_tag.step_selected, Int64 31L
+    ; Generated_protocol.Event_tag.step_continue, Unit
+    ; Generated_protocol.Event_tag.step_cancel, Unit
+    ; Generated_protocol.Event_tag.expansion_changed, Int64_list [ 41L ]
+    ; Generated_protocol.Event_tag.dialog_option_selected, Int64 51L
     ]
   in
   let batch =
@@ -2078,6 +2254,7 @@ let () =
   test_complete_material_protocol_round_trip ();
   test_linear_progress_protocol_boundaries ();
   test_segmented_button_protocol_validation ();
+  test_additional_material_protocol_validation ();
   test_material_typed_event_payload_round_trip ();
   print_endline "protocol tests passed"
 ;;

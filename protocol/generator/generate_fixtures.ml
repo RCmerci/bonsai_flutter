@@ -218,6 +218,116 @@ let viewport_body_frame : Protocol.Wire_frame.t =
   }
 ;;
 
+let additional_material_frame : Protocol.Wire_frame.t =
+  let open Protocol.Wire_frame in
+  let props =
+    [ Material_search_bar_props
+        { session_id = ID.Text_input.Session_id.of_int64 3L
+        ; document_revision = ID.Text_input.Document_revision.of_int64 8L
+        ; value =
+            { text = "find"
+            ; selection = { start_utf16 = 1; end_utf16 = 4 }
+            ; composing = Some { start_utf16 = 0; end_utf16 = 4 }
+            }
+        ; enabled = true
+        ; read_only = false
+        ; keyboard_type = Keyboard_text
+        ; input_action = Search
+        ; accepted_local_revision = ID.Text_input.Local_revision.of_int64 5L
+        ; update_mode = Correction
+        ; autofocus = true
+        ; max_utf8_bytes = Some 64
+        ; has_leading = true
+        ; trailing_count = 2
+        ; hint_text = Some "Search"
+        ; has_on_tap = true
+        }
+    ; Material_tooltip_props
+        { message = "Details"
+        ; enabled = true
+        ; exclude_from_semantics = false
+        ; prefer_below = false
+        ; trigger_mode = Tooltip_tap
+        ; wait_duration_ms = 20
+        ; show_duration_ms = 1500
+        ; exit_duration_ms = 100
+        ; enable_tap_to_dismiss = true
+        ; enable_feedback = false
+        ; has_on_triggered = true
+        }
+    ; Material_data_table_props
+        { columns =
+            [ { column_id = 11L; tooltip = Some "Name"; numeric = false; sortable = true }
+            ]
+        ; rows =
+            [ { row_id = 21L
+              ; selected = true
+              ; selection_enabled = true
+              ; cells =
+                  [ { placeholder = false; show_edit_icon = true; activatable = true } ]
+              }
+            ]
+        ; sort_column_id = Some 11L
+        ; sort_ascending = false
+        ; selected_row_ids = [ 21L ]
+        ; has_on_sort = true
+        ; has_on_row_selected = true
+        ; has_on_select_all = true
+        ; has_on_cell_activate = true
+        }
+    ; Material_stepper_props
+        { orientation = Horizontal
+        ; current_step_id = 31L
+        ; steps =
+            [ { step_id = 31L
+              ; active = true
+              ; state = Step_editing
+              ; has_subtitle = true
+              ; has_label = true
+              }
+            ]
+        }
+    ; Material_expansion_panel_list_props
+        { policy = Single_panel
+        ; expanded_ids = [ 41L ]
+        ; panels = [ { panel_id = 41L; enabled = true; can_tap_on_header = true } ]
+        }
+    ; Material_simple_dialog_props
+        { has_title = true; options = [ { option_id = 51L; enabled = true } ] }
+    ; Material_fullscreen_dialog_props
+    ; Material_chip_props
+        { variant = Action_chip
+        ; presentation = Elevated_chip
+        ; enabled = true
+        ; selected = false
+        ; has_avatar = true
+        ; has_delete_icon = false
+        ; has_on_press = true
+        ; has_on_selected = false
+        ; has_on_delete = false
+        }
+    ; Material_card_props { variant = Filled_card; elevation = 2. }
+    ; Material_divider_props
+        { orientation = Vertical
+        ; thickness = 2.
+        ; spacing = 24.
+        ; indent = 4.
+        ; end_indent = 8.
+        }
+    ]
+  in
+  { runtime_epoch = epoch 77L
+  ; base_revision = revision 1L
+  ; target_revision = revision 2L
+  ; kind = Incremental_frame
+  ; operations =
+      List.mapi
+        (fun index props ->
+           Update_props { node_id = node (Int64.of_int (index + 1)); props })
+        props
+  }
+;;
+
 let counter_frame : Protocol.Wire_frame.t =
   { runtime_epoch = epoch 7L
   ; base_revision = revision 0L
@@ -415,6 +525,7 @@ let fixtures : (string * Protocol.Wire_frame.t) list =
           ]
       } )
   ; "ocaml_viewport_body.hex", viewport_body_frame
+  ; "ocaml_additional_material_components.hex", additional_material_frame
   ]
 ;;
 

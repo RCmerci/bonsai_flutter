@@ -2,7 +2,7 @@
 
 # Protocol IDs
 
-Protocol version: `1.23`
+Protocol version: `1.24`
 
 ## Frame kind
 
@@ -109,6 +109,13 @@ Protocol version: `1.23`
 | `material_linear_progress_indicator` | 124 |
 | `material_segmented_button` | 125 |
 | `native_widget` | 128 |
+| `material_search_bar` | 129 |
+| `material_tooltip` | 130 |
+| `material_data_table` | 131 |
+| `material_stepper` | 132 |
+| `material_expansion_panel_list` | 133 |
+| `material_simple_dialog` | 134 |
+| `material_fullscreen_dialog` | 135 |
 
 ## Event tag
 
@@ -149,6 +156,16 @@ Protocol version: `1.23`
 | `range_slider_change_end` | 33 |
 | `delete` | 34 |
 | `segmented_selection_changed` | 35 |
+| `tooltip_triggered` | 36 |
+| `table_sort_requested` | 37 |
+| `table_row_selected` | 38 |
+| `table_select_all` | 39 |
+| `table_cell_activated` | 40 |
+| `step_selected` | 41 |
+| `step_continue` | 42 |
+| `step_cancel` | 43 |
+| `expansion_changed` | 44 |
+| `dialog_option_selected` | 45 |
 
 ## Host request
 
@@ -555,6 +572,7 @@ Protocol version: `1.23`
 | `has_on_press` | 5 | `bool` |
 | `has_on_selected` | 6 | `bool` |
 | `has_on_delete` | 7 | `bool` |
+| `presentation` | 8 | `material_chip_presentation` |
 
 ## Material filter chip properties
 
@@ -567,6 +585,7 @@ Protocol version: `1.23`
 | `has_on_press` | 5 | `bool` |
 | `has_on_selected` | 6 | `bool` |
 | `has_on_delete` | 7 | `bool` |
+| `presentation` | 8 | `material_chip_presentation` |
 
 ## Material choice chip properties
 
@@ -579,6 +598,7 @@ Protocol version: `1.23`
 | `has_on_press` | 5 | `bool` |
 | `has_on_selected` | 6 | `bool` |
 | `has_on_delete` | 7 | `bool` |
+| `presentation` | 8 | `material_chip_presentation` |
 
 ## Material input chip properties
 
@@ -591,6 +611,7 @@ Protocol version: `1.23`
 | `has_on_press` | 5 | `bool` |
 | `has_on_selected` | 6 | `bool` |
 | `has_on_delete` | 7 | `bool` |
+| `presentation` | 8 | `material_chip_presentation` |
 
 ## Material alert dialog properties
 
@@ -630,12 +651,17 @@ Protocol version: `1.23`
 | Name | ID | Encoding |
 |---|---:|---|
 | `thickness` | 1 | `f64` |
+| `orientation` | 2 | `axis` |
+| `spacing` | 3 | `f64` |
+| `indent` | 4 | `f64` |
+| `end_indent` | 5 | `f64` |
 
 ## Material card properties
 
 | Name | ID | Encoding |
 |---|---:|---|
 | `elevation` | 1 | `f64` |
+| `variant` | 2 | `material_card_variant` |
 
 ## Material circular progress indicator properties
 
@@ -662,6 +688,84 @@ Protocol version: `1.23`
 | `show_selected_icon` | 7 | `bool` |
 | `has_selected_icon` | 8 | `bool` |
 | `segments` | 9 | `material_segments` |
+
+## Material search bar properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `session_id` | 1 | `u64` |
+| `document_revision` | 2 | `u64` |
+| `value` | 3 | `text_editing_value` |
+| `enabled` | 4 | `bool` |
+| `read_only` | 5 | `bool` |
+| `keyboard_type` | 6 | `keyboard_type` |
+| `input_action` | 7 | `input_action` |
+| `accepted_local_revision` | 8 | `u64` |
+| `update_mode` | 9 | `text_update_mode` |
+| `autofocus` | 10 | `bool` |
+| `max_utf8_bytes` | 11 | `optional_u32` |
+| `has_leading` | 12 | `bool` |
+| `trailing_count` | 13 | `u32` |
+| `hint_text` | 14 | `optional_string` |
+| `has_on_tap` | 15 | `bool` |
+
+## Material tooltip properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `message` | 1 | `string` |
+| `enabled` | 2 | `bool` |
+| `exclude_from_semantics` | 3 | `bool` |
+| `prefer_below` | 4 | `bool` |
+| `trigger_mode` | 5 | `material_tooltip_trigger_mode` |
+| `wait_duration_ms` | 6 | `u32` |
+| `show_duration_ms` | 7 | `u32` |
+| `exit_duration_ms` | 8 | `u32` |
+| `enable_tap_to_dismiss` | 9 | `bool` |
+| `enable_feedback` | 10 | `bool` |
+| `has_on_triggered` | 11 | `bool` |
+
+## Material data table properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `columns` | 1 | `material_data_table_columns` |
+| `rows` | 2 | `material_data_table_rows` |
+| `sort_column_id` | 3 | `optional_i64` |
+| `sort_ascending` | 4 | `bool` |
+| `selected_row_ids` | 5 | `i64_list` |
+| `has_on_sort` | 6 | `bool` |
+| `has_on_row_selected` | 7 | `bool` |
+| `has_on_select_all` | 8 | `bool` |
+| `has_on_cell_activate` | 9 | `bool` |
+
+## Material stepper properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `orientation` | 1 | `axis` |
+| `current_step_id` | 2 | `i64` |
+| `steps` | 3 | `material_steps` |
+
+## Material expansion panel list properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `policy` | 1 | `material_expansion_panel_policy` |
+| `expanded_ids` | 2 | `i64_list` |
+| `panels` | 3 | `material_expansion_panels` |
+
+## Material simple dialog properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `has_title` | 1 | `bool` |
+| `options` | 2 | `material_simple_dialog_options` |
+
+## Material fullscreen dialog properties
+
+| Name | ID | Encoding |
+|---|---:|---|
 
 ## Cupertino button properties
 

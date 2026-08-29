@@ -287,6 +287,13 @@ let wire_node_kind = function
   | K_material_choice_chip -> Ok Material_choice_chip
   | K_material_input_chip -> Ok Material_input_chip
   | K_material_alert_dialog -> Ok Material_alert_dialog
+  | K_material_search_bar -> Ok Material_search_bar
+  | K_material_tooltip -> Ok Material_tooltip
+  | K_material_data_table -> Ok Material_data_table
+  | K_material_stepper -> Ok Material_stepper
+  | K_material_expansion_panel_list -> Ok Material_expansion_panel_list
+  | K_material_simple_dialog -> Ok Material_simple_dialog
+  | K_material_fullscreen_dialog -> Ok Material_fullscreen_dialog
   | K_material_checkbox -> Ok Material_checkbox
   | K_material_switch -> Ok Material_switch
   | K_material_list_tile -> Ok Material_list_tile
@@ -800,6 +807,10 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
     Ok
       (Material_chip_props
          { variant = Action_chip
+         ; presentation =
+             (match fields.presentation with
+              | Ui.Widget.Private.Flat_chip -> Flat_chip
+              | Elevated_chip -> Elevated_chip)
          ; enabled = fields.enabled
          ; selected = fields.selected
          ; has_avatar = fields.has_avatar
@@ -812,6 +823,10 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
     Ok
       (Material_chip_props
          { variant = Filter_chip
+         ; presentation =
+             (match fields.presentation with
+              | Ui.Widget.Private.Flat_chip -> Flat_chip
+              | Elevated_chip -> Elevated_chip)
          ; enabled = fields.enabled
          ; selected = fields.selected
          ; has_avatar = fields.has_avatar
@@ -824,6 +839,10 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
     Ok
       (Material_chip_props
          { variant = Choice_chip
+         ; presentation =
+             (match fields.presentation with
+              | Ui.Widget.Private.Flat_chip -> Flat_chip
+              | Elevated_chip -> Elevated_chip)
          ; enabled = fields.enabled
          ; selected = fields.selected
          ; has_avatar = fields.has_avatar
@@ -836,6 +855,7 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
     Ok
       (Material_chip_props
          { variant = Input_chip
+         ; presentation = Flat_chip
          ; enabled = fields.enabled
          ; selected = fields.selected
          ; has_avatar = fields.has_avatar
@@ -846,6 +866,176 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
          })
   | Material_alert_dialog { has_icon; has_title; has_content; action_count } ->
     Ok (Material_alert_dialog_props { has_icon; has_title; has_content; action_count })
+  | Material_search_bar fields ->
+    let wire_range range =
+      Protocol.Wire_frame.
+        { start_utf16 = Ui.Text_editing.Range.start_utf16 range
+        ; end_utf16 = Ui.Text_editing.Range.end_utf16 range
+        }
+    in
+    let value =
+      Protocol.Wire_frame.
+        { text = Ui.Text_editing.Value.text fields.value
+        ; selection = wire_range (Ui.Text_editing.Value.selection fields.value)
+        ; composing = Option.map wire_range (Ui.Text_editing.Value.composing fields.value)
+        }
+    in
+    let keyboard_type =
+      match fields.keyboard_type with
+      | Ui.Text_editing.Text -> Protocol.Wire_frame.Keyboard_text
+      | Multiline -> Keyboard_multiline
+      | Number -> Keyboard_number
+      | Email -> Keyboard_email
+      | Phone -> Keyboard_phone
+      | Url -> Keyboard_url
+    in
+    let input_action =
+      match fields.input_action with
+      | Ui.Text_editing.Done -> Protocol.Wire_frame.Done
+      | Newline -> Newline
+      | Next -> Next
+      | Previous -> Previous
+      | Search -> Search
+      | Send -> Send
+      | Go -> Go
+    in
+    let update_mode =
+      match fields.update_mode with
+      | Ui.Text_editing.Ack -> Protocol.Wire_frame.Ack
+      | Correction -> Correction
+      | Force_replace -> Force_replace
+    in
+    Ok
+      (Material_search_bar_props
+         { session_id = fields.session_id
+         ; document_revision = fields.document_revision
+         ; value
+         ; enabled = fields.enabled
+         ; read_only = fields.read_only
+         ; keyboard_type
+         ; input_action
+         ; accepted_local_revision = fields.accepted_local_revision
+         ; update_mode
+         ; autofocus = fields.autofocus
+         ; max_utf8_bytes = fields.max_utf8_bytes
+         ; has_leading = fields.has_leading
+         ; trailing_count = fields.trailing_count
+         ; hint_text = fields.hint_text
+         ; has_on_tap = fields.has_on_tap
+         })
+  | Material_tooltip fields ->
+    Ok
+      (Material_tooltip_props
+         { message = fields.message
+         ; enabled = fields.enabled
+         ; exclude_from_semantics = fields.exclude_from_semantics
+         ; prefer_below = fields.prefer_below
+         ; trigger_mode =
+             (match fields.trigger_mode with
+              | Ui.Widget.Private.Tooltip_long_press -> Tooltip_long_press
+              | Tooltip_tap -> Tooltip_tap)
+         ; wait_duration_ms = fields.wait_duration_ms
+         ; show_duration_ms = fields.show_duration_ms
+         ; exit_duration_ms = fields.exit_duration_ms
+         ; enable_tap_to_dismiss = fields.enable_tap_to_dismiss
+         ; enable_feedback = fields.enable_feedback
+         ; has_on_triggered = fields.has_on_triggered
+         })
+  | Material_data_table fields ->
+    let cell (value : Ui.Widget.Private.material_data_table_cell) =
+      Protocol.Wire_frame.
+        { placeholder = value.placeholder
+        ; show_edit_icon = value.show_edit_icon
+        ; activatable = value.activatable
+        }
+    in
+    Ok
+      (Material_data_table_props
+         { columns =
+             List.map
+               (fun (value : Ui.Widget.Private.material_data_table_column) ->
+                  Protocol.Wire_frame.
+                    { column_id = value.column_id
+                    ; tooltip = value.tooltip
+                    ; numeric = value.numeric
+                    ; sortable = value.sortable
+                    })
+               fields.columns
+         ; rows =
+             List.map
+               (fun (value : Ui.Widget.Private.material_data_table_row) ->
+                  Protocol.Wire_frame.
+                    { row_id = value.row_id
+                    ; selected = value.selected
+                    ; selection_enabled = value.selection_enabled
+                    ; cells = List.map cell value.cells
+                    })
+               fields.rows
+         ; sort_column_id = fields.sort_column_id
+         ; sort_ascending = fields.sort_ascending
+         ; selected_row_ids = fields.selected_row_ids
+         ; has_on_sort = fields.has_on_sort
+         ; has_on_row_selected = fields.has_on_row_selected
+         ; has_on_select_all = fields.has_on_select_all
+         ; has_on_cell_activate = fields.has_on_cell_activate
+         })
+  | Material_stepper fields ->
+    let state = function
+      | Ui.Widget.Private.Step_indexed -> Protocol.Wire_frame.Step_indexed
+      | Step_editing -> Step_editing
+      | Step_complete -> Step_complete
+      | Step_disabled -> Step_disabled
+      | Step_error -> Step_error
+    in
+    Ok
+      (Material_stepper_props
+         { orientation =
+             (match fields.orientation with
+              | Ui.Layout.Axis.Horizontal -> Protocol.Wire_frame.Horizontal
+              | Vertical -> Vertical)
+         ; current_step_id = fields.current_step_id
+         ; steps =
+             List.map
+               (fun (value : Ui.Widget.Private.material_step) ->
+                  Protocol.Wire_frame.
+                    { step_id = value.step_id
+                    ; active = value.active
+                    ; state = state value.state
+                    ; has_subtitle = value.has_subtitle
+                    ; has_label = value.has_label
+                    })
+               fields.steps
+         })
+  | Material_expansion_panel_list fields ->
+    Ok
+      (Material_expansion_panel_list_props
+         { policy =
+             (match fields.policy with
+              | Ui.Widget.Private.Multiple_panels -> Multiple_panels
+              | Single_panel -> Single_panel)
+         ; expanded_ids = fields.expanded_ids
+         ; panels =
+             List.map
+               (fun (value : Ui.Widget.Private.material_expansion_panel) ->
+                  Protocol.Wire_frame.
+                    { panel_id = value.panel_id
+                    ; enabled = value.enabled
+                    ; can_tap_on_header = value.can_tap_on_header
+                    })
+               fields.panels
+         })
+  | Material_simple_dialog fields ->
+    Ok
+      (Material_simple_dialog_props
+         { has_title = fields.has_title
+         ; options =
+             List.map
+               (fun (value : Ui.Widget.Private.material_simple_dialog_option) ->
+                  Protocol.Wire_frame.
+                    { option_id = value.option_id; enabled = value.enabled })
+               fields.options
+         })
+  | Material_fullscreen_dialog -> Ok Material_fullscreen_dialog_props
   | Material_checkbox { value; enabled } ->
     Ok (Material_checkbox_props { value; enabled })
   | Material_switch { value; enabled } -> Ok (Material_switch_props { value; enabled })
@@ -853,8 +1043,28 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
     Ok
       (Material_list_tile_props
          { enabled; selected; has_subtitle; has_leading; has_trailing })
-  | Material_divider { thickness } -> Ok (Material_divider_props { thickness })
-  | Material_card { elevation } -> Ok (Material_card_props { elevation })
+  | Material_divider { orientation; thickness; spacing; indent; end_indent } ->
+    Ok
+      (Material_divider_props
+         { orientation =
+             (match orientation with
+              | Ui.Layout.Axis.Horizontal -> Protocol.Wire_frame.Horizontal
+              | Vertical -> Vertical)
+         ; thickness
+         ; spacing
+         ; indent
+         ; end_indent
+         })
+  | Material_card { variant; elevation } ->
+    Ok
+      (Material_card_props
+         { variant =
+             (match variant with
+              | Ui.Widget.Private.Elevated_card -> Protocol.Wire_frame.Elevated_card
+              | Filled_card -> Filled_card
+              | Outlined_card -> Outlined_card)
+         ; elevation
+         })
   | Material_circular_progress_indicator { value } ->
     Ok (Material_circular_progress_props { value })
   | Material_linear_progress_indicator { value } ->
@@ -1085,6 +1295,16 @@ let wire_event_tag =
   | Range_slider_change_end -> Tag.range_slider_change_end
   | Delete -> Tag.delete
   | Segmented_selection_changed -> Tag.segmented_selection_changed
+  | Tooltip_triggered -> Tag.tooltip_triggered
+  | Table_sort_requested -> Tag.table_sort_requested
+  | Table_row_selected -> Tag.table_row_selected
+  | Table_select_all -> Tag.table_select_all
+  | Table_cell_activated -> Tag.table_cell_activated
+  | Step_selected -> Tag.step_selected
+  | Step_continue -> Tag.step_continue
+  | Step_cancel -> Tag.step_cancel
+  | Expansion_changed -> Tag.expansion_changed
+  | Dialog_option_selected -> Tag.dialog_option_selected
 ;;
 
 let wire_bindings bindings =
@@ -1496,6 +1716,8 @@ let payload_summary = function
   | Int64 value -> Printf.sprintf "int64(%Ld)" value
   | Int64_list values ->
     Printf.sprintf "int64_list(%s)" (String.concat "," (List.map Int64.to_string values))
+  | Int64_bool { id; value } -> Printf.sprintf "int64_bool(%Ld,%b)" id value
+  | Int64_pair { first; second } -> Printf.sprintf "int64_pair(%Ld,%Ld)" first second
   | Tap tap ->
     Printf.sprintf
       "tap(local=%g,%g global=%g,%g pointer=%s)"

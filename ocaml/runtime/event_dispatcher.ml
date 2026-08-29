@@ -78,9 +78,15 @@ let convert_payload tag payload =
     | Unknown_pointer -> Unknown_pointer
   in
   match payload with
-  | Protocol_event.Unit when tag = Id.press || tag = Id.long_press ->
-    Ok Ui_event.Payload.Unit
-  | Bool value when tag = Id.focus_changed || tag = Id.value_changed -> Ok (Bool value)
+  | Protocol_event.Unit
+    when tag = Id.press
+         || tag = Id.long_press
+         || tag = Id.tooltip_triggered
+         || tag = Id.step_continue
+         || tag = Id.step_cancel -> Ok Ui_event.Payload.Unit
+  | Bool value
+    when tag = Id.focus_changed || tag = Id.value_changed || tag = Id.table_select_all ->
+    Ok (Bool value)
   | Tap { local_x; local_y; global_x; global_y; pointer_kind = kind }
     when tag = Id.tap || tag = Id.double_tap ->
     Ok (Tap { local_x; local_y; global_x; global_y; pointer_kind = pointer_kind kind })
@@ -132,9 +138,19 @@ let convert_payload tag payload =
          ; composing
          })
   | Int64 value when tag = Id.animation_completed -> Ok (Int64 value)
-  | Int64 value when tag = Id.navigation_destination_selected || tag = Id.radio_selected
-    -> Ok (Int64 value)
-  | Int64_list values when tag = Id.segmented_selection_changed -> Ok (Int64_list values)
+  | Int64 value
+    when tag = Id.navigation_destination_selected
+         || tag = Id.radio_selected
+         || tag = Id.step_selected
+         || tag = Id.dialog_option_selected -> Ok (Int64 value)
+  | Int64_list values
+    when tag = Id.segmented_selection_changed || tag = Id.expansion_changed ->
+    Ok (Int64_list values)
+  | Int64_bool { id; value }
+    when tag = Id.table_sort_requested || tag = Id.table_row_selected ->
+    Ok (Int64_bool { id; value })
+  | Int64_pair { first; second } when tag = Id.table_cell_activated ->
+    Ok (Int64_pair { first; second })
   | Float value when tag = Id.slider_changed || tag = Id.slider_change_end ->
     Ok (Float value)
   | Float_range { start; end_ }

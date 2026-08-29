@@ -10,12 +10,21 @@ import '../renderer/renderer_resource_store.dart';
 import '../renderer/widget_registry.dart';
 import '../store/node_store.dart';
 
+typedef TextInputWidgetBuilder =
+    Widget Function(
+      BuildContext context,
+      TextEditingController controller,
+      FocusNode focusNode,
+      ValueChanged<String> onSubmitted,
+    );
+
 final class TextInputHost extends StatefulWidget {
   const TextInputHost({
     required this.node,
     required this.props,
     required this.resources,
     this.onEvent,
+    this.builder,
     super.key,
   });
 
@@ -23,6 +32,7 @@ final class TextInputHost extends StatefulWidget {
   final TextInputProps props;
   final RendererResourceStore resources;
   final RendererEventCallback? onEvent;
+  final TextInputWidgetBuilder? builder;
 
   @override
   State<TextInputHost> createState() => _TextInputHostState();
@@ -164,23 +174,34 @@ final class _TextInputHostState extends State<TextInputHost> {
   }
 
   @override
-  Widget build(BuildContext context) => TextField(
-    controller: _resource.controller,
-    focusNode: _resource.focusNode,
-    enabled: widget.props.enabled,
-    readOnly: widget.props.readOnly,
-    obscureText: widget.props.obscureText,
-    keyboardType: _keyboardType(widget.props.keyboardType),
-    textInputAction: _inputAction(widget.props.inputAction),
-    autofocus:
-        widget.props.autofocus &&
-        ModalSheetAutomaticFocusScope.isReady(context),
-    maxLines: widget.props.keyboardType == TextKeyboardType.multiline
-        ? null
-        : 1,
-    onSubmitted: (value) =>
-        _emit(EventTagId.textSubmit, TextEventPayload(value)),
-  );
+  Widget build(BuildContext context) {
+    final builder = widget.builder;
+    if (builder != null) {
+      return builder(
+        context,
+        _resource.controller,
+        _resource.focusNode,
+        (value) => _emit(EventTagId.textSubmit, TextEventPayload(value)),
+      );
+    }
+    return TextField(
+      controller: _resource.controller,
+      focusNode: _resource.focusNode,
+      enabled: widget.props.enabled,
+      readOnly: widget.props.readOnly,
+      obscureText: widget.props.obscureText,
+      keyboardType: _keyboardType(widget.props.keyboardType),
+      textInputAction: _inputAction(widget.props.inputAction),
+      autofocus:
+          widget.props.autofocus &&
+          ModalSheetAutomaticFocusScope.isReady(context),
+      maxLines: widget.props.keyboardType == TextKeyboardType.multiline
+          ? null
+          : 1,
+      onSubmitted: (value) =>
+          _emit(EventTagId.textSubmit, TextEventPayload(value)),
+    );
+  }
 }
 
 (int, int) _normalizeSelection(String text, TextSelection selection) {

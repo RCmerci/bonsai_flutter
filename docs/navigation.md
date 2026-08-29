@@ -157,4 +157,5 @@ behavior.
 `Widget.overlay` and pages using `Navigation.Modal_dialog` follow the same
 ownership rule: their content and presence are declared by OCaml, while
 Flutter owns layout, paint, hit testing, focus, barriers, and transition
-frames. Dialog content is built with `Material.alert_dialog`.
+frames. Dialog content is built with `Material.Dialog.alert`,
+`Material.Dialog.simple`, or `Material.Dialog.fullscreen`.

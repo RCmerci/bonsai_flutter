@@ -991,6 +991,14 @@ let node_kind_id = function
   | Material_choice_chip -> Generated_protocol.Node_kind.material_choice_chip
   | Material_input_chip -> Generated_protocol.Node_kind.material_input_chip
   | Material_alert_dialog -> Generated_protocol.Node_kind.material_alert_dialog
+  | Material_search_bar -> Generated_protocol.Node_kind.material_search_bar
+  | Material_tooltip -> Generated_protocol.Node_kind.material_tooltip
+  | Material_data_table -> Generated_protocol.Node_kind.material_data_table
+  | Material_stepper -> Generated_protocol.Node_kind.material_stepper
+  | Material_expansion_panel_list ->
+    Generated_protocol.Node_kind.material_expansion_panel_list
+  | Material_simple_dialog -> Generated_protocol.Node_kind.material_simple_dialog
+  | Material_fullscreen_dialog -> Generated_protocol.Node_kind.material_fullscreen_dialog
   | Material_checkbox -> Generated_protocol.Node_kind.material_checkbox
   | Material_switch -> Generated_protocol.Node_kind.material_switch
   | Material_list_tile -> Generated_protocol.Node_kind.material_list_tile
@@ -1010,6 +1018,269 @@ let node_kind_id = function
   | Safe_area -> Generated_protocol.Node_kind.safe_area
   | Environment_boundary -> Generated_protocol.Node_kind.environment_boundary
   | Native_widget -> Generated_protocol.Node_kind.native_widget
+;;
+
+let write_i64_list writer label values =
+  check_u16 (label ^ " count") (List.length values);
+  Writer.u16 writer (List.length values);
+  List.iter (Writer.u64 writer) values
+;;
+
+let unique_i64_set label ids =
+  let seen = Hashtbl.create (List.length ids) in
+  List.iter
+    (fun id ->
+       if Hashtbl.mem seen id then fail Invalid_props "%s IDs must be unique" label;
+       Hashtbl.add seen id ())
+    ids;
+  seen
+;;
+
+let validate_canonical_ids label known ids =
+  let rec loop previous = function
+    | [] -> ()
+    | id :: rest ->
+      if not (Hashtbl.mem known id) then fail Invalid_props "%s ID is absent" label;
+      Option.iter
+        (fun previous ->
+           if Int64.compare previous id >= 0
+           then fail Invalid_props "%s IDs must be sorted and unique" label)
+        previous;
+      loop (Some id) rest
+  in
+  loop None ids
+;;
+
+let validate_data_table ~columns ~rows ~sort_column_id ~selected_row_ids =
+  if List.is_empty columns then fail Invalid_props "data table needs a column";
+  let column_ids =
+    unique_i64_set
+      "data table column"
+      (List.map
+         (fun (column : Wire_frame.material_data_table_column) -> column.column_id)
+         columns)
+  in
+  List.iter
+    (fun (column : Wire_frame.material_data_table_column) ->
+       Option.iter
+         (fun tooltip ->
+            if String.length (String.trim tooltip) = 0
+            then fail Invalid_props "data table tooltip must not be empty")
+         column.tooltip)
+    columns;
+  let row_ids =
+    unique_i64_set
+      "data table row"
+      (List.map (fun (row : Wire_frame.material_data_table_row) -> row.row_id) rows)
+  in
+  List.iter
+    (fun (row : Wire_frame.material_data_table_row) ->
+       if List.length row.cells <> List.length columns
+       then fail Invalid_props "data table rows must have one cell per column")
+    rows;
+  Option.iter
+    (fun id ->
+       if not (Hashtbl.mem column_ids id)
+       then fail Invalid_props "data table sort column ID is absent")
+    sort_column_id;
+  validate_canonical_ids "data table selected row" row_ids selected_row_ids
+;;
+
+let validate_stepper ~current_step_id ~steps =
+  if List.is_empty steps then fail Invalid_props "stepper needs a step";
+  let ids =
+    unique_i64_set
+      "stepper"
+      (List.map (fun (step : Wire_frame.material_step) -> step.step_id) steps)
+  in
+  if not (Hashtbl.mem ids current_step_id)
+  then fail Invalid_props "stepper current ID is absent"
+;;
+
+let validate_expansion_panels ~policy ~expanded_ids ~panels =
+  let ids =
+    unique_i64_set
+      "expansion panel"
+      (List.map
+         (fun (panel : Wire_frame.material_expansion_panel) -> panel.panel_id)
+         panels)
+  in
+  validate_canonical_ids "expanded panel" ids expanded_ids;
+  if policy = Wire_frame.Single_panel && List.length expanded_ids > 1
+  then fail Invalid_props "single expansion panel list has multiple expanded IDs"
+;;
+
+let validate_simple_dialog options =
+  if List.is_empty options then fail Invalid_props "simple dialog needs an option";
+  ignore
+    (unique_i64_set
+       "simple dialog option"
+       (List.map
+          (fun (option : Wire_frame.material_simple_dialog_option) -> option.option_id)
+          options))
+;;
+
+let validate_nonnegative_finite label values =
+  List.iter
+    (fun value ->
+       if (not (Float.is_finite value)) || Float.compare value 0. < 0
+       then fail Invalid_props "%s must be finite and non-negative" label)
+    values
+;;
+
+let write_additional_material_props writer = function
+  | Wire_frame.Material_search_bar_props fields ->
+    let session_id = ID.Text_input.Session_id.to_int64 fields.session_id in
+    let document_revision =
+      ID.Text_input.Document_revision.to_int64 fields.document_revision
+    in
+    let accepted_local_revision =
+      ID.Text_input.Local_revision.to_int64 fields.accepted_local_revision
+    in
+    check_u64 "search bar session ID" session_id;
+    check_u64 "search bar document revision" document_revision;
+    check_u64 "search bar accepted local revision" accepted_local_revision;
+    (match fields.max_utf8_bytes with
+     | Some value when value > Generated_protocol.Limits.max_string_bytes ->
+       fail Invalid_props "search bar max UTF-8 bytes exceeds the protocol string limit"
+     | None | Some _ -> ());
+    Writer.u64 writer session_id;
+    Writer.u64 writer document_revision;
+    write_text_editing_value writer fields.value;
+    write_bool writer fields.enabled;
+    write_bool writer fields.read_only;
+    Writer.u8 writer (text_keyboard_type_id fields.keyboard_type);
+    Writer.u8 writer (text_input_action_id fields.input_action);
+    Writer.u64 writer accepted_local_revision;
+    Writer.u8 writer (text_update_mode_id fields.update_mode);
+    write_bool writer fields.autofocus;
+    write_optional_u32 writer "search bar max UTF-8 bytes" fields.max_utf8_bytes;
+    write_bool writer fields.has_leading;
+    check_u32 "search bar trailing count" fields.trailing_count;
+    Writer.u32 writer fields.trailing_count;
+    write_optional_string writer fields.hint_text;
+    write_bool writer fields.has_on_tap
+  | Material_tooltip_props fields ->
+    if String.length (String.trim fields.message) = 0
+    then fail Invalid_props "tooltip message is empty";
+    write_string writer fields.message;
+    write_bool writer fields.enabled;
+    write_bool writer fields.exclude_from_semantics;
+    write_bool writer fields.prefer_below;
+    Writer.u8
+      writer
+      (match fields.trigger_mode with
+       | Tooltip_long_press -> 0
+       | Tooltip_tap -> 1);
+    List.iter
+      (fun value ->
+         check_u32 "tooltip duration" value;
+         Writer.u32 writer value)
+      [ fields.wait_duration_ms; fields.show_duration_ms; fields.exit_duration_ms ];
+    write_bool writer fields.enable_tap_to_dismiss;
+    write_bool writer fields.enable_feedback;
+    write_bool writer fields.has_on_triggered
+  | Material_data_table_props fields ->
+    validate_data_table
+      ~columns:fields.columns
+      ~rows:fields.rows
+      ~sort_column_id:fields.sort_column_id
+      ~selected_row_ids:fields.selected_row_ids;
+    check_u16 "data table column count" (List.length fields.columns);
+    Writer.u16 writer (List.length fields.columns);
+    List.iter
+      (fun (column : Wire_frame.material_data_table_column) ->
+         Writer.u64 writer column.column_id;
+         write_optional_string writer column.tooltip;
+         write_bool writer column.numeric;
+         write_bool writer column.sortable)
+      fields.columns;
+    check_u16 "data table row count" (List.length fields.rows);
+    Writer.u16 writer (List.length fields.rows);
+    List.iter
+      (fun (row : Wire_frame.material_data_table_row) ->
+         Writer.u64 writer row.row_id;
+         write_bool writer row.selected;
+         write_bool writer row.selection_enabled;
+         check_u16 "data table cell count" (List.length row.cells);
+         Writer.u16 writer (List.length row.cells);
+         List.iter
+           (fun (cell : Wire_frame.material_data_table_cell) ->
+              write_bool writer cell.placeholder;
+              write_bool writer cell.show_edit_icon;
+              write_bool writer cell.activatable)
+           row.cells)
+      fields.rows;
+    (match fields.sort_column_id with
+     | None -> Writer.u8 writer 0
+     | Some id ->
+       Writer.u8 writer 1;
+       Writer.u64 writer id);
+    write_bool writer fields.sort_ascending;
+    write_i64_list writer "selected row" fields.selected_row_ids;
+    List.iter
+      (write_bool writer)
+      [ fields.has_on_sort
+      ; fields.has_on_row_selected
+      ; fields.has_on_select_all
+      ; fields.has_on_cell_activate
+      ]
+  | Material_stepper_props fields ->
+    validate_stepper ~current_step_id:fields.current_step_id ~steps:fields.steps;
+    Writer.u8
+      writer
+      (match fields.orientation with
+       | Horizontal -> 0
+       | Vertical -> 1);
+    Writer.u64 writer fields.current_step_id;
+    check_u16 "step count" (List.length fields.steps);
+    Writer.u16 writer (List.length fields.steps);
+    List.iter
+      (fun (step : Wire_frame.material_step) ->
+         Writer.u64 writer step.step_id;
+         write_bool writer step.active;
+         Writer.u8
+           writer
+           (match step.state with
+            | Step_indexed -> 0
+            | Step_editing -> 1
+            | Step_complete -> 2
+            | Step_disabled -> 3
+            | Step_error -> 4);
+         write_bool writer step.has_subtitle;
+         write_bool writer step.has_label)
+      fields.steps
+  | Material_expansion_panel_list_props fields ->
+    validate_expansion_panels
+      ~policy:fields.policy
+      ~expanded_ids:fields.expanded_ids
+      ~panels:fields.panels;
+    Writer.u8
+      writer
+      (match fields.policy with
+       | Multiple_panels -> 0
+       | Single_panel -> 1);
+    write_i64_list writer "expanded panel" fields.expanded_ids;
+    check_u16 "panel count" (List.length fields.panels);
+    Writer.u16 writer (List.length fields.panels);
+    List.iter
+      (fun (panel : Wire_frame.material_expansion_panel) ->
+         Writer.u64 writer panel.panel_id;
+         write_bool writer panel.enabled;
+         write_bool writer panel.can_tap_on_header)
+      fields.panels
+  | Material_simple_dialog_props fields ->
+    validate_simple_dialog fields.options;
+    write_bool writer fields.has_title;
+    check_u16 "simple dialog option count" (List.length fields.options);
+    Writer.u16 writer (List.length fields.options);
+    List.iter
+      (fun (option : Wire_frame.material_simple_dialog_option) ->
+         Writer.u64 writer option.option_id;
+         write_bool writer option.enabled)
+      fields.options
+  | Material_fullscreen_dialog_props -> ()
+  | _ -> invalid_arg "not an additional Material prop"
 ;;
 
 let write_props writer kind props =
@@ -1298,6 +1569,7 @@ let write_props writer kind props =
       | Material_input_chip )
     , Material_chip_props
         { variant
+        ; presentation
         ; enabled
         ; selected
         ; has_avatar
@@ -1307,13 +1579,20 @@ let write_props writer kind props =
         ; has_on_delete
         } ) ->
     ignore (material_chip_variant_id variant);
+    if variant = Input_chip && presentation = Elevated_chip
+    then fail Invalid_props "input chip cannot be elevated";
     write_bool writer enabled;
     write_bool writer selected;
     write_bool writer has_avatar;
     write_bool writer has_delete_icon;
     write_bool writer has_on_press;
     write_bool writer has_on_selected;
-    write_bool writer has_on_delete
+    write_bool writer has_on_delete;
+    Writer.u8
+      writer
+      (match presentation with
+       | Flat_chip -> 0
+       | Elevated_chip -> 1)
   | ( Material_alert_dialog
     , Material_alert_dialog_props { has_icon; has_title; has_content; action_count } ) ->
     check_u32 "alert dialog action count" action_count;
@@ -1321,6 +1600,14 @@ let write_props writer kind props =
     write_bool writer has_title;
     write_bool writer has_content;
     Writer.u32 writer action_count
+  | Material_search_bar, (Material_search_bar_props _ as props)
+  | Material_tooltip, (Material_tooltip_props _ as props)
+  | Material_data_table, (Material_data_table_props _ as props)
+  | Material_stepper, (Material_stepper_props _ as props)
+  | Material_expansion_panel_list, (Material_expansion_panel_list_props _ as props)
+  | Material_simple_dialog, (Material_simple_dialog_props _ as props)
+  | Material_fullscreen_dialog, (Material_fullscreen_dialog_props as props) ->
+    write_additional_material_props writer props
   | Material_checkbox, Material_checkbox_props { value; enabled } ->
     write_bool writer value;
     write_bool writer enabled
@@ -1335,8 +1622,26 @@ let write_props writer kind props =
     write_bool writer has_subtitle;
     write_bool writer has_leading;
     write_bool writer has_trailing
-  | Material_divider, Material_divider_props { thickness } -> Writer.f64 writer thickness
-  | Material_card, Material_card_props { elevation } -> Writer.f64 writer elevation
+  | ( Material_divider
+    , Material_divider_props { orientation; thickness; spacing; indent; end_indent } ) ->
+    validate_nonnegative_finite
+      "divider geometry"
+      [ thickness; spacing; indent; end_indent ];
+    Writer.u8
+      writer
+      (match orientation with
+       | Horizontal -> 0
+       | Vertical -> 1);
+    List.iter (Writer.f64 writer) [ thickness; spacing; indent; end_indent ]
+  | Material_card, Material_card_props { variant; elevation } ->
+    validate_nonnegative_finite "card elevation" [ elevation ];
+    Writer.f64 writer elevation;
+    Writer.u8
+      writer
+      (match variant with
+       | Elevated_card -> 0
+       | Filled_card -> 1
+       | Outlined_card -> 2)
   | Material_circular_progress_indicator, Material_circular_progress_props { value } ->
     validate_progress_value value;
     write_optional_f64 writer value
@@ -1508,6 +1813,15 @@ let props_kind_id = function
      | Choice_chip -> Generated_protocol.Node_kind.material_choice_chip
      | Input_chip -> Generated_protocol.Node_kind.material_input_chip)
   | Material_alert_dialog_props _ -> Generated_protocol.Node_kind.material_alert_dialog
+  | Material_search_bar_props _ -> Generated_protocol.Node_kind.material_search_bar
+  | Material_tooltip_props _ -> Generated_protocol.Node_kind.material_tooltip
+  | Material_data_table_props _ -> Generated_protocol.Node_kind.material_data_table
+  | Material_stepper_props _ -> Generated_protocol.Node_kind.material_stepper
+  | Material_expansion_panel_list_props _ ->
+    Generated_protocol.Node_kind.material_expansion_panel_list
+  | Material_simple_dialog_props _ -> Generated_protocol.Node_kind.material_simple_dialog
+  | Material_fullscreen_dialog_props ->
+    Generated_protocol.Node_kind.material_fullscreen_dialog
   | Material_checkbox_props _ -> Generated_protocol.Node_kind.material_checkbox
   | Material_switch_props _ -> Generated_protocol.Node_kind.material_switch
   | Material_list_tile_props _ -> Generated_protocol.Node_kind.material_list_tile
@@ -1772,7 +2086,15 @@ let changed_fields = function
       ; field_mask Generated_protocol.Material_range_slider_prop.has_on_change
       ]
   | Material_chip_props { variant; _ } ->
-    let enabled, selected, avatar, delete_icon, press, on_selected, on_delete =
+    let ( enabled
+        , selected
+        , avatar
+        , delete_icon
+        , press
+        , on_selected
+        , on_delete
+        , presentation )
+      =
       match variant with
       | Action_chip ->
         let module P = Generated_protocol.Material_action_chip_prop in
@@ -1782,7 +2104,8 @@ let changed_fields = function
         , P.has_delete_icon
         , P.has_on_press
         , P.has_on_selected
-        , P.has_on_delete )
+        , P.has_on_delete
+        , P.presentation )
       | Filter_chip ->
         let module P = Generated_protocol.Material_filter_chip_prop in
         ( P.enabled
@@ -1791,7 +2114,8 @@ let changed_fields = function
         , P.has_delete_icon
         , P.has_on_press
         , P.has_on_selected
-        , P.has_on_delete )
+        , P.has_on_delete
+        , P.presentation )
       | Choice_chip ->
         let module P = Generated_protocol.Material_choice_chip_prop in
         ( P.enabled
@@ -1800,7 +2124,8 @@ let changed_fields = function
         , P.has_delete_icon
         , P.has_on_press
         , P.has_on_selected
-        , P.has_on_delete )
+        , P.has_on_delete
+        , P.presentation )
       | Input_chip ->
         let module P = Generated_protocol.Material_input_chip_prop in
         ( P.enabled
@@ -1809,14 +2134,23 @@ let changed_fields = function
         , P.has_delete_icon
         , P.has_on_press
         , P.has_on_selected
-        , P.has_on_delete )
+        , P.has_on_delete
+        , P.presentation )
     in
     List.fold_left
       Int64.logor
       0L
       (List.map
          field_mask
-         [ enabled; selected; avatar; delete_icon; press; on_selected; on_delete ])
+         [ enabled
+         ; selected
+         ; avatar
+         ; delete_icon
+         ; press
+         ; on_selected
+         ; on_delete
+         ; presentation
+         ])
   | Material_alert_dialog_props _ ->
     List.fold_left
       Int64.logor
@@ -1826,6 +2160,19 @@ let changed_fields = function
       ; field_mask Generated_protocol.Material_alert_dialog_prop.has_content
       ; field_mask Generated_protocol.Material_alert_dialog_prop.action_count
       ]
+  | Material_search_bar_props _ ->
+    List.fold_left Int64.logor 0L (List.init 15 (fun index -> Int64.shift_left 1L index))
+  | Material_tooltip_props _ ->
+    List.fold_left Int64.logor 0L (List.init 11 (fun index -> Int64.shift_left 1L index))
+  | Material_data_table_props _ ->
+    List.fold_left Int64.logor 0L (List.init 9 (fun index -> Int64.shift_left 1L index))
+  | Material_stepper_props _ ->
+    List.fold_left Int64.logor 0L (List.init 3 (fun index -> Int64.shift_left 1L index))
+  | Material_expansion_panel_list_props _ ->
+    List.fold_left Int64.logor 0L (List.init 3 (fun index -> Int64.shift_left 1L index))
+  | Material_simple_dialog_props _ ->
+    List.fold_left Int64.logor 0L (List.init 2 (fun index -> Int64.shift_left 1L index))
+  | Material_fullscreen_dialog_props -> 0L
   | Material_checkbox_props _ ->
     Int64.logor
       (field_mask Generated_protocol.Material_checkbox_prop.value)
@@ -1845,8 +2192,11 @@ let changed_fields = function
       ; field_mask Generated_protocol.Material_list_tile_prop.has_trailing
       ]
   | Material_divider_props _ ->
-    field_mask Generated_protocol.Material_divider_prop.thickness
-  | Material_card_props _ -> field_mask Generated_protocol.Material_card_prop.elevation
+    List.fold_left Int64.logor 0L (List.init 5 (fun index -> Int64.shift_left 1L index))
+  | Material_card_props _ ->
+    Int64.logor
+      (field_mask Generated_protocol.Material_card_prop.elevation)
+      (field_mask Generated_protocol.Material_card_prop.variant)
   | Material_circular_progress_props _ ->
     field_mask Generated_protocol.Material_circular_progress_indicator_prop.value
   | Material_linear_progress_props _ ->
@@ -2200,6 +2550,7 @@ let write_update_props writer props =
     write_bool writer has_on_change
   | Material_chip_props
       { variant
+      ; presentation
       ; enabled
       ; selected
       ; has_avatar
@@ -2209,19 +2560,34 @@ let write_update_props writer props =
       ; has_on_delete
       } ->
     ignore (material_chip_variant_id variant);
+    if variant = Input_chip && presentation = Elevated_chip
+    then fail Invalid_props "input chip cannot be elevated";
     write_bool writer enabled;
     write_bool writer selected;
     write_bool writer has_avatar;
     write_bool writer has_delete_icon;
     write_bool writer has_on_press;
     write_bool writer has_on_selected;
-    write_bool writer has_on_delete
+    write_bool writer has_on_delete;
+    Writer.u8
+      writer
+      (match presentation with
+       | Flat_chip -> 0
+       | Elevated_chip -> 1)
   | Material_alert_dialog_props { has_icon; has_title; has_content; action_count } ->
     check_u32 "alert dialog action count" action_count;
     write_bool writer has_icon;
     write_bool writer has_title;
     write_bool writer has_content;
     Writer.u32 writer action_count
+  | (Material_search_bar_props _ as props)
+  | (Material_tooltip_props _ as props)
+  | (Material_data_table_props _ as props)
+  | (Material_stepper_props _ as props)
+  | (Material_expansion_panel_list_props _ as props)
+  | (Material_simple_dialog_props _ as props)
+  | (Material_fullscreen_dialog_props as props) ->
+    write_additional_material_props writer props
   | Material_checkbox_props { value; enabled } ->
     write_bool writer value;
     write_bool writer enabled
@@ -2235,8 +2601,25 @@ let write_update_props writer props =
     write_bool writer has_subtitle;
     write_bool writer has_leading;
     write_bool writer has_trailing
-  | Material_divider_props { thickness } -> Writer.f64 writer thickness
-  | Material_card_props { elevation } -> Writer.f64 writer elevation
+  | Material_divider_props { orientation; thickness; spacing; indent; end_indent } ->
+    validate_nonnegative_finite
+      "divider geometry"
+      [ thickness; spacing; indent; end_indent ];
+    Writer.u8
+      writer
+      (match orientation with
+       | Horizontal -> 0
+       | Vertical -> 1);
+    List.iter (Writer.f64 writer) [ thickness; spacing; indent; end_indent ]
+  | Material_card_props { variant; elevation } ->
+    validate_nonnegative_finite "card elevation" [ elevation ];
+    Writer.f64 writer elevation;
+    Writer.u8
+      writer
+      (match variant with
+       | Elevated_card -> 0
+       | Filled_card -> 1
+       | Outlined_card -> 2)
   | Material_circular_progress_props { value } ->
     validate_progress_value value;
     write_optional_f64 writer value
@@ -3321,6 +3704,18 @@ let read_node_kind reader =
     Material_input_chip
   | value when value = Generated_protocol.Node_kind.material_alert_dialog ->
     Material_alert_dialog
+  | value when value = Generated_protocol.Node_kind.material_search_bar ->
+    Material_search_bar
+  | value when value = Generated_protocol.Node_kind.material_tooltip -> Material_tooltip
+  | value when value = Generated_protocol.Node_kind.material_data_table ->
+    Material_data_table
+  | value when value = Generated_protocol.Node_kind.material_stepper -> Material_stepper
+  | value when value = Generated_protocol.Node_kind.material_expansion_panel_list ->
+    Material_expansion_panel_list
+  | value when value = Generated_protocol.Node_kind.material_simple_dialog ->
+    Material_simple_dialog
+  | value when value = Generated_protocol.Node_kind.material_fullscreen_dialog ->
+    Material_fullscreen_dialog
   | value when value = Generated_protocol.Node_kind.material_checkbox -> Material_checkbox
   | value when value = Generated_protocol.Node_kind.material_switch -> Material_switch
   | value when value = Generated_protocol.Node_kind.material_list_tile ->
@@ -3750,8 +4145,17 @@ let read_props reader kind ~protocol_minor =
     let has_on_press = read_bool reader in
     let has_on_selected = read_bool reader in
     let has_on_delete = read_bool reader in
+    let presentation =
+      match Reader.u8 reader with
+      | 0 -> Wire_frame.Flat_chip
+      | 1 -> Elevated_chip
+      | value -> fail Invalid_props "invalid chip presentation %d" value
+    in
+    if variant = Input_chip && presentation = Elevated_chip
+    then fail Invalid_props "input chip cannot be elevated";
     Material_chip_props
       { variant
+      ; presentation
       ; enabled
       ; selected
       ; has_avatar
@@ -3766,6 +4170,226 @@ let read_props reader kind ~protocol_minor =
     let has_content = read_bool reader in
     let action_count = Reader.u32 reader in
     Material_alert_dialog_props { has_icon; has_title; has_content; action_count }
+  | Material_search_bar ->
+    let session_id_int64 = Reader.u64 reader in
+    let document_revision_int64 = Reader.u64 reader in
+    check_u64 "search bar session ID" session_id_int64;
+    check_u64 "search bar document revision" document_revision_int64;
+    let session_id = ID.Text_input.Session_id.of_int64 session_id_int64 in
+    let document_revision =
+      ID.Text_input.Document_revision.of_int64 document_revision_int64
+    in
+    let text = read_string reader in
+    let read_range () =
+      let start_utf16 = Reader.u32 reader in
+      let end_utf16 = Reader.u32 reader in
+      let range = Wire_frame.{ start_utf16; end_utf16 } in
+      validate_text_range text range;
+      range
+    in
+    let selection = read_range () in
+    let composing =
+      match Reader.u8 reader with
+      | 0 -> None
+      | 1 -> Some (read_range ())
+      | value -> fail Invalid_props "invalid composing tag %d" value
+    in
+    let enabled = read_bool reader in
+    let read_only = read_bool reader in
+    let keyboard_type =
+      match Reader.u8 reader with
+      | 0 -> Wire_frame.Keyboard_text
+      | 1 -> Keyboard_multiline
+      | 2 -> Keyboard_number
+      | 3 -> Keyboard_email
+      | 4 -> Keyboard_phone
+      | 5 -> Keyboard_url
+      | value -> fail Invalid_props "invalid keyboard type %d" value
+    in
+    let input_action =
+      match Reader.u8 reader with
+      | 0 -> Wire_frame.Done
+      | 1 -> Newline
+      | 2 -> Next
+      | 3 -> Previous
+      | 4 -> Search
+      | 5 -> Send
+      | 6 -> Go
+      | value -> fail Invalid_props "invalid input action %d" value
+    in
+    let accepted_local_revision_int64 = Reader.u64 reader in
+    check_u64 "search bar accepted local revision" accepted_local_revision_int64;
+    let accepted_local_revision =
+      ID.Text_input.Local_revision.of_int64 accepted_local_revision_int64
+    in
+    let update_mode =
+      match Reader.u8 reader with
+      | 0 -> Wire_frame.Ack
+      | 1 -> Correction
+      | 2 -> Force_replace
+      | value -> fail Invalid_props "invalid update mode %d" value
+    in
+    let autofocus = read_bool reader in
+    let max_utf8_bytes = read_optional_positive_u32 reader "search bar max UTF-8 bytes" in
+    (match max_utf8_bytes with
+     | Some value when value > Generated_protocol.Limits.max_string_bytes ->
+       fail Invalid_props "search bar max UTF-8 bytes exceeds the protocol string limit"
+     | None | Some _ -> ());
+    let has_leading = read_bool reader in
+    let trailing_count = Reader.u32 reader in
+    let hint_text = read_optional_string reader in
+    let has_on_tap = read_bool reader in
+    Material_search_bar_props
+      { session_id
+      ; document_revision
+      ; value = { text; selection; composing }
+      ; enabled
+      ; read_only
+      ; keyboard_type
+      ; input_action
+      ; accepted_local_revision
+      ; update_mode
+      ; autofocus
+      ; max_utf8_bytes
+      ; has_leading
+      ; trailing_count
+      ; hint_text
+      ; has_on_tap
+      }
+  | Material_tooltip ->
+    let message = read_string reader in
+    if String.length (String.trim message) = 0
+    then fail Invalid_props "tooltip message is empty";
+    let enabled = read_bool reader in
+    let exclude_from_semantics = read_bool reader in
+    let prefer_below = read_bool reader in
+    let trigger_mode =
+      match Reader.u8 reader with
+      | 0 -> Wire_frame.Tooltip_long_press
+      | 1 -> Tooltip_tap
+      | value -> fail Invalid_props "invalid tooltip trigger %d" value
+    in
+    let wait_duration_ms = Reader.u32 reader in
+    let show_duration_ms = Reader.u32 reader in
+    let exit_duration_ms = Reader.u32 reader in
+    let enable_tap_to_dismiss = read_bool reader in
+    let enable_feedback = read_bool reader in
+    let has_on_triggered = read_bool reader in
+    Material_tooltip_props
+      { message
+      ; enabled
+      ; exclude_from_semantics
+      ; prefer_below
+      ; trigger_mode
+      ; wait_duration_ms
+      ; show_duration_ms
+      ; exit_duration_ms
+      ; enable_tap_to_dismiss
+      ; enable_feedback
+      ; has_on_triggered
+      }
+  | Material_data_table ->
+    let columns =
+      List.init (Reader.u16 reader) (fun _ ->
+        let column_id = Reader.u64 reader in
+        let tooltip = read_optional_string reader in
+        let numeric = read_bool reader in
+        let sortable = read_bool reader in
+        Wire_frame.{ column_id; tooltip; numeric; sortable })
+    in
+    let rows =
+      List.init (Reader.u16 reader) (fun _ ->
+        let row_id = Reader.u64 reader in
+        let selected = read_bool reader in
+        let selection_enabled = read_bool reader in
+        let cells =
+          List.init (Reader.u16 reader) (fun _ ->
+            let placeholder = read_bool reader in
+            let show_edit_icon = read_bool reader in
+            let activatable = read_bool reader in
+            Wire_frame.{ placeholder; show_edit_icon; activatable })
+        in
+        Wire_frame.{ row_id; selected; selection_enabled; cells })
+    in
+    let sort_column_id =
+      match Reader.u8 reader with
+      | 0 -> None
+      | 1 -> Some (Reader.u64 reader)
+      | value -> fail Invalid_props "invalid optional sort ID tag %d" value
+    in
+    let sort_ascending = read_bool reader in
+    let selected_row_ids = List.init (Reader.u16 reader) (fun _ -> Reader.u64 reader) in
+    validate_data_table ~columns ~rows ~sort_column_id ~selected_row_ids;
+    let has_on_sort = read_bool reader in
+    let has_on_row_selected = read_bool reader in
+    let has_on_select_all = read_bool reader in
+    let has_on_cell_activate = read_bool reader in
+    Material_data_table_props
+      { columns
+      ; rows
+      ; sort_column_id
+      ; sort_ascending
+      ; selected_row_ids
+      ; has_on_sort
+      ; has_on_row_selected
+      ; has_on_select_all
+      ; has_on_cell_activate
+      }
+  | Material_stepper ->
+    let orientation =
+      match Reader.u8 reader with
+      | 0 -> Wire_frame.Horizontal
+      | 1 -> Vertical
+      | value -> fail Invalid_props "invalid stepper orientation %d" value
+    in
+    let current_step_id = Reader.u64 reader in
+    let steps =
+      List.init (Reader.u16 reader) (fun _ ->
+        let step_id = Reader.u64 reader in
+        let active = read_bool reader in
+        let state =
+          match Reader.u8 reader with
+          | 0 -> Wire_frame.Step_indexed
+          | 1 -> Step_editing
+          | 2 -> Step_complete
+          | 3 -> Step_disabled
+          | 4 -> Step_error
+          | value -> fail Invalid_props "invalid step state %d" value
+        in
+        let has_subtitle = read_bool reader in
+        let has_label = read_bool reader in
+        Wire_frame.{ step_id; active; state; has_subtitle; has_label })
+    in
+    validate_stepper ~current_step_id ~steps;
+    Material_stepper_props { orientation; current_step_id; steps }
+  | Material_expansion_panel_list ->
+    let policy =
+      match Reader.u8 reader with
+      | 0 -> Wire_frame.Multiple_panels
+      | 1 -> Single_panel
+      | value -> fail Invalid_props "invalid expansion policy %d" value
+    in
+    let expanded_ids = List.init (Reader.u16 reader) (fun _ -> Reader.u64 reader) in
+    let panels =
+      List.init (Reader.u16 reader) (fun _ ->
+        let panel_id = Reader.u64 reader in
+        let enabled = read_bool reader in
+        let can_tap_on_header = read_bool reader in
+        Wire_frame.{ panel_id; enabled; can_tap_on_header })
+    in
+    validate_expansion_panels ~policy ~expanded_ids ~panels;
+    Material_expansion_panel_list_props { policy; expanded_ids; panels }
+  | Material_simple_dialog ->
+    let has_title = read_bool reader in
+    let options =
+      List.init (Reader.u16 reader) (fun _ ->
+        let option_id = Reader.u64 reader in
+        let enabled = read_bool reader in
+        Wire_frame.{ option_id; enabled })
+    in
+    validate_simple_dialog options;
+    Material_simple_dialog_props { has_title; options }
+  | Material_fullscreen_dialog -> Material_fullscreen_dialog_props
   | Material_checkbox ->
     let value = read_bool reader in
     let enabled = read_bool reader in
@@ -3782,8 +4406,32 @@ let read_props reader kind ~protocol_minor =
       ; has_leading = read_bool reader
       ; has_trailing = read_bool reader
       }
-  | Material_divider -> Material_divider_props { thickness = read_finite_f64 reader }
-  | Material_card -> Material_card_props { elevation = read_finite_f64 reader }
+  | Material_divider ->
+    let orientation =
+      match Reader.u8 reader with
+      | 0 -> Wire_frame.Horizontal
+      | 1 -> Vertical
+      | value -> fail Invalid_props "invalid divider orientation %d" value
+    in
+    let thickness = read_finite_f64 reader in
+    let spacing = read_finite_f64 reader in
+    let indent = read_finite_f64 reader in
+    let end_indent = read_finite_f64 reader in
+    validate_nonnegative_finite
+      "divider geometry"
+      [ thickness; spacing; indent; end_indent ];
+    Material_divider_props { orientation; thickness; spacing; indent; end_indent }
+  | Material_card ->
+    let elevation = read_finite_f64 reader in
+    let variant =
+      match Reader.u8 reader with
+      | 0 -> Wire_frame.Elevated_card
+      | 1 -> Filled_card
+      | 2 -> Outlined_card
+      | value -> fail Invalid_props "invalid card variant %d" value
+    in
+    validate_nonnegative_finite "card elevation" [ elevation ];
+    Material_card_props { variant; elevation }
   | Material_circular_progress_indicator ->
     let value = read_optional_f64 reader in
     validate_progress_value value;

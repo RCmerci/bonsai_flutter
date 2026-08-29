@@ -385,6 +385,52 @@ void main() {
       );
       expectFixtureMatchesDartEncoding('ocaml_primary_scroll.hex', frame);
     });
+
+    test('decodes additional Material components byte-exactly', () {
+      final frame = decodeOcamlFixture(
+        'ocaml_additional_material_components.hex',
+      );
+      final props = [
+        for (final operation in frame.operations)
+          (operation as UpdateProps).props,
+      ];
+
+      expect(props.map((value) => value.runtimeType), [
+        MaterialSearchBarProps,
+        MaterialTooltipProps,
+        MaterialDataTableProps,
+        MaterialStepperProps,
+        MaterialExpansionPanelListProps,
+        MaterialSimpleDialogProps,
+        MaterialFullscreenDialogProps,
+        MaterialChipProps,
+        MaterialCardProps,
+        MaterialDividerProps,
+      ]);
+      final search = props[0] as MaterialSearchBarProps;
+      expect(search.value.text, 'find');
+      expect(
+        search.value.selection,
+        const TextRangeValue(startUtf16: 1, endUtf16: 4),
+      );
+      final table = props[2] as MaterialDataTableProps;
+      expect(table.sortColumnId, 11);
+      expect(table.selectedRowIds, [21]);
+      final chip = props[7] as MaterialChipProps;
+      expect(chip.presentation, MaterialChipPresentation.elevated);
+      expect(
+        (props[8] as MaterialCardProps).variant,
+        MaterialCardVariant.filled,
+      );
+      expect(
+        (props[9] as MaterialDividerProps).orientation,
+        MaterialDividerOrientation.vertical,
+      );
+      expectFixtureMatchesDartEncoding(
+        'ocaml_additional_material_components.hex',
+        frame,
+      );
+    });
   });
 }
 

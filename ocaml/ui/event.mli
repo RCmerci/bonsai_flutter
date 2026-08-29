@@ -31,6 +31,16 @@ module Tag : sig
     | Range_slider_change_end
     | Delete
     | Segmented_selection_changed
+    | Tooltip_triggered
+    | Table_sort_requested
+    | Table_row_selected
+    | Table_select_all
+    | Table_cell_activated
+    | Step_selected
+    | Step_continue
+    | Step_cancel
+    | Expansion_changed
+    | Dialog_option_selected
 
   val compare : t -> t -> int
   val equal : t -> t -> bool
@@ -125,6 +135,14 @@ module Payload : sig
     | Text_edit of text_edit
     | Int64 of int64
     | Int64_list of int64 list
+    | Int64_bool of
+        { id : int64
+        ; value : bool
+        }
+    | Int64_pair of
+        { first : int64
+        ; second : int64
+        }
     | Float of float
     | Float_range of
         { start : float

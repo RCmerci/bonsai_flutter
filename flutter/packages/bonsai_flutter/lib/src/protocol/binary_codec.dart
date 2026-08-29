@@ -745,6 +745,7 @@ abstract final class FrameCodec {
             NodeKind.materialChoiceChip ||
             NodeKind.materialInputChip,
         MaterialChipProps(
+          :final presentation,
           :final enabled,
           :final selected,
           :final hasAvatar,
@@ -761,7 +762,8 @@ abstract final class FrameCodec {
           ..uint8(hasDeleteIcon ? 1 : 0)
           ..uint8(hasOnPress ? 1 : 0)
           ..uint8(hasOnSelected ? 1 : 0)
-          ..uint8(hasOnDelete ? 1 : 0);
+          ..uint8(hasOnDelete ? 1 : 0)
+          ..uint8(presentation.index);
       case (
         NodeKind.materialAlertDialog,
         MaterialAlertDialogProps(
@@ -776,6 +778,17 @@ abstract final class FrameCodec {
           ..uint8(hasTitle ? 1 : 0)
           ..uint8(hasContent ? 1 : 0)
           ..uint32(actionCount);
+      case (
+        NodeKind.materialSearchBar ||
+            NodeKind.materialTooltip ||
+            NodeKind.materialDataTable ||
+            NodeKind.materialStepper ||
+            NodeKind.materialExpansionPanelList ||
+            NodeKind.materialSimpleDialog ||
+            NodeKind.materialFullscreenDialog,
+        final UiProps props,
+      ):
+        _writeAdditionalMaterialProps(writer, props);
       case (
         NodeKind.materialCheckbox,
         MaterialCheckboxProps(:final value, :final enabled),
@@ -806,10 +819,29 @@ abstract final class FrameCodec {
           ..uint8(hasSubtitle ? 1 : 0)
           ..uint8(hasLeading ? 1 : 0)
           ..uint8(hasTrailing ? 1 : 0);
-      case (NodeKind.materialDivider, MaterialDividerProps(:final thickness)):
-        writer.float64(thickness);
-      case (NodeKind.materialCard, MaterialCardProps(:final elevation)):
-        writer.float64(elevation);
+      case (
+        NodeKind.materialDivider,
+        MaterialDividerProps(
+          :final orientation,
+          :final thickness,
+          :final spacing,
+          :final indent,
+          :final endIndent,
+        ),
+      ):
+        writer
+          ..uint8(orientation.index)
+          ..float64(thickness)
+          ..float64(spacing)
+          ..float64(indent)
+          ..float64(endIndent);
+      case (
+        NodeKind.materialCard,
+        MaterialCardProps(:final variant, :final elevation),
+      ):
+        writer
+          ..float64(elevation)
+          ..uint8(variant.index);
       case (
         NodeKind.materialCircularProgressIndicator,
         MaterialCircularProgressProps(:final value),
@@ -1215,6 +1247,7 @@ abstract final class FrameCodec {
           ..uint64(_changedFields(props));
         _writeCreateProps(writer, NodeKind.materialRangeSlider, props);
       case final MaterialChipProps props:
+        _validateMaterialChip(props);
         final kind = switch (props.variant) {
           MaterialChipVariant.action => NodeKind.materialActionChip,
           MaterialChipVariant.filter => NodeKind.materialFilterChip,
@@ -1230,6 +1263,41 @@ abstract final class FrameCodec {
           ..uint16(NodeKindId.materialAlertDialog)
           ..uint64(_changedFields(props));
         _writeCreateProps(writer, NodeKind.materialAlertDialog, props);
+      case final MaterialSearchBarProps props:
+        writer
+          ..uint16(NodeKindId.materialSearchBar)
+          ..uint64(_changedFields(props));
+        _writeAdditionalMaterialProps(writer, props);
+      case final MaterialTooltipProps props:
+        writer
+          ..uint16(NodeKindId.materialTooltip)
+          ..uint64(_changedFields(props));
+        _writeAdditionalMaterialProps(writer, props);
+      case final MaterialDataTableProps props:
+        writer
+          ..uint16(NodeKindId.materialDataTable)
+          ..uint64(_changedFields(props));
+        _writeAdditionalMaterialProps(writer, props);
+      case final MaterialStepperProps props:
+        writer
+          ..uint16(NodeKindId.materialStepper)
+          ..uint64(_changedFields(props));
+        _writeAdditionalMaterialProps(writer, props);
+      case final MaterialExpansionPanelListProps props:
+        writer
+          ..uint16(NodeKindId.materialExpansionPanelList)
+          ..uint64(_changedFields(props));
+        _writeAdditionalMaterialProps(writer, props);
+      case final MaterialSimpleDialogProps props:
+        writer
+          ..uint16(NodeKindId.materialSimpleDialog)
+          ..uint64(_changedFields(props));
+        _writeAdditionalMaterialProps(writer, props);
+      case final MaterialFullscreenDialogProps props:
+        writer
+          ..uint16(NodeKindId.materialFullscreenDialog)
+          ..uint64(0);
+        _writeAdditionalMaterialProps(writer, props);
       case MaterialCheckboxProps(:final value, :final enabled):
         writer
           ..uint16(NodeKindId.materialCheckbox)
@@ -1260,16 +1328,29 @@ abstract final class FrameCodec {
           ..uint8(hasSubtitle ? 1 : 0)
           ..uint8(hasLeading ? 1 : 0)
           ..uint8(hasTrailing ? 1 : 0);
-      case MaterialDividerProps(:final thickness):
+      case MaterialDividerProps(
+        :final orientation,
+        :final thickness,
+        :final spacing,
+        :final indent,
+        :final endIndent,
+      ):
+        _validateMaterialDivider(props);
         writer
           ..uint16(NodeKindId.materialDivider)
           ..uint64(_changedFields(props))
-          ..float64(thickness);
-      case MaterialCardProps(:final elevation):
+          ..uint8(orientation.index)
+          ..float64(thickness)
+          ..float64(spacing)
+          ..float64(indent)
+          ..float64(endIndent);
+      case MaterialCardProps(:final variant, :final elevation):
+        _validateMaterialCard(props);
         writer
           ..uint16(NodeKindId.materialCard)
           ..uint64(_changedFields(props))
-          ..float64(elevation);
+          ..float64(elevation)
+          ..uint8(variant.index);
       case MaterialCircularProgressProps(:final value):
         _validateProgressValue(value);
         writer
@@ -1542,6 +1623,16 @@ abstract final class FrameCodec {
       hasContent: reader.boolean(),
       actionCount: reader.uint32(),
     ),
+    NodeKind.materialSearchBar ||
+    NodeKind.materialTooltip ||
+    NodeKind.materialDataTable ||
+    NodeKind.materialStepper ||
+    NodeKind.materialExpansionPanelList ||
+    NodeKind.materialSimpleDialog ||
+    NodeKind.materialFullscreenDialog => _readAdditionalMaterialProps(
+      reader,
+      kind,
+    ),
     NodeKind.materialCheckbox => MaterialCheckboxProps(
       value: reader.boolean(),
       enabled: reader.boolean(),
@@ -1557,12 +1648,8 @@ abstract final class FrameCodec {
       hasLeading: reader.boolean(),
       hasTrailing: reader.boolean(),
     ),
-    NodeKind.materialDivider => MaterialDividerProps(
-      thickness: reader.finiteFloat64(),
-    ),
-    NodeKind.materialCard => MaterialCardProps(
-      elevation: reader.finiteFloat64(),
-    ),
+    NodeKind.materialDivider => _readMaterialDivider(reader),
+    NodeKind.materialCard => _readMaterialCard(reader),
     NodeKind.materialCircularProgressIndicator => MaterialCircularProgressProps(
       value: _readProgressValue(reader),
     ),
@@ -1703,6 +1790,14 @@ abstract final class FrameCodec {
     NodeKind.materialChoiceChip => NodeKindId.materialChoiceChip,
     NodeKind.materialInputChip => NodeKindId.materialInputChip,
     NodeKind.materialAlertDialog => NodeKindId.materialAlertDialog,
+    NodeKind.materialSearchBar => NodeKindId.materialSearchBar,
+    NodeKind.materialTooltip => NodeKindId.materialTooltip,
+    NodeKind.materialDataTable => NodeKindId.materialDataTable,
+    NodeKind.materialStepper => NodeKindId.materialStepper,
+    NodeKind.materialExpansionPanelList =>
+      NodeKindId.materialExpansionPanelList,
+    NodeKind.materialSimpleDialog => NodeKindId.materialSimpleDialog,
+    NodeKind.materialFullscreenDialog => NodeKindId.materialFullscreenDialog,
     NodeKind.materialCheckbox => NodeKindId.materialCheckbox,
     NodeKind.materialSwitch => NodeKindId.materialSwitch,
     NodeKind.materialListTile => NodeKindId.materialListTile,
@@ -1816,6 +1911,27 @@ abstract final class FrameCodec {
     }
     if (value == NodeKindId.materialAlertDialog) {
       return NodeKind.materialAlertDialog;
+    }
+    if (value == NodeKindId.materialSearchBar) {
+      return NodeKind.materialSearchBar;
+    }
+    if (value == NodeKindId.materialTooltip) {
+      return NodeKind.materialTooltip;
+    }
+    if (value == NodeKindId.materialDataTable) {
+      return NodeKind.materialDataTable;
+    }
+    if (value == NodeKindId.materialStepper) {
+      return NodeKind.materialStepper;
+    }
+    if (value == NodeKindId.materialExpansionPanelList) {
+      return NodeKind.materialExpansionPanelList;
+    }
+    if (value == NodeKindId.materialSimpleDialog) {
+      return NodeKind.materialSimpleDialog;
+    }
+    if (value == NodeKindId.materialFullscreenDialog) {
+      return NodeKind.materialFullscreenDialog;
     }
     if (value == NodeKindId.materialCheckbox) {
       return NodeKind.materialCheckbox;
@@ -2412,12 +2528,20 @@ int _changedFields(UiProps props) => switch (props) {
         _fieldMask(MaterialActionChipPropId.hasDeleteIcon) |
         _fieldMask(MaterialActionChipPropId.hasOnPress) |
         _fieldMask(MaterialActionChipPropId.hasOnSelected) |
-        _fieldMask(MaterialActionChipPropId.hasOnDelete),
+        _fieldMask(MaterialActionChipPropId.hasOnDelete) |
+        _fieldMask(MaterialActionChipPropId.presentation),
   MaterialAlertDialogProps() =>
     _fieldMask(MaterialAlertDialogPropId.hasIcon) |
         _fieldMask(MaterialAlertDialogPropId.hasTitle) |
         _fieldMask(MaterialAlertDialogPropId.hasContent) |
         _fieldMask(MaterialAlertDialogPropId.actionCount),
+  MaterialSearchBarProps() => (1 << 15) - 1,
+  MaterialTooltipProps() => (1 << 11) - 1,
+  MaterialDataTableProps() => (1 << 9) - 1,
+  MaterialStepperProps() => (1 << 3) - 1,
+  MaterialExpansionPanelListProps() => (1 << 3) - 1,
+  MaterialSimpleDialogProps() => (1 << 2) - 1,
+  MaterialFullscreenDialogProps() => 0,
   MaterialCheckboxProps() =>
     _fieldMask(MaterialCheckboxPropId.value) |
         _fieldMask(MaterialCheckboxPropId.enabled),
@@ -2430,8 +2554,10 @@ int _changedFields(UiProps props) => switch (props) {
         _fieldMask(MaterialListTilePropId.hasSubtitle) |
         _fieldMask(MaterialListTilePropId.hasLeading) |
         _fieldMask(MaterialListTilePropId.hasTrailing),
-  MaterialDividerProps() => _fieldMask(MaterialDividerPropId.thickness),
-  MaterialCardProps() => _fieldMask(MaterialCardPropId.elevation),
+  MaterialDividerProps() => (1 << 5) - 1,
+  MaterialCardProps() =>
+    _fieldMask(MaterialCardPropId.elevation) |
+        _fieldMask(MaterialCardPropId.variant),
   MaterialCircularProgressProps() => _fieldMask(
     MaterialCircularProgressIndicatorPropId.value,
   ),
@@ -2933,16 +3059,623 @@ MaterialRangeSliderProps _readMaterialRangeSlider(_Reader reader) {
 MaterialChipProps _readMaterialChip(
   _Reader reader,
   MaterialChipVariant variant,
-) => MaterialChipProps(
-  variant: variant,
-  enabled: reader.boolean(),
-  selected: reader.boolean(),
-  hasAvatar: reader.boolean(),
-  hasDeleteIcon: reader.boolean(),
-  hasOnPress: reader.boolean(),
-  hasOnSelected: reader.boolean(),
-  hasOnDelete: reader.boolean(),
-);
+) {
+  final props = MaterialChipProps(
+    variant: variant,
+    enabled: reader.boolean(),
+    selected: reader.boolean(),
+    hasAvatar: reader.boolean(),
+    hasDeleteIcon: reader.boolean(),
+    hasOnPress: reader.boolean(),
+    hasOnSelected: reader.boolean(),
+    hasOnDelete: reader.boolean(),
+    presentation: _enumValue(
+      MaterialChipPresentation.values,
+      reader.uint8(),
+      'chip presentation',
+    ),
+  );
+  _validateMaterialChip(props);
+  return props;
+}
+
+void _validateMaterialChip(MaterialChipProps props) {
+  if (props.variant == MaterialChipVariant.input &&
+      props.presentation == MaterialChipPresentation.elevated) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'InputChip does not support elevated presentation',
+    );
+  }
+}
+
+void _validateMaterialDivider(MaterialDividerProps props) {
+  if ([
+    props.thickness,
+    props.spacing,
+    props.indent,
+    props.endIndent,
+  ].any((value) => !value.isFinite || value < 0)) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Divider geometry must be finite and non-negative',
+    );
+  }
+}
+
+MaterialDividerProps _readMaterialDivider(_Reader reader) {
+  final props = MaterialDividerProps(
+    orientation: _enumValue(
+      MaterialDividerOrientation.values,
+      reader.uint8(),
+      'divider orientation',
+    ),
+    thickness: reader.finiteFloat64(),
+    spacing: reader.finiteFloat64(),
+    indent: reader.finiteFloat64(),
+    endIndent: reader.finiteFloat64(),
+  );
+  _validateMaterialDivider(props);
+  return props;
+}
+
+void _validateMaterialCard(MaterialCardProps props) {
+  if (!props.elevation.isFinite || props.elevation < 0) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Card elevation must be finite and non-negative',
+    );
+  }
+}
+
+MaterialCardProps _readMaterialCard(_Reader reader) {
+  final props = MaterialCardProps(
+    elevation: reader.finiteFloat64(),
+    variant: _enumValue(
+      MaterialCardVariant.values,
+      reader.uint8(),
+      'card variant',
+    ),
+  );
+  _validateMaterialCard(props);
+  return props;
+}
+
+void _validateMaterialSearchBar(MaterialSearchBarProps props) {
+  _checkUint64('search bar session ID', props.sessionId);
+  _checkUint64('search bar document revision', props.documentRevision);
+  _checkUint64(
+    'search bar accepted local revision',
+    props.acceptedLocalRevision,
+  );
+  final maxUtf8Bytes = props.maxUtf8Bytes;
+  if (maxUtf8Bytes != null &&
+      (maxUtf8Bytes <= 0 || maxUtf8Bytes > ProtocolLimits.maxStringBytes)) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'SearchBar max UTF-8 bytes is outside the protocol string limit',
+    );
+  }
+  if (props.trailingCount < 0 || props.trailingCount > 0xffffffff) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'SearchBar trailing child count must fit uint32',
+    );
+  }
+}
+
+void _validateMaterialTooltip(MaterialTooltipProps props) {
+  if (props.message.trim().isEmpty) {
+    _fail(ProtocolErrorCode.invalidProps, 'Tooltip message must not be empty');
+  }
+  for (final duration in [
+    props.waitDurationMs,
+    props.showDurationMs,
+    props.exitDurationMs,
+  ]) {
+    if (duration < 0 || duration > 0xffffffff) {
+      _fail(ProtocolErrorCode.invalidProps, 'Tooltip duration must fit uint32');
+    }
+  }
+}
+
+void _validateCanonicalIds(List<int> ids, Set<int> knownIds, String label) {
+  for (var index = 0; index < ids.length; index += 1) {
+    final id = ids[index];
+    if (!knownIds.contains(id)) {
+      _fail(ProtocolErrorCode.invalidProps, '$label ID is absent');
+    }
+    if (index > 0 && ids[index - 1] >= id) {
+      _fail(
+        ProtocolErrorCode.invalidProps,
+        '$label IDs must be sorted and unique',
+      );
+    }
+  }
+}
+
+void _validateMaterialDataTable(MaterialDataTableProps props) {
+  if (props.columns.isEmpty) {
+    _fail(ProtocolErrorCode.invalidProps, 'DataTable needs a column');
+  }
+  if (props.columns.length > 0xffff ||
+      props.rows.length > 0xffff ||
+      props.selectedRowIds.length > 0xffff) {
+    _fail(ProtocolErrorCode.invalidProps, 'DataTable counts must fit uint16');
+  }
+  final columnIds = <int>{};
+  for (final column in props.columns) {
+    if (!columnIds.add(column.id)) {
+      _fail(
+        ProtocolErrorCode.invalidProps,
+        'DataTable column IDs must be unique',
+      );
+    }
+    if (column.tooltip case final tooltip? when tooltip.trim().isEmpty) {
+      _fail(
+        ProtocolErrorCode.invalidProps,
+        'DataTable tooltip must not be empty',
+      );
+    }
+  }
+  final rowIds = <int>{};
+  for (final row in props.rows) {
+    if (!rowIds.add(row.id)) {
+      _fail(ProtocolErrorCode.invalidProps, 'DataTable row IDs must be unique');
+    }
+    if (row.cells.length != props.columns.length) {
+      _fail(
+        ProtocolErrorCode.invalidProps,
+        'DataTable rows must have one cell per column',
+      );
+    }
+  }
+  final sortColumnId = props.sortColumnId;
+  if (sortColumnId != null && !columnIds.contains(sortColumnId)) {
+    _fail(ProtocolErrorCode.invalidProps, 'DataTable sort column ID is absent');
+  }
+  _validateCanonicalIds(props.selectedRowIds, rowIds, 'DataTable selected row');
+}
+
+void _validateMaterialStepper(MaterialStepperProps props) {
+  if (props.steps.isEmpty) {
+    _fail(ProtocolErrorCode.invalidProps, 'Stepper needs a step');
+  }
+  if (props.steps.length > 0xffff) {
+    _fail(ProtocolErrorCode.invalidProps, 'Stepper count must fit uint16');
+  }
+  final ids = <int>{};
+  for (final step in props.steps) {
+    if (!ids.add(step.id)) {
+      _fail(ProtocolErrorCode.invalidProps, 'Stepper IDs must be unique');
+    }
+  }
+  if (!ids.contains(props.currentStepId)) {
+    _fail(ProtocolErrorCode.invalidProps, 'Stepper current ID is absent');
+  }
+}
+
+void _validateMaterialExpansionPanels(MaterialExpansionPanelListProps props) {
+  if (props.expandedIds.length > 0xffff || props.panels.length > 0xffff) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'ExpansionPanelList counts must fit uint16',
+    );
+  }
+  final ids = <int>{};
+  for (final panel in props.panels) {
+    if (!ids.add(panel.id)) {
+      _fail(
+        ProtocolErrorCode.invalidProps,
+        'ExpansionPanelList IDs must be unique',
+      );
+    }
+  }
+  _validateCanonicalIds(props.expandedIds, ids, 'Expanded panel');
+  if (props.policy == MaterialExpansionPanelPolicy.single &&
+      props.expandedIds.length > 1) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Single ExpansionPanelList has multiple expanded IDs',
+    );
+  }
+}
+
+void _validateMaterialSimpleDialog(MaterialSimpleDialogProps props) {
+  if (props.options.isEmpty) {
+    _fail(ProtocolErrorCode.invalidProps, 'SimpleDialog needs an option');
+  }
+  if (props.options.length > 0xffff) {
+    _fail(ProtocolErrorCode.invalidProps, 'SimpleDialog count must fit uint16');
+  }
+  final ids = <int>{};
+  for (final option in props.options) {
+    if (!ids.add(option.id)) {
+      _fail(ProtocolErrorCode.invalidProps, 'SimpleDialog IDs must be unique');
+    }
+  }
+}
+
+void _writeAdditionalMaterialProps(_Writer writer, UiProps props) {
+  switch (props) {
+    case MaterialSearchBarProps(
+      :final sessionId,
+      :final documentRevision,
+      :final value,
+      :final enabled,
+      :final readOnly,
+      :final keyboardType,
+      :final inputAction,
+      :final acceptedLocalRevision,
+      :final updateMode,
+      :final autofocus,
+      :final maxUtf8Bytes,
+      :final hasLeading,
+      :final trailingCount,
+      :final hintText,
+      :final hasOnTap,
+    ):
+      _validateMaterialSearchBar(props);
+      writer
+        ..uint64(sessionId)
+        ..uint64(documentRevision)
+        ..string(value.text);
+      _writeTextRange(writer, value.text, value.selection);
+      if (value.composing case final composing?) {
+        writer.uint8(1);
+        _writeTextRange(writer, value.text, composing);
+      } else {
+        writer.uint8(0);
+      }
+      writer
+        ..uint8(enabled ? 1 : 0)
+        ..uint8(readOnly ? 1 : 0)
+        ..uint8(keyboardType.index)
+        ..uint8(inputAction.index)
+        ..uint64(acceptedLocalRevision)
+        ..uint8(updateMode.index)
+        ..uint8(autofocus ? 1 : 0)
+        ..optionalUint32(maxUtf8Bytes)
+        ..uint8(hasLeading ? 1 : 0)
+        ..uint32(trailingCount)
+        ..optionalString(hintText)
+        ..uint8(hasOnTap ? 1 : 0);
+    case MaterialTooltipProps(
+      :final message,
+      :final enabled,
+      :final excludeFromSemantics,
+      :final preferBelow,
+      :final triggerMode,
+      :final waitDurationMs,
+      :final showDurationMs,
+      :final exitDurationMs,
+      :final enableTapToDismiss,
+      :final enableFeedback,
+      :final hasOnTriggered,
+    ):
+      _validateMaterialTooltip(props);
+      writer
+        ..string(message)
+        ..uint8(enabled ? 1 : 0)
+        ..uint8(excludeFromSemantics ? 1 : 0)
+        ..uint8(preferBelow ? 1 : 0)
+        ..uint8(triggerMode.index)
+        ..uint32(waitDurationMs)
+        ..uint32(showDurationMs)
+        ..uint32(exitDurationMs)
+        ..uint8(enableTapToDismiss ? 1 : 0)
+        ..uint8(enableFeedback ? 1 : 0)
+        ..uint8(hasOnTriggered ? 1 : 0);
+    case MaterialDataTableProps(
+      :final columns,
+      :final rows,
+      :final sortColumnId,
+      :final sortAscending,
+      :final selectedRowIds,
+      :final hasOnSort,
+      :final hasOnRowSelected,
+      :final hasOnSelectAll,
+      :final hasOnCellActivate,
+    ):
+      _validateMaterialDataTable(props);
+      writer.uint16(columns.length);
+      for (final column in columns) {
+        writer
+          ..int64(column.id)
+          ..optionalString(column.tooltip)
+          ..uint8(column.numeric ? 1 : 0)
+          ..uint8(column.sortable ? 1 : 0);
+      }
+      writer.uint16(rows.length);
+      for (final row in rows) {
+        writer
+          ..int64(row.id)
+          ..uint8(row.selected ? 1 : 0)
+          ..uint8(row.selectionEnabled ? 1 : 0)
+          ..uint16(row.cells.length);
+        for (final cell in row.cells) {
+          writer
+            ..uint8(cell.placeholder ? 1 : 0)
+            ..uint8(cell.showEditIcon ? 1 : 0)
+            ..uint8(cell.activatable ? 1 : 0);
+        }
+      }
+      if (sortColumnId == null) {
+        writer.uint8(0);
+      } else {
+        writer
+          ..uint8(1)
+          ..int64(sortColumnId);
+      }
+      writer
+        ..uint8(sortAscending ? 1 : 0)
+        ..uint16(selectedRowIds.length);
+      for (final id in selectedRowIds) {
+        writer.int64(id);
+      }
+      writer
+        ..uint8(hasOnSort ? 1 : 0)
+        ..uint8(hasOnRowSelected ? 1 : 0)
+        ..uint8(hasOnSelectAll ? 1 : 0)
+        ..uint8(hasOnCellActivate ? 1 : 0);
+    case MaterialStepperProps(
+      :final orientation,
+      :final currentStepId,
+      :final steps,
+    ):
+      _validateMaterialStepper(props);
+      writer
+        ..uint8(orientation == MaterialStepperOrientation.horizontal ? 0 : 1)
+        ..int64(currentStepId)
+        ..uint16(steps.length);
+      for (final step in steps) {
+        writer
+          ..int64(step.id)
+          ..uint8(step.active ? 1 : 0)
+          ..uint8(step.state.index)
+          ..uint8(step.hasSubtitle ? 1 : 0)
+          ..uint8(step.hasLabel ? 1 : 0);
+      }
+    case MaterialExpansionPanelListProps(
+      :final policy,
+      :final expandedIds,
+      :final panels,
+    ):
+      _validateMaterialExpansionPanels(props);
+      writer
+        ..uint8(policy.index)
+        ..uint16(expandedIds.length);
+      for (final id in expandedIds) {
+        writer.int64(id);
+      }
+      writer.uint16(panels.length);
+      for (final panel in panels) {
+        writer
+          ..int64(panel.id)
+          ..uint8(panel.enabled ? 1 : 0)
+          ..uint8(panel.canTapOnHeader ? 1 : 0);
+      }
+    case MaterialSimpleDialogProps(:final hasTitle, :final options):
+      _validateMaterialSimpleDialog(props);
+      writer
+        ..uint8(hasTitle ? 1 : 0)
+        ..uint16(options.length);
+      for (final option in options) {
+        writer
+          ..int64(option.id)
+          ..uint8(option.enabled ? 1 : 0);
+      }
+    case MaterialFullscreenDialogProps():
+      break;
+    default:
+      throw ArgumentError.value(props, 'props');
+  }
+}
+
+UiProps _readAdditionalMaterialProps(_Reader reader, NodeKind kind) {
+  if (kind == NodeKind.materialSearchBar) {
+    final sessionId = reader.uint64();
+    final documentRevision = reader.uint64();
+    final text = reader.string();
+    final selection = _readTextRange(reader, text);
+    final composing = switch (reader.uint8()) {
+      0 => null,
+      1 => _readTextRange(reader, text),
+      final value => _fail(
+        ProtocolErrorCode.invalidProps,
+        'Invalid composing tag $value',
+      ),
+    };
+    final props = MaterialSearchBarProps(
+      sessionId: sessionId,
+      documentRevision: documentRevision,
+      value: TextEditingStateValue(
+        text: text,
+        selection: selection,
+        composing: composing,
+      ),
+      enabled: reader.boolean(),
+      readOnly: reader.boolean(),
+      keyboardType: _enumValue(
+        TextKeyboardType.values,
+        reader.uint8(),
+        'keyboard type',
+      ),
+      inputAction: _enumValue(
+        TextInputActionKind.values,
+        reader.uint8(),
+        'input action',
+      ),
+      acceptedLocalRevision: reader.uint64(),
+      updateMode: _enumValue(
+        TextUpdateMode.values,
+        reader.uint8(),
+        'update mode',
+      ),
+      autofocus: reader.boolean(),
+      maxUtf8Bytes: reader.optionalUint32(),
+      hasLeading: reader.boolean(),
+      trailingCount: reader.uint32(),
+      hintText: reader.optionalString(),
+      hasOnTap: reader.boolean(),
+    );
+    _validateMaterialSearchBar(props);
+    return props;
+  }
+  if (kind == NodeKind.materialTooltip) {
+    final props = MaterialTooltipProps(
+      message: reader.string(),
+      enabled: reader.boolean(),
+      excludeFromSemantics: reader.boolean(),
+      preferBelow: reader.boolean(),
+      triggerMode: _enumValue(
+        MaterialTooltipTriggerMode.values,
+        reader.uint8(),
+        'tooltip trigger',
+      ),
+      waitDurationMs: reader.uint32(),
+      showDurationMs: reader.uint32(),
+      exitDurationMs: reader.uint32(),
+      enableTapToDismiss: reader.boolean(),
+      enableFeedback: reader.boolean(),
+      hasOnTriggered: reader.boolean(),
+    );
+    _validateMaterialTooltip(props);
+    return props;
+  }
+  if (kind == NodeKind.materialDataTable) {
+    final columns = List.generate(
+      reader.uint16(),
+      (_) => MaterialDataTableColumnProps(
+        id: reader.int64(),
+        tooltip: reader.optionalString(),
+        numeric: reader.boolean(),
+        sortable: reader.boolean(),
+      ),
+    );
+    final rows = List.generate(reader.uint16(), (_) {
+      final id = reader.int64();
+      final selected = reader.boolean();
+      final selectionEnabled = reader.boolean();
+      final cells = List.generate(
+        reader.uint16(),
+        (_) => MaterialDataTableCellProps(
+          placeholder: reader.boolean(),
+          showEditIcon: reader.boolean(),
+          activatable: reader.boolean(),
+        ),
+      );
+      return MaterialDataTableRowProps(
+        id: id,
+        selected: selected,
+        selectionEnabled: selectionEnabled,
+        cells: cells,
+      );
+    });
+    final sortColumnId = switch (reader.uint8()) {
+      0 => null,
+      1 => reader.int64(),
+      final value => _fail(
+        ProtocolErrorCode.invalidProps,
+        'Invalid optional sort ID tag $value',
+      ),
+    };
+    final sortAscending = reader.boolean();
+    final selectedRowIds = List.generate(
+      reader.uint16(),
+      (_) => reader.int64(),
+    );
+    final props = MaterialDataTableProps(
+      columns: columns,
+      rows: rows,
+      sortColumnId: sortColumnId,
+      sortAscending: sortAscending,
+      selectedRowIds: selectedRowIds,
+      hasOnSort: reader.boolean(),
+      hasOnRowSelected: reader.boolean(),
+      hasOnSelectAll: reader.boolean(),
+      hasOnCellActivate: reader.boolean(),
+    );
+    _validateMaterialDataTable(props);
+    return props;
+  }
+  if (kind == NodeKind.materialStepper) {
+    final wireOrientation = reader.uint8();
+    final orientation = switch (wireOrientation) {
+      0 => MaterialStepperOrientation.horizontal,
+      1 => MaterialStepperOrientation.vertical,
+      _ => _fail(
+        ProtocolErrorCode.invalidProps,
+        'Invalid stepper orientation $wireOrientation',
+      ),
+    };
+    final currentStepId = reader.int64();
+    final steps = List.generate(
+      reader.uint16(),
+      (_) => MaterialStepProps(
+        id: reader.int64(),
+        active: reader.boolean(),
+        state: _enumValue(
+          MaterialStepState.values,
+          reader.uint8(),
+          'step state',
+        ),
+        hasSubtitle: reader.boolean(),
+        hasLabel: reader.boolean(),
+      ),
+    );
+    final props = MaterialStepperProps(
+      orientation: orientation,
+      currentStepId: currentStepId,
+      steps: steps,
+    );
+    _validateMaterialStepper(props);
+    return props;
+  }
+  if (kind == NodeKind.materialExpansionPanelList) {
+    final policy = _enumValue(
+      MaterialExpansionPanelPolicy.values,
+      reader.uint8(),
+      'panel policy',
+    );
+    final expandedIds = List.generate(reader.uint16(), (_) => reader.int64());
+    final panels = List.generate(
+      reader.uint16(),
+      (_) => MaterialExpansionPanelProps(
+        id: reader.int64(),
+        enabled: reader.boolean(),
+        canTapOnHeader: reader.boolean(),
+      ),
+    );
+    final props = MaterialExpansionPanelListProps(
+      policy: policy,
+      expandedIds: expandedIds,
+      panels: panels,
+    );
+    _validateMaterialExpansionPanels(props);
+    return props;
+  }
+  if (kind == NodeKind.materialSimpleDialog) {
+    final hasTitle = reader.boolean();
+    final options = List.generate(
+      reader.uint16(),
+      (_) => MaterialSimpleDialogOptionProps(
+        id: reader.int64(),
+        enabled: reader.boolean(),
+      ),
+    );
+    final props = MaterialSimpleDialogProps(
+      hasTitle: hasTitle,
+      options: options,
+    );
+    _validateMaterialSimpleDialog(props);
+    return props;
+  }
+  if (kind == NodeKind.materialFullscreenDialog) {
+    return const MaterialFullscreenDialogProps();
+  }
+  throw ArgumentError.value(kind, 'kind');
+}
 
 void _writeHostRequest(_Writer writer, int requestId, HostRequest request) {
   _checkUint64('host request ID', requestId);

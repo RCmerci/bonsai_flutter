@@ -527,6 +527,187 @@ void main() {
     expect(resources.disposedResourceCount, 1);
   });
 
+  testWidgets('search bar shares revisioned editing and resource disposal', (
+    tester,
+  ) async {
+    MaterialSearchBarProps props({
+      int documentRevision = 1,
+      int acceptedLocalRevision = 0,
+      TextUpdateMode updateMode = TextUpdateMode.ack,
+      String text = 'find',
+    }) => MaterialSearchBarProps(
+      sessionId: 41,
+      documentRevision: documentRevision,
+      value: TextEditingStateValue(
+        text: text,
+        selection: TextRangeValue(
+          startUtf16: text.length,
+          endUtf16: text.length,
+        ),
+        composing: null,
+      ),
+      enabled: true,
+      readOnly: false,
+      keyboardType: TextKeyboardType.text,
+      inputAction: TextInputActionKind.search,
+      acceptedLocalRevision: acceptedLocalRevision,
+      updateMode: updateMode,
+      autofocus: false,
+      maxUtf8Bytes: 4,
+      hasLeading: false,
+      trailingCount: 0,
+      hintText: 'Search',
+      hasOnTap: false,
+    );
+
+    final store = NodeStore()
+      ..apply(
+        Frame(
+          runtimeEpoch: 96,
+          baseRevision: 0,
+          targetRevision: 1,
+          kind: FrameKind.fullSnapshot,
+          operations: [
+            const SetApplicationTheme(
+              title: 'Test',
+              theme: testApplicationTheme,
+            ),
+            CreateNode(
+              nodeId: 1,
+              kind: NodeKind.materialSearchBar,
+              props: props(),
+              eventBindings: const [
+                EventBinding(eventTag: EventTagId.textEdit, handlerId: 201),
+                EventBinding(eventTag: EventTagId.textSubmit, handlerId: 202),
+                EventBinding(eventTag: EventTagId.focusChanged, handlerId: 203),
+                EventBinding(
+                  eventTag: EventTagId.textLimitReached,
+                  handlerId: 204,
+                ),
+              ],
+            ),
+            const SetRoot(1),
+          ],
+        ),
+      );
+    final resources = RendererResourceStore();
+    final events = <RendererEvent>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BonsaiFlutterView(
+            store: store,
+            resourceStore: resources,
+            onEvent: events.add,
+          ),
+        ),
+      ),
+    );
+    expect(find.byType(SearchBar), findsOneWidget);
+    final controller = tester
+        .widget<EditableText>(find.byType(EditableText))
+        .controller;
+
+    controller.value = const TextEditingValue(
+      text: '😀a',
+      selection: TextSelection.collapsed(offset: 3),
+    );
+    await tester.pump();
+    expect(controller.text, 'find');
+    expect(
+      events.where((event) => event.eventTag == EventTagId.textLimitReached),
+      hasLength(1),
+    );
+
+    controller.value = const TextEditingValue(
+      text: 'ok',
+      selection: TextSelection.collapsed(offset: 2),
+    );
+    await tester.pump();
+    expect(
+      (events
+                  .where((event) => event.eventTag == EventTagId.textEdit)
+                  .single
+                  .payload
+              as TextEditEventPayload)
+          .text,
+      'ok',
+    );
+
+    final focusRequest = resources.requestFocus(1);
+    await tester.pump();
+    await focusRequest;
+    await tester.pump();
+    expect(
+      events
+          .where((event) => event.eventTag == EventTagId.focusChanged)
+          .last
+          .payload,
+      const BoolEventPayload(true),
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pump();
+    expect(
+      events
+          .where((event) => event.eventTag == EventTagId.textSubmit)
+          .single
+          .payload,
+      const TextEventPayload('ok'),
+    );
+
+    store.apply(
+      Frame(
+        runtimeEpoch: 96,
+        baseRevision: 1,
+        targetRevision: 2,
+        kind: FrameKind.incremental,
+        operations: [
+          UpdateProps(
+            nodeId: 1,
+            props: props(
+              documentRevision: 2,
+              acceptedLocalRevision: 1,
+              updateMode: TextUpdateMode.forceReplace,
+              text: 'new',
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    expect(
+      identical(
+        tester.widget<EditableText>(find.byType(EditableText)).controller,
+        controller,
+      ),
+      isTrue,
+    );
+    expect(controller.text, 'new');
+
+    store.apply(
+      const Frame(
+        runtimeEpoch: 96,
+        baseRevision: 0,
+        targetRevision: 3,
+        kind: FrameKind.fullSnapshot,
+        operations: [
+          SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
+          CreateNode(
+            nodeId: 2,
+            kind: NodeKind.text,
+            props: TextProps('removed'),
+            eventBindings: [],
+          ),
+          SetRoot(2),
+        ],
+      ),
+    );
+    await tester.pump();
+    expect(resources.liveResourceCount, 0);
+    expect(resources.disposedResourceCount, 1);
+  });
+
   testWidgets('keyed reorder retains controller and node drop disposes it', (
     tester,
   ) async {

@@ -197,8 +197,15 @@ val range_slider
   -> unit
   -> Widget.t
 
+type chip_presentation =
+  | Flat
+  | Elevated
+
+(** [action_chip] represents both Material 3 assist chips (with [avatar]) and
+    suggestion chips (without [avatar]). *)
 val action_chip
   :  ?key:Key.t
+  -> ?presentation:chip_presentation
   -> ?enabled:bool
   -> ?avatar:Widget.t
   -> on_press:Event.Handler.t
@@ -208,6 +215,7 @@ val action_chip
 
 val filter_chip
   :  ?key:Key.t
+  -> ?presentation:chip_presentation
   -> ?enabled:bool
   -> ?avatar:Widget.t
   -> selected:bool
@@ -218,6 +226,7 @@ val filter_chip
 
 val choice_chip
   :  ?key:Key.t
+  -> ?presentation:chip_presentation
   -> ?enabled:bool
   -> ?avatar:Widget.t
   -> selected:bool
@@ -239,14 +248,181 @@ val input_chip
   -> unit
   -> Widget.t
 
-val alert_dialog
+module Tooltip : sig
+  type placement =
+    | Above
+    | Below
+
+  type trigger_mode =
+    | Long_press
+    | Tap
+end
+
+val tooltip
   :  ?key:Key.t
-  -> ?icon:Widget.t
-  -> ?title:Widget.t
-  -> ?content:Widget.t
-  -> actions:Widget.t list
+  -> ?enabled:bool
+  -> ?exclude_from_semantics:bool
+  -> ?placement:Tooltip.placement
+  -> ?trigger_mode:Tooltip.trigger_mode
+  -> ?wait_duration_ms:int
+  -> ?show_duration_ms:int
+  -> ?exit_duration_ms:int
+  -> ?enable_tap_to_dismiss:bool
+  -> ?enable_feedback:bool
+  -> ?on_triggered:Event.Handler.t
+  -> message:string
+  -> Widget.t
+  -> Widget.t
+
+val search_bar
+  :  ?key:Key.t
+  -> ?enabled:bool
+  -> ?read_only:bool
+  -> ?keyboard_type:Text_editing.keyboard_type
+  -> ?input_action:Text_editing.input_action
+  -> ?autofocus:bool
+  -> ?max_utf8_bytes:int
+  -> session_id:Bonsai_flutter_spec.Id.Text_input.session_id
+  -> document_revision:Bonsai_flutter_spec.Id.Text_input.document_revision
+  -> accepted_local_revision:Bonsai_flutter_spec.Id.Text_input.local_revision
+  -> update_mode:Text_editing.update_mode
+  -> value:Text_editing.Value.t
+  -> on_edit:Event.Handler.t
+  -> on_submit:Event.Handler.t
+  -> on_focus_changed:Event.Handler.t
+  -> ?on_limit_reached:Event.Handler.t
+  -> ?leading:Widget.t
+  -> ?trailing:Widget.t list
+  -> ?hint_text:string
+  -> ?on_tap:Event.Handler.t
   -> unit
   -> Widget.t
+
+module Data_table : sig
+  type column
+  type row
+  type cell
+
+  val column
+    :  id:int64
+    -> ?tooltip:string
+    -> ?numeric:bool
+    -> ?sortable:bool
+    -> label:Widget.t
+    -> unit
+    -> column
+
+  val cell
+    :  ?placeholder:bool
+    -> ?show_edit_icon:bool
+    -> ?activatable:bool
+    -> Widget.t
+    -> cell
+
+  val row : id:int64 -> ?selected:bool -> ?selection_enabled:bool -> cell list -> row
+
+  val create
+    :  ?key:Key.t
+    -> ?sort_column_id:int64
+    -> ?sort_ascending:bool
+    -> ?selected_row_ids:int64 list
+    -> ?on_sort:Event.Handler.t
+    -> ?on_row_selected:Event.Handler.t
+    -> ?on_select_all:Event.Handler.t
+    -> ?on_cell_activate:Event.Handler.t
+    -> columns:column list
+    -> rows:row list
+    -> unit
+    -> Widget.t
+end
+
+module Stepper : sig
+  type orientation =
+    | Vertical
+    | Horizontal
+
+  type state =
+    | Indexed
+    | Editing
+    | Complete
+    | Disabled
+    | Error
+
+  type step
+
+  val step
+    :  id:int64
+    -> title:Widget.t
+    -> content:Widget.t
+    -> ?subtitle:Widget.t
+    -> ?label:Widget.t
+    -> ?active:bool
+    -> ?state:state
+    -> unit
+    -> step
+
+  val create
+    :  ?key:Key.t
+    -> ?orientation:orientation
+    -> current_step_id:int64
+    -> ?on_step_selected:Event.Handler.t
+    -> ?on_continue:Event.Handler.t
+    -> ?on_cancel:Event.Handler.t
+    -> step list
+    -> unit
+    -> Widget.t
+end
+
+module Expansion_panel_list : sig
+  type policy =
+    | Multiple
+    | Single
+
+  type panel
+
+  val panel
+    :  id:int64
+    -> header:Widget.t
+    -> body:Widget.t
+    -> ?enabled:bool
+    -> ?can_tap_on_header:bool
+    -> unit
+    -> panel
+
+  val create
+    :  ?key:Key.t
+    -> ?policy:policy
+    -> expanded_ids:int64 list
+    -> on_expansion_changed:Event.Handler.t
+    -> panel list
+    -> unit
+    -> Widget.t
+end
+
+module Dialog : sig
+  type option_
+
+  val option : id:int64 -> ?enabled:bool -> label:Widget.t -> unit -> option_
+
+  val alert
+    :  ?key:Key.t
+    -> ?icon:Widget.t
+    -> ?title:Widget.t
+    -> ?content:Widget.t
+    -> actions:Widget.t list
+    -> unit
+    -> Widget.t
+
+  val simple
+    :  ?key:Key.t
+    -> ?title:Widget.t
+    -> on_select:Event.Handler.t
+    -> option_ list
+    -> unit
+    -> Widget.t
+
+  val fullscreen : ?key:Key.t -> Widget.t -> Widget.t
+end
 
 val checkbox
   :  ?key:Key.t
@@ -297,7 +473,25 @@ val list_tile
   -> unit
   -> Widget.t
 
-val divider : ?key:Key.t -> ?thickness:float -> unit -> Widget.t
-val card : ?key:Key.t -> ?elevation:float -> Widget.t -> Widget.t
+type divider_orientation =
+  | Horizontal
+  | Vertical
+
+type card_variant =
+  | Elevated
+  | Filled
+  | Outlined
+
+val divider
+  :  ?key:Key.t
+  -> ?orientation:divider_orientation
+  -> ?thickness:float
+  -> ?spacing:float
+  -> ?indent:float
+  -> ?end_indent:float
+  -> unit
+  -> Widget.t
+
+val card : ?key:Key.t -> ?variant:card_variant -> ?elevation:float -> Widget.t -> Widget.t
 val circular_progress_indicator : ?key:Key.t -> ?value:float -> unit -> Widget.t
 val linear_progress_indicator : ?key:Key.t -> ?value:float -> unit -> Widget.t

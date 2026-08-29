@@ -341,6 +341,153 @@ void main() {
       );
     });
 
+    test('round trips additional Material component properties', () {
+      const props = <UiProps>[
+        MaterialSearchBarProps(
+          sessionId: 3,
+          documentRevision: 8,
+          value: TextEditingStateValue(
+            text: 'find',
+            selection: TextRangeValue(startUtf16: 1, endUtf16: 4),
+            composing: TextRangeValue(startUtf16: 0, endUtf16: 4),
+          ),
+          enabled: true,
+          readOnly: false,
+          keyboardType: TextKeyboardType.text,
+          inputAction: TextInputActionKind.search,
+          acceptedLocalRevision: 5,
+          updateMode: TextUpdateMode.correction,
+          autofocus: true,
+          maxUtf8Bytes: 64,
+          hasLeading: true,
+          trailingCount: 2,
+          hintText: 'Search',
+          hasOnTap: true,
+        ),
+        MaterialTooltipProps(
+          message: 'Details',
+          enabled: true,
+          excludeFromSemantics: false,
+          preferBelow: false,
+          triggerMode: MaterialTooltipTriggerMode.tap,
+          waitDurationMs: 20,
+          showDurationMs: 1500,
+          exitDurationMs: 100,
+          enableTapToDismiss: true,
+          enableFeedback: false,
+          hasOnTriggered: true,
+        ),
+        MaterialDataTableProps(
+          columns: [
+            MaterialDataTableColumnProps(
+              id: 11,
+              tooltip: 'Name',
+              numeric: false,
+              sortable: true,
+            ),
+            MaterialDataTableColumnProps(
+              id: 12,
+              tooltip: null,
+              numeric: true,
+              sortable: false,
+            ),
+          ],
+          rows: [
+            MaterialDataTableRowProps(
+              id: 21,
+              selected: true,
+              selectionEnabled: true,
+              cells: [
+                MaterialDataTableCellProps(
+                  placeholder: false,
+                  showEditIcon: true,
+                  activatable: true,
+                ),
+                MaterialDataTableCellProps(
+                  placeholder: false,
+                  showEditIcon: false,
+                  activatable: false,
+                ),
+              ],
+            ),
+          ],
+          sortColumnId: 11,
+          sortAscending: false,
+          selectedRowIds: [21],
+          hasOnSort: true,
+          hasOnRowSelected: true,
+          hasOnSelectAll: true,
+          hasOnCellActivate: true,
+        ),
+        MaterialStepperProps(
+          orientation: MaterialStepperOrientation.horizontal,
+          currentStepId: 31,
+          steps: [
+            MaterialStepProps(
+              id: 31,
+              active: true,
+              state: MaterialStepState.editing,
+              hasSubtitle: true,
+              hasLabel: true,
+            ),
+          ],
+        ),
+        MaterialExpansionPanelListProps(
+          policy: MaterialExpansionPanelPolicy.single,
+          expandedIds: [41],
+          panels: [
+            MaterialExpansionPanelProps(
+              id: 41,
+              enabled: true,
+              canTapOnHeader: true,
+            ),
+          ],
+        ),
+        MaterialSimpleDialogProps(
+          hasTitle: true,
+          options: [MaterialSimpleDialogOptionProps(id: 51, enabled: true)],
+        ),
+        MaterialFullscreenDialogProps(),
+        MaterialChipProps(
+          variant: MaterialChipVariant.action,
+          presentation: MaterialChipPresentation.elevated,
+          enabled: true,
+          selected: false,
+          hasAvatar: true,
+          hasDeleteIcon: false,
+          hasOnPress: true,
+          hasOnSelected: false,
+          hasOnDelete: false,
+        ),
+        MaterialCardProps(variant: MaterialCardVariant.filled, elevation: 2),
+        MaterialDividerProps(
+          orientation: MaterialDividerOrientation.vertical,
+          thickness: 2,
+          spacing: 24,
+          indent: 4,
+          endIndent: 8,
+        ),
+      ];
+      final frame = Frame(
+        runtimeEpoch: 77,
+        baseRevision: 1,
+        targetRevision: 2,
+        kind: FrameKind.incremental,
+        operations: [
+          for (var index = 0; index < props.length; index += 1)
+            UpdateProps(nodeId: index + 1, props: props[index]),
+        ],
+      );
+
+      final decoded = FrameCodec.decode(FrameCodec.encode(frame));
+      final decodedProps = [
+        for (final operation in decoded.operations)
+          (operation as UpdateProps).props,
+      ];
+
+      expect(decodedProps, props);
+    });
+
     test('rejects malformed Material controls at the Dart wire boundary', () {
       Frame frame(UiProps props) => Frame(
         runtimeEpoch: 77,
@@ -418,6 +565,71 @@ void main() {
           labelEnd: null,
           enabled: true,
           hasOnChange: true,
+        ),
+        const MaterialChipProps(
+          variant: MaterialChipVariant.input,
+          presentation: MaterialChipPresentation.elevated,
+          enabled: true,
+          selected: false,
+          hasAvatar: false,
+          hasDeleteIcon: false,
+          hasOnPress: false,
+          hasOnSelected: false,
+          hasOnDelete: false,
+        ),
+        const MaterialDataTableProps(
+          columns: [
+            MaterialDataTableColumnProps(
+              id: 1,
+              tooltip: null,
+              numeric: false,
+              sortable: false,
+            ),
+          ],
+          rows: [
+            MaterialDataTableRowProps(
+              id: 2,
+              selected: false,
+              selectionEnabled: true,
+              cells: [],
+            ),
+          ],
+          sortColumnId: null,
+          sortAscending: true,
+          selectedRowIds: [],
+        ),
+        const MaterialStepperProps(
+          orientation: MaterialStepperOrientation.vertical,
+          currentStepId: 1,
+          steps: [],
+        ),
+        const MaterialExpansionPanelListProps(
+          policy: MaterialExpansionPanelPolicy.single,
+          expandedIds: [1, 2],
+          panels: [
+            MaterialExpansionPanelProps(
+              id: 1,
+              enabled: true,
+              canTapOnHeader: false,
+            ),
+            MaterialExpansionPanelProps(
+              id: 2,
+              enabled: true,
+              canTapOnHeader: false,
+            ),
+          ],
+        ),
+        const MaterialSimpleDialogProps(hasTitle: false, options: []),
+        const MaterialCardProps(
+          variant: MaterialCardVariant.outlined,
+          elevation: -1,
+        ),
+        const MaterialDividerProps(
+          orientation: MaterialDividerOrientation.vertical,
+          thickness: 1,
+          spacing: -1,
+          indent: 0,
+          endIndent: 0,
         ),
       ];
 

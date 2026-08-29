@@ -427,15 +427,23 @@ let material_section model handlers =
         ()
     ; Ui.Widget.row
         [ Ui.Material.action_chip
+            ~avatar:(icon 0xe8b6)
             ~on_press:handlers.press
-            ~label:(Ui.Widget.text "Action")
+            ~label:(Ui.Widget.text "Assist")
+            ()
+        ; Ui.Material.action_chip
+            ~presentation:Ui.Material.Elevated
+            ~on_press:handlers.press
+            ~label:(Ui.Widget.text "Suggestion")
             ()
         ; Ui.Material.filter_chip
+            ~presentation:Ui.Material.Elevated
             ~selected:model.checked
             ~on_selected:handlers.toggle
             ~label:(Ui.Widget.text "Filter")
             ()
         ; Ui.Material.choice_chip
+            ~presentation:Ui.Material.Elevated
             ~selected:(not model.checked)
             ~on_selected:handlers.toggle
             ~label:(Ui.Widget.text "Choice")
@@ -448,7 +456,7 @@ let material_section model handlers =
             ~label:(Ui.Widget.text "Input")
             ()
         ]
-    ; Ui.Material.alert_dialog
+    ; Ui.Material.Dialog.alert
         ~icon:(icon 0xe002)
         ~title:(Ui.Widget.text "AlertDialog")
         ~content:(Ui.Widget.text "Declarative dialog content")
@@ -463,6 +471,74 @@ let material_section model handlers =
               ()
           ]
         ()
+    ; Ui.Material.Dialog.simple
+        ~title:(Ui.Widget.text "Simple dialog")
+        ~on_select:handlers.interaction
+        [ Ui.Material.Dialog.option ~id:1L ~label:(Ui.Widget.text "First option") ()
+        ; Ui.Material.Dialog.option ~id:2L ~label:(Ui.Widget.text "Second option") ()
+        ]
+        ()
+    ; Ui.Material.Dialog.fullscreen (Ui.Widget.text "Fullscreen dialog surface")
+    ; Ui.Material.tooltip
+        ~message:"General Material tooltip"
+        ~on_triggered:handlers.interaction
+        (Ui.Widget.text "Long-press for tooltip")
+    ; Ui.Material.search_bar
+        ~session_id:(ID.Text_input.Session_id.of_int64 2L)
+        ~document_revision:model.document_revision
+        ~accepted_local_revision:model.accepted_local_revision
+        ~update_mode:Ui.Text_editing.Ack
+        ~value:
+          (let selection =
+             Ui.Text_editing.Range.create
+               ~text:model.text
+               ~start_utf16:(Ui.Text_editing.Utf16.length model.text)
+               ~end_utf16:(Ui.Text_editing.Utf16.length model.text)
+           in
+           Ui.Text_editing.Value.create ~text:model.text ~selection ())
+        ~on_edit:handlers.text_edit
+        ~on_submit:handlers.text_submit
+        ~on_focus_changed:handlers.focus_changed
+        ~leading:(icon 0xe8b6)
+        ~hint_text:"Standalone SearchBar"
+        ()
+    ; Ui.Material.Data_table.create
+        ~sort_column_id:1L
+        ~selected_row_ids:[ 10L ]
+        ~on_sort:handlers.interaction
+        ~on_row_selected:handlers.interaction
+        ~on_cell_activate:handlers.interaction
+        ~columns:
+          [ Ui.Material.Data_table.column ~id:1L ~sortable:true ~label:(Ui.Widget.text "Name") ()
+          ; Ui.Material.Data_table.column ~id:2L ~numeric:true ~label:(Ui.Widget.text "Score") ()
+          ]
+        ~rows:
+          [ Ui.Material.Data_table.row
+              ~id:10L
+              ~selected:true
+              [ Ui.Material.Data_table.cell ~activatable:true (Ui.Widget.text "Ada")
+              ; Ui.Material.Data_table.cell (Ui.Widget.text "42")
+              ]
+          ]
+        ()
+    ; Ui.Material.Stepper.create
+        ~orientation:Ui.Material.Stepper.Horizontal
+        ~current_step_id:1L
+        ~on_step_selected:handlers.interaction
+        ~on_continue:handlers.press
+        ~on_cancel:handlers.press
+        [ Ui.Material.Stepper.step ~id:1L ~title:(Ui.Widget.text "Edit") ~content:(Ui.Widget.text "Edit content") ()
+        ; Ui.Material.Stepper.step ~id:2L ~state:Ui.Material.Stepper.Complete ~title:(Ui.Widget.text "Review") ~content:(Ui.Widget.text "Review content") ()
+        ]
+        ()
+    ; Ui.Material.Expansion_panel_list.create
+        ~policy:Ui.Material.Expansion_panel_list.Single
+        ~expanded_ids:[ 1L ]
+        ~on_expansion_changed:handlers.interaction
+        [ Ui.Material.Expansion_panel_list.panel ~id:1L ~header:(Ui.Widget.text "Panel one") ~body:(Ui.Widget.text "Panel body") ()
+        ; Ui.Material.Expansion_panel_list.panel ~id:2L ~header:(Ui.Widget.text "Panel two") ~body:(Ui.Widget.text "Second body") ()
+        ]
+        ()
     ; Ui.Widget.row
         [ Ui.Material.checkbox ~value:model.checked ~on_changed:handlers.toggle ()
         ; Ui.Material.switch ~value:model.checked ~on_changed:handlers.toggle ()
@@ -476,6 +552,12 @@ let material_section model handlers =
         ~on_press:handlers.toggle
         ~title:(Ui.Widget.text "Typed ListTile")
         ()
+    ; Ui.Widget.row
+        [ Ui.Material.card ~variant:Ui.Material.Elevated (Ui.Widget.text "Elevated card")
+        ; Ui.Material.card ~variant:Ui.Material.Filled (Ui.Widget.text "Filled card")
+        ; Ui.Material.card ~variant:Ui.Material.Outlined (Ui.Widget.text "Outlined card")
+        ; Ui.Material.divider ~orientation:Ui.Material.Vertical ~spacing:32. ()
+        ]
     ; Ui.Material.divider ~thickness:1. ()
     ; Ui.Widget.row
         [ Ui.Material.circular_progress_indicator ~value:0.68 ()

@@ -408,6 +408,13 @@ bool _isCoreSliverKind(NodeKind kind) => switch (kind) {
   NodeKind.materialFloatingActionButton ||
   NodeKind.materialNavigationBar ||
   NodeKind.materialRadioGroup ||
+  NodeKind.materialSearchBar ||
+  NodeKind.materialTooltip ||
+  NodeKind.materialDataTable ||
+  NodeKind.materialStepper ||
+  NodeKind.materialExpansionPanelList ||
+  NodeKind.materialSimpleDialog ||
+  NodeKind.materialFullscreenDialog ||
   NodeKind.materialSegmentedButton ||
   NodeKind.materialSlider ||
   NodeKind.materialRangeSlider ||

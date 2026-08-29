@@ -1,7 +1,7 @@
 ((protocol
   (name bonsai_flutter)
   (major 1)
-  (minor 23)
+  (minor 24)
   (endianness little)
   (header_bytes 48)
   (max_frame_bytes 16777216)
@@ -105,7 +105,14 @@
    (material_alert_dialog 123)
    (material_linear_progress_indicator 124)
    (material_segmented_button 125)
-   (native_widget 128)))
+   (native_widget 128)
+   (material_search_bar 129)
+   (material_tooltip 130)
+   (material_data_table 131)
+   (material_stepper 132)
+   (material_expansion_panel_list 133)
+   (material_simple_dialog 134)
+   (material_fullscreen_dialog 135)))
 
  (common_props
   ((test_id 1 optional_string)
@@ -302,7 +309,8 @@
      (has_delete_icon 4 bool)
      (has_on_press 5 bool)
      (has_on_selected 6 bool)
-     (has_on_delete 7 bool)))
+     (has_on_delete 7 bool)
+     (presentation 8 material_chip_presentation)))
    (material_filter_chip
     ((enabled 1 bool)
      (selected 2 bool)
@@ -310,7 +318,8 @@
      (has_delete_icon 4 bool)
      (has_on_press 5 bool)
      (has_on_selected 6 bool)
-     (has_on_delete 7 bool)))
+     (has_on_delete 7 bool)
+     (presentation 8 material_chip_presentation)))
    (material_choice_chip
     ((enabled 1 bool)
      (selected 2 bool)
@@ -318,7 +327,8 @@
      (has_delete_icon 4 bool)
      (has_on_press 5 bool)
      (has_on_selected 6 bool)
-     (has_on_delete 7 bool)))
+     (has_on_delete 7 bool)
+     (presentation 8 material_chip_presentation)))
    (material_input_chip
     ((enabled 1 bool)
      (selected 2 bool)
@@ -326,7 +336,8 @@
      (has_delete_icon 4 bool)
      (has_on_press 5 bool)
      (has_on_selected 6 bool)
-     (has_on_delete 7 bool)))
+     (has_on_delete 7 bool)
+     (presentation 8 material_chip_presentation)))
    (material_alert_dialog
     ((has_icon 1 bool)
      (has_title 2 bool)
@@ -345,9 +356,14 @@
      (has_leading 4 bool)
      (has_trailing 5 bool)))
    (material_divider
-    ((thickness 1 f64)))
+    ((thickness 1 f64)
+     (orientation 2 axis)
+     (spacing 3 f64)
+     (indent 4 f64)
+     (end_indent 5 f64)))
    (material_card
-    ((elevation 1 f64)))
+    ((elevation 1 f64)
+     (variant 2 material_card_variant)))
    (material_circular_progress_indicator
     ((value 1 optional_f64)))
    (material_linear_progress_indicator
@@ -362,6 +378,57 @@
      (show_selected_icon 7 bool)
      (has_selected_icon 8 bool)
      (segments 9 material_segments)))
+   (material_search_bar
+    ((session_id 1 u64)
+     (document_revision 2 u64)
+     (value 3 text_editing_value)
+     (enabled 4 bool)
+     (read_only 5 bool)
+     (keyboard_type 6 keyboard_type)
+     (input_action 7 input_action)
+     (accepted_local_revision 8 u64)
+     (update_mode 9 text_update_mode)
+     (autofocus 10 bool)
+     (max_utf8_bytes 11 optional_u32)
+     (has_leading 12 bool)
+     (trailing_count 13 u32)
+     (hint_text 14 optional_string)
+     (has_on_tap 15 bool)))
+   (material_tooltip
+    ((message 1 string)
+     (enabled 2 bool)
+     (exclude_from_semantics 3 bool)
+     (prefer_below 4 bool)
+     (trigger_mode 5 material_tooltip_trigger_mode)
+     (wait_duration_ms 6 u32)
+     (show_duration_ms 7 u32)
+     (exit_duration_ms 8 u32)
+     (enable_tap_to_dismiss 9 bool)
+     (enable_feedback 10 bool)
+     (has_on_triggered 11 bool)))
+   (material_data_table
+    ((columns 1 material_data_table_columns)
+     (rows 2 material_data_table_rows)
+     (sort_column_id 3 optional_i64)
+     (sort_ascending 4 bool)
+     (selected_row_ids 5 i64_list)
+     (has_on_sort 6 bool)
+     (has_on_row_selected 7 bool)
+     (has_on_select_all 8 bool)
+     (has_on_cell_activate 9 bool)))
+   (material_stepper
+    ((orientation 1 axis)
+     (current_step_id 2 i64)
+     (steps 3 material_steps)))
+   (material_expansion_panel_list
+    ((policy 1 material_expansion_panel_policy)
+     (expanded_ids 2 i64_list)
+     (panels 3 material_expansion_panels)))
+   (material_simple_dialog
+    ((has_title 1 bool)
+     (options 2 material_simple_dialog_options)))
+   (material_fullscreen_dialog
+    ())
    (cupertino_button
     ((enabled 1 bool)))
    (cupertino_switch
@@ -462,7 +529,17 @@
    (range_slider_changed 32 f64_range)
    (range_slider_change_end 33 f64_range)
    (delete 34 unit)
-   (segmented_selection_changed 35 i64_list)))
+   (segmented_selection_changed 35 i64_list)
+   (tooltip_triggered 36 unit)
+   (table_sort_requested 37 i64_bool)
+   (table_row_selected 38 i64_bool)
+   (table_select_all 39 bool)
+   (table_cell_activated 40 i64_pair)
+   (step_selected 41 i64)
+   (step_continue 42 unit)
+   (step_cancel 43 unit)
+   (expansion_changed 44 i64_list)
+   (dialog_option_selected 45 i64)))
 
  (host_requests
   ((clipboard_read 1 unit string_result)

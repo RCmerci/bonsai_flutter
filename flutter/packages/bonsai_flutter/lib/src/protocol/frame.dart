@@ -55,6 +55,13 @@ enum NodeKind {
   materialChoiceChip,
   materialInputChip,
   materialAlertDialog,
+  materialSearchBar,
+  materialTooltip,
+  materialDataTable,
+  materialStepper,
+  materialExpansionPanelList,
+  materialSimpleDialog,
+  materialFullscreenDialog,
   materialCheckbox,
   materialSwitch,
   materialListTile,
@@ -395,6 +402,20 @@ enum MaterialFloatingActionButtonLocation {
 enum MaterialFloatingActionButtonVariant { small, standard, large, extended }
 
 enum MaterialChipVariant { action, filter, choice, input }
+
+enum MaterialChipPresentation { flat, elevated }
+
+enum MaterialCardVariant { elevated, filled, outlined }
+
+enum MaterialDividerOrientation { horizontal, vertical }
+
+enum MaterialTooltipTriggerMode { longPress, tap }
+
+enum MaterialStepperOrientation { vertical, horizontal }
+
+enum MaterialStepState { indexed, editing, complete, disabled, error }
+
+enum MaterialExpansionPanelPolicy { multiple, single }
 
 enum KeyEventPolicy { handled, ignored }
 
@@ -1720,6 +1741,7 @@ final class MaterialRangeSliderProps extends UiProps {
 final class MaterialChipProps extends UiProps {
   const MaterialChipProps({
     required this.variant,
+    this.presentation = MaterialChipPresentation.flat,
     required this.enabled,
     required this.selected,
     required this.hasAvatar,
@@ -1730,6 +1752,7 @@ final class MaterialChipProps extends UiProps {
   });
 
   final MaterialChipVariant variant;
+  final MaterialChipPresentation presentation;
   final bool enabled;
   final bool selected;
   final bool hasAvatar;
@@ -1742,6 +1765,7 @@ final class MaterialChipProps extends UiProps {
   bool operator ==(Object other) =>
       other is MaterialChipProps &&
       other.variant == variant &&
+      other.presentation == presentation &&
       other.enabled == enabled &&
       other.selected == selected &&
       other.hasAvatar == hasAvatar &&
@@ -1753,6 +1777,7 @@ final class MaterialChipProps extends UiProps {
   @override
   int get hashCode => Object.hash(
     variant,
+    presentation,
     enabled,
     selected,
     hasAvatar,
@@ -1788,6 +1813,393 @@ final class MaterialAlertDialogProps extends UiProps {
   int get hashCode => Object.hash(hasIcon, hasTitle, hasContent, actionCount);
 }
 
+final class MaterialSearchBarProps extends UiProps {
+  const MaterialSearchBarProps({
+    required this.sessionId,
+    required this.documentRevision,
+    required this.value,
+    required this.enabled,
+    required this.readOnly,
+    required this.keyboardType,
+    required this.inputAction,
+    required this.acceptedLocalRevision,
+    required this.updateMode,
+    required this.autofocus,
+    required this.maxUtf8Bytes,
+    required this.hasLeading,
+    required this.trailingCount,
+    required this.hintText,
+    required this.hasOnTap,
+  });
+  final int sessionId;
+  final int documentRevision;
+  final TextEditingStateValue value;
+  final bool enabled;
+  final bool readOnly;
+  final TextKeyboardType keyboardType;
+  final TextInputActionKind inputAction;
+  final int acceptedLocalRevision;
+  final TextUpdateMode updateMode;
+  final bool autofocus;
+  final int? maxUtf8Bytes;
+  final bool hasLeading;
+  final int trailingCount;
+  final String? hintText;
+  final bool hasOnTap;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialSearchBarProps &&
+      other.sessionId == sessionId &&
+      other.documentRevision == documentRevision &&
+      other.value == value &&
+      other.enabled == enabled &&
+      other.readOnly == readOnly &&
+      other.keyboardType == keyboardType &&
+      other.inputAction == inputAction &&
+      other.acceptedLocalRevision == acceptedLocalRevision &&
+      other.updateMode == updateMode &&
+      other.autofocus == autofocus &&
+      other.maxUtf8Bytes == maxUtf8Bytes &&
+      other.hasLeading == hasLeading &&
+      other.trailingCount == trailingCount &&
+      other.hintText == hintText &&
+      other.hasOnTap == hasOnTap;
+
+  @override
+  int get hashCode => Object.hash(
+    sessionId,
+    documentRevision,
+    value,
+    enabled,
+    readOnly,
+    keyboardType,
+    inputAction,
+    acceptedLocalRevision,
+    updateMode,
+    autofocus,
+    maxUtf8Bytes,
+    hasLeading,
+    trailingCount,
+    hintText,
+    hasOnTap,
+  );
+}
+
+final class MaterialTooltipProps extends UiProps {
+  const MaterialTooltipProps({
+    required this.message,
+    required this.enabled,
+    required this.excludeFromSemantics,
+    required this.preferBelow,
+    required this.triggerMode,
+    required this.waitDurationMs,
+    required this.showDurationMs,
+    required this.exitDurationMs,
+    required this.enableTapToDismiss,
+    required this.enableFeedback,
+    required this.hasOnTriggered,
+  });
+  final String message;
+  final bool enabled;
+  final bool excludeFromSemantics;
+  final bool preferBelow;
+  final MaterialTooltipTriggerMode triggerMode;
+  final int waitDurationMs;
+  final int showDurationMs;
+  final int exitDurationMs;
+  final bool enableTapToDismiss;
+  final bool enableFeedback;
+  final bool hasOnTriggered;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialTooltipProps &&
+      other.message == message &&
+      other.enabled == enabled &&
+      other.excludeFromSemantics == excludeFromSemantics &&
+      other.preferBelow == preferBelow &&
+      other.triggerMode == triggerMode &&
+      other.waitDurationMs == waitDurationMs &&
+      other.showDurationMs == showDurationMs &&
+      other.exitDurationMs == exitDurationMs &&
+      other.enableTapToDismiss == enableTapToDismiss &&
+      other.enableFeedback == enableFeedback &&
+      other.hasOnTriggered == hasOnTriggered;
+
+  @override
+  int get hashCode => Object.hash(
+    message,
+    enabled,
+    excludeFromSemantics,
+    preferBelow,
+    triggerMode,
+    waitDurationMs,
+    showDurationMs,
+    exitDurationMs,
+    enableTapToDismiss,
+    enableFeedback,
+    hasOnTriggered,
+  );
+}
+
+final class MaterialDataTableColumnProps {
+  const MaterialDataTableColumnProps({
+    required this.id,
+    required this.tooltip,
+    required this.numeric,
+    required this.sortable,
+  });
+  final int id;
+  final String? tooltip;
+  final bool numeric;
+  final bool sortable;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialDataTableColumnProps &&
+      other.id == id &&
+      other.tooltip == tooltip &&
+      other.numeric == numeric &&
+      other.sortable == sortable;
+
+  @override
+  int get hashCode => Object.hash(id, tooltip, numeric, sortable);
+}
+
+final class MaterialDataTableCellProps {
+  const MaterialDataTableCellProps({
+    required this.placeholder,
+    required this.showEditIcon,
+    required this.activatable,
+  });
+  final bool placeholder;
+  final bool showEditIcon;
+  final bool activatable;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialDataTableCellProps &&
+      other.placeholder == placeholder &&
+      other.showEditIcon == showEditIcon &&
+      other.activatable == activatable;
+
+  @override
+  int get hashCode => Object.hash(placeholder, showEditIcon, activatable);
+}
+
+final class MaterialDataTableRowProps {
+  const MaterialDataTableRowProps({
+    required this.id,
+    required this.selected,
+    required this.selectionEnabled,
+    required this.cells,
+  });
+  final int id;
+  final bool selected;
+  final bool selectionEnabled;
+  final List<MaterialDataTableCellProps> cells;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialDataTableRowProps &&
+      other.id == id &&
+      other.selected == selected &&
+      other.selectionEnabled == selectionEnabled &&
+      _listEquals(other.cells, cells);
+
+  @override
+  int get hashCode =>
+      Object.hash(id, selected, selectionEnabled, Object.hashAll(cells));
+}
+
+final class MaterialDataTableProps extends UiProps {
+  const MaterialDataTableProps({
+    required this.columns,
+    required this.rows,
+    required this.sortColumnId,
+    required this.sortAscending,
+    required this.selectedRowIds,
+    this.hasOnSort = true,
+    this.hasOnRowSelected = true,
+    this.hasOnSelectAll = false,
+    this.hasOnCellActivate = true,
+  });
+  final List<MaterialDataTableColumnProps> columns;
+  final List<MaterialDataTableRowProps> rows;
+  final int? sortColumnId;
+  final bool sortAscending;
+  final List<int> selectedRowIds;
+  final bool hasOnSort;
+  final bool hasOnRowSelected;
+  final bool hasOnSelectAll;
+  final bool hasOnCellActivate;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialDataTableProps &&
+      _listEquals(other.columns, columns) &&
+      _listEquals(other.rows, rows) &&
+      other.sortColumnId == sortColumnId &&
+      other.sortAscending == sortAscending &&
+      _listEquals(other.selectedRowIds, selectedRowIds) &&
+      other.hasOnSort == hasOnSort &&
+      other.hasOnRowSelected == hasOnRowSelected &&
+      other.hasOnSelectAll == hasOnSelectAll &&
+      other.hasOnCellActivate == hasOnCellActivate;
+
+  @override
+  int get hashCode => Object.hash(
+    Object.hashAll(columns),
+    Object.hashAll(rows),
+    sortColumnId,
+    sortAscending,
+    Object.hashAll(selectedRowIds),
+    hasOnSort,
+    hasOnRowSelected,
+    hasOnSelectAll,
+    hasOnCellActivate,
+  );
+}
+
+final class MaterialStepProps {
+  const MaterialStepProps({
+    required this.id,
+    required this.active,
+    required this.state,
+    required this.hasSubtitle,
+    required this.hasLabel,
+  });
+  final int id;
+  final bool active;
+  final MaterialStepState state;
+  final bool hasSubtitle;
+  final bool hasLabel;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialStepProps &&
+      other.id == id &&
+      other.active == active &&
+      other.state == state &&
+      other.hasSubtitle == hasSubtitle &&
+      other.hasLabel == hasLabel;
+
+  @override
+  int get hashCode => Object.hash(id, active, state, hasSubtitle, hasLabel);
+}
+
+final class MaterialStepperProps extends UiProps {
+  const MaterialStepperProps({
+    required this.orientation,
+    required this.currentStepId,
+    required this.steps,
+  });
+  final MaterialStepperOrientation orientation;
+  final int currentStepId;
+  final List<MaterialStepProps> steps;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialStepperProps &&
+      other.orientation == orientation &&
+      other.currentStepId == currentStepId &&
+      _listEquals(other.steps, steps);
+
+  @override
+  int get hashCode =>
+      Object.hash(orientation, currentStepId, Object.hashAll(steps));
+}
+
+final class MaterialExpansionPanelProps {
+  const MaterialExpansionPanelProps({
+    required this.id,
+    required this.enabled,
+    required this.canTapOnHeader,
+  });
+  final int id;
+  final bool enabled;
+  final bool canTapOnHeader;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialExpansionPanelProps &&
+      other.id == id &&
+      other.enabled == enabled &&
+      other.canTapOnHeader == canTapOnHeader;
+
+  @override
+  int get hashCode => Object.hash(id, enabled, canTapOnHeader);
+}
+
+final class MaterialExpansionPanelListProps extends UiProps {
+  const MaterialExpansionPanelListProps({
+    required this.policy,
+    required this.expandedIds,
+    required this.panels,
+  });
+  final MaterialExpansionPanelPolicy policy;
+  final List<int> expandedIds;
+  final List<MaterialExpansionPanelProps> panels;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialExpansionPanelListProps &&
+      other.policy == policy &&
+      _listEquals(other.expandedIds, expandedIds) &&
+      _listEquals(other.panels, panels);
+
+  @override
+  int get hashCode =>
+      Object.hash(policy, Object.hashAll(expandedIds), Object.hashAll(panels));
+}
+
+final class MaterialSimpleDialogOptionProps {
+  const MaterialSimpleDialogOptionProps({
+    required this.id,
+    required this.enabled,
+  });
+  final int id;
+  final bool enabled;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialSimpleDialogOptionProps &&
+      other.id == id &&
+      other.enabled == enabled;
+
+  @override
+  int get hashCode => Object.hash(id, enabled);
+}
+
+final class MaterialSimpleDialogProps extends UiProps {
+  const MaterialSimpleDialogProps({
+    required this.hasTitle,
+    required this.options,
+  });
+  final bool hasTitle;
+  final List<MaterialSimpleDialogOptionProps> options;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialSimpleDialogProps &&
+      other.hasTitle == hasTitle &&
+      _listEquals(other.options, options);
+
+  @override
+  int get hashCode => Object.hash(hasTitle, Object.hashAll(options));
+}
+
+final class MaterialFullscreenDialogProps extends UiProps {
+  const MaterialFullscreenDialogProps();
+
+  @override
+  bool operator ==(Object other) => other is MaterialFullscreenDialogProps;
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+}
+
 final class MaterialSwitchProps extends UiProps {
   const MaterialSwitchProps({required this.value, required this.enabled});
 
@@ -1812,15 +2224,49 @@ final class MaterialListTileProps extends UiProps {
 }
 
 final class MaterialDividerProps extends UiProps {
-  const MaterialDividerProps({required this.thickness});
-
+  const MaterialDividerProps({
+    this.orientation = MaterialDividerOrientation.horizontal,
+    required this.thickness,
+    this.spacing = 16,
+    this.indent = 0,
+    this.endIndent = 0,
+  });
+  final MaterialDividerOrientation orientation;
   final double thickness;
+  final double spacing;
+  final double indent;
+  final double endIndent;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialDividerProps &&
+      other.orientation == orientation &&
+      other.thickness == thickness &&
+      other.spacing == spacing &&
+      other.indent == indent &&
+      other.endIndent == endIndent;
+
+  @override
+  int get hashCode =>
+      Object.hash(orientation, thickness, spacing, indent, endIndent);
 }
 
 final class MaterialCardProps extends UiProps {
-  const MaterialCardProps({required this.elevation});
-
+  const MaterialCardProps({
+    this.variant = MaterialCardVariant.elevated,
+    required this.elevation,
+  });
+  final MaterialCardVariant variant;
   final double elevation;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MaterialCardProps &&
+      other.variant == variant &&
+      other.elevation == elevation;
+
+  @override
+  int get hashCode => Object.hash(variant, elevation);
 }
 
 final class MaterialCircularProgressProps extends UiProps {

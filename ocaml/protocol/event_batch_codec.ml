@@ -301,6 +301,9 @@ let read_payload reader event_tag =
     || event_tag = Generated_protocol.Event_tag.resync_requested
     || event_tag = Generated_protocol.Event_tag.text_limit_reached
     || event_tag = Generated_protocol.Event_tag.delete
+    || event_tag = Generated_protocol.Event_tag.tooltip_triggered
+    || event_tag = Generated_protocol.Event_tag.step_continue
+    || event_tag = Generated_protocol.Event_tag.step_cancel
   then Inbound_event.Unit
   else if
     event_tag = Generated_protocol.Event_tag.tap
@@ -323,6 +326,7 @@ let read_payload reader event_tag =
   else if
     event_tag = Generated_protocol.Event_tag.focus_changed
     || event_tag = Generated_protocol.Event_tag.value_changed
+    || event_tag = Generated_protocol.Event_tag.table_select_all
   then Bool (read_bool reader)
   else if event_tag = Generated_protocol.Event_tag.text_edit
   then (
@@ -363,8 +367,12 @@ let read_payload reader event_tag =
   else if
     event_tag = Generated_protocol.Event_tag.navigation_destination_selected
     || event_tag = Generated_protocol.Event_tag.radio_selected
+    || event_tag = Generated_protocol.Event_tag.step_selected
+    || event_tag = Generated_protocol.Event_tag.dialog_option_selected
   then Int64 (Reader.i64 reader)
-  else if event_tag = Generated_protocol.Event_tag.segmented_selection_changed
+  else if
+    event_tag = Generated_protocol.Event_tag.segmented_selection_changed
+    || event_tag = Generated_protocol.Event_tag.expansion_changed
   then (
     let count = Reader.u16 reader in
     let rec read index previous reversed =
@@ -380,6 +388,18 @@ let read_payload reader event_tag =
         read (index + 1) (Some value) (value :: reversed))
     in
     read 0 None [])
+  else if
+    event_tag = Generated_protocol.Event_tag.table_sort_requested
+    || event_tag = Generated_protocol.Event_tag.table_row_selected
+  then (
+    let id = Reader.i64 reader in
+    let value = read_bool reader in
+    Int64_bool { id; value })
+  else if event_tag = Generated_protocol.Event_tag.table_cell_activated
+  then (
+    let first = Reader.i64 reader in
+    let second = Reader.i64 reader in
+    Int64_pair { first; second })
   else if
     event_tag = Generated_protocol.Event_tag.slider_changed
     || event_tag = Generated_protocol.Event_tag.slider_change_end
@@ -619,11 +639,15 @@ let write_payload writer event_tag payload =
       && event_tag <> Generated_protocol.Event_tag.resync_requested
       && event_tag <> Generated_protocol.Event_tag.text_limit_reached
       && event_tag <> Generated_protocol.Event_tag.delete
+      && event_tag <> Generated_protocol.Event_tag.tooltip_triggered
+      && event_tag <> Generated_protocol.Event_tag.step_continue
+      && event_tag <> Generated_protocol.Event_tag.step_cancel
     then fail Invalid_payload "unit payload does not match event tag"
   | Bool value ->
     if
       event_tag <> Generated_protocol.Event_tag.focus_changed
       && event_tag <> Generated_protocol.Event_tag.value_changed
+      && event_tag <> Generated_protocol.Event_tag.table_select_all
     then fail Invalid_payload "bool payload does not match event tag";
     write_bool writer value
   | Text value ->
@@ -657,6 +681,8 @@ let write_payload writer event_tag payload =
       && event_tag <> Generated_protocol.Event_tag.semantics_action
       && event_tag <> Generated_protocol.Event_tag.navigation_destination_selected
       && event_tag <> Generated_protocol.Event_tag.radio_selected
+      && event_tag <> Generated_protocol.Event_tag.step_selected
+      && event_tag <> Generated_protocol.Event_tag.dialog_option_selected
     then fail Invalid_payload "int64 payload does not match event tag";
     if
       event_tag = Generated_protocol.Event_tag.animation_completed
@@ -664,7 +690,9 @@ let write_payload writer event_tag payload =
     then check_u64 "event int64" value;
     Writer.u64 writer value
   | Int64_list values ->
-    if event_tag <> Generated_protocol.Event_tag.segmented_selection_changed
+    if
+      event_tag <> Generated_protocol.Event_tag.segmented_selection_changed
+      && event_tag <> Generated_protocol.Event_tag.expansion_changed
     then fail Invalid_payload "int64 list payload does not match event tag";
     if List.length values > 0xffff
     then fail Invalid_payload "segmented selected ID count must fit uint16";
@@ -678,6 +706,18 @@ let write_payload writer event_tag payload =
     validate values;
     Writer.u16 writer (List.length values);
     List.iter (Writer.u64 writer) values
+  | Int64_bool { id; value } ->
+    if
+      event_tag <> Generated_protocol.Event_tag.table_sort_requested
+      && event_tag <> Generated_protocol.Event_tag.table_row_selected
+    then fail Invalid_payload "int64-bool payload does not match event tag";
+    Writer.u64 writer id;
+    Writer.u8 writer (if value then 1 else 0)
+  | Int64_pair { first; second } ->
+    if event_tag <> Generated_protocol.Event_tag.table_cell_activated
+    then fail Invalid_payload "int64-pair payload does not match event tag";
+    Writer.u64 writer first;
+    Writer.u64 writer second
   | Float value ->
     if
       event_tag <> Generated_protocol.Event_tag.slider_changed

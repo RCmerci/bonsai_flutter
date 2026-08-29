@@ -2,7 +2,7 @@
 
 abstract final class ProtocolVersion {
   static const int protocolMajor = 1;
-  static const int protocolMinor = 23;
+  static const int protocolMinor = 24;
 }
 
 abstract final class ProtocolLimits {
@@ -137,6 +137,13 @@ abstract final class NodeKindId {
   static const int materialLinearProgressIndicator = 124;
   static const int materialSegmentedButton = 125;
   static const int nativeWidget = 128;
+  static const int materialSearchBar = 129;
+  static const int materialTooltip = 130;
+  static const int materialDataTable = 131;
+  static const int materialStepper = 132;
+  static const int materialExpansionPanelList = 133;
+  static const int materialSimpleDialog = 134;
+  static const int materialFullscreenDialog = 135;
 
   static String? debugName(int id) => switch (id) {
     1 => 'empty',
@@ -213,6 +220,13 @@ abstract final class NodeKindId {
     124 => 'material_linear_progress_indicator',
     125 => 'material_segmented_button',
     128 => 'native_widget',
+    129 => 'material_search_bar',
+    130 => 'material_tooltip',
+    131 => 'material_data_table',
+    132 => 'material_stepper',
+    133 => 'material_expansion_panel_list',
+    134 => 'material_simple_dialog',
+    135 => 'material_fullscreen_dialog',
     _ => null,
   };
 }
@@ -253,6 +267,16 @@ abstract final class EventTagId {
   static const int rangeSliderChangeEnd = 33;
   static const int delete = 34;
   static const int segmentedSelectionChanged = 35;
+  static const int tooltipTriggered = 36;
+  static const int tableSortRequested = 37;
+  static const int tableRowSelected = 38;
+  static const int tableSelectAll = 39;
+  static const int tableCellActivated = 40;
+  static const int stepSelected = 41;
+  static const int stepContinue = 42;
+  static const int stepCancel = 43;
+  static const int expansionChanged = 44;
+  static const int dialogOptionSelected = 45;
 
   static String? debugName(int id) => switch (id) {
     1 => 'press',
@@ -290,6 +314,16 @@ abstract final class EventTagId {
     33 => 'range_slider_change_end',
     34 => 'delete',
     35 => 'segmented_selection_changed',
+    36 => 'tooltip_triggered',
+    37 => 'table_sort_requested',
+    38 => 'table_row_selected',
+    39 => 'table_select_all',
+    40 => 'table_cell_activated',
+    41 => 'step_selected',
+    42 => 'step_continue',
+    43 => 'step_cancel',
+    44 => 'expansion_changed',
+    45 => 'dialog_option_selected',
     _ => null,
   };
 }
@@ -954,6 +988,7 @@ abstract final class MaterialActionChipPropId {
   static const int hasOnPress = 5;
   static const int hasOnSelected = 6;
   static const int hasOnDelete = 7;
+  static const int presentation = 8;
 
   static String? debugName(int id) => switch (id) {
     1 => 'enabled',
@@ -963,6 +998,7 @@ abstract final class MaterialActionChipPropId {
     5 => 'has_on_press',
     6 => 'has_on_selected',
     7 => 'has_on_delete',
+    8 => 'presentation',
     _ => null,
   };
 }
@@ -975,6 +1011,7 @@ abstract final class MaterialFilterChipPropId {
   static const int hasOnPress = 5;
   static const int hasOnSelected = 6;
   static const int hasOnDelete = 7;
+  static const int presentation = 8;
 
   static String? debugName(int id) => switch (id) {
     1 => 'enabled',
@@ -984,6 +1021,7 @@ abstract final class MaterialFilterChipPropId {
     5 => 'has_on_press',
     6 => 'has_on_selected',
     7 => 'has_on_delete',
+    8 => 'presentation',
     _ => null,
   };
 }
@@ -996,6 +1034,7 @@ abstract final class MaterialChoiceChipPropId {
   static const int hasOnPress = 5;
   static const int hasOnSelected = 6;
   static const int hasOnDelete = 7;
+  static const int presentation = 8;
 
   static String? debugName(int id) => switch (id) {
     1 => 'enabled',
@@ -1005,6 +1044,7 @@ abstract final class MaterialChoiceChipPropId {
     5 => 'has_on_press',
     6 => 'has_on_selected',
     7 => 'has_on_delete',
+    8 => 'presentation',
     _ => null,
   };
 }
@@ -1017,6 +1057,7 @@ abstract final class MaterialInputChipPropId {
   static const int hasOnPress = 5;
   static const int hasOnSelected = 6;
   static const int hasOnDelete = 7;
+  static const int presentation = 8;
 
   static String? debugName(int id) => switch (id) {
     1 => 'enabled',
@@ -1026,6 +1067,7 @@ abstract final class MaterialInputChipPropId {
     5 => 'has_on_press',
     6 => 'has_on_selected',
     7 => 'has_on_delete',
+    8 => 'presentation',
     _ => null,
   };
 }
@@ -1086,18 +1128,28 @@ abstract final class MaterialListTilePropId {
 
 abstract final class MaterialDividerPropId {
   static const int thickness = 1;
+  static const int orientation = 2;
+  static const int spacing = 3;
+  static const int indent = 4;
+  static const int endIndent = 5;
 
   static String? debugName(int id) => switch (id) {
     1 => 'thickness',
+    2 => 'orientation',
+    3 => 'spacing',
+    4 => 'indent',
+    5 => 'end_indent',
     _ => null,
   };
 }
 
 abstract final class MaterialCardPropId {
   static const int elevation = 1;
+  static const int variant = 2;
 
   static String? debugName(int id) => switch (id) {
     1 => 'elevation',
+    2 => 'variant',
     _ => null,
   };
 }
@@ -1141,6 +1193,140 @@ abstract final class MaterialSegmentedButtonPropId {
     7 => 'show_selected_icon',
     8 => 'has_selected_icon',
     9 => 'segments',
+    _ => null,
+  };
+}
+
+abstract final class MaterialSearchBarPropId {
+  static const int sessionId = 1;
+  static const int documentRevision = 2;
+  static const int value = 3;
+  static const int enabled = 4;
+  static const int readOnly = 5;
+  static const int keyboardType = 6;
+  static const int inputAction = 7;
+  static const int acceptedLocalRevision = 8;
+  static const int updateMode = 9;
+  static const int autofocus = 10;
+  static const int maxUtf8Bytes = 11;
+  static const int hasLeading = 12;
+  static const int trailingCount = 13;
+  static const int hintText = 14;
+  static const int hasOnTap = 15;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'session_id',
+    2 => 'document_revision',
+    3 => 'value',
+    4 => 'enabled',
+    5 => 'read_only',
+    6 => 'keyboard_type',
+    7 => 'input_action',
+    8 => 'accepted_local_revision',
+    9 => 'update_mode',
+    10 => 'autofocus',
+    11 => 'max_utf8_bytes',
+    12 => 'has_leading',
+    13 => 'trailing_count',
+    14 => 'hint_text',
+    15 => 'has_on_tap',
+    _ => null,
+  };
+}
+
+abstract final class MaterialTooltipPropId {
+  static const int message = 1;
+  static const int enabled = 2;
+  static const int excludeFromSemantics = 3;
+  static const int preferBelow = 4;
+  static const int triggerMode = 5;
+  static const int waitDurationMs = 6;
+  static const int showDurationMs = 7;
+  static const int exitDurationMs = 8;
+  static const int enableTapToDismiss = 9;
+  static const int enableFeedback = 10;
+  static const int hasOnTriggered = 11;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'message',
+    2 => 'enabled',
+    3 => 'exclude_from_semantics',
+    4 => 'prefer_below',
+    5 => 'trigger_mode',
+    6 => 'wait_duration_ms',
+    7 => 'show_duration_ms',
+    8 => 'exit_duration_ms',
+    9 => 'enable_tap_to_dismiss',
+    10 => 'enable_feedback',
+    11 => 'has_on_triggered',
+    _ => null,
+  };
+}
+
+abstract final class MaterialDataTablePropId {
+  static const int columns = 1;
+  static const int rows = 2;
+  static const int sortColumnId = 3;
+  static const int sortAscending = 4;
+  static const int selectedRowIds = 5;
+  static const int hasOnSort = 6;
+  static const int hasOnRowSelected = 7;
+  static const int hasOnSelectAll = 8;
+  static const int hasOnCellActivate = 9;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'columns',
+    2 => 'rows',
+    3 => 'sort_column_id',
+    4 => 'sort_ascending',
+    5 => 'selected_row_ids',
+    6 => 'has_on_sort',
+    7 => 'has_on_row_selected',
+    8 => 'has_on_select_all',
+    9 => 'has_on_cell_activate',
+    _ => null,
+  };
+}
+
+abstract final class MaterialStepperPropId {
+  static const int orientation = 1;
+  static const int currentStepId = 2;
+  static const int steps = 3;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'orientation',
+    2 => 'current_step_id',
+    3 => 'steps',
+    _ => null,
+  };
+}
+
+abstract final class MaterialExpansionPanelListPropId {
+  static const int policy = 1;
+  static const int expandedIds = 2;
+  static const int panels = 3;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'policy',
+    2 => 'expanded_ids',
+    3 => 'panels',
+    _ => null,
+  };
+}
+
+abstract final class MaterialSimpleDialogPropId {
+  static const int hasTitle = 1;
+  static const int options = 2;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'has_title',
+    2 => 'options',
+    _ => null,
+  };
+}
+
+abstract final class MaterialFullscreenDialogPropId {
+  static String? debugName(int id) => switch (id) {
     _ => null,
   };
 }

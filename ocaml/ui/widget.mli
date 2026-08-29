@@ -511,6 +511,13 @@ module Private : sig
     | K_material_choice_chip
     | K_material_input_chip
     | K_material_alert_dialog
+    | K_material_search_bar
+    | K_material_tooltip
+    | K_material_data_table
+    | K_material_stepper
+    | K_material_expansion_panel_list
+    | K_material_simple_dialog
+    | K_material_fullscreen_dialog
     | K_material_checkbox
     | K_material_switch
     | K_material_list_tile
@@ -600,6 +607,69 @@ module Private : sig
     | Filter
     | Choice
     | Input
+
+  type material_chip_presentation =
+    | Flat_chip
+    | Elevated_chip
+
+  type material_card_variant =
+    | Elevated_card
+    | Filled_card
+    | Outlined_card
+
+  type material_tooltip_trigger_mode =
+    | Tooltip_long_press
+    | Tooltip_tap
+
+  type material_data_table_column =
+    { column_id : int64
+    ; tooltip : string option
+    ; numeric : bool
+    ; sortable : bool
+    }
+
+  type material_data_table_cell =
+    { placeholder : bool
+    ; show_edit_icon : bool
+    ; activatable : bool
+    }
+
+  type material_data_table_row =
+    { row_id : int64
+    ; selected : bool
+    ; selection_enabled : bool
+    ; cells : material_data_table_cell list
+    }
+
+  type material_step_state =
+    | Step_indexed
+    | Step_editing
+    | Step_complete
+    | Step_disabled
+    | Step_error
+
+  type material_step =
+    { step_id : int64
+    ; active : bool
+    ; state : material_step_state
+    ; has_subtitle : bool
+    ; has_label : bool
+    }
+
+  type material_expansion_panel_policy =
+    | Multiple_panels
+    | Single_panel
+
+  type material_expansion_panel =
+    { panel_id : int64
+    ; enabled : bool
+    ; can_tap_on_header : bool
+    }
+
+  type material_simple_dialog_option =
+    { option_id : int64
+    ; enabled : bool
+    }
 
   type 'k node =
     | Empty : [ `Empty ] node
@@ -852,6 +922,7 @@ module Private : sig
         -> [ `Material_range_slider ] node
     | Material_action_chip :
         { variant : material_chip_variant
+        ; presentation : material_chip_presentation
         ; enabled : bool
         ; selected : bool
         ; has_avatar : bool
@@ -863,6 +934,7 @@ module Private : sig
         -> [ `Material_action_chip ] node
     | Material_filter_chip :
         { variant : material_chip_variant
+        ; presentation : material_chip_presentation
         ; enabled : bool
         ; selected : bool
         ; has_avatar : bool
@@ -874,6 +946,7 @@ module Private : sig
         -> [ `Material_filter_chip ] node
     | Material_choice_chip :
         { variant : material_chip_variant
+        ; presentation : material_chip_presentation
         ; enabled : bool
         ; selected : bool
         ; has_avatar : bool
@@ -885,6 +958,7 @@ module Private : sig
         -> [ `Material_choice_chip ] node
     | Material_input_chip :
         { variant : material_chip_variant
+        ; presentation : material_chip_presentation
         ; enabled : bool
         ; selected : bool
         ; has_avatar : bool
@@ -901,6 +975,68 @@ module Private : sig
         ; action_count : int
         }
         -> [ `Material_alert_dialog ] node
+    | Material_search_bar :
+        { session_id : Bonsai_flutter_spec.Id.Text_input.session_id
+        ; document_revision : Bonsai_flutter_spec.Id.Text_input.document_revision
+        ; value : Text_editing.Value.t
+        ; enabled : bool
+        ; read_only : bool
+        ; keyboard_type : Text_editing.keyboard_type
+        ; input_action : Text_editing.input_action
+        ; accepted_local_revision : Bonsai_flutter_spec.Id.Text_input.local_revision
+        ; update_mode : Text_editing.update_mode
+        ; autofocus : bool
+        ; max_utf8_bytes : int option
+        ; has_leading : bool
+        ; trailing_count : int
+        ; hint_text : string option
+        ; has_on_tap : bool
+        }
+        -> [ `Material_search_bar ] node
+    | Material_tooltip :
+        { message : string
+        ; enabled : bool
+        ; exclude_from_semantics : bool
+        ; prefer_below : bool
+        ; trigger_mode : material_tooltip_trigger_mode
+        ; wait_duration_ms : int
+        ; show_duration_ms : int
+        ; exit_duration_ms : int
+        ; enable_tap_to_dismiss : bool
+        ; enable_feedback : bool
+        ; has_on_triggered : bool
+        }
+        -> [ `Material_tooltip ] node
+    | Material_data_table :
+        { columns : material_data_table_column list
+        ; rows : material_data_table_row list
+        ; sort_column_id : int64 option
+        ; sort_ascending : bool
+        ; selected_row_ids : int64 list
+        ; has_on_sort : bool
+        ; has_on_row_selected : bool
+        ; has_on_select_all : bool
+        ; has_on_cell_activate : bool
+        }
+        -> [ `Material_data_table ] node
+    | Material_stepper :
+        { orientation : Layout.Axis.t
+        ; current_step_id : int64
+        ; steps : material_step list
+        }
+        -> [ `Material_stepper ] node
+    | Material_expansion_panel_list :
+        { policy : material_expansion_panel_policy
+        ; expanded_ids : int64 list
+        ; panels : material_expansion_panel list
+        }
+        -> [ `Material_expansion_panel_list ] node
+    | Material_simple_dialog :
+        { has_title : bool
+        ; options : material_simple_dialog_option list
+        }
+        -> [ `Material_simple_dialog ] node
+    | Material_fullscreen_dialog : [ `Material_fullscreen_dialog ] node
     | Material_checkbox :
         { value : bool
         ; enabled : bool
@@ -919,8 +1055,19 @@ module Private : sig
         ; has_trailing : bool
         }
         -> [ `Material_list_tile ] node
-    | Material_divider : { thickness : float } -> [ `Material_divider ] node
-    | Material_card : { elevation : float } -> [ `Material_card ] node
+    | Material_divider :
+        { orientation : Layout.Axis.t
+        ; thickness : float
+        ; spacing : float
+        ; indent : float
+        ; end_indent : float
+        }
+        -> [ `Material_divider ] node
+    | Material_card :
+        { variant : material_card_variant
+        ; elevation : float
+        }
+        -> [ `Material_card ] node
     | Material_circular_progress_indicator :
         { value : float option }
         -> [ `Material_circular_progress_indicator ] node
@@ -1120,6 +1267,7 @@ module Private : sig
   val material_chip
     :  ?key:Key.t
     -> variant:material_chip_variant
+    -> presentation:material_chip_presentation
     -> enabled:bool
     -> selected:bool
     -> ?avatar:t
@@ -1139,6 +1287,94 @@ module Private : sig
     -> actions:t list
     -> unit
     -> t
+
+  val material_search_bar
+    :  ?key:Key.t
+    -> session_id:Bonsai_flutter_spec.Id.Text_input.session_id
+    -> document_revision:Bonsai_flutter_spec.Id.Text_input.document_revision
+    -> accepted_local_revision:Bonsai_flutter_spec.Id.Text_input.local_revision
+    -> update_mode:Text_editing.update_mode
+    -> value:Text_editing.Value.t
+    -> enabled:bool
+    -> read_only:bool
+    -> keyboard_type:Text_editing.keyboard_type
+    -> input_action:Text_editing.input_action
+    -> autofocus:bool
+    -> max_utf8_bytes:int option
+    -> on_edit:Event.Handler.t
+    -> on_submit:Event.Handler.t
+    -> on_focus_changed:Event.Handler.t
+    -> on_limit_reached:Event.Handler.t option
+    -> leading:t option
+    -> trailing:t list
+    -> hint_text:string option
+    -> on_tap:Event.Handler.t option
+    -> unit
+    -> t
+
+  val material_tooltip
+    :  ?key:Key.t
+    -> message:string
+    -> enabled:bool
+    -> exclude_from_semantics:bool
+    -> prefer_below:bool
+    -> trigger_mode:material_tooltip_trigger_mode
+    -> wait_duration_ms:int
+    -> show_duration_ms:int
+    -> exit_duration_ms:int
+    -> enable_tap_to_dismiss:bool
+    -> enable_feedback:bool
+    -> on_triggered:Event.Handler.t option
+    -> t
+    -> t
+
+  val material_data_table
+    :  ?key:Key.t
+    -> columns:material_data_table_column list
+    -> rows:material_data_table_row list
+    -> sort_column_id:int64 option
+    -> sort_ascending:bool
+    -> selected_row_ids:int64 list
+    -> on_sort:Event.Handler.t option
+    -> on_row_selected:Event.Handler.t option
+    -> on_select_all:Event.Handler.t option
+    -> on_cell_activate:Event.Handler.t option
+    -> children:t list
+    -> unit
+    -> t
+
+  val material_stepper
+    :  ?key:Key.t
+    -> orientation:Layout.Axis.t
+    -> current_step_id:int64
+    -> steps:material_step list
+    -> on_step_selected:Event.Handler.t option
+    -> on_continue:Event.Handler.t option
+    -> on_cancel:Event.Handler.t option
+    -> children:t list
+    -> unit
+    -> t
+
+  val material_expansion_panel_list
+    :  ?key:Key.t
+    -> policy:material_expansion_panel_policy
+    -> expanded_ids:int64 list
+    -> panels:material_expansion_panel list
+    -> on_expansion_changed:Event.Handler.t
+    -> children:t list
+    -> unit
+    -> t
+
+  val material_simple_dialog
+    :  ?key:Key.t
+    -> ?title:t
+    -> options:material_simple_dialog_option list
+    -> on_select:Event.Handler.t
+    -> children:t list
+    -> unit
+    -> t
+
+  val material_fullscreen_dialog : ?key:Key.t -> t -> t
 
   val material_switch
     :  ?key:Key.t
@@ -1160,8 +1396,23 @@ module Private : sig
     -> unit
     -> t
 
-  val material_divider : ?key:Key.t -> ?thickness:float -> unit -> t
-  val material_card : ?key:Key.t -> ?elevation:float -> t -> t
+  val material_divider
+    :  ?key:Key.t
+    -> ?orientation:Layout.Axis.t
+    -> ?thickness:float
+    -> ?spacing:float
+    -> ?indent:float
+    -> ?end_indent:float
+    -> unit
+    -> t
+
+  val material_card
+    :  ?key:Key.t
+    -> ?variant:material_card_variant
+    -> ?elevation:float
+    -> t
+    -> t
+
   val material_circular_progress : ?key:Key.t -> ?value:float -> unit -> t
   val material_linear_progress : ?key:Key.t -> ?value:float -> unit -> t
 
