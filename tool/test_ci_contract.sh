@@ -274,6 +274,7 @@ expected_patch_files='./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_i
 ./vendor/opam-ios/ocaml-ios64.5.1.1/files/ocamlmklib-failsafe.patch
 ./vendor/patches/basement-macos.patch
 ./vendor/patches/ios/base-host-generator.patch
+./vendor/patches/ios/datascript-system-sqlite.patch
 ./vendor/patches/ios/eio-posix-darwin-protocol-zero.patch
 ./vendor/patches/ios/eio-posix-darwin-socktype-hints.patch
 ./vendor/patches/ios/jst-config-host-discover.patch
@@ -290,6 +291,9 @@ require_sha256 \
 require_sha256 \
   vendor/patches/ios/base-host-generator.patch \
   e919f3c5ec1e6a546a6e499ed262d309055fd0c856d7c216d3609b7d64ca47b5
+require_sha256 \
+  vendor/patches/ios/datascript-system-sqlite.patch \
+  25671b3a84772c8a6b6c9fae3c8c2e0efa1b7d88c9ca2edb274b2ce40de481a4
 require_sha256 \
   vendor/patches/ios/eio-posix-darwin-protocol-zero.patch \
   b6a158f56db6bc1c1e19ad2412625f2d7941a5004274e3a45fe58f6c89e5b963

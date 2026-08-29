@@ -91,6 +91,74 @@ for closure in "$runtime_closure" "$supported_closure"; do
     "DataScript iOS closure"
 done
 
+datascript_sqlite_patch=vendor/patches/ios/datascript-system-sqlite.patch
+runtime_builder=$(cat tool/ios/build_runtime_package.sh 2>/dev/null)
+toolchain_lock=$(cat tool/ios/toolchain.lock 2>/dev/null)
+require_file "$datascript_sqlite_patch"
+require_text \
+  "$runtime_builder" \
+  'if test "$package_name" = datascript-ocaml-native; then' \
+  "DataScript SQLite runtime recipe"
+require_text \
+  "$runtime_builder" \
+  'patches/datascript-system-sqlite.patch' \
+  "DataScript SQLite runtime recipe"
+require_text \
+  "$runtime_builder" \
+  'DataScript SQLite source declaration changed upstream' \
+  "DataScript SQLite source-drift guard"
+require_text \
+  "$runtime_builder" \
+  'DataScript SQLite still configures an explicit library path' \
+  "DataScript SQLite patched-source guard"
+require_text \
+  "$runtime_builder" \
+  'DataScript SQLite does not link the system sqlite3 library' \
+  "DataScript SQLite system-library guard"
+require_text \
+  "$toolchain_lock" \
+  "IOS_RUNTIME_RECIPE_REVISION='5'" \
+  "DataScript SQLite runtime recipe revision"
+
+if test -f "$datascript_sqlite_patch"; then
+  patch_fixture=$(mktemp -d "${TMPDIR:-/tmp}/bonsai-datascript-patch.XXXXXX")
+  mkdir -p "$patch_fixture/sqlite"
+  trap 'rm -rf "$patch_fixture"' EXIT HUP INT TERM
+  {
+    printf '%s\n' \
+      '(library' \
+      ' (name datascript_sqlite)' \
+      ' (public_name datascript-ocaml-native.sqlite)' \
+      ' (foreign_stubs' \
+      '  (language c)' \
+      '  (names datascript_sqlite_stubs))' \
+      ' (c_library_flags' \
+      '  (:standard -L%{env:DATASCRIPT_SQLITE_LIB_DIR=.} -lsqlite3))' \
+      ' (libraries datascript-ocaml-native persistent_sorted_set_ocaml melange-transit-native))'
+  } >"$patch_fixture/sqlite/dune"
+  if ! patch \
+    --batch \
+    --forward \
+    -d "$patch_fixture" \
+    -p1 \
+    <"$datascript_sqlite_patch" >/dev/null; then
+    fail "DataScript SQLite patch does not apply to the pinned upstream declaration"
+  fi
+  patched_sqlite_dune=$(cat "$patch_fixture/sqlite/dune")
+  require_text \
+    "$patched_sqlite_dune" \
+    '(:standard -lsqlite3)' \
+    "patched DataScript SQLite declaration"
+  reject_text \
+    "$patched_sqlite_dune" \
+    'DATASCRIPT_SQLITE_LIB_DIR' \
+    "patched DataScript SQLite declaration"
+  reject_text \
+    "$patched_sqlite_dune" \
+    '-L.' \
+    "patched DataScript SQLite declaration"
+fi
+
 transit_repository=tool/ios/opam-repository/0.1.0/packages
 require_file \
   "$transit_repository/melange-transit-core/melange-transit-core.0.1.1/opam"
