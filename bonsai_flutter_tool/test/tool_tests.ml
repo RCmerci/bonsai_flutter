@@ -618,7 +618,7 @@ let valid_sdk_manifest =
  (target_components_digest component-digest)
  (required_frameworks Foundation Security)
  (required_system_libraries sqlite3)
- (build_recipe_revision 3)
+ (build_recipe_revision 4)
  (packages
   (base v0.17.0)
   (bonsai_flutter 0.1.0~dev)
@@ -665,6 +665,18 @@ let test_sdk_manifest_contract () =
     ~minimum_deployment_target:"15.0"
   |> check_error_contains
        "The iPhoneOS switch SDK manifest is incompatible with bonsai-flutter 0.2.0";
+  Sdk.Manifest.validate
+    (valid_sdk_manifest
+     |> replace_once
+          ~pattern:"(build_recipe_revision 4)"
+          ~replacement:"(build_recipe_revision 3)"
+     |> parse_sdk_manifest)
+    ~bonsai_flutter_version:"0.1.0~dev"
+    ~abi_version:"2"
+    ~minimum_deployment_target:"15.0"
+  |> check_error_contains
+       "Run: bonsai-flutter toolchain remove iphoneos; bonsai-flutter toolchain install \
+        iphoneos";
   Sdk.Manifest.validate
     manifest
     ~bonsai_flutter_version:"0.1.0~dev"
