@@ -78,13 +78,13 @@ extra-source "runtime-cstruct-9a78073392580e8349148fa3ab4b1b2e989dc9d30d07401b04
   src: "https://github.com/mirage/ocaml-cstruct/releases/download/v6.2.0/cstruct-6.2.0.tbz"
   checksum: ["sha256=9a78073392580e8349148fa3ab4b1b2e989dc9d30d07401b04c96b7c60f03e62"]
 }
-extra-source "runtime-datascript-ocaml-native-27df894e867dc13e7cea9d63ea403859f2db4667e121553db086945502bc6352.archive" {
-  src: "https://github.com/logseq/datascript-ocaml/archive/b1029d6a7210baae15aa2189293bd126b746bad4.tar.gz"
-  checksum: ["sha256=27df894e867dc13e7cea9d63ea403859f2db4667e121553db086945502bc6352"]
+extra-source "runtime-datascript-ocaml-native-691b75e5ae1c025257af17342c102c0e9f6a3527d24c3ab21b6571a6ceedbb29.archive" {
+  src: "https://github.com/logseq/datascript-ocaml/archive/5895af25101de15f56d7c5df383c150ca07cef90.tar.gz"
+  checksum: ["sha256=691b75e5ae1c025257af17342c102c0e9f6a3527d24c3ab21b6571a6ceedbb29"]
 }
-extra-source "runtime-datascript_ocaml-27df894e867dc13e7cea9d63ea403859f2db4667e121553db086945502bc6352.archive" {
-  src: "https://github.com/logseq/datascript-ocaml/archive/b1029d6a7210baae15aa2189293bd126b746bad4.tar.gz"
-  checksum: ["sha256=27df894e867dc13e7cea9d63ea403859f2db4667e121553db086945502bc6352"]
+extra-source "runtime-datascript_ocaml-691b75e5ae1c025257af17342c102c0e9f6a3527d24c3ab21b6571a6ceedbb29.archive" {
+  src: "https://github.com/logseq/datascript-ocaml/archive/5895af25101de15f56d7c5df383c150ca07cef90.tar.gz"
+  checksum: ["sha256=691b75e5ae1c025257af17342c102c0e9f6a3527d24c3ab21b6571a6ceedbb29"]
 }
 extra-source "runtime-digestif-3927949a56d435ac2106cdb8394400bff989d44567eba9038e47db266cc88466.archive" {
   src: "https://github.com/mirage/digestif/releases/download/v1.3.1/digestif-1.3.1.tbz"
@@ -214,13 +214,13 @@ extra-source "runtime-melange-edn-native-6c52b0cffd59249a2a0ad994d511370bd7189be
   src: "https://github.com/RCmerci/melange-edn/archive/3cb79f278e972388a0a2b2ea1caec7a008a0b956.tar.gz"
   checksum: ["sha256=6c52b0cffd59249a2a0ad994d511370bd7189beecec888ebe5eee1f11b13e504"]
 }
-extra-source "runtime-melange-transit-core-3b502927af2a1b0090d5a718889395cb339becb87ca44fd7e5735b76d4917260.archive" {
-  src: "https://github.com/RCmerci/melange-transit/archive/b298260eb67d96710cb26eaad96a40c81b1af21b.tar.gz"
-  checksum: ["sha256=3b502927af2a1b0090d5a718889395cb339becb87ca44fd7e5735b76d4917260"]
+extra-source "runtime-melange-transit-core-0667f6ea1fb9dfb0c5983fe4bc79d2bcb70a1d442f2cff29e6d75e95ba32c25c.archive" {
+  src: "https://github.com/RCmerci/melange-transit/archive/a64270a1ed5c8ad3ff7e05dbb60e83ad0465ae93.tar.gz"
+  checksum: ["sha256=0667f6ea1fb9dfb0c5983fe4bc79d2bcb70a1d442f2cff29e6d75e95ba32c25c"]
 }
-extra-source "runtime-melange-transit-native-3b502927af2a1b0090d5a718889395cb339becb87ca44fd7e5735b76d4917260.archive" {
-  src: "https://github.com/RCmerci/melange-transit/archive/b298260eb67d96710cb26eaad96a40c81b1af21b.tar.gz"
-  checksum: ["sha256=3b502927af2a1b0090d5a718889395cb339becb87ca44fd7e5735b76d4917260"]
+extra-source "runtime-melange-transit-native-0667f6ea1fb9dfb0c5983fe4bc79d2bcb70a1d442f2cff29e6d75e95ba32c25c.archive" {
+  src: "https://github.com/RCmerci/melange-transit/archive/a64270a1ed5c8ad3ff7e05dbb60e83ad0465ae93.tar.gz"
+  checksum: ["sha256=0667f6ea1fb9dfb0c5983fe4bc79d2bcb70a1d442f2cff29e6d75e95ba32c25c"]
 }
 extra-source "runtime-mirage-crypto-4b87091b6a77843bf97a74aae2e7da21310307ff7d2105712c4369680122d80a.archive" {
   src: "https://github.com/mirage/mirage-crypto/releases/download/v2.2.0/mirage-crypto-2.2.0.tbz"
@@ -428,7 +428,7 @@ extra-files: [
   ["patches/jst-config-host-discover.patch" "sha256=ee279c4935234e295cb432e67d02cbab47f5655da7b335585678bef2a2eb62a9"]
   ["patches/mirage-crypto-rng-apple-entropy.patch" "sha256=da840f6ac6b44892f7e3cdbf6b931d557caa44697d21292fbadd5f1f95c60994"]
   ["pkgconfig/iphoneos/sqlite3.pc" "sha256=8b5b586f38ac603b9ac45c7193805a728934d489000dfb578b345733c41ed3ad"]
-  ["supported-closure.lock" "sha256=5199659ed658a91ec0e5417e1728249a2017cfc7b22d0e93119eb30f0a382d98"]
+  ["supported-closure.lock" "sha256=549fb4be9d99a3f37cb074312d888a862390a587ffe99cd52e4335b566114941"]
   ["toolchain.lock" "sha256=6516a7553c762d5b9f56eedb6a05c1f5fb5b9197cedcb7327689c744594cecba"]
   ["verify_macho.sh" "sha256=e6d2083e03ac5f883f236e35b7e9e539759e8cc36eb403dd76d5b8136f7f9076"]
 ]
@@ -554,8 +554,8 @@ depends: [
   "melange" {= "5.1.0-51"}
   "melange-edn-core" {= "0.5.0"}
   "melange-edn-native" {= "0.5.0"}
-  "melange-transit-core" {= "0.1.0"}
-  "melange-transit-native" {= "0.1.0"}
+  "melange-transit-core" {= "0.1.1"}
+  "melange-transit-native" {= "0.1.1"}
   "menhir" {= "20260209"}
   "menhirCST" {= "20260209"}
   "menhirGLR" {= "20260209"}

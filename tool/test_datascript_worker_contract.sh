@@ -16,6 +16,10 @@ require_file() {
   test -f "$1" || fail "missing $1"
 }
 
+reject_file() {
+  test ! -e "$1" || fail "obsolete path remains: $1"
+}
+
 require_text() {
   haystack=$1
   needle=$2
@@ -48,13 +52,60 @@ require_before() {
 }
 
 fixture=tool/ios/fixtures/application-closure
+fixture_opam="$fixture/bonsai_flutter_ios_closure_fixture.opam"
 for path in \
   "$fixture/datascript_worker_probe.ml" \
   "$fixture/datascript_worker_native_embed.ml" \
+  "$fixture_opam" \
   tool/ios/test_datascript_worker_device.sh
 do
   require_file "$path"
 done
+
+fixture_packages=$(cat "$fixture_opam" 2>/dev/null)
+for dependency in \
+  '"melange-transit-core" {= "0.1.1"}' \
+  '"melange-transit-native" {= "0.1.1"}' \
+  '["datascript_ocaml.dev" "git+https://github.com/logseq/datascript-ocaml.git#5895af25101de15f56d7c5df383c150ca07cef90"]' \
+  '["datascript-ocaml-native.dev" "git+https://github.com/logseq/datascript-ocaml.git#5895af25101de15f56d7c5df383c150ca07cef90"]' \
+  '["melange-transit-core.0.1.1" "git+https://github.com/RCmerci/melange-transit.git#a64270a1ed5c8ad3ff7e05dbb60e83ad0465ae93"]' \
+  '["melange-transit-native.0.1.1" "git+https://github.com/RCmerci/melange-transit.git#a64270a1ed5c8ad3ff7e05dbb60e83ad0465ae93"]'
+do
+  require_text "$fixture_packages" "$dependency" "DataScript Worker fixture package pins"
+done
+reject_text "$fixture_packages" 'melange-transit-core.0.1.0' \
+  "DataScript Worker fixture package pins"
+reject_text "$fixture_packages" 'melange-transit-native.0.1.0' \
+  "DataScript Worker fixture package pins"
+
+runtime_closure=$(cat vendor/opam-ios/runtime-closure.lock 2>/dev/null)
+supported_closure=$(cat vendor/opam-ios/supported-closure.lock 2>/dev/null)
+for closure in "$runtime_closure" "$supported_closure"; do
+  require_text "$closure" 'melange-transit-core|0.1.1|target-package|' \
+    "DataScript iOS closure"
+  require_text "$closure" 'melange-transit-native|0.1.1|target-package|' \
+    "DataScript iOS closure"
+  reject_text "$closure" 'melange-transit-core|0.1.0|' \
+    "DataScript iOS closure"
+  reject_text "$closure" 'melange-transit-native|0.1.0|' \
+    "DataScript iOS closure"
+done
+
+transit_repository=tool/ios/opam-repository/0.1.0/packages
+require_file \
+  "$transit_repository/melange-transit-core/melange-transit-core.0.1.1/opam"
+require_file \
+  "$transit_repository/melange-transit-native/melange-transit-native.0.1.1/opam"
+reject_file \
+  "$transit_repository/melange-transit-core/melange-transit-core.0.1.0"
+reject_file \
+  "$transit_repository/melange-transit-native/melange-transit-native.0.1.0"
+
+sdk_repository_lock=$(cat tool/ios/sdk_repository.lock 2>/dev/null)
+require_text "$sdk_repository_lock" "SDK_RUNTIME_PACKAGE_VERSION='0.1.0~dev.2'" \
+  "DataScript runtime SDK version"
+require_text "$sdk_repository_lock" "SDK_PACKAGE_VERSION='0.1.0~dev.26'" \
+  "DataScript framework SDK version"
 
 fixture_dune=$(cat "$fixture/app.dune")
 for library in \

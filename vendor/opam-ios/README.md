@@ -61,7 +61,7 @@ The resolver discovers system SQLite use from the selected native archives'
 `sqlite` feature. This rule is independent of package names. The reference
 application metadata and generated closure lock pin the unchanged DataScript
 source at commit
-`b1029d6a7210baae15aa2189293bd126b746bad4`, plus the exact persistent sorted
+`5895af25101de15f56d7c5df383c150ca07cef90`, plus the exact persistent sorted
 set, Melange EDN, and Melange Transit commits. The framework toolchain lock and
 host dependency setup contain no DataScript sources or package list.
 

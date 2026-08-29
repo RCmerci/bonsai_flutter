@@ -16,11 +16,11 @@ extra-source "bonsai_flutter.tar.gz" {
 }
 extra-files: [
   ["build-installed-framework.sh" "sha256=d43f1832f70a84b333074697b26339ab9b0cfa604bbceb5fab2ceb5f2638f924"]
-  ["manifest.sexp" "sha256=a0527011a350740250c8d6575eba94b4524c2172192d7024ee9fb479cdd95727"]
-  ["package-lock.sexp" "sha256=e864559e4b669035ba305513107ea5bda7c6208cc0a580bb182ac28267bad900"]
+  ["manifest.sexp" "sha256=6b3c9cf3c80a8afa227be60c13ecd203cc1f6593174396cb3f3b323ddd1bbec9"]
+  ["package-lock.sexp" "sha256=54bf6d6f2263d3af2834470c042992d5baa05913352244288fb0819fa1d87eba"]
 ]
 depends: [
-  "bonsai_flutter_ios_runtime_sdk" {= "0.1.0~dev.1"}
+  "bonsai_flutter_ios_runtime_sdk" {= "0.1.0~dev.2"}
 ]
 build: [
   ["sh" "./build-installed-framework.sh" "%{switch}%" "%{prefix}%"]
