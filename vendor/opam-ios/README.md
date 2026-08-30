@@ -61,9 +61,9 @@ The resolver discovers system SQLite use from the selected native archives'
 `sqlite` feature. This rule is independent of package names. The reference
 application metadata and generated closure lock pin the unchanged DataScript
 source at commit
-`5895af25101de15f56d7c5df383c150ca07cef90`, plus the exact persistent sorted
-set, Melange EDN, and Melange Transit commits. The framework toolchain lock and
-host dependency setup contain no DataScript sources or package list.
+`40345cc2f59214daa88b33b8aec711337d20afa7`, plus the exact persistent sorted
+set, Melange EDN, and Melange Transit 0.1.2 commits. The framework toolchain
+lock and host dependency setup contain no DataScript sources or package list.
 
 The host and target use OCaml 5.1.1 and the same Jane Street v0.17.x release
 line. Host executables are never copied into the iOS sysroot or executed as
