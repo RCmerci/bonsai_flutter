@@ -9,7 +9,7 @@ dev-repo: "git+https://github.com/RCmerci/melange-transit.git"
 depends: [
   "dune" {= "3.23.1"}
   "ocaml" {= "5.1.1"}
-  "melange-transit-core" {= "0.1.1"}
+  "melange-transit-core" {= "0.1.2"}
   "melange-edn-core" {= "0.5.0"}
   "melange-edn-native" {= "0.5.0"}
   "ptime" {= "1.2.0"}

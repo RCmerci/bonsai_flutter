@@ -20,6 +20,19 @@ Remove the obsolete Melange Transit 0.1.1 package paths and increment both the
 runtime SDK package version and framework SDK package version. Keep the
 protocol ABI and SDK build recipe revisions unchanged.
 
+## Decision
+
+The fixture and both closure locks select DataScript commit
+`40345cc2f59214daa88b33b8aec711337d20afa7` and Melange Transit 0.1.2 commit
+`35f8afe7d6506863c7253e67a20befb3dde5c18f`. The dependency source commit is
+`73101370444f702986833478682f3163ed065fbe`; the generated SDK repository locks
+that exact Bonsai Flutter archive and checksum.
+
+The immutable runtime SDK advances from `0.1.0~dev.3` to `0.1.0~dev.4`, and
+the framework SDK advances from `0.1.0~dev.29` to `0.1.0~dev.30`. Protocol ABI
+version 2 and SDK build recipe revision 4 remain unchanged. Transit 0.1.1
+package paths are removed from the deterministic repository snapshot.
+
 ## Alternatives considered
 
 ### Keep the current closure
@@ -57,3 +70,13 @@ obsolete package paths must be removed.
 
 - None. The user selected the dependency versions and requested both framework
   and iOS SDK updates.
+
+## Consequences
+
+- DataScript iPhoneOS consumers use the Transit 0.1.2 evaluation-order fix.
+- Existing iPhoneOS SDK installations require complete replacement because the
+  immutable runtime package version changed.
+- The reference and supported closure boundaries remain unchanged; only the
+  selected DataScript and Transit source identities change.
+- Repository regeneration, closure contracts, SDK layering checks, and opam
+  lint pass for the new runtime and framework packages.

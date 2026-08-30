@@ -64,30 +64,36 @@ done
 
 fixture_packages=$(cat "$fixture_opam" 2>/dev/null)
 for dependency in \
-  '"melange-transit-core" {= "0.1.1"}' \
-  '"melange-transit-native" {= "0.1.1"}' \
-  '["datascript_ocaml.dev" "git+https://github.com/logseq/datascript-ocaml.git#5895af25101de15f56d7c5df383c150ca07cef90"]' \
-  '["datascript-ocaml-native.dev" "git+https://github.com/logseq/datascript-ocaml.git#5895af25101de15f56d7c5df383c150ca07cef90"]' \
-  '["melange-transit-core.0.1.1" "git+https://github.com/RCmerci/melange-transit.git#a64270a1ed5c8ad3ff7e05dbb60e83ad0465ae93"]' \
-  '["melange-transit-native.0.1.1" "git+https://github.com/RCmerci/melange-transit.git#a64270a1ed5c8ad3ff7e05dbb60e83ad0465ae93"]'
+  '"melange-transit-core" {= "0.1.2"}' \
+  '"melange-transit-native" {= "0.1.2"}' \
+  '["datascript_ocaml.dev" "git+https://github.com/logseq/datascript-ocaml.git#40345cc2f59214daa88b33b8aec711337d20afa7"]' \
+  '["datascript-ocaml-native.dev" "git+https://github.com/logseq/datascript-ocaml.git#40345cc2f59214daa88b33b8aec711337d20afa7"]' \
+  '["melange-transit-core.0.1.2" "git+https://github.com/RCmerci/melange-transit.git#35f8afe7d6506863c7253e67a20befb3dde5c18f"]' \
+  '["melange-transit-native.0.1.2" "git+https://github.com/RCmerci/melange-transit.git#35f8afe7d6506863c7253e67a20befb3dde5c18f"]'
 do
   require_text "$fixture_packages" "$dependency" "DataScript Worker fixture package pins"
 done
-reject_text "$fixture_packages" 'melange-transit-core.0.1.0' \
+reject_text "$fixture_packages" 'melange-transit-core.0.1.1' \
   "DataScript Worker fixture package pins"
-reject_text "$fixture_packages" 'melange-transit-native.0.1.0' \
+reject_text "$fixture_packages" 'melange-transit-native.0.1.1' \
   "DataScript Worker fixture package pins"
 
 runtime_closure=$(cat vendor/opam-ios/runtime-closure.lock 2>/dev/null)
 supported_closure=$(cat vendor/opam-ios/supported-closure.lock 2>/dev/null)
 for closure in "$runtime_closure" "$supported_closure"; do
-  require_text "$closure" 'melange-transit-core|0.1.1|target-package|' \
+  require_text "$closure" \
+    'datascript-ocaml/archive/40345cc2f59214daa88b33b8aec711337d20afa7.tar.gz' \
     "DataScript iOS closure"
-  require_text "$closure" 'melange-transit-native|0.1.1|target-package|' \
+  require_text "$closure" 'melange-transit-core|0.1.2|target-package|' \
     "DataScript iOS closure"
-  reject_text "$closure" 'melange-transit-core|0.1.0|' \
+  require_text "$closure" 'melange-transit-native|0.1.2|target-package|' \
     "DataScript iOS closure"
-  reject_text "$closure" 'melange-transit-native|0.1.0|' \
+  require_text "$closure" \
+    'melange-transit/archive/35f8afe7d6506863c7253e67a20befb3dde5c18f.tar.gz' \
+    "DataScript iOS closure"
+  reject_text "$closure" 'melange-transit-core|0.1.1|' \
+    "DataScript iOS closure"
+  reject_text "$closure" 'melange-transit-native|0.1.1|' \
     "DataScript iOS closure"
 done
 
@@ -161,18 +167,18 @@ fi
 
 transit_repository=tool/ios/opam-repository/0.1.0/packages
 require_file \
-  "$transit_repository/melange-transit-core/melange-transit-core.0.1.1/opam"
+  "$transit_repository/melange-transit-core/melange-transit-core.0.1.2/opam"
 require_file \
-  "$transit_repository/melange-transit-native/melange-transit-native.0.1.1/opam"
+  "$transit_repository/melange-transit-native/melange-transit-native.0.1.2/opam"
 reject_file \
-  "$transit_repository/melange-transit-core/melange-transit-core.0.1.0"
+  "$transit_repository/melange-transit-core/melange-transit-core.0.1.1"
 reject_file \
-  "$transit_repository/melange-transit-native/melange-transit-native.0.1.0"
+  "$transit_repository/melange-transit-native/melange-transit-native.0.1.1"
 
 sdk_repository_lock=$(cat tool/ios/sdk_repository.lock 2>/dev/null)
-require_text "$sdk_repository_lock" "SDK_RUNTIME_PACKAGE_VERSION='0.1.0~dev.3'" \
+require_text "$sdk_repository_lock" "SDK_RUNTIME_PACKAGE_VERSION='0.1.0~dev.4'" \
   "DataScript runtime SDK version"
-require_text "$sdk_repository_lock" "SDK_PACKAGE_VERSION='0.1.0~dev.28'" \
+require_text "$sdk_repository_lock" "SDK_PACKAGE_VERSION='0.1.0~dev.30'" \
   "DataScript framework SDK version"
 
 fixture_dune=$(cat "$fixture/app.dune")

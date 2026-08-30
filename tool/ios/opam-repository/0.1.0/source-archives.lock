@@ -25,7 +25,7 @@ bigstringaf|0.10.0|https://github.com/inhabitedtype/bigstringaf/archive/0.10.0.t
 bin_prot|v0.17.0-1|https://github.com/janestreet/bin_prot/archive/refs/tags/v0.17.0.tar.gz|sha256|0e6c61aff150d19a0f89cb3e354ab36189e4bc23e28ab8bce03b6c6b6004f237
 bin_prot|v0.17.0-1|https://github.com/ocaml/opam-source-archives/raw/refs/heads/main/patches/bin_prot/remove-outdated-mirage-xen-cross-compilation-rules.patch|sha256|0c6fdc1a9377ae678895f237bae191ac458e507550063de143f1ee70a39ba318
 bonsai|v0.17.0|https://github.com/janestreet/bonsai/archive/refs/tags/v0.17.0.tar.gz|sha256|c78c4476ee6b856846e2d0941e5965009d5e1b853e564b2b1bee61202f0b1ebb
-bonsai_flutter|0.1.0~dev|https://github.com/RCmerci/bonsai_flutter/archive/fdd46cffded0efb0ede712c8a3bd318b75f147ad.tar.gz|sha256|7f371b2fe04d62b70d368a6dcd2576b0aafa9b6a9cba8e7b0973e332aba54cee
+bonsai_flutter|0.1.0~dev|https://github.com/RCmerci/bonsai_flutter/archive/73101370444f702986833478682f3163ed065fbe.tar.gz|sha256|a988284759e275c238f90cff9db6a2a0b01b1e308da4aeddb8bcb812aee47869
 bos|0.3.0|https://erratique.ch/software/bos/releases/bos-0.3.0.tbz|sha512|77416442448462fb316b9b64ec213038153e82c6de030d511838a15bb13b80700598c1bcfae1c90ef766d4f42c9bf5dcf231eeff23709558246d7946962858cc
 ca-certs-nss|3.126|https://github.com/mirage/ca-certs-nss/releases/download/v3.126/ca-certs-nss-3.126.tbz|sha256|682a23c2c547c2af85084d75bb9844c5d9a7b8fddf90fa02ea4958eddce30204
 camlp-streams|5.0.1|https://github.com/ocaml/camlp-streams/archive/v5.0.1.tar.gz|sha512|2efa8dd4a636217c8d49bac1e4e7e5558fc2f45cfea66514140a59fd99dd08d61fb9f1e17804997ff648b71b13820a5d4a1eb70fed9d848aa2abd6e41f853c86
@@ -50,8 +50,8 @@ csexp|1.5.2|https://github.com/ocaml-dune/csexp/releases/download/1.5.2/csexp-1.
 cstruct|6.2.0|https://github.com/mirage/ocaml-cstruct/releases/download/v6.2.0/cstruct-6.2.0.tbz|sha256|9a78073392580e8349148fa3ab4b1b2e989dc9d30d07401b04c96b7c60f03e62
 ctypes|0.24.0|https://github.com/yallop/ocaml-ctypes/archive/refs/tags/0.24.0.tar.gz|sha256|249c5604c8554659761a7282db4ad200aa8c0fdc408cdb53102bd70feeb51955
 ctypes-foreign|0.24.0|https://github.com/yallop/ocaml-ctypes/archive/refs/tags/0.24.0.tar.gz|sha256|249c5604c8554659761a7282db4ad200aa8c0fdc408cdb53102bd70feeb51955
-datascript-ocaml-native|dev|https://github.com/logseq/datascript-ocaml/archive/5895af25101de15f56d7c5df383c150ca07cef90.tar.gz|sha256|691b75e5ae1c025257af17342c102c0e9f6a3527d24c3ab21b6571a6ceedbb29
-datascript_ocaml|dev|https://github.com/logseq/datascript-ocaml/archive/5895af25101de15f56d7c5df383c150ca07cef90.tar.gz|sha256|691b75e5ae1c025257af17342c102c0e9f6a3527d24c3ab21b6571a6ceedbb29
+datascript-ocaml-native|dev|https://github.com/logseq/datascript-ocaml/archive/40345cc2f59214daa88b33b8aec711337d20afa7.tar.gz|sha256|c8858d6dc1161fb3b940c8e356219d24ce2ff9b838aeebe0e80c1b429782a4ab
+datascript_ocaml|dev|https://github.com/logseq/datascript-ocaml/archive/40345cc2f59214daa88b33b8aec711337d20afa7.tar.gz|sha256|c8858d6dc1161fb3b940c8e356219d24ce2ff9b838aeebe0e80c1b429782a4ab
 delimited_parsing|v0.17.0|https://github.com/janestreet/delimited_parsing/archive/refs/tags/v0.17.0.tar.gz|sha256|fb9251ba0d024506a02b68606ceb5490a8373f346d2e0329e8c0db7d19d2b0de
 digestif|1.3.1|https://github.com/mirage/digestif/releases/download/v1.3.1/digestif-1.3.1.tbz|sha256|3927949a56d435ac2106cdb8394400bff989d44567eba9038e47db266cc88466
 domain-local-await|1.0.1|https://github.com/ocaml-multicore/domain-local-await/releases/download/1.0.1/domain-local-await-1.0.1.tbz|sha256|2952113c53cb07e2b054b2dc86ce72939131dab8207c8f3139adb23e64cdfa6f
@@ -112,8 +112,8 @@ markup|1.0.3|https://github.com/aantron/markup.ml/archive/1.0.3.tar.gz|sha256|95
 melange|5.1.0-51|https://github.com/melange-re/melange/releases/download/5.1.0-51/melange-5.1.0-51.tbz|sha256|0c817cbd92c42ac15fea6e6d975fd3eb3aa31f22b10cca22b3687ffed0e1b092
 melange-edn-core|0.5.0|https://github.com/RCmerci/melange-edn/archive/3cb79f278e972388a0a2b2ea1caec7a008a0b956.tar.gz|sha256|6c52b0cffd59249a2a0ad994d511370bd7189beecec888ebe5eee1f11b13e504
 melange-edn-native|0.5.0|https://github.com/RCmerci/melange-edn/archive/3cb79f278e972388a0a2b2ea1caec7a008a0b956.tar.gz|sha256|6c52b0cffd59249a2a0ad994d511370bd7189beecec888ebe5eee1f11b13e504
-melange-transit-core|0.1.1|https://github.com/RCmerci/melange-transit/archive/a64270a1ed5c8ad3ff7e05dbb60e83ad0465ae93.tar.gz|sha256|0667f6ea1fb9dfb0c5983fe4bc79d2bcb70a1d442f2cff29e6d75e95ba32c25c
-melange-transit-native|0.1.1|https://github.com/RCmerci/melange-transit/archive/a64270a1ed5c8ad3ff7e05dbb60e83ad0465ae93.tar.gz|sha256|0667f6ea1fb9dfb0c5983fe4bc79d2bcb70a1d442f2cff29e6d75e95ba32c25c
+melange-transit-core|0.1.2|https://github.com/RCmerci/melange-transit/archive/35f8afe7d6506863c7253e67a20befb3dde5c18f.tar.gz|sha256|b714fab0b4c083cff50e3666ccb0bd2bec54cd2a5ebf72c98834203264c9af52
+melange-transit-native|0.1.2|https://github.com/RCmerci/melange-transit/archive/35f8afe7d6506863c7253e67a20befb3dde5c18f.tar.gz|sha256|b714fab0b4c083cff50e3666ccb0bd2bec54cd2a5ebf72c98834203264c9af52
 menhir|20260209|https://gitlab.inria.fr/fpottier/menhir/-/archive/20260209/archive.tar.gz|sha512|aafad186f328ae8dd4cc69af0f30c1a0b208cf5148a7a94c150099be03838503c5ec12918de26cd7f794b5a72f114bc1bae8d81058bd0ea10372a3b06818687e
 menhirCST|20260209|https://gitlab.inria.fr/fpottier/menhir/-/archive/20260209/archive.tar.gz|sha512|aafad186f328ae8dd4cc69af0f30c1a0b208cf5148a7a94c150099be03838503c5ec12918de26cd7f794b5a72f114bc1bae8d81058bd0ea10372a3b06818687e
 menhirGLR|20260209|https://gitlab.inria.fr/fpottier/menhir/-/archive/20260209/archive.tar.gz|sha512|aafad186f328ae8dd4cc69af0f30c1a0b208cf5148a7a94c150099be03838503c5ec12918de26cd7f794b5a72f114bc1bae8d81058bd0ea10372a3b06818687e
