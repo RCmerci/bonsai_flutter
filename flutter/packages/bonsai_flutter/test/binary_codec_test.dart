@@ -116,7 +116,7 @@ void main() {
   group('binary frame codec', () {
     test('matches the shared counter full-snapshot fixture byte for byte', () {
       final encoded = FrameCodec.encode(counterSnapshot(text: 'Count: 0'));
-      final expected = readHexFixture('counter_full.hex');
+      final expected = readHexFixture('ocaml_counter_full.hex');
 
       expect(encoded, orderedEquals(expected));
       expect(encoded.length, expected.length);
@@ -1928,7 +1928,9 @@ void main() {
     );
 
     test('decoded full snapshot can be applied atomically', () {
-      final decoded = FrameCodec.decode(readHexFixture('counter_full.hex'));
+      final decoded = FrameCodec.decode(
+        readHexFixture('ocaml_counter_full.hex'),
+      );
       final store = NodeStore()..apply(decoded);
 
       expect(store.runtimeEpoch, 7);
@@ -2076,7 +2078,7 @@ void main() {
     });
 
     test('rejects malformed headers and payloads deterministically', () {
-      final valid = readHexFixture('counter_full.hex');
+      final valid = readHexFixture('ocaml_counter_full.hex');
 
       expectDecodeError(mutate(valid, 0, 0), ProtocolErrorCode.invalidMagic);
       expectDecodeError(

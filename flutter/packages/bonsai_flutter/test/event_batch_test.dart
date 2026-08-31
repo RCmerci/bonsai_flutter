@@ -193,7 +193,7 @@ void main() {
 
       final encoded = EventBatchCodec.encode(batch);
 
-      expect(encoded, orderedEquals(readHexFixture('counter_press.hex')));
+      expect(encoded, orderedEquals(readHexFixture('dart_counter_press.hex')));
       expect(encoded, hasLength(90));
     });
 
@@ -383,7 +383,7 @@ void main() {
     });
 
     test('rejects malformed event batches before allocation', () {
-      final valid = readHexFixture('counter_press.hex');
+      final valid = readHexFixture('dart_counter_press.hex');
 
       expectEventDecodeError(
         Uint8List.sublistView(valid, 0, valid.length - 1),

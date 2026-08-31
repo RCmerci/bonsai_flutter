@@ -13,7 +13,6 @@ void main(List<String> arguments) {
   );
   final fixtures = <String, EventBatch>{
     'dart_counter_press.hex': counterPress,
-    'counter_press.hex': counterPress,
     'dart_host_response.hex': hostResponse,
     'dart_text_edit_unicode.hex': textEditUnicode,
     'dart_text_limit_reached.hex': textLimitReached,

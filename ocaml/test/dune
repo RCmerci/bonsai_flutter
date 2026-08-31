@@ -26,8 +26,8 @@
  (name protocol_tests)
  (modules protocol_tests)
  (deps
-  ../../protocol/generated/fixtures/counter_full.hex
-  ../../protocol/generated/fixtures/counter_press.hex
+  ../../protocol/generated/fixtures/ocaml_counter_full.hex
+  ../../protocol/generated/fixtures/dart_counter_press.hex
   ../../protocol/generated/fixtures/legacy_1_12_counter_full.hex)
  (libraries bonsai_flutter.spec_impl bonsai_flutter.protocol))
 
@@ -44,7 +44,7 @@
 (test
  (name event_dispatch_tests)
  (modules event_dispatch_tests)
- (deps ../../protocol/generated/fixtures/counter_press.hex)
+ (deps ../../protocol/generated/fixtures/dart_counter_press.hex)
  (libraries
   bonsai_flutter.spec_impl
   bonsai_flutter.ui

@@ -372,7 +372,6 @@ let fixtures : (string * Protocol.Wire_frame.t) list =
       ; operations = []
       } )
   ; "ocaml_counter_full.hex", counter_frame
-  ; "counter_full.hex", counter_frame
   ; ( "ocaml_unicode_update.hex"
     , { runtime_epoch = epoch 7L
       ; base_revision = revision 1L

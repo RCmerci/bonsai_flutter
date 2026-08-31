@@ -373,7 +373,7 @@ void main() {
 
     expect(
       EventBatchCodec.encode(queue.takeBatch()!),
-      orderedEquals(readHexFixture('counter_press.hex')),
+      orderedEquals(readHexFixture('dart_counter_press.hex')),
     );
   });
 

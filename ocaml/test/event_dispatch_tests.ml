@@ -31,10 +31,10 @@ let bytes_of_hex text =
 
 let press_batch () =
   let path =
-    let from_root = "protocol/generated/fixtures/counter_press.hex" in
+    let from_root = "protocol/generated/fixtures/dart_counter_press.hex" in
     if Sys.file_exists from_root
     then from_root
-    else "../../protocol/generated/fixtures/counter_press.hex"
+    else "../../protocol/generated/fixtures/dart_counter_press.hex"
   in
   let channel = open_in_bin path in
   let bytes =

@@ -51,7 +51,7 @@ let fixture_named name =
     (fun () -> really_input_string channel (in_channel_length channel) |> bytes_of_hex)
 ;;
 
-let fixture () = fixture_named "counter_full.hex"
+let fixture () = fixture_named "ocaml_counter_full.hex"
 
 let counter_theme_data
       brightness
@@ -808,10 +808,10 @@ let test_malformed_frames () =
 
 let test_event_batch_fixture () =
   let path =
-    let from_root = "protocol/generated/fixtures/counter_press.hex" in
+    let from_root = "protocol/generated/fixtures/dart_counter_press.hex" in
     if Sys.file_exists from_root
     then from_root
-    else "../../protocol/generated/fixtures/counter_press.hex"
+    else "../../protocol/generated/fixtures/dart_counter_press.hex"
   in
   let channel = open_in_bin path in
   let encoded =
@@ -904,10 +904,10 @@ let test_text_input_rejects_invalid_utf8_byte_limits () =
 let test_unknown_event_tag () =
   let encoded =
     let path =
-      let from_root = "protocol/generated/fixtures/counter_press.hex" in
+      let from_root = "protocol/generated/fixtures/dart_counter_press.hex" in
       if Sys.file_exists from_root
       then from_root
-      else "../../protocol/generated/fixtures/counter_press.hex"
+      else "../../protocol/generated/fixtures/dart_counter_press.hex"
     in
     let channel = open_in_bin path in
     Fun.protect

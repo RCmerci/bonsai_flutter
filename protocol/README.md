@@ -23,6 +23,5 @@ make protocol-fixtures-check
 The two fixture producers have explicit ownership. OCaml generates
 `ocaml_*.hex` output frames for the Dart decoder; Dart generates
 `dart_*.hex` input event batches for the OCaml decoder. The opposite language
-validates typed contents and byte-for-byte re-encoding. `counter_full.hex` and
-`counter_press.hex` are generated compatibility aliases. CI runs both
-producers in `--check` mode and fails on missing or stale fixtures.
+validates typed contents and byte-for-byte re-encoding. CI runs both producers
+in `--check` mode and fails on missing or stale fixtures.

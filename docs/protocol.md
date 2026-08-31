@@ -226,8 +226,7 @@ semantic snapshot changes.
 
 `protocol/generated/fixtures/dart_counter_press.hex` is the canonical Button
 event. Dart produces it with `EventBatchCodec`, and OCaml decodes and validates
-the same bytes. `counter_press.hex` is a compatibility alias generated from
-the same Dart value.
+the same bytes.
 
 The OCaml `Driver` validates every handler reference and event sequence in a
 batch before committing its sequence cursor. Driver-created handlers enqueue
@@ -297,8 +296,6 @@ The fixture target has two explicit owners:
 
 Every opposite-language test decodes the committed bytes, validates their
 typed contents, and re-encodes the equivalent value byte for byte.
-`counter_full.hex` and `counter_press.hex` remain compatibility aliases;
-new tests use the producer-prefixed names to make provenance unambiguous.
 The shared incremental fixture is also applied against wrong epoch and
 revision state to prove rejection before mutation. Malformed length, unknown
 kind or tag, wrong version, truncation, and oversized-input coverage remains

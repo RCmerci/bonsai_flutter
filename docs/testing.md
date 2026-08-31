@@ -186,8 +186,6 @@ Fixture provenance is part of the test contract:
 - Dart generates Counter press, host-response, Unicode TextEdit, and complete
   EnvironmentChanged event batches. OCaml decodes their typed contents and
   matches its own encoding byte for byte.
-- The legacy `counter_full.hex` and `counter_press.hex` files are generated
-  compatibility aliases, not independently maintained sources.
 
 The shared Unicode incremental frame is applied to mismatched epoch and
 revision stores to verify transactional rejection. Decoder suites additionally
