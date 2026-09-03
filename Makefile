@@ -105,7 +105,18 @@ ci-flutter: ci-install-consumers
 	cd flutter/packages/bonsai_flutter_native && dart test
 	cd flutter/packages/bonsai_flutter_native && dart run ffigen --config ffigen.yaml
 	git diff --exit-code -- flutter/packages/bonsai_flutter_native/lib/bonsai_flutter_native_bindings_generated.dart
-	@set -e; for consumer in $(CONSUMERS); do 	  (cd "examples/$$consumer" && 	    $(BONSAI_FLUTTER) sync-host --check && 	    cd flutter && 	    dart format --output=none --set-exit-if-changed lib test && 	    $(BONSAI_FLUTTER) exec --profile=debug -- flutter analyze && 	    if find test -type f -name '*_test.dart' | grep -q .; then 	      NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost $(BONSAI_FLUTTER) exec --profile=debug -- flutter test --no-pub; 	    fi); 	done
+	@set -e; for consumer in $(CONSUMERS); do \
+	  (cd "examples/$$consumer" && \
+	    $(BONSAI_FLUTTER) sync-host --check && \
+	    cd flutter && \
+	    format_paths=lib && \
+	    if test -d test; then format_paths="$$format_paths test"; fi && \
+	    dart format --output=none --set-exit-if-changed $$format_paths && \
+	    $(BONSAI_FLUTTER) exec --profile=debug -- flutter analyze && \
+	    if test -d test && find test -type f -name '*_test.dart' | grep -q .; then \
+	      NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost $(BONSAI_FLUTTER) exec --profile=debug -- flutter test --no-pub; \
+	    fi); \
+	done
 	cd flutter/integration_test && dart format --output=none --set-exit-if-changed benchmark integration_test lib test test_driver
 	cd flutter/integration_test && $(BONSAI_FLUTTER) sync-host --check
 	cd flutter/integration_test && $(BONSAI_FLUTTER) exec --profile=debug -- flutter analyze

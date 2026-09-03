@@ -103,11 +103,10 @@ assert_consumer_root() {
   require_text "$pubspec" '# bonsai-flutter:begin native-hook' "$root pubspec"
   require_text "$pubspec" '# bonsai-flutter:end native-hook' "$root pubspec"
   if test "$mode" = managed_adapter; then
-    require_text "$pubspec" 'flutter_test:' "$root managed-host test dependency"
-    require_text \
-      "$(cat "$root/flutter/test/widget_test.dart")" \
-      '// ignore_for_file: avoid_relative_lib_imports' \
-      "$root generated widget test"
+    reject_text "$pubspec" 'flutter_test:' "$root managed-host pubspec"
+    reject_text "$pubspec" 'integration_test:' "$root managed-host pubspec"
+    test ! -e "$root/flutter/test/widget_test.dart" ||
+      fail "$root contains obsolete generated widget test"
   fi
   reject_text "$pubspec" '../../../flutter/packages/' "$root pubspec"
   reject_text "$pubspec" '../../../_build/native-artifacts/' "$root pubspec"
@@ -501,6 +500,10 @@ flutter_commands=$(dry_run_target ci-flutter)
 require_text "$flutter_commands" "dart format --output=none --set-exit-if-changed" "ci-flutter"
 require_text "$flutter_commands" "flutter analyze" "ci-flutter"
 require_text "$flutter_commands" "flutter test" "ci-flutter"
+require_text \
+  "$flutter_commands" \
+  "if test -d test" \
+  "ci-flutter optional example test directory"
 require_text \
   "$flutter_commands" \
   "find test -type f -name '*_test.dart'" \

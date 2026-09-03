@@ -1348,10 +1348,12 @@ let test_generated_host () =
     "renderer dependency"
     true
     (contains pubspec "path: ../.bonsai-flutter/flutter-packages/bonsai_flutter");
-  Alcotest.(check bool)
-    "integration test dependency"
-    true
-    (contains pubspec "  integration_test:\n    sdk: flutter\n");
+  [ "flutter_test"; "integration_test" ]
+  |> List.iter (fun dependency ->
+    Alcotest.(check bool)
+      (dependency ^ " is not predeclared")
+      false
+      (contains pubspec ("  " ^ dependency ^ ":")));
   Alcotest.(check bool)
     "macOS deployment target user define"
     true
@@ -1384,7 +1386,10 @@ let test_generated_managed_adapter_host () =
   let config = Config.parse_string managed_adapter_config |> get_ok in
   let files = Host.render ~config in
   let main = List.assoc "flutter/lib/main.dart" files in
-  let widget_test = List.assoc "flutter/test/widget_test.dart" files in
+  Alcotest.(check (option string))
+    "managed construction test is not rendered"
+    None
+    (List.assoc_opt "flutter/test/widget_test.dart" files);
   [ "import 'application_host_adapter.dart' as application;"
   ; "application.createBonsaiFlutterHostAdapter()"
   ; "await widget.adapter.createApplicationPayload()"
@@ -1412,21 +1417,7 @@ let test_generated_managed_adapter_host () =
   Alcotest.(check bool)
     "raw entrypoint is absent"
     false
-    (contains main "utf8.encode('journal')");
-  Alcotest.(check bool)
-    "generated Flutter construction test imports adapter"
-    true
-    (contains widget_test "application_host_adapter.dart");
-  Alcotest.(check bool)
-    "generated Flutter construction test declares its relative import policy"
-    true
-    (contains widget_test "// ignore_for_file: avoid_relative_lib_imports");
-  Alcotest.(check bool)
-    "generated Flutter construction test constructs adapter host"
-    true
-    (contains
-       widget_test
-       "BonsaiFlutterHost(adapter: application.createBonsaiFlutterHostAdapter())")
+    (contains main "utf8.encode('journal')")
 ;;
 
 let test_mixed_ownership_pubspec_sync () =
@@ -1899,15 +1890,23 @@ let test_host_sync_preserves_consumer_dependency_changes () =
   let pubspec_path = Filename.concat root "flutter/pubspec.yaml" in
   let generated = read_file pubspec_path in
   let dependency = "  integration_test:\n    sdk: flutter\n" in
-  let missing = replace_once generated ~pattern:dependency ~replacement:"" in
-  write_file pubspec_path missing;
+  let with_dependency =
+    replace_once
+      generated
+      ~pattern:"dev_dependencies:\n"
+      ~replacement:("dev_dependencies:\n" ^ dependency)
+  in
+  write_file pubspec_path with_dependency;
   Alcotest.(check (list string))
     "consumer dependency is outside managed regions"
     []
     (Host.sync ~project_root:root ~config ~mode:Host.Check |> get_ok);
   let repaired = Host.sync ~project_root:root ~config ~mode:Host.Write |> get_ok in
   Alcotest.(check (list string)) "consumer dependency change is untouched" [] repaired;
-  Alcotest.(check string) "preserves consumer pubspec" missing (read_file pubspec_path)
+  Alcotest.(check string)
+    "preserves consumer pubspec"
+    with_dependency
+    (read_file pubspec_path)
 ;;
 
 let test_native_sync_only_manages_dune_aliases () =

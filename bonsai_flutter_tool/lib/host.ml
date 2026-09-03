@@ -65,10 +65,6 @@ dependencies:
 
 dev_dependencies:
   flutter_lints: ^6.0.0
-  flutter_test:
-    sdk: flutter
-  integration_test:
-    sdk: flutter
 
 flutter:
   uses-material-design: true
@@ -236,33 +232,6 @@ let privacy_manifest =
 |}
 ;;
 
-let managed_host_test adapter =
-  Printf.sprintf
-    {|%s// ignore_for_file: avoid_relative_lib_imports
-
-import '../lib/%s' as application;
-import '../lib/main.dart';
-import 'package:flutter_test/flutter_test.dart';
-
-void main() {
-  test('managed host can be constructed', () {
-    expect(
-      BonsaiFlutterHost(adapter: application.createBonsaiFlutterHostAdapter()),
-      isNotNull,
-    );
-  });
-}
-|}
-    generated_header
-    (strip_lib_prefix adapter.Config.adapter)
-;;
-
-let host_test config =
-  match config.Config.host with
-  | Config.Managed_adapter adapter -> managed_host_test adapter
-  | Config.Custom _ -> invalid_arg "custom hosts do not have generated widget tests"
-;;
-
 let macos_xcconfig config =
   Printf.sprintf
     "MACOSX_DEPLOYMENT_TARGET = %s\nARCHS = %s\n"
@@ -281,10 +250,7 @@ let render ~config =
   in
   match config.host with
   | Config.Managed_adapter _ ->
-    common
-    @ [ Filename.concat config.flutter_root "lib/main.dart", main_dart config
-      ; Filename.concat config.flutter_root "test/widget_test.dart", host_test config
-      ]
+    common @ [ Filename.concat config.flutter_root "lib/main.dart", main_dart config ]
   | Config.Custom _ -> common
 ;;
 
@@ -549,9 +515,6 @@ let sync ~project_root ~config ~mode : (string list, string) result =
     let pubspec_relative = Filename.concat config.Config.flutter_root "pubspec.yaml" in
     let managed_source relative_path =
       String.equal relative_path (Filename.concat config.flutter_root "lib/main.dart")
-      || String.equal
-           relative_path
-           (Filename.concat config.flutter_root "test/widget_test.dart")
     in
     let generated_drift =
       render ~config

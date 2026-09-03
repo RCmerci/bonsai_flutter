@@ -178,7 +178,7 @@ reject_file \
 sdk_repository_lock=$(cat tool/ios/sdk_repository.lock 2>/dev/null)
 require_text "$sdk_repository_lock" "SDK_RUNTIME_PACKAGE_VERSION='0.1.0~dev.4'" \
   "DataScript runtime SDK version"
-require_text "$sdk_repository_lock" "SDK_PACKAGE_VERSION='0.1.0~dev.30'" \
+require_text "$sdk_repository_lock" "SDK_PACKAGE_VERSION='0.1.0~dev.31'" \
   "DataScript framework SDK version"
 
 fixture_dune=$(cat "$fixture/app.dune")
