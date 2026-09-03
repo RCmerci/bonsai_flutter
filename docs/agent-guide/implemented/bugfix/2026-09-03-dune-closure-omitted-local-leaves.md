@@ -86,6 +86,6 @@ internal dependency, so terminating that branch is sufficient.
   resolver result against Dune 3.23.1.
 - All 87 `bonsai_flutter_tool` tests pass, `dune build @all` passes, and the
   formatting alias is clean.
-- This host-only CLI fix does not change framework source included in the
-  iPhoneOS SDK, its dependency universe, ABI, patches, or build recipes, so no
-  SDK repository regeneration is required.
+- Repository policy published framework SDK `0.1.0~dev.31` from source revision
+  `9483aae1520844a44508f534fbaa48ef76b43d7c`; the runtime package, ABI, and
+  build recipe revisions remain unchanged.
