@@ -236,11 +236,8 @@ let external_closure ~target stanzas =
         | dependency :: dependencies ->
           (match String_map.find_opt dependency libraries with
            | Some stanza -> local_stanzas (stanza :: reversed) dependencies
-           | None ->
-             Error
-               (Printf.sprintf
-                  "Dune workspace dependency graph references a missing local stanza: %s"
-                  dependency))
+           (* Dune omits dependency-free local leaves from [external-lib-deps]. *)
+           | None -> local_stanzas reversed dependencies)
       in
       let* reachable = local_stanzas [] stanza.internal_deps in
       visit visited dependencies (reachable @ rest)

@@ -104,6 +104,18 @@ let contains source pattern =
   | Not_found -> false
 ;;
 
+let count_occurrences source pattern =
+  let regexp = Str.regexp_string pattern in
+  let rec loop count position =
+    try
+      let index = Str.search_forward regexp source position in
+      loop (count + 1) (index + String.length pattern)
+    with
+    | Not_found -> count
+  in
+  loop 0 0
+;;
+
 let check_error_contains expected = function
   | Ok _ -> Alcotest.failf "expected an error containing %S" expected
   | Error message -> Alcotest.(check bool) message true (contains message expected)
@@ -3521,25 +3533,78 @@ let test_dune_closure_keeps_ppx_only_stanzas_host_only () =
     |}
 ;;
 
-let test_dune_closure_reports_missing_local_stanza () =
-  let actual =
-    resolve_dune_closure
-      {|
-        (default
-         ((executables
-           ((names (native_embed))
-            (extensions (.exe.o))
-            (package ())
-            (source_dir app)
-            (external_deps ())
-            (internal_deps ((missing_local required)))))))
-      |}
+let test_dune_closure_accepts_omitted_dependency_free_local_leaf () =
+  check_dune_closure
+    []
+    {|
+      (default
+       ((executables
+         ((names (native_embed))
+          (extensions (.exe.o))
+          (package ())
+          (source_dir app)
+          (external_deps ())
+          (internal_deps ((dependency_free_leaf required)))))))
+    |}
+;;
+
+let test_dune_closure_ignores_omitted_leaf_and_keeps_external_dependencies () =
+  check_dune_closure
+    [ "bonsai_flutter.ui"; "uutf" ]
+    {|
+      (default
+       ((executables
+         ((names (native_embed))
+          (extensions (.exe.o))
+          (package ())
+          (source_dir app)
+          (external_deps ((bonsai_flutter.ui required)))
+          (internal_deps
+           ((application required)
+            (dependency_free_leaf required)))))
+        (library
+         ((names (application))
+          (extensions ())
+          (package ())
+          (source_dir app)
+          (external_deps ((uutf required)))
+          (internal_deps ())))))
+    |}
+;;
+
+let test_dune_closure_accepts_real_dune_omitted_local_leaf () =
+  let project_root = Filename.temp_dir "bonsai-flutter-tool" "dune-closure" in
+  write_file (Filename.concat project_root "dune-project") "(lang dune 3.23)\n";
+  write_file
+    (Filename.concat project_root "dune")
+    {|(library
+ (name dependency_free_leaf)
+ (modules dependency_free_leaf))
+
+(executable
+ (name native_embed)
+ (modules native_embed)
+ (libraries dependency_free_leaf))
+|};
+  write_file (Filename.concat project_root "dependency_free_leaf.ml") "";
+  write_file (Filename.concat project_root "native_embed.ml") "";
+  let description =
+    Process_runner.capture
+      ~working_directory:project_root
+      ~environment:[]
+      "dune"
+      [ "describe"; "external-lib-deps"; "--format=csexp" ]
+    |> get_ok
   in
+  let dependency_name = "20:dependency_free_leaf" in
+  Alcotest.(check int)
+    "Dune reports only the internal dependency reference"
+    1
+    (count_occurrences description dependency_name);
   Alcotest.(check (result (list string) string))
-    "workspace diagnostic"
-    (Error
-       "Dune workspace dependency graph references a missing local stanza: missing_local")
-    actual
+    "real Dune external dependency closure"
+    (Ok [])
+    (Dune_closure.resolve_csexp ~target:"native_embed.exe" description)
 ;;
 
 let test_dune_closure_accepts_selected_ios_context () =
@@ -3903,9 +3968,17 @@ let () =
             `Quick
             test_dune_closure_keeps_ppx_only_stanzas_host_only
         ; Alcotest.test_case
-            "missing local stanza"
+            "omitted dependency-free local leaf"
             `Quick
-            test_dune_closure_reports_missing_local_stanza
+            test_dune_closure_accepts_omitted_dependency_free_local_leaf
+        ; Alcotest.test_case
+            "omitted leaf with external dependencies"
+            `Quick
+            test_dune_closure_ignores_omitted_leaf_and_keeps_external_dependencies
+        ; Alcotest.test_case
+            "real Dune omitted local leaf"
+            `Quick
+            test_dune_closure_accepts_real_dune_omitted_local_leaf
         ; Alcotest.test_case
             "selected iOS context"
             `Quick
