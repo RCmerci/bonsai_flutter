@@ -7,7 +7,7 @@ import 'package:test/test.dart';
 final class _FakeNativeVersionFacade implements NativeVersionFacade {
   const _FakeNativeVersionFacade({
     required this.abi,
-    this.protocol = const NativeProtocolVersion(1, 14),
+    this.protocol = const NativeProtocolVersion(2, 26),
   });
 
   @override
@@ -18,9 +18,9 @@ final class _FakeNativeVersionFacade implements NativeVersionFacade {
 }
 
 void main() {
-  test('requires exact ABI 2.0 independently from protocol 1.14', () {
+  test('requires exact ABI 2.0 independently from protocol 2.26', () {
     expect(nativeAbiVersion, const NativeAbiVersion(2, 0));
-    expect(nativeProtocolVersion, const NativeProtocolVersion(1, 14));
+    expect(nativeProtocolVersion, const NativeProtocolVersion(2, 26));
   });
 
   test('rejects ABI major and minor mismatch before runtime creation', () {
@@ -43,7 +43,7 @@ void main() {
       () => validateNativeVersions(
         const _FakeNativeVersionFacade(
           abi: NativeAbiVersion(2, 0),
-          protocol: NativeProtocolVersion(1, 13),
+          protocol: NativeProtocolVersion(1, 26),
         ),
       ),
       throwsA(isA<NativeLibraryLoadingException>()),
@@ -52,7 +52,7 @@ void main() {
       () => validateNativeVersions(
         const _FakeNativeVersionFacade(
           abi: NativeAbiVersion(2, 0),
-          protocol: NativeProtocolVersion(1, 15),
+          protocol: NativeProtocolVersion(2, 25),
         ),
       ),
       throwsA(isA<NativeLibraryLoadingException>()),
@@ -60,7 +60,7 @@ void main() {
   });
 
   test('reports the stable native protocol version', () {
-    expect(nativeProtocolVersion, const NativeProtocolVersion(1, 14));
+    expect(nativeProtocolVersion, const NativeProtocolVersion(2, 26));
   });
 
   test('owns and frees native error buffers after every call', () {

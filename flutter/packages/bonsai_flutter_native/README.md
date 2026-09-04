@@ -5,7 +5,7 @@ It provides the opaque `bf_runtime`, fixed-width status values, owned output
 buffers, generated private FFI declarations, and the public `NativeRuntime`
 Dart wrapper.
 
-The current version contract is native ABI 2.0 and renderer protocol 1.14.
+The current version contract is native ABI 2.0 and renderer protocol 2.26.
 The package queries and validates them independently before runtime creation.
 
 The build hook, buffer ownership tests, and Dart wrapper have been verified on

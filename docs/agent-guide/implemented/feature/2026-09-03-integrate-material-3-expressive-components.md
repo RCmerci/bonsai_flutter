@@ -407,7 +407,7 @@ narrowed no longer encode or expose the obsolete capabilities; the retired
 app-bar, list-item, alert-dialog, and tooltip protocol kinds were removed
 instead of retained as aliases.
 
-The protocol minor version is 26. Typed civil-date, civil-date-range, and time
+The protocol version is 2.26. Typed civil-date, civil-date-range, and time
 payloads are used by the modal picker host effects. Search open and close
 events, request-token dismiss and refresh handshakes, controller lifecycle,
 selection translation, and carousel layout callbacks are bound to accepted

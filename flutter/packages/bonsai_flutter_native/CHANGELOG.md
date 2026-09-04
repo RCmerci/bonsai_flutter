@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Aligned the native protocol query and Dart version contract with generated
-  renderer protocol 1.14.
+  renderer protocol 2.26.
 
 ## 0.0.1
 
