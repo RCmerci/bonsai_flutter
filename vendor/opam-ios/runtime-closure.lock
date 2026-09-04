@@ -1,13 +1,14 @@
 # metadata.format=bonsai-flutter-ios-closure-v2
 # metadata.features=core,sqlite
-# metadata.roots=astring,bonsai,bonsai.driver,core,datascript-ocaml-native,datascript-ocaml-native.sqlite,datascript_ocaml,eio_posix,incr_dom.ui_incr,incr_dom.ui_time_source,melange-edn-core,melange-edn-native,melange-transit-core,melange-transit-native,persistent_sorted_set_ocaml,sqlite3,uucp,uunf,uutf,virtual_dom.ui_effect
-# metadata.package-count=121
+# metadata.roots=datascript-ocaml-native,datascript-ocaml-native.sqlite,ppx_deriving_yojson.runtime,uucp,uunf,uutf,yojson
+# metadata.package-count=123
 # metadata.target-package-count=69
-# metadata.host-package-count=51
+# metadata.host-package-count=53
 # metadata.target-build-count=1
 # metadata.component-count=106
-# metadata.digest=c1d02634c551b69b44926868bc87c9a5972a0a56150d34d13dba028a89a32000
+# metadata.digest=28df0d0d68f8ec234042181aa6762b73cba56e18917283e74fd45b0d012adbb6
 # package|version|role|capability|build-mechanism|source|sha256|findlib-components|target-dependencies
+astring|0.8.5|host-package|Host_only|opam|https://erratique.ch/software/astring/releases/astring-0.8.5.tbz|865692630c07c3ab87c66cdfc2734c0fdfc9c34a57f8e89ffec7c7d15e7a70fa|-|-
 base64|3.5.2|host-package|Host_only|opam|https://github.com/mirage/ocaml-base64/releases/download/v3.5.2/base64-3.5.2.tbz|b3f5ce301aa72c7032ef90be2332d72ff3962922c00ee2aec6bcade187a2f59b|-|-
 camlp-streams|5.0.1|host-package|Host_only|opam|https://github.com/ocaml/camlp-streams/archive/v5.0.1.tar.gz|ad71f62406e9bb4e7fb5d4593ede2af6c68f8b0d96f25574446e142c3eb0d9a4|-|-
 capitalization|v0.17.0|host-package|Host_only|opam|https://github.com/janestreet/capitalization/archive/refs/tags/v0.17.0.tar.gz|f71d45ec929c9fc9b08e07723c15b6663b0143c4465b5d93038f653258cd5c6f|-|-
@@ -57,11 +58,11 @@ ppx_typerep_conv|v0.17.0|host-package|Host_only|opam|https://github.com/janestre
 ppx_variants_conv|v0.17.0|host-package|Host_only|opam|https://github.com/janestreet/ppx_variants_conv/archive/refs/tags/v0.17.0.tar.gz|b66d1fe64d0adc2e7da5474f270467f1eddcba880f398ee9b0e7e0946c65b6c4|-|-
 ppxlib_jane|v0.17.0|host-package|Host_only|opam|https://github.com/janestreet/ppxlib_jane/archive/refs/tags/v0.17.0.tar.gz|42757d7b44a5f2a766778e6b4710100c6ef9d0c074eb3e7fa4c69647336d8398|-|-
 re|1.14.0|host-package|Host_only|opam|https://github.com/ocaml/ocaml-re/archive/refs/tags/1.14.0.tar.gz|e32eb4c6f319ff74241da9e1b00032f990241347271baf3adb468faaaa616147|-|-
+sqlite3|5.4.0|host-package|Host_only|opam|https://github.com/mmottl/sqlite3-ocaml/releases/download/5.4.0/sqlite3-5.4.0.tbz|f0069532f78ac24f16d79262af01434952d0481f8bf80ae541dff4a56cc4e9ff|-|-
 stdlib-shims|0.3.0|host-package|Host_only|opam|https://github.com/ocaml/stdlib-shims/releases/download/0.3.0/stdlib-shims-0.3.0.tbz|babf72d3917b86f707885f0c5528e36c63fccb698f4b46cf2bab5c7ccdd6d84a|-|-
 topkg|1.1.1|host-package|Host_only|opam|https://erratique.ch/software/topkg/releases/topkg-1.1.1.tbz|20da062dc9cea21b5c728f22c986ed3e3d57310e643260160a802d559712f6fc|-|-
 jst-config|v0.17.0|target-build|Foreign_stubs|dune|https://github.com/janestreet/jst-config/archive/refs/tags/v0.17.0.tar.gz|2cf345e33bed0ee4c325667e77dfc5bee8f12afd56318b7c9acf81ec875ecf6e|jst-config|-
 abstract_algebra|v0.17.0|target-package|Pure_ocaml|dune|https://github.com/janestreet/abstract_algebra/archive/refs/tags/v0.17.0.tar.gz|f7cc273be50f9212454342e3c69e85b98a83d1487857ce9f9952c21db309258b|abstract_algebra|base,base_quickcheck,bin_prot,fieldslib,jane-street-headers,ocaml_intrinsics_kernel,parsexp,ppx_assert,ppx_bench,ppx_compare,ppx_enumerate,ppx_expect,ppx_hash,ppx_here,ppx_inline_test,ppx_log,ppx_module_timer,ppx_sexp_conv,ppx_stable_witness,ppx_string,ppxlib,sexplib,sexplib0,splittable_random,stdio,time_now,typerep,variantslib
-astring|0.8.5|target-package|Pure_ocaml|topkg|https://erratique.ch/software/astring/releases/astring-0.8.5.tbz|865692630c07c3ab87c66cdfc2734c0fdfc9c34a57f8e89ffec7c7d15e7a70fa|astring|-
 base|v0.17.3|target-package|Foreign_stubs|dune|https://github.com/janestreet/base/archive/refs/tags/v0.17.3.tar.gz|3f3f64789ab25bb5cb7f5f907dd651dec9cc9440981822fe75df6b94344b7208|base,base.base_internalhash_types,base.md5,base.shadow_stdlib|ocaml_intrinsics_kernel,sexplib0
 base_bigstring|v0.17.0|target-package|Foreign_stubs|dune|https://github.com/janestreet/base_bigstring/archive/refs/tags/v0.17.0.tar.gz|0c77edb9db4f29797cd5c22dd07fdbe4ff668715be870b86dcc1d849730b8562|base_bigstring|base,base_quickcheck,bin_prot,fieldslib,int_repr,jane-street-headers,ocaml_intrinsics_kernel,parsexp,ppx_assert,ppx_bench,ppx_compare,ppx_enumerate,ppx_expect,ppx_hash,ppx_here,ppx_inline_test,ppx_log,ppx_module_timer,ppx_sexp_conv,ppx_stable_witness,ppx_string,ppxlib,sexplib,sexplib0,splittable_random,stdio,time_now,typerep,variantslib
 base_quickcheck|v0.17.0|target-package|Pure_ocaml|dune|https://github.com/janestreet/base_quickcheck/archive/refs/tags/v0.17.0.tar.gz|bb1e7362d52e00cb4c460ee64a05133aee12f120a81a682ceb5fb09d11d8acea|base_quickcheck,base_quickcheck.ppx_quickcheck.runtime|base,fieldslib,jane-street-headers,ocaml_intrinsics_kernel,ppx_assert,ppx_bench,ppx_compare,ppx_enumerate,ppx_hash,ppx_here,ppx_inline_test,ppx_sexp_conv,sexplib0,splittable_random,time_now
@@ -100,6 +101,8 @@ persistent_sorted_set_ocaml|dev|target-package|Pure_ocaml|dune|https://github.co
 ppx_assert|v0.17.0|target-package|Pure_ocaml|dune|https://github.com/janestreet/ppx_assert/archive/refs/tags/v0.17.0.tar.gz|94c47289a6393642b1cca7d2cdb8decdbf387c3cee4faf50d9b00efc871cce8b|ppx_assert.runtime-lib|base,ocaml_intrinsics_kernel,ppx_sexp_conv,sexplib0
 ppx_bench|v0.17.0|target-package|Pure_ocaml|dune|https://github.com/janestreet/ppx_bench/archive/refs/tags/v0.17.0.tar.gz|7e91a1b7c82fc512560ca1de14deab3754dc2df4adc924112e68bede74691ba2|ppx_bench.runtime-lib|-
 ppx_compare|v0.17.0|target-package|Pure_ocaml|dune|https://github.com/janestreet/ppx_compare/archive/refs/tags/v0.17.0.tar.gz|f0b23eb78082ef4dc71a66939bbc63c6b0cc2cf6a4744a906b7a2c016cbe3098|ppx_compare.runtime-lib|base,ocaml_intrinsics_kernel,sexplib0
+ppx_deriving|6.0.3|target-package|Pure_ocaml|dune|https://github.com/ocaml-ppx/ppx_deriving/releases/download/v6.0.3/ppx_deriving-6.0.3.tbz|374aa97b32c5e01c09a97810a48bfa218c213b5b649e4452101455ac19c94a6d|ppx_deriving.runtime|-
+ppx_deriving_yojson|3.9.1|target-package|Pure_ocaml|dune|https://github.com/ocaml-ppx/ppx_deriving_yojson/releases/download/v3.9.1/ppx_deriving_yojson-3.9.1.tbz|6a3ef7c7bb381f57448853f2a6d2287cf623628162a979587d1e8f7502114f4d|ppx_deriving_yojson.runtime|ppx_deriving
 ppx_diff|v0.17.0|target-package|Pure_ocaml|dune|https://github.com/janestreet/ppx_diff/archive/refs/tags/v0.17.0.tar.gz|5e817094edf127d384110227ecfdc3e23f0f130266d48d1f326a03f6f58a2609|ppx_diff.diffable,ppx_diff.diffable_cinaps|base,base_quickcheck,bin_prot,fieldslib,gel,jane-street-headers,ocaml_intrinsics_kernel,parsexp,ppx_assert,ppx_bench,ppx_compare,ppx_enumerate,ppx_expect,ppx_hash,ppx_here,ppx_inline_test,ppx_log,ppx_module_timer,ppx_sexp_conv,ppx_stable_witness,ppx_string,ppxlib,sexplib,sexplib0,splittable_random,stdio,time_now,typerep,variantslib
 ppx_enumerate|v0.17.0|target-package|Pure_ocaml|dune|https://github.com/janestreet/ppx_enumerate/archive/refs/tags/v0.17.0.tar.gz|a27f1797b1315bdf7678fde783dff493bd348f1c5b644d7616b660bd295dad36|ppx_enumerate.runtime-lib|-
 ppx_expect|v0.17.0|target-package|Foreign_stubs|dune|https://github.com/janestreet/ppx_expect/archive/refs/tags/v0.17.0.tar.gz|6cb403d7d59f7451f1d5a94838ca46902991fc7bb43e5342b620fc73ab99bd94|ppx_expect.config,ppx_expect.config_types,ppx_expect.make_corrected_file,ppx_expect.runtime|base,jane-street-headers,ocaml_intrinsics_kernel,ppx_compare,ppx_enumerate,ppx_hash,ppx_inline_test,ppx_sexp_conv,ppxlib,sexplib0,stdio,time_now
@@ -117,7 +120,6 @@ ptime|1.2.0|target-package|Foreign_stubs|topkg|https://erratique.ch/software/pti
 sexplib|v0.17.0|target-package|Pure_ocaml|dune|https://github.com/janestreet/sexplib/archive/refs/tags/v0.17.0.tar.gz|da863b42b81235fdcf45eb32c04fb8bde22ff446a779cfb6f989730a35103160|sexplib|parsexp,sexplib0
 sexplib0|v0.17.0|target-package|Pure_ocaml|dune|https://github.com/janestreet/sexplib0/archive/refs/tags/v0.17.0.tar.gz|5b0910b5dab8ec63633be5dbf92a3e4863d415d803cad9dddf99dba43ce7498b|sexplib0|-
 splittable_random|v0.17.0|target-package|Pure_ocaml|dune|https://github.com/janestreet/splittable_random/archive/refs/tags/v0.17.0.tar.gz|4f8adcade214d1f84e1073a35f4751154e73853649df581cce68d20dc6337ad2|splittable_random|base,jane-street-headers,ocaml_intrinsics_kernel,ppx_assert,ppx_bench,ppx_compare,ppx_enumerate,ppx_hash,ppx_here,ppx_inline_test,ppx_sexp_conv,sexplib0,time_now
-sqlite3|5.4.0|target-package|System_sqlite|dune|https://github.com/mmottl/sqlite3-ocaml/releases/download/5.4.0/sqlite3-5.4.0.tbz|f0069532f78ac24f16d79262af01434952d0481f8bf80ae541dff4a56cc4e9ff|sqlite3|-
 stdio|v0.17.0|target-package|Pure_ocaml|dune|https://github.com/janestreet/stdio/archive/refs/tags/v0.17.0.tar.gz|e7cb473d4bffcf419f307c658cf2599fab03a2b4fe655bfd0be699f8f7af176e|stdio|base,ocaml_intrinsics_kernel,sexplib0
 thread-table|1.0.0|target-package|Pure_ocaml|dune|https://github.com/ocaml-multicore/thread-table/releases/download/1.0.0/thread-table-1.0.0.tbz|a48cd88463597df9442c4baa69ccc06091ca77ba71e438d3609fbae0f3b81ddd|thread-table|-
 time_now|v0.17.0|target-package|Foreign_stubs|dune|https://github.com/janestreet/time_now/archive/refs/tags/v0.17.0.tar.gz|fc85d6e46c4eb9370de9385f7bbfa6d57b4e48a9e96b20009007226b73f9530c|time_now|base,jane-street-headers,ocaml_intrinsics_kernel,ppx_compare,ppx_enumerate,ppx_hash,ppx_sexp_conv,sexplib0

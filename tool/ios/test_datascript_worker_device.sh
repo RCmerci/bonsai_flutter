@@ -179,6 +179,7 @@ launch_and_wait() {
     "$IOS_BUNDLE_IDENTIFIER" >"$log" 2>&1 &
   launcher_pid=$!
   wait_for_marker "$log" "$expected"
+  wait_for_marker "$log" 'BONSAI_DERIVING_YOJSON_ROUND_TRIP'
   wait_for_marker "$log" 'BONSAI_DATASCRIPT_WORKER_SHUTDOWN'
   wait_for_marker "$log" 'BONSAI_DATASCRIPT_HOST_RUNTIME_DISPOSED'
   kill "$launcher_pid" 2>/dev/null || true

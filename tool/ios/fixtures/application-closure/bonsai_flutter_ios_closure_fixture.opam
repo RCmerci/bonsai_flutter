@@ -16,6 +16,7 @@ depends: [
   "melange-edn-native" {= "0.5.0"}
   "melange-transit-core" {= "0.1.2"}
   "melange-transit-native" {= "0.1.2"}
+  "ppx_deriving_yojson" {= "3.9.1"}
   "sqlite3" {= "5.4.0"}
   "uutf" {= "1.0.4"}
   "uunf" {= "17.0.0"}

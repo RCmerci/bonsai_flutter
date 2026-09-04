@@ -2,6 +2,12 @@ open Datascript
 
 type t = Datascript_sqlite.session
 
+type json_probe =
+  { identifier : string
+  ; revision : int
+  }
+[@@deriving yojson]
+
 let indexed_string =
   { cardinality = One
   ; unique = Some Identity
@@ -25,6 +31,14 @@ let marker value =
 
 let require condition message = if not condition then failwith message
 
+let verify_json_round_trip () =
+  let expected = { identifier = "physical-iphone-worker"; revision = 1 } in
+  match json_probe_of_yojson (json_probe_to_yojson expected) with
+  | Ok actual when actual = expected -> marker "BONSAI_DERIVING_YOJSON_ROUND_TRIP"
+  | Ok _ -> failwith "derived JSON codec round trip changed the value"
+  | Error message -> failwith ("derived JSON codec round trip failed: " ^ message)
+;;
+
 let validate_fact db =
   let entity =
     match entity db (Lookup_ref ("fact/id", String fact_id)) with
@@ -41,6 +55,7 @@ let open_ (config : Sqlite_worker_config.t) =
     Filename.concat config.application_support_directory "datascript-worker-probe.sqlite3"
   in
   try
+    verify_json_round_trip ();
     let session = Datascript_sqlite.open_session path in
     let storage = Datascript_sqlite.storage session in
     (match Datascript.restore storage with

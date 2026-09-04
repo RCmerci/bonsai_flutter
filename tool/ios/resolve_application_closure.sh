@@ -113,6 +113,38 @@ resolve_findlib_closure() {
   mv "$closure_roots.sorted" "$closure_roots"
 }
 
+extract_pps_libraries() {
+  awk '
+    {
+      line = $0
+      sub(/;.*/, "", line)
+      if (!in_pps) {
+        if (!match(line, /\(pps([[:space:]]|\))/)) next
+        line = substr(line, RSTART)
+        in_pps = 1
+        depth = 0
+        accept = 1
+      }
+      open_count = gsub(/\(/, "(", line)
+      close_count = gsub(/\)/, ")", line)
+      depth += open_count - close_count
+      gsub(/[()]/, " ", line)
+      count = split(line, words, /[[:space:]]+/)
+      for (word_index = 1; word_index <= count; word_index++) {
+        word = words[word_index]
+        if (word == "--") accept = 0
+        if (accept && word != "" && word != "pps" &&
+            word ~ /^[A-Za-z0-9][A-Za-z0-9_.+-]*$/) print word
+      }
+      if (depth <= 0) {
+        in_pps = 0
+        depth = 0
+        accept = 0
+      }
+    }
+  ' "$1"
+}
+
 if test "${1:-}" = --identity; then
   shift
   lock=
@@ -211,6 +243,7 @@ target_packages_file="$temporary_directory/target-packages"
 component_owners_file="$temporary_directory/component-owners"
 host_packages_file="$temporary_directory/host-packages"
 ppx_libraries_file="$temporary_directory/ppx-libraries"
+application_ppx_libraries_file="$temporary_directory/application-ppx-libraries"
 ppx_packages_file="$temporary_directory/ppx-packages"
 target_build_libraries_file="$temporary_directory/target-build-libraries"
 target_build_packages_file="$temporary_directory/target-build-packages"
@@ -246,6 +279,40 @@ then
 fi
 test -s "$external_libraries_file" ||
   fail "application native embed target has no external Dune dependencies"
+
+: >"$application_ppx_libraries_file.unsorted"
+find "$project_root" \
+  \( -type d \( -name .git -o -name _build \) -prune \) -o \
+  -type f -name dune -print |
+  LC_ALL=C sort |
+  while IFS= read -r dune_file; do
+    extract_pps_libraries "$dune_file"
+  done >"$application_ppx_libraries_file.unsorted"
+sort -u \
+  "$application_ppx_libraries_file.unsorted" \
+  >"$application_ppx_libraries_file.all"
+grep -Fxf \
+  "$external_libraries_file" \
+  "$application_ppx_libraries_file.all" \
+  >"$application_ppx_libraries_file" || true
+
+if test -s "$application_ppx_libraries_file"; then
+  grep -Fvx -f "$application_ppx_libraries_file" "$external_libraries_file" \
+    >"$external_libraries_file.target" || true
+  while IFS= read -r ppx_library; do
+    OPAMROOT="$opam_root" opam exec --switch="$host_switch" -- \
+      ocamlfind query "$ppx_library" >/dev/null 2>&1 ||
+      fail "Application PPX library $ppx_library does not resolve in the pinned host switch"
+    runtime_dependencies=$(
+      OPAMROOT="$opam_root" opam exec --switch="$host_switch" -- \
+        ocamlfind query -format '%(ppx_runtime_deps)' "$ppx_library"
+    )
+    for runtime_dependency in $runtime_dependencies; do
+      printf '%s\n' "$runtime_dependency" >>"$external_libraries_file.target"
+    done
+  done <"$application_ppx_libraries_file"
+  sort -u "$external_libraries_file.target" >"$external_libraries_file"
+fi
 
 if ! application_packages=$(application_opam_roots "$application_opam_file"); then
   fail "application opam metadata has invalid dependency constraints"
@@ -385,40 +452,8 @@ prepare_source() {
   printf '%s|%s\n' "$archive" "$source_directory"
 }
 
-extract_pps_libraries() {
-  awk '
-    {
-      line = $0
-      sub(/;.*/, "", line)
-      if (!in_pps) {
-        if (!match(line, /\(pps([[:space:]]|\))/)) next
-        line = substr(line, RSTART)
-        in_pps = 1
-        depth = 0
-        accept = 1
-      }
-      open_count = gsub(/\(/, "(", line)
-      close_count = gsub(/\)/, ")", line)
-      depth += open_count - close_count
-      gsub(/[()]/, " ", line)
-      count = split(line, words, /[[:space:]]+/)
-      for (word_index = 1; word_index <= count; word_index++) {
-        word = words[word_index]
-        if (word == "--") accept = 0
-        if (accept && word != "" && word != "pps" &&
-            word ~ /^[A-Za-z0-9][A-Za-z0-9_.+-]*$/) print word
-      }
-      if (depth <= 0) {
-        in_pps = 0
-        depth = 0
-        accept = 0
-      }
-    }
-  ' "$1"
-}
-
 resolve_host_build_packages() {
-  : >"$ppx_libraries_file.unsorted"
+  cp "$application_ppx_libraries_file" "$ppx_libraries_file.unsorted"
   : >"$target_build_libraries_file.unsorted"
   while IFS= read -r package; do
     source_url=$(source_url_for_package "$package")

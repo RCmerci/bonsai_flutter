@@ -64,6 +64,7 @@ done
 
 fixture_packages=$(cat "$fixture_opam" 2>/dev/null)
 for dependency in \
+  '"ppx_deriving_yojson" {= "3.9.1"}' \
   '"melange-transit-core" {= "0.1.2"}' \
   '"melange-transit-native" {= "0.1.2"}' \
   '["datascript_ocaml.dev" "git+https://github.com/logseq/datascript-ocaml.git#40345cc2f59214daa88b33b8aec711337d20afa7"]' \
@@ -82,6 +83,24 @@ runtime_closure=$(cat vendor/opam-ios/runtime-closure.lock 2>/dev/null)
 supported_closure=$(cat vendor/opam-ios/supported-closure.lock 2>/dev/null)
 for closure in "$runtime_closure" "$supported_closure"; do
   require_text "$closure" \
+    'ppx_deriving|6.0.3|target-package|Pure_ocaml|dune|https://github.com/ocaml-ppx/ppx_deriving/releases/download/v6.0.3/ppx_deriving-6.0.3.tbz|374aa97b32c5e01c09a97810a48bfa218c213b5b649e4452101455ac19c94a6d|ppx_deriving.runtime|-' \
+    "ppx_deriving iOS runtime closure"
+  require_text "$closure" \
+    'ppx_deriving_yojson|3.9.1|target-package|Pure_ocaml|dune|https://github.com/ocaml-ppx/ppx_deriving_yojson/releases/download/v3.9.1/ppx_deriving_yojson-3.9.1.tbz|6a3ef7c7bb381f57448853f2a6d2287cf623628162a979587d1e8f7502114f4d|ppx_deriving_yojson.runtime|ppx_deriving' \
+    "ppx_deriving_yojson iOS runtime closure"
+  require_text "$closure" \
+    'cppo|1.8.0|host-package|Host_only|' \
+    "ppx_deriving native host closure"
+  require_text "$closure" \
+    'ppx_derivers|1.2.1|host-package|Host_only|' \
+    "ppx_deriving native host closure"
+  reject_text "$closure" \
+    '|ppx_deriving,ppx_deriving.runtime|' \
+    "ppx_deriving target components"
+  reject_text "$closure" \
+    '|ppx_deriving_yojson,ppx_deriving_yojson.runtime|' \
+    "ppx_deriving_yojson target components"
+  require_text "$closure" \
     'datascript-ocaml/archive/40345cc2f59214daa88b33b8aec711337d20afa7.tar.gz' \
     "DataScript iOS closure"
   require_text "$closure" 'melange-transit-core|0.1.2|target-package|' \
@@ -96,6 +115,12 @@ for closure in "$runtime_closure" "$supported_closure"; do
   reject_text "$closure" 'melange-transit-native|0.1.1|' \
     "DataScript iOS closure"
 done
+
+closure_capabilities=$(cat tool/ios/closure_capabilities.lock 2>/dev/null)
+reject_text "$closure_capabilities" 'ppx_deriving|' \
+  "generic ppx_deriving capability classification"
+reject_text "$closure_capabilities" 'ppx_deriving_yojson|' \
+  "generic ppx_deriving_yojson capability classification"
 
 datascript_sqlite_patch=vendor/patches/ios/datascript-system-sqlite.patch
 runtime_builder=$(cat tool/ios/build_runtime_package.sh 2>/dev/null)
@@ -176,10 +201,38 @@ reject_file \
   "$transit_repository/melange-transit-native/melange-transit-native.0.1.1"
 
 sdk_repository_lock=$(cat tool/ios/sdk_repository.lock 2>/dev/null)
-require_text "$sdk_repository_lock" "SDK_RUNTIME_PACKAGE_VERSION='0.1.0~dev.4'" \
+require_text "$sdk_repository_lock" "SDK_ABI_VERSION='2'" \
+  "ppx_deriving_yojson SDK ABI version"
+require_text "$sdk_repository_lock" "SDK_BUILD_RECIPE_REVISION='4'" \
+  "ppx_deriving_yojson SDK build recipe revision"
+require_text "$sdk_repository_lock" "SDK_RUNTIME_PACKAGE_VERSION='0.1.0~dev.5'" \
   "DataScript runtime SDK version"
-require_text "$sdk_repository_lock" "SDK_PACKAGE_VERSION='0.1.0~dev.31'" \
+require_text "$sdk_repository_lock" "SDK_PACKAGE_VERSION='0.1.0~dev.32'" \
   "DataScript framework SDK version"
+
+sdk_packages=tool/ios/opam-repository/0.1.0/packages
+runtime_sdk="$sdk_packages/bonsai_flutter_ios_runtime_sdk/bonsai_flutter_ios_runtime_sdk.0.1.0~dev.5"
+framework_sdk="$sdk_packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.32"
+require_file "$runtime_sdk/opam"
+require_file "$runtime_sdk/files/supported-closure.lock"
+require_file "$framework_sdk/opam"
+require_file "$framework_sdk/files/manifest.sexp"
+reject_file \
+  "$sdk_packages/bonsai_flutter_ios_runtime_sdk/bonsai_flutter_ios_runtime_sdk.0.1.0~dev.4"
+reject_file \
+  "$sdk_packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.31"
+package_universe=$(cat tool/ios/opam-repository/0.1.0/package-universe.lock 2>/dev/null)
+require_text "$package_universe" 'ppx_deriving|6.0.3|default|' \
+  "ppx_deriving immutable package metadata"
+require_text "$package_universe" 'ppx_deriving_yojson|3.9.1|default|' \
+  "ppx_deriving_yojson immutable package metadata"
+source_archives=$(cat tool/ios/opam-repository/0.1.0/source-archives.lock 2>/dev/null)
+require_text "$source_archives" \
+  'ppx_deriving|6.0.3|https://github.com/ocaml-ppx/ppx_deriving/releases/download/v6.0.3/ppx_deriving-6.0.3.tbz|sha256|374aa97b32c5e01c09a97810a48bfa218c213b5b649e4452101455ac19c94a6d' \
+  "ppx_deriving immutable repository source"
+require_text "$source_archives" \
+  'ppx_deriving_yojson|3.9.1|https://github.com/ocaml-ppx/ppx_deriving_yojson/releases/download/v3.9.1/ppx_deriving_yojson-3.9.1.tbz|sha256|6a3ef7c7bb381f57448853f2a6d2287cf623628162a979587d1e8f7502114f4d' \
+  "ppx_deriving_yojson immutable repository source"
 
 fixture_dune=$(cat "$fixture/app.dune")
 for library in \
@@ -193,8 +246,15 @@ do
   require_text "$fixture_dune" "$library" "DataScript Worker fixture libraries"
 done
 require_text "$fixture_dune" 'datascript_worker_native_embed' "DataScript Worker fixture executable"
+require_text "$fixture_dune" '(pps ppx_deriving_yojson)' \
+  "DataScript Worker real PPX preprocessing"
 
 probe=$(cat "$fixture/datascript_worker_probe.ml" 2>/dev/null)
+require_text "$probe" '[@@deriving yojson]' "derived JSON codec declaration"
+require_text "$probe" 'json_probe_to_yojson' "generated JSON encoder execution"
+require_text "$probe" 'json_probe_of_yojson' "generated JSON decoder execution"
+require_text "$probe" 'BONSAI_DERIVING_YOJSON_ROUND_TRIP' \
+  "generated JSON codec round-trip marker"
 require_text "$probe" 'Datascript_sqlite.open_session' "DataScript SQLite open"
 require_text "$probe" 'Datascript.store' "typed fact persistence"
 require_text "$probe" 'Datascript.restore' "typed fact restoration"
@@ -235,6 +295,8 @@ reject_text "$device_test" '--debug' \
 require_text "$device_test" 'BONSAI_DATASCRIPT_WORKER_PERSISTED' "first launch evidence"
 require_text "$device_test" 'BONSAI_DATASCRIPT_WORKER_SHUTDOWN' "runtime shutdown evidence"
 require_text "$device_test" 'BONSAI_DATASCRIPT_WORKER_RESTORED' "relaunch evidence"
+require_text "$device_test" 'BONSAI_DERIVING_YOJSON_ROUND_TRIP' \
+  "physical-device generated JSON codec evidence"
 require_text "$device_test" '--terminate-existing' "runtime relaunch"
 
 require_text "$(cat Makefile)" 'tool/test_datascript_worker_contract.sh' "CI contract target"

@@ -18,6 +18,8 @@
  (modules
   datascript_worker_probe
   datascript_worker_native_embed)
+ (preprocess
+  (pps ppx_deriving_yojson))
  (modes
   (native object))
  (libraries

@@ -263,12 +263,12 @@ patch_files=$(
     -type f \( -name '*.patch' -o -name '*.diff' \) -print |
     LC_ALL=C sort
 )
-expected_patch_files='./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_runtime_sdk/bonsai_flutter_ios_runtime_sdk.0.1.0~dev.4/files/patches/base-host-generator.patch
-./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_runtime_sdk/bonsai_flutter_ios_runtime_sdk.0.1.0~dev.4/files/patches/datascript-system-sqlite.patch
-./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_runtime_sdk/bonsai_flutter_ios_runtime_sdk.0.1.0~dev.4/files/patches/eio-posix-darwin-protocol-zero.patch
-./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_runtime_sdk/bonsai_flutter_ios_runtime_sdk.0.1.0~dev.4/files/patches/eio-posix-darwin-socktype-hints.patch
-./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_runtime_sdk/bonsai_flutter_ios_runtime_sdk.0.1.0~dev.4/files/patches/jst-config-host-discover.patch
-./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_runtime_sdk/bonsai_flutter_ios_runtime_sdk.0.1.0~dev.4/files/patches/mirage-crypto-rng-apple-entropy.patch
+expected_patch_files='./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_runtime_sdk/bonsai_flutter_ios_runtime_sdk.0.1.0~dev.5/files/patches/base-host-generator.patch
+./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_runtime_sdk/bonsai_flutter_ios_runtime_sdk.0.1.0~dev.5/files/patches/datascript-system-sqlite.patch
+./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_runtime_sdk/bonsai_flutter_ios_runtime_sdk.0.1.0~dev.5/files/patches/eio-posix-darwin-protocol-zero.patch
+./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_runtime_sdk/bonsai_flutter_ios_runtime_sdk.0.1.0~dev.5/files/patches/eio-posix-darwin-socktype-hints.patch
+./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_runtime_sdk/bonsai_flutter_ios_runtime_sdk.0.1.0~dev.5/files/patches/jst-config-host-discover.patch
+./tool/ios/opam-repository/0.1.0/packages/bonsai_flutter_ios_runtime_sdk/bonsai_flutter_ios_runtime_sdk.0.1.0~dev.5/files/patches/mirage-crypto-rng-apple-entropy.patch
 ./tool/ios/opam-repository/0.1.0/packages/ocaml-ios64/ocaml-ios64.5.1.1/files/ocamlmklib-failsafe.patch
 ./tool/ios/opam-repository/0.1.0/packages/ocaml-ios64/ocaml-ios64.5.1.1/files/sys.patch
 ./vendor/opam-ios/ocaml-ios64.5.1.1/files/ocamlmklib-failsafe.patch
@@ -375,7 +375,7 @@ require_text \
   "bonsai_flutter_test opam dependencies"
 require_text \
   "$(cat vendor/opam-ios/runtime-closure.lock)" \
-  'sqlite3|5.4.0|target-package|System_sqlite|dune|https://github.com/mmottl/sqlite3-ocaml/releases/download/5.4.0/sqlite3-5.4.0.tbz|f0069532f78ac24f16d79262af01434952d0481f8bf80ae541dff4a56cc4e9ff|sqlite3|-' \
+  'sqlite3|5.4.0|host-package|Host_only|opam|https://github.com/mmottl/sqlite3-ocaml/releases/download/5.4.0/sqlite3-5.4.0.tbz|f0069532f78ac24f16d79262af01434952d0481f8bf80ae541dff4a56cc4e9ff|-|-' \
   "iOS runtime closure lock"
 require_text \
   "$(cat tool/ios/toolchain.lock)" \
