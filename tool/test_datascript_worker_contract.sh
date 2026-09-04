@@ -207,12 +207,12 @@ require_text "$sdk_repository_lock" "SDK_BUILD_RECIPE_REVISION='4'" \
   "ppx_deriving_yojson SDK build recipe revision"
 require_text "$sdk_repository_lock" "SDK_RUNTIME_PACKAGE_VERSION='0.1.0~dev.5'" \
   "DataScript runtime SDK version"
-require_text "$sdk_repository_lock" "SDK_PACKAGE_VERSION='0.1.0~dev.32'" \
+require_text "$sdk_repository_lock" "SDK_PACKAGE_VERSION='0.1.0~dev.33'" \
   "DataScript framework SDK version"
 
 sdk_packages=tool/ios/opam-repository/0.1.0/packages
 runtime_sdk="$sdk_packages/bonsai_flutter_ios_runtime_sdk/bonsai_flutter_ios_runtime_sdk.0.1.0~dev.5"
-framework_sdk="$sdk_packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.32"
+framework_sdk="$sdk_packages/bonsai_flutter_ios_sdk/bonsai_flutter_ios_sdk.0.1.0~dev.33"
 require_file "$runtime_sdk/opam"
 require_file "$runtime_sdk/files/supported-closure.lock"
 require_file "$framework_sdk/opam"

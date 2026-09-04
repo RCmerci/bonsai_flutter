@@ -11,13 +11,13 @@ homepage: "https://github.com/RCmerci/bonsai_flutter"
 bug-reports: "https://github.com/RCmerci/bonsai_flutter/issues"
 dev-repo: "git+https://github.com/RCmerci/bonsai_flutter.git"
 extra-source "bonsai_flutter.tar.gz" {
-  src: "https://github.com/RCmerci/bonsai_flutter/archive/6c8ae865d16ab1d781cfb74ef2a4168ea0f949b7.tar.gz"
-  checksum: ["sha256=5329b2fba63224d16f983a750fd8124a6f766e8c011a4a8af095850b6ca2069a"]
+  src: "https://github.com/RCmerci/bonsai_flutter/archive/1a8c9f8c711e9136f99090b2891921fd8e1adb97.tar.gz"
+  checksum: ["sha256=1c90b256746bd851d4a9576aa76efc0b74a26162903403314ce1b0efb32aa8c0"]
 }
 extra-files: [
-  ["build-installed-framework.sh" "sha256=c507101107eb1cf813a44215ebdfb5515579d4e8f18a94bbfdb3904d9d528fe9"]
-  ["manifest.sexp" "sha256=b28891ec655d92b36dca4d12e1d19e45e4e56047549023d1027a369286c65e6e"]
-  ["package-lock.sexp" "sha256=9548592486bd5b294291d404b414fbdd380104df5b120b93575f89c496a8f303"]
+  ["build-installed-framework.sh" "sha256=5a31f8598364104b391da7a29273288f169ba0e03287f2185edc9a36b684e25d"]
+  ["manifest.sexp" "sha256=023e1d80259014bd2770d8eac2b153c0de78aa18b16f942616a4dbf9589b98f9"]
+  ["package-lock.sexp" "sha256=2743688d06aafe3844ea442164e2aa1ef825888dfe6dd3caa427272c068a671c"]
 ]
 depends: [
   "bonsai_flutter_ios_runtime_sdk" {= "0.1.0~dev.5"}
