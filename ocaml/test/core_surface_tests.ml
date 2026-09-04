@@ -459,6 +459,61 @@ let expect_invalid create message =
   | _ -> failwith message
 ;;
 
+let test_box_constraints_optional_maxima_and_validation () =
+  let min_width, max_width, min_height, max_height =
+    Ui.Layout.Box_constraints.create () |> Ui.Layout.Box_constraints.Private.to_values
+  in
+  check (Float.equal min_width 0.) "box constraints default minimum width changed";
+  check (Option.is_none max_width) "box constraints default maximum width is bounded";
+  check (Float.equal min_height 0.) "box constraints default minimum height changed";
+  check (Option.is_none max_height) "box constraints default maximum height is bounded";
+  let constraints =
+    Ui.Layout.Box_constraints.create
+      ~min_width:10.
+      ~max_width:100.
+      ~min_height:20.
+      ~max_height:200.
+      ()
+  in
+  let min_width, max_width, min_height, max_height =
+    Ui.Layout.Box_constraints.Private.to_values constraints
+  in
+  check
+    (Float.equal min_width 10. && Option.equal Float.equal max_width (Some 100.))
+    "explicit width constraints were not preserved";
+  check
+    (Float.equal min_height 20. && Option.equal Float.equal max_height (Some 200.))
+    "explicit height constraints were not preserved";
+  let widget = Ui.Widget.constrained_box ~constraints child in
+  (let (Av view) = Ui.Widget.Private.view widget in
+   match view.node with
+   | Ui.Widget.Private.Constrained_box
+       { min_width = 10.
+       ; max_width = Some 100.
+       ; min_height = 20.
+       ; max_height = Some 200.
+       } -> ()
+   | _ -> failwith "constrained-box widget lost optional maximum constraints");
+  List.iter
+    (fun max_width ->
+       expect_invalid
+         (fun () -> Ui.Layout.Box_constraints.create ~max_width ())
+         "invalid maximum width was accepted")
+    [ -1.; nan; infinity; neg_infinity ];
+  List.iter
+    (fun max_height ->
+       expect_invalid
+         (fun () -> Ui.Layout.Box_constraints.create ~max_height ())
+         "invalid maximum height was accepted")
+    [ -1.; nan; infinity; neg_infinity ];
+  expect_invalid
+    (fun () -> Ui.Layout.Box_constraints.create ~min_width:11. ~max_width:10. ())
+    "maximum width below its minimum was accepted";
+  expect_invalid
+    (fun () -> Ui.Layout.Box_constraints.create ~min_height:21. ~max_height:20. ())
+    "maximum height below its minimum was accepted"
+;;
+
 let test_typed_viewport_body_encoding () =
   let viewport =
     Ui.Widget.Scroll_view.vertical
@@ -577,6 +632,7 @@ let () =
   test_debug_tree ();
   test_semantics_properties ();
   test_styled_text_constructor_and_validation ();
+  test_box_constraints_optional_maxima_and_validation ();
   test_typed_viewport_body_encoding ();
   test_viewport_extent_and_body_validation ();
   test_application_theme_validation ()

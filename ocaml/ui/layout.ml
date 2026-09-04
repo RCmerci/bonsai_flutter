@@ -20,9 +20,9 @@ end
 module Box_constraints = struct
   type t =
     { min_width : float
-    ; max_width : float
+    ; max_width : float option
     ; min_height : float
-    ; max_height : float
+    ; max_height : float option
     }
 
   let finite_nonnegative label value =
@@ -33,19 +33,19 @@ module Box_constraints = struct
     value
   ;;
 
-  let create
-        ?(min_width = 0.)
-        ?(max_width = Float.max_float)
-        ?(min_height = 0.)
-        ?(max_height = Float.max_float)
-        ()
-    =
+  let validate_maximum minimum = function
+    | Some maximum when Float.compare minimum maximum > 0 ->
+      invalid_arg "Layout.Box_constraints.create: minimum exceeds maximum"
+    | None | Some _ -> ()
+  ;;
+
+  let create ?(min_width = 0.) ?max_width ?(min_height = 0.) ?max_height () =
     let min_width = finite_nonnegative "min_width" min_width in
-    let max_width = finite_nonnegative "max_width" max_width in
+    let max_width = Option.map (finite_nonnegative "max_width") max_width in
     let min_height = finite_nonnegative "min_height" min_height in
-    let max_height = finite_nonnegative "max_height" max_height in
-    if Float.compare min_width max_width > 0 || Float.compare min_height max_height > 0
-    then invalid_arg "Layout.Box_constraints.create: minimum exceeds maximum";
+    let max_height = Option.map (finite_nonnegative "max_height") max_height in
+    validate_maximum min_width max_width;
+    validate_maximum min_height max_height;
     { min_width; max_width; min_height; max_height }
   ;;
 

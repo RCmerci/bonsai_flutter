@@ -1,7 +1,7 @@
 ((protocol
   (name bonsai_flutter)
   (major 2)
-  (minor 26)
+  (minor 27)
   (endianness little)
   (header_bytes 48)
   (max_frame_bytes 16777216)
@@ -154,9 +154,9 @@
      (height 2 optional_f64)))
    (constrained_box
     ((min_width 1 f64)
-     (max_width 2 f64)
+     (max_width 2 optional_f64)
      (min_height 3 f64)
-     (max_height 4 f64)))
+     (max_height 4 optional_f64)))
    (decorated_box
     ((background 1 optional_argb32)
      (border_radius 2 f64)))

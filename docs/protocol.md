@@ -108,6 +108,7 @@ implemented kind-specific property layouts are:
 | Button | `enabled:bool` |
 | Padding | `left:f64`, `top:f64`, `right:f64`, `bottom:f64` |
 | Center | `width_factor:optional f64`, `height_factor:optional f64` |
+| ConstrainedBox | `min_width:f64`, `max_width:optional f64`, `min_height:f64`, `max_height:optional f64` |
 | ScrollView | `axis:u8`, `reverse:bool` |
 | Semantics | `label:optional string`, `button:bool`, `enabled:optional bool`, `checked:optional bool` |
 | Theme | one structured `theme_data` value used only as a subtree override |
@@ -123,6 +124,11 @@ implemented kind-specific property layouts are:
 typed property value. Empty and linear values use mask zero; multi-property
 values set each implemented field bit. Future fields extend the
 kind-specific generated layout rather than inserting a dynamic property map.
+Protocol 2.27 changes both ConstrainedBox maxima from required `f64` values to
+optional finite `f64` values. An absent maximum is unbounded and maps to
+Flutter `double.infinity`; a present maximum must be finite, non-negative, and
+at least its corresponding minimum. Protocol 2.26 constrained-box payloads are
+not accepted as 2.27 payloads, and no maximum-finite sentinel is retained.
 Protocol 1.22 adds node kind 124 for Material linear progress with one optional
 finite `f64` value. An absent value selects indeterminate progress; a present
 value must be in the inclusive range `0.0` through `1.0`. OCaml and Dart both

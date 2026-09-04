@@ -3,7 +3,8 @@
 ## Unreleased
 
 - Aligned the native protocol query and Dart version contract with generated
-  renderer protocol 2.26.
+  renderer protocol 2.27, whose constrained-box maxima use explicit optional
+  values for unbounded layout.
 
 ## 0.0.1
 

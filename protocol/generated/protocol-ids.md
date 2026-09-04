@@ -2,7 +2,7 @@
 
 # Protocol IDs
 
-Protocol version: `2.26`
+Protocol version: `2.27`
 
 ## Frame kind
 
@@ -296,9 +296,9 @@ Protocol version: `2.26`
 | Name | ID | Encoding |
 |---|---:|---|
 | `min_width` | 1 | `f64` |
-| `max_width` | 2 | `f64` |
+| `max_width` | 2 | `optional_f64` |
 | `min_height` | 3 | `f64` |
-| `max_height` | 4 | `f64` |
+| `max_height` | 4 | `optional_f64` |
 
 ## Decorated box properties
 

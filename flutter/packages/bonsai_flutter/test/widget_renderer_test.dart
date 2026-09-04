@@ -1210,6 +1210,126 @@ void main() {
     expect(find.byType(SafeArea), findsOneWidget);
     expect(find.byType(MediaQuery), findsWidgets);
   });
+
+  testWidgets(
+    'minimum-only constrained box stays finite and visible in a vertical scroll view',
+    (tester) async {
+      final store = NodeStore()
+        ..apply(
+          const Frame(
+            runtimeEpoch: 27,
+            baseRevision: 0,
+            targetRevision: 1,
+            kind: FrameKind.fullSnapshot,
+            operations: [
+              SetApplicationTheme(
+                title: 'Constraint regression',
+                theme: testApplicationTheme,
+              ),
+              CreateNode(
+                nodeId: 1,
+                kind: NodeKind.scrollView,
+                props: ScrollViewProps(
+                  axis: ScrollAxis.vertical,
+                  reverse: false,
+                ),
+                eventBindings: [],
+              ),
+              CreateNode(
+                nodeId: 2,
+                kind: NodeKind.sliverBox,
+                props: EmptyProps(),
+                eventBindings: [],
+              ),
+              CreateNode(
+                nodeId: 3,
+                kind: NodeKind.constrainedBox,
+                props: ConstrainedBoxProps(
+                  minWidth: 0,
+                  maxWidth: null,
+                  minHeight: 44,
+                  maxHeight: null,
+                ),
+                eventBindings: [],
+              ),
+              CreateNode(
+                nodeId: 4,
+                kind: NodeKind.align,
+                props: AlignProps(AlignmentValue.center),
+                eventBindings: [],
+              ),
+              CreateNode(
+                nodeId: 5,
+                kind: NodeKind.text,
+                props: TextProps('Visible row'),
+                eventBindings: [],
+              ),
+              SetChildren(nodeId: 1, children: [2]),
+              SetChildren(nodeId: 2, children: [3]),
+              SetChildren(nodeId: 3, children: [4]),
+              SetChildren(nodeId: 4, children: [5]),
+              SetRoot(1),
+            ],
+          ),
+        );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 320,
+                height: 200,
+                child: BonsaiFlutterView(store: store),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final constrainedFinder = find.descendant(
+        of: find.byKey(const ValueKey<int>(3)),
+        matching: find.byType(ConstrainedBox),
+      );
+      final constrained = tester.widget<ConstrainedBox>(constrainedFinder);
+      expect(constrained.constraints.maxWidth, double.infinity);
+      expect(constrained.constraints.maxHeight, double.infinity);
+      final viewportRect = tester.getRect(find.byType(CustomScrollView));
+      final textRect = tester.getRect(find.text('Visible row'));
+      expect(textRect.width.isFinite, isTrue);
+      expect(textRect.height.isFinite, isTrue);
+      expect(textRect.top.isFinite, isTrue);
+      expect(textRect.bottom, lessThanOrEqualTo(viewportRect.bottom));
+      expect(textRect.top, greaterThanOrEqualTo(viewportRect.top));
+
+      store.apply(
+        const Frame(
+          runtimeEpoch: 27,
+          baseRevision: 1,
+          targetRevision: 2,
+          kind: FrameKind.incremental,
+          operations: [
+            UpdateProps(
+              nodeId: 3,
+              props: ConstrainedBoxProps(
+                minWidth: 0,
+                maxWidth: null,
+                minHeight: 44,
+                maxHeight: 80,
+              ),
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
+
+      final bounded = tester.widget<ConstrainedBox>(constrainedFinder);
+      expect(bounded.constraints.maxWidth, double.infinity);
+      expect(bounded.constraints.maxHeight, 80);
+      expect(tester.getRect(find.text('Visible row')).top.isFinite, isTrue);
+    },
+  );
 }
 
 Frame counterWidgetSnapshot() => const Frame(

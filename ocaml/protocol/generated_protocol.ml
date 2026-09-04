@@ -3,7 +3,7 @@
 module ID = Bonsai_flutter_spec.Id
 
 let protocol_major = 2
-let protocol_minor = 26
+let protocol_minor = 27
 
 module Limits = struct
   let header_bytes = 48

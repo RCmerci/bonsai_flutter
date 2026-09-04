@@ -93,6 +93,25 @@ let check_u64 label value =
   if Int64.compare value 0L < 0 then fail Invalid_props "%s must be non-negative" label
 ;;
 
+let validate_box_constraints ~min_width ~max_width ~min_height ~max_height =
+  if
+    (not (Float.is_finite min_width))
+    || Float.compare min_width 0. < 0
+    || (not (Float.is_finite min_height))
+    || Float.compare min_height 0. < 0
+  then fail Invalid_props "box constraint minima must be finite and non-negative";
+  let validate_maximum label minimum = function
+    | None -> ()
+    | Some maximum ->
+      if (not (Float.is_finite maximum)) || Float.compare maximum 0. < 0
+      then fail Invalid_props "%s must be finite and non-negative" label;
+      if Float.compare minimum maximum > 0
+      then fail Invalid_props "%s must not be below its minimum" label
+  in
+  validate_maximum "box constraint maximum width" min_width max_width;
+  validate_maximum "box constraint maximum height" min_height max_height
+;;
+
 let write_string writer value =
   let length = String.length value in
   if length > Generated_protocol.Limits.max_string_bytes
@@ -1356,10 +1375,11 @@ let write_props writer kind props =
     write_optional_f64 writer height
   | ( Constrained_box
     , Constrained_box_props { min_width; max_width; min_height; max_height } ) ->
+    validate_box_constraints ~min_width ~max_width ~min_height ~max_height;
     Writer.f64 writer min_width;
-    Writer.f64 writer max_width;
+    write_optional_f64 writer max_width;
     Writer.f64 writer min_height;
-    Writer.f64 writer max_height
+    write_optional_f64 writer max_height
   | Decorated_box, Decorated_box_props { background; border_radius } ->
     write_optional_argb32 writer background;
     Writer.f64 writer border_radius
@@ -2235,10 +2255,11 @@ let write_update_props writer props =
     write_optional_f64 writer width;
     write_optional_f64 writer height
   | Constrained_box_props { min_width; max_width; min_height; max_height } ->
+    validate_box_constraints ~min_width ~max_width ~min_height ~max_height;
     Writer.f64 writer min_width;
-    Writer.f64 writer max_width;
+    write_optional_f64 writer max_width;
     Writer.f64 writer min_height;
-    Writer.f64 writer max_height
+    write_optional_f64 writer max_height
   | Decorated_box_props { background; border_radius } ->
     write_optional_argb32 writer background;
     Writer.f64 writer border_radius
@@ -3725,15 +3746,10 @@ let read_props reader kind ~protocol_minor =
     Sized_box_props { width; height }
   | Constrained_box ->
     let min_width = read_finite_f64 reader in
-    let max_width = read_finite_f64 reader in
+    let max_width = read_optional_f64 reader in
     let min_height = read_finite_f64 reader in
-    let max_height = read_finite_f64 reader in
-    if
-      Float.compare min_width 0. < 0
-      || Float.compare min_height 0. < 0
-      || Float.compare min_width max_width > 0
-      || Float.compare min_height max_height > 0
-    then fail Invalid_props "invalid box constraints";
+    let max_height = read_optional_f64 reader in
+    validate_box_constraints ~min_width ~max_width ~min_height ~max_height;
     Constrained_box_props { min_width; max_width; min_height; max_height }
   | Decorated_box ->
     let background = read_optional_argb32 reader in

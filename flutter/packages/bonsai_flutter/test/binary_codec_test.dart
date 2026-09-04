@@ -1898,6 +1898,175 @@ void main() {
       expect(store.node(2).props, const TextProps('Count: 0'));
     });
 
+    test(
+      'round trips constrained-box optional maxima and patch transitions',
+      () {
+        const frame = Frame(
+          runtimeEpoch: 9,
+          baseRevision: 1,
+          targetRevision: 2,
+          kind: FrameKind.incremental,
+          operations: [
+            UpdateProps(
+              nodeId: 1,
+              props: ConstrainedBoxProps(
+                minWidth: 0,
+                maxWidth: null,
+                minHeight: 44,
+                maxHeight: null,
+              ),
+            ),
+            UpdateProps(
+              nodeId: 1,
+              props: ConstrainedBoxProps(
+                minWidth: 10,
+                maxWidth: 100,
+                minHeight: 44,
+                maxHeight: 200,
+              ),
+            ),
+            UpdateProps(
+              nodeId: 1,
+              props: ConstrainedBoxProps(
+                minWidth: 0,
+                maxWidth: null,
+                minHeight: 44,
+                maxHeight: null,
+              ),
+            ),
+          ],
+        );
+
+        final decoded = FrameCodec.decode(FrameCodec.encode(frame));
+        final props = decoded.operations
+            .cast<UpdateProps>()
+            .map((operation) => operation.props as ConstrainedBoxProps)
+            .toList();
+
+        expect(props[0].maxWidth, isNull);
+        expect(props[0].maxHeight, isNull);
+        expect(props[1].maxWidth, 100);
+        expect(props[1].maxHeight, 200);
+        expect(props[2].maxWidth, isNull);
+        expect(props[2].maxHeight, isNull);
+      },
+    );
+
+    test('rejects invalid constrained-box maxima at both codec boundaries', () {
+      Frame frame(ConstrainedBoxProps props) => Frame(
+        runtimeEpoch: 9,
+        baseRevision: 1,
+        targetRevision: 2,
+        kind: FrameKind.incremental,
+        operations: [UpdateProps(nodeId: 1, props: props)],
+      );
+
+      for (final invalid in [
+        -1.0,
+        double.nan,
+        double.infinity,
+        double.negativeInfinity,
+      ]) {
+        expect(
+          () => FrameCodec.encode(
+            frame(
+              ConstrainedBoxProps(
+                minWidth: 0,
+                maxWidth: invalid,
+                minHeight: 0,
+                maxHeight: null,
+              ),
+            ),
+          ),
+          throwsProtocolCode(ProtocolErrorCode.invalidProps),
+        );
+        expect(
+          () => FrameCodec.encode(
+            frame(
+              ConstrainedBoxProps(
+                minWidth: 0,
+                maxWidth: null,
+                minHeight: 0,
+                maxHeight: invalid,
+              ),
+            ),
+          ),
+          throwsProtocolCode(ProtocolErrorCode.invalidProps),
+        );
+      }
+      expect(
+        () => FrameCodec.encode(
+          frame(
+            const ConstrainedBoxProps(
+              minWidth: 11,
+              maxWidth: 10,
+              minHeight: 0,
+              maxHeight: null,
+            ),
+          ),
+        ),
+        throwsProtocolCode(ProtocolErrorCode.invalidProps),
+      );
+      expect(
+        () => FrameCodec.encode(
+          frame(
+            const ConstrainedBoxProps(
+              minWidth: 0,
+              maxWidth: null,
+              minHeight: 21,
+              maxHeight: 20,
+            ),
+          ),
+        ),
+        throwsProtocolCode(ProtocolErrorCode.invalidProps),
+      );
+
+      final encoded = FrameCodec.encode(
+        frame(
+          const ConstrainedBoxProps(
+            minWidth: 10,
+            maxWidth: 123.25,
+            minHeight: 20,
+            maxHeight: null,
+          ),
+        ),
+      );
+      for (final invalid in [
+        -1.0,
+        5.0,
+        double.nan,
+        double.infinity,
+        double.negativeInfinity,
+      ]) {
+        expectDecodeError(
+          replaceFloat64(encoded, 123.25, invalid),
+          ProtocolErrorCode.invalidProps,
+        );
+      }
+      final encodedHeight = FrameCodec.encode(
+        frame(
+          const ConstrainedBoxProps(
+            minWidth: 10,
+            maxWidth: null,
+            minHeight: 20,
+            maxHeight: 321.5,
+          ),
+        ),
+      );
+      for (final invalid in [
+        -1.0,
+        15.0,
+        double.nan,
+        double.infinity,
+        double.negativeInfinity,
+      ]) {
+        expectDecodeError(
+          replaceFloat64(encodedHeight, 321.5, invalid),
+          ProtocolErrorCode.invalidProps,
+        );
+      }
+    });
+
     test('round trips the typed core visual and layout surface', () {
       const frame = Frame(
         runtimeEpoch: 9,

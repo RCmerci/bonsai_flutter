@@ -685,9 +685,9 @@ final class ConstrainedBoxProps extends UiProps {
   });
 
   final double minWidth;
-  final double maxWidth;
+  final double? maxWidth;
   final double minHeight;
-  final double maxHeight;
+  final double? maxHeight;
 }
 
 final class DecoratedBoxProps extends UiProps {

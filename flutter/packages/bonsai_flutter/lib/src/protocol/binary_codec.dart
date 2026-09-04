@@ -465,20 +465,13 @@ abstract final class FrameCodec {
         writer
           ..optionalFloat64(width)
           ..optionalFloat64(height);
-      case (
-        NodeKind.constrainedBox,
-        ConstrainedBoxProps(
-          :final minWidth,
-          :final maxWidth,
-          :final minHeight,
-          :final maxHeight,
-        ),
-      ):
+      case (NodeKind.constrainedBox, final ConstrainedBoxProps props):
+        _validateConstrainedBoxProps(props);
         writer
-          ..float64(minWidth)
-          ..float64(maxWidth)
-          ..float64(minHeight)
-          ..float64(maxHeight);
+          ..float64(props.minWidth)
+          ..optionalFloat64(props.maxWidth)
+          ..float64(props.minHeight)
+          ..optionalFloat64(props.maxHeight);
       case (
         NodeKind.decoratedBox,
         DecoratedBoxProps(:final backgroundArgb, :final borderRadius),
@@ -946,19 +939,15 @@ abstract final class FrameCodec {
           ..uint64(_changedFields(props))
           ..optionalFloat64(width)
           ..optionalFloat64(height);
-      case ConstrainedBoxProps(
-        :final minWidth,
-        :final maxWidth,
-        :final minHeight,
-        :final maxHeight,
-      ):
+      case final ConstrainedBoxProps props:
+        _validateConstrainedBoxProps(props);
         writer
           ..uint16(NodeKindId.constrainedBox)
           ..uint64(_changedFields(props))
-          ..float64(minWidth)
-          ..float64(maxWidth)
-          ..float64(minHeight)
-          ..float64(maxHeight);
+          ..float64(props.minWidth)
+          ..optionalFloat64(props.maxWidth)
+          ..float64(props.minHeight)
+          ..optionalFloat64(props.maxHeight);
       case DecoratedBoxProps(:final backgroundArgb, :final borderRadius):
         writer
           ..uint16(NodeKindId.decoratedBox)
@@ -1431,12 +1420,7 @@ abstract final class FrameCodec {
       width: reader.optionalFloat64(),
       height: reader.optionalFloat64(),
     ),
-    NodeKind.constrainedBox => ConstrainedBoxProps(
-      minWidth: reader.finiteFloat64(),
-      maxWidth: reader.finiteFloat64(),
-      minHeight: reader.finiteFloat64(),
-      maxHeight: reader.finiteFloat64(),
-    ),
+    NodeKind.constrainedBox => _readConstrainedBoxProps(reader),
     NodeKind.decoratedBox => DecoratedBoxProps(
       backgroundArgb: _readOptionalArgb32(reader),
       borderRadius: reader.finiteFloat64(),
@@ -4633,6 +4617,47 @@ ScrollViewProps _readScrollViewProps(_Reader reader) {
     primary: primary,
     cacheExtent: cacheExtent,
   );
+}
+
+ConstrainedBoxProps _readConstrainedBoxProps(_Reader reader) {
+  final props = ConstrainedBoxProps(
+    minWidth: reader.finiteFloat64(),
+    maxWidth: reader.optionalFloat64(),
+    minHeight: reader.finiteFloat64(),
+    maxHeight: reader.optionalFloat64(),
+  );
+  _validateConstrainedBoxProps(props);
+  return props;
+}
+
+void _validateConstrainedBoxProps(ConstrainedBoxProps props) {
+  if (!props.minWidth.isFinite ||
+      props.minWidth < 0 ||
+      !props.minHeight.isFinite ||
+      props.minHeight < 0) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Box constraint minima must be finite and non-negative',
+    );
+  }
+  final maxWidth = props.maxWidth;
+  if (maxWidth != null &&
+      (!maxWidth.isFinite || maxWidth < 0 || props.minWidth > maxWidth)) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Box constraint maximum width must be finite, non-negative, and not '
+      'below its minimum',
+    );
+  }
+  final maxHeight = props.maxHeight;
+  if (maxHeight != null &&
+      (!maxHeight.isFinite || maxHeight < 0 || props.minHeight > maxHeight)) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Box constraint maximum height must be finite, non-negative, and not '
+      'below its minimum',
+    );
+  }
 }
 
 void _validateCacheExtent(double? cacheExtent) {

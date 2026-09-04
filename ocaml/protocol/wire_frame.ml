@@ -568,9 +568,9 @@ type props =
       }
   | Constrained_box_props of
       { min_width : float
-      ; max_width : float
+      ; max_width : float option
       ; min_height : float
-      ; max_height : float
+      ; max_height : float option
       }
   | Decorated_box_props of
       { background : int32 option

@@ -1681,6 +1681,77 @@ let test_scroll_view_cache_extent_validation () =
     [ -1.; Float.nan; Float.infinity; Float.neg_infinity ]
 ;;
 
+let test_constrained_box_optional_maxima_protocol () =
+  let props ?(min_width = 0.) ?max_width ?(min_height = 0.) ?max_height () =
+    Wire_frame.Constrained_box_props { min_width; max_width; min_height; max_height }
+  in
+  expect_frame_round_trip
+    "unbounded constrained box"
+    (props_frame (props ~min_height:44. ()));
+  expect_frame_round_trip
+    "bounded constrained box"
+    (props_frame
+       (props ~min_width:10. ~max_width:100. ~min_height:20. ~max_height:200. ()));
+  let transitions =
+    Wire_frame.
+      { runtime_epoch = epoch 90L
+      ; base_revision = revision 1L
+      ; target_revision = revision 2L
+      ; kind = Incremental_frame
+      ; operations =
+          [ Update_props { node_id = node 1L; props = props ~min_height:44. () }
+          ; Update_props
+              { node_id = node 1L; props = props ~min_height:44. ~max_height:200. () }
+          ; Update_props { node_id = node 1L; props = props ~min_height:44. () }
+          ]
+      }
+  in
+  expect_frame_round_trip "constrained box None/Some patch transitions" transitions;
+  List.iter
+    (fun invalid ->
+       expect_invalid_props_encode
+         "invalid constrained-box maximum width"
+         (props_frame (props ~max_width:invalid ()));
+       expect_invalid_props_encode
+         "invalid constrained-box maximum height"
+         (props_frame (props ~max_height:invalid ())))
+    [ -1.; Float.nan; Float.infinity; Float.neg_infinity ];
+  expect_invalid_props_encode
+    "constrained-box maximum width below minimum"
+    (props_frame (props ~min_width:11. ~max_width:10. ()));
+  expect_invalid_props_encode
+    "constrained-box maximum height below minimum"
+    (props_frame (props ~min_height:21. ~max_height:20. ()));
+  let encoded =
+    match
+      Binary_codec.encode
+        (props_frame (props ~min_width:10. ~max_width:123.25 ~min_height:20. ()))
+    with
+    | Ok bytes -> bytes
+    | Error error -> fail "valid constrained box failed to encode: %s" error.message
+  in
+  List.iter
+    (fun invalid ->
+       expect_invalid_props_decode
+         "invalid decoded constrained-box maximum width"
+         (replace_float64 encoded 123.25 invalid))
+    [ -1.; 5.; Float.nan; Float.infinity; Float.neg_infinity ];
+  let encoded =
+    match
+      Binary_codec.encode
+        (props_frame (props ~min_width:10. ~min_height:20. ~max_height:321.5 ()))
+    with
+    | Ok bytes -> bytes
+    | Error error -> fail "valid constrained box failed to encode: %s" error.message
+  in
+  List.iter
+    (fun invalid ->
+       expect_invalid_props_decode
+         "invalid decoded constrained-box maximum height"
+         (replace_float64 encoded 321.5 invalid))
+    [ -1.; 15.; Float.nan; Float.infinity; Float.neg_infinity ]
+;;
+
 let test_sliver_app_bar_codec_validation () =
   let props
         ?(floating = true)
@@ -2164,6 +2235,7 @@ let () =
   test_sliver_wire_boundaries ();
   test_virtual_sliver_invariant_validation ();
   test_scroll_view_cache_extent_validation ();
+  test_constrained_box_optional_maxima_protocol ();
   test_sliver_app_bar_codec_validation ();
   test_complete_material_protocol_round_trip ();
   test_linear_progress_protocol_boundaries ();

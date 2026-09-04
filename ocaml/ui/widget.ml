@@ -445,9 +445,9 @@ module Private_types = struct
         -> [ `Sized_box ] node
     | Constrained_box :
         { min_width : float
-        ; max_width : float
+        ; max_width : float option
         ; min_height : float
-        ; max_height : float
+        ; max_height : float option
         }
         -> [ `Constrained_box ] node
     | Decorated_box :
@@ -987,9 +987,9 @@ let node_equal (type k1 k2) (a : k1 node) (b : k2 node) : bool =
     Option.equal Float.equal x.width y.width && Option.equal Float.equal x.height y.height
   | Constrained_box x, Constrained_box y ->
     Float.equal x.min_width y.min_width
-    && Float.equal x.max_width y.max_width
+    && Option.equal Float.equal x.max_width y.max_width
     && Float.equal x.min_height y.min_height
-    && Float.equal x.max_height y.max_height
+    && Option.equal Float.equal x.max_height y.max_height
   | Decorated_box x, Decorated_box y ->
     Option.equal Int32.equal x.background y.background
     && Float.equal x.border_radius y.border_radius

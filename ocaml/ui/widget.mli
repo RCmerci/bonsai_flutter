@@ -711,9 +711,9 @@ module Private : sig
         -> [ `Sized_box ] node
     | Constrained_box :
         { min_width : float
-        ; max_width : float
+        ; max_width : float option
         ; min_height : float
-        ; max_height : float
+        ; max_height : float option
         }
         -> [ `Constrained_box ] node
     | Decorated_box :

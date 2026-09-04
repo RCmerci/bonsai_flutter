@@ -21,7 +21,7 @@ The current development release contains:
 - a foreground-vsync pump with background suspension, resume catch-up, and
   exact presentation-token backpressure;
 - a dedicated ordered runtime isolate and ABI 2.0 native owned-buffer
-  transport boundary for renderer protocol 2.26;
+  transport boundary for renderer protocol 2.27;
 - node-scoped text-input, focus, scroll, animation, and native resource
   disposal;
 - Flutter-local semantic opacity interpolation with typed completion events

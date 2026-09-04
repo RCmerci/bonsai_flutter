@@ -420,9 +420,9 @@ Widget _buildConstrainedBox(
   return ConstrainedBox(
     constraints: BoxConstraints(
       minWidth: props.minWidth,
-      maxWidth: props.maxWidth,
+      maxWidth: props.maxWidth ?? double.infinity,
       minHeight: props.minHeight,
-      maxHeight: props.maxHeight,
+      maxHeight: props.maxHeight ?? double.infinity,
     ),
     child: children.single,
   );

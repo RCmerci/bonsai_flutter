@@ -2,7 +2,7 @@
 
 abstract final class ProtocolVersion {
   static const int protocolMajor = 2;
-  static const int protocolMinor = 26;
+  static const int protocolMinor = 27;
 }
 
 abstract final class ProtocolLimits {

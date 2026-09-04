@@ -74,7 +74,7 @@ final NativeProtocolVersion nativeProtocolVersion =
 
 void validateNativeVersions(NativeVersionFacade versions) {
   const expectedAbi = NativeAbiVersion(2, 0);
-  const expectedProtocol = NativeProtocolVersion(2, 26);
+  const expectedProtocol = NativeProtocolVersion(2, 27);
   if (versions.abi != expectedAbi) {
     throw NativeLibraryLoadingException(
       'Native ABI ${versions.abi} does not match required ABI $expectedAbi',

@@ -9,7 +9,7 @@
 #endif
 
 #define BF_PROTOCOL_MAJOR 2
-#define BF_PROTOCOL_MINOR 26
+#define BF_PROTOCOL_MINOR 27
 #define BF_ABI_MAJOR 2
 #define BF_ABI_MINOR 0
 

@@ -1647,6 +1647,68 @@ let test_layout_material_and_semantics_widgets_are_incremental () =
   apply_and_compare ~old_snapshot:(Some (Mounted_tree.snapshot first.mounted_tree)) second
 ;;
 
+let test_constrained_box_reconciles_optional_maximum_transitions () =
+  let reconciler = Reconciler.create ~runtime_epoch:590L in
+  let key = Key.string "constraints" in
+  let tree max_height =
+    let constraints =
+      match max_height with
+      | None -> Ui.Layout.Box_constraints.create ~min_height:44. ()
+      | Some max_height -> Ui.Layout.Box_constraints.create ~min_height:44. ~max_height ()
+    in
+    Widget.constrained_box ~key ~constraints (Widget.text "Visible")
+  in
+  let unbounded =
+    reconcile_exn reconciler ~base_revision:0L ~target_revision:1L ~old:None (tree None)
+  in
+  let bounded =
+    reconcile_exn
+      reconciler
+      ~base_revision:1L
+      ~target_revision:2L
+      ~old:(Some unbounded.mounted_tree)
+      (tree (Some 200.))
+  in
+  check_int
+    ~expected:1
+    ~actual:(count_operations bounded.frame_patch is_update_props)
+    "None to Some maximum update";
+  check_int
+    ~expected:0
+    ~actual:(count_operations bounded.frame_patch is_create)
+    "None to Some maximum creates";
+  check_int
+    ~expected:0
+    ~actual:(count_operations bounded.frame_patch is_drop)
+    "None to Some maximum drops";
+  apply_and_compare
+    ~old_snapshot:(Some (Mounted_tree.snapshot unbounded.mounted_tree))
+    bounded;
+  let unbounded_again =
+    reconcile_exn
+      reconciler
+      ~base_revision:2L
+      ~target_revision:3L
+      ~old:(Some bounded.mounted_tree)
+      (tree None)
+  in
+  check_int
+    ~expected:1
+    ~actual:(count_operations unbounded_again.frame_patch is_update_props)
+    "Some to None maximum update";
+  check_int
+    ~expected:0
+    ~actual:(count_operations unbounded_again.frame_patch is_create)
+    "Some to None maximum creates";
+  check_int
+    ~expected:0
+    ~actual:(count_operations unbounded_again.frame_patch is_drop)
+    "Some to None maximum drops";
+  apply_and_compare
+    ~old_snapshot:(Some (Mounted_tree.snapshot bounded.mounted_tree))
+    unbounded_again
+;;
+
 let test_linear_progress_indicator_reconciles_value_and_kind () =
   let reconciler = Reconciler.create ~runtime_epoch:591L in
   let key = Key.string "progress" in
@@ -1950,6 +2012,8 @@ let tests =
   ; "randomized patch invariant", test_randomized_patch_invariant
   ; ( "layout, Material, and semantics widgets update incrementally"
     , test_layout_material_and_semantics_widgets_are_incremental )
+  ; ( "constrained box reconciles optional maximum transitions"
+    , test_constrained_box_reconciles_optional_maximum_transitions )
   ; ( "linear progress indicator reconciles value and kind"
     , test_linear_progress_indicator_reconciles_value_and_kind )
   ; ( "segmented button reconciles and dispatches controlled selection"

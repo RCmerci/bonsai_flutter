@@ -34,7 +34,7 @@ int main(void) {
   assert(bf_abi_version_major() == 2);
   assert(bf_abi_version_minor() == 0);
   assert(bf_protocol_version_major() == 2);
-  assert(bf_protocol_version_minor() == 26);
+  assert(bf_protocol_version_minor() == 27);
   assert(offsetof(bf_output_buffer, data) == 0);
   assert(offsetof(bf_output_buffer, length) > offsetof(bf_output_buffer, data));
   assert(offsetof(bf_output_buffer, presentation_id) >

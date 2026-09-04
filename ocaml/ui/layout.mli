@@ -22,6 +22,8 @@ end
 module Box_constraints : sig
   type t
 
+  (** Creates box constraints with finite, non-negative bounds. An omitted
+      maximum is unbounded. *)
   val create
     :  ?min_width:float
     -> ?max_width:float
@@ -31,7 +33,7 @@ module Box_constraints : sig
     -> t
 
   module Private : sig
-    val to_values : t -> float * float * float * float
+    val to_values : t -> float * float option * float * float option
   end
 end
 
