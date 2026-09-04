@@ -278,6 +278,14 @@ extra-source "runtime-ppx_compare-f0b23eb78082ef4dc71a66939bbc63c6b0cc2cf6a4744a
   src: "https://github.com/janestreet/ppx_compare/archive/refs/tags/v0.17.0.tar.gz"
   checksum: ["sha256=f0b23eb78082ef4dc71a66939bbc63c6b0cc2cf6a4744a906b7a2c016cbe3098"]
 }
+extra-source "runtime-ppx_deriving-374aa97b32c5e01c09a97810a48bfa218c213b5b649e4452101455ac19c94a6d.archive" {
+  src: "https://github.com/ocaml-ppx/ppx_deriving/releases/download/v6.0.3/ppx_deriving-6.0.3.tbz"
+  checksum: ["sha256=374aa97b32c5e01c09a97810a48bfa218c213b5b649e4452101455ac19c94a6d"]
+}
+extra-source "runtime-ppx_deriving_yojson-6a3ef7c7bb381f57448853f2a6d2287cf623628162a979587d1e8f7502114f4d.archive" {
+  src: "https://github.com/ocaml-ppx/ppx_deriving_yojson/releases/download/v3.9.1/ppx_deriving_yojson-3.9.1.tbz"
+  checksum: ["sha256=6a3ef7c7bb381f57448853f2a6d2287cf623628162a979587d1e8f7502114f4d"]
+}
 extra-source "runtime-ppx_diff-5e817094edf127d384110227ecfdc3e23f0f130266d48d1f326a03f6f58a2609.archive" {
   src: "https://github.com/janestreet/ppx_diff/archive/refs/tags/v0.17.0.tar.gz"
   checksum: ["sha256=5e817094edf127d384110227ecfdc3e23f0f130266d48d1f326a03f6f58a2609"]
@@ -429,7 +437,7 @@ extra-files: [
   ["patches/jst-config-host-discover.patch" "sha256=ee279c4935234e295cb432e67d02cbab47f5655da7b335585678bef2a2eb62a9"]
   ["patches/mirage-crypto-rng-apple-entropy.patch" "sha256=da840f6ac6b44892f7e3cdbf6b931d557caa44697d21292fbadd5f1f95c60994"]
   ["pkgconfig/iphoneos/sqlite3.pc" "sha256=8b5b586f38ac603b9ac45c7193805a728934d489000dfb578b345733c41ed3ad"]
-  ["supported-closure.lock" "sha256=082e7378f047b29a3fafad762134bf1e418d53ebbba6b9d819ccb232b80fef63"]
+  ["supported-closure.lock" "sha256=916e57d1d4346f480e11338332f85d6567f6738a8645b85f4d17c27ad13c8d83"]
   ["toolchain.lock" "sha256=8228a4b35f40ee151c480a372737725d3630d8bebbaa1534d670fc69f409be41"]
   ["verify_macho.sh" "sha256=e6d2083e03ac5f883f236e35b7e9e539759e8cc36eb403dd76d5b8136f7f9076"]
 ]
@@ -598,6 +606,8 @@ depends: [
   "ppx_css" {= "v0.17.0"}
   "ppx_custom_printf" {= "v0.17.0"}
   "ppx_derivers" {= "1.2.1"}
+  "ppx_deriving" {= "6.0.3"}
+  "ppx_deriving_yojson" {= "3.9.1"}
   "ppx_diff" {= "v0.17.0"}
   "ppx_disable_unused_warnings" {= "v0.17.0"}
   "ppx_enumerate" {= "v0.17.0"}

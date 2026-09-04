@@ -1,12 +1,12 @@
 # metadata.format=bonsai-flutter-ios-closure-v2
 # metadata.features=core,network,sqlite
-# metadata.roots=astring,base,bigstringaf,bonsai,bonsai.driver,ca-certs-nss,core,cstruct,datascript-ocaml-native,datascript-ocaml-native.sqlite,datascript_ocaml,digestif,domain-name,eio,eio.core,eio_posix,gluten,gluten-eio,httpun,httpun-eio,httpun-ws,incr_dom.ui_incr,incr_dom.ui_time_source,melange-edn-core,melange-edn-native,melange-transit-core,melange-transit-native,mirage-crypto-rng,mirage-crypto-rng.unix,persistent_sorted_set_ocaml,ptime,sqlite3,tls,tls-eio,uri,uucp,uunf,uutf,virtual_dom.ui_effect,x509
-# metadata.package-count=226
-# metadata.target-package-count=100
+# metadata.roots=astring,base,bigstringaf,bonsai,bonsai.driver,ca-certs-nss,core,cstruct,datascript-ocaml-native,datascript-ocaml-native.sqlite,datascript_ocaml,digestif,domain-name,eio,eio.core,eio_posix,gluten,gluten-eio,httpun,httpun-eio,httpun-ws,incr_dom.ui_incr,incr_dom.ui_time_source,melange-edn-core,melange-edn-native,melange-transit-core,melange-transit-native,mirage-crypto-rng,mirage-crypto-rng.unix,persistent_sorted_set_ocaml,ppx_deriving_yojson.runtime,ptime,sqlite3,tls,tls-eio,uri,uucp,uunf,uutf,virtual_dom.ui_effect,x509,yojson
+# metadata.package-count=228
+# metadata.target-package-count=102
 # metadata.host-package-count=124
 # metadata.target-build-count=2
-# metadata.component-count=143
-# metadata.digest=da7397d26d2d5605139771f9ff261a45d2510b3e0f9dce2f6073aa3765323230
+# metadata.component-count=145
+# metadata.digest=11cae3a3d33639d7bc1c2c07ea10c7524c59fb58748b22c79334182ace534151
 # package|version|role|capability|build-mechanism|source|sha256|findlib-components|target-dependencies
 async|v0.17.0|host-package|Host_only|opam|https://github.com/janestreet/async/archive/refs/tags/v0.17.0.tar.gz|3edbaa62a7ea910da0d5c06974da9b2b7e14a9e2648596bc7c9f09c89970b5f8|-|-
 async_durable|v0.17.0|host-package|Host_only|opam|https://github.com/janestreet/async_durable/archive/refs/tags/v0.17.0.tar.gz|649fa946f3cb7a3df8e198129981e4d8a891c6d2e645a1e6d213a2cc2a358938|-|-
@@ -199,6 +199,8 @@ persistent_sorted_set_ocaml|dev|target-package|Pure_ocaml|dune|https://github.co
 ppx_assert|v0.17.0|target-package|Pure_ocaml|dune|https://github.com/janestreet/ppx_assert/archive/refs/tags/v0.17.0.tar.gz|94c47289a6393642b1cca7d2cdb8decdbf387c3cee4faf50d9b00efc871cce8b|ppx_assert.runtime-lib|base,ocaml_intrinsics_kernel,ppx_sexp_conv,sexplib0
 ppx_bench|v0.17.0|target-package|Pure_ocaml|dune|https://github.com/janestreet/ppx_bench/archive/refs/tags/v0.17.0.tar.gz|7e91a1b7c82fc512560ca1de14deab3754dc2df4adc924112e68bede74691ba2|ppx_bench.runtime-lib|-
 ppx_compare|v0.17.0|target-package|Pure_ocaml|dune|https://github.com/janestreet/ppx_compare/archive/refs/tags/v0.17.0.tar.gz|f0b23eb78082ef4dc71a66939bbc63c6b0cc2cf6a4744a906b7a2c016cbe3098|ppx_compare.runtime-lib|base,ocaml_intrinsics_kernel,sexplib0
+ppx_deriving|6.0.3|target-package|Pure_ocaml|dune|https://github.com/ocaml-ppx/ppx_deriving/releases/download/v6.0.3/ppx_deriving-6.0.3.tbz|374aa97b32c5e01c09a97810a48bfa218c213b5b649e4452101455ac19c94a6d|ppx_deriving.runtime|-
+ppx_deriving_yojson|3.9.1|target-package|Pure_ocaml|dune|https://github.com/ocaml-ppx/ppx_deriving_yojson/releases/download/v3.9.1/ppx_deriving_yojson-3.9.1.tbz|6a3ef7c7bb381f57448853f2a6d2287cf623628162a979587d1e8f7502114f4d|ppx_deriving_yojson.runtime|ppx_deriving
 ppx_diff|v0.17.0|target-package|Pure_ocaml|dune|https://github.com/janestreet/ppx_diff/archive/refs/tags/v0.17.0.tar.gz|5e817094edf127d384110227ecfdc3e23f0f130266d48d1f326a03f6f58a2609|ppx_diff.diffable,ppx_diff.diffable_cinaps|base,base_quickcheck,bin_prot,fieldslib,gel,jane-street-headers,ocaml_intrinsics_kernel,parsexp,ppx_assert,ppx_bench,ppx_compare,ppx_enumerate,ppx_expect,ppx_hash,ppx_here,ppx_inline_test,ppx_log,ppx_module_timer,ppx_sexp_conv,ppx_stable_witness,ppx_string,ppxlib,sexplib,sexplib0,splittable_random,stdio,time_now,typerep,variantslib
 ppx_enumerate|v0.17.0|target-package|Pure_ocaml|dune|https://github.com/janestreet/ppx_enumerate/archive/refs/tags/v0.17.0.tar.gz|a27f1797b1315bdf7678fde783dff493bd348f1c5b644d7616b660bd295dad36|ppx_enumerate.runtime-lib|-
 ppx_expect|v0.17.0|target-package|Foreign_stubs|dune|https://github.com/janestreet/ppx_expect/archive/refs/tags/v0.17.0.tar.gz|6cb403d7d59f7451f1d5a94838ca46902991fc7bb43e5342b620fc73ab99bd94|ppx_expect.config,ppx_expect.config_types,ppx_expect.make_corrected_file,ppx_expect.runtime|base,jane-street-headers,ocaml_intrinsics_kernel,ppx_compare,ppx_enumerate,ppx_hash,ppx_inline_test,ppx_sexp_conv,ppxlib,sexplib0,stdio,time_now

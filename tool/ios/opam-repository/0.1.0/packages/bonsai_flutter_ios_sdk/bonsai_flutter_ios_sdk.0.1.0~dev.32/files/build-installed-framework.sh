@@ -25,7 +25,7 @@ stage_root="$work_root/stage"
 target_lib="$stage_root/ios-sysroot/lib"
 mkdir -p "$target_lib"
 
-framework_source_sha256='9f3b057e22f36992f3eef1e508257c6db86a5f39894e4255285e9cf551c15bfb'
+framework_source_sha256='5329b2fba63224d16f983a750fd8124a6f766e8c011a4a8af095850b6ca2069a'
 framework_archive_source="$script_directory/bonsai_flutter.tar.gz"
 framework_archive="$work_root/bonsai_flutter.tar.gz"
 framework_source="$work_root/framework-source"

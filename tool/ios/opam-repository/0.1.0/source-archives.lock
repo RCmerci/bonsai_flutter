@@ -25,7 +25,7 @@ bigstringaf|0.10.0|https://github.com/inhabitedtype/bigstringaf/archive/0.10.0.t
 bin_prot|v0.17.0-1|https://github.com/janestreet/bin_prot/archive/refs/tags/v0.17.0.tar.gz|sha256|0e6c61aff150d19a0f89cb3e354ab36189e4bc23e28ab8bce03b6c6b6004f237
 bin_prot|v0.17.0-1|https://github.com/ocaml/opam-source-archives/raw/refs/heads/main/patches/bin_prot/remove-outdated-mirage-xen-cross-compilation-rules.patch|sha256|0c6fdc1a9377ae678895f237bae191ac458e507550063de143f1ee70a39ba318
 bonsai|v0.17.0|https://github.com/janestreet/bonsai/archive/refs/tags/v0.17.0.tar.gz|sha256|c78c4476ee6b856846e2d0941e5965009d5e1b853e564b2b1bee61202f0b1ebb
-bonsai_flutter|0.1.0~dev|https://github.com/RCmerci/bonsai_flutter/archive/9483aae1520844a44508f534fbaa48ef76b43d7c.tar.gz|sha256|9f3b057e22f36992f3eef1e508257c6db86a5f39894e4255285e9cf551c15bfb
+bonsai_flutter|0.1.0~dev|https://github.com/RCmerci/bonsai_flutter/archive/6c8ae865d16ab1d781cfb74ef2a4168ea0f949b7.tar.gz|sha256|5329b2fba63224d16f983a750fd8124a6f766e8c011a4a8af095850b6ca2069a
 bos|0.3.0|https://erratique.ch/software/bos/releases/bos-0.3.0.tbz|sha512|77416442448462fb316b9b64ec213038153e82c6de030d511838a15bb13b80700598c1bcfae1c90ef766d4f42c9bf5dcf231eeff23709558246d7946962858cc
 ca-certs-nss|3.126|https://github.com/mirage/ca-certs-nss/releases/download/v3.126/ca-certs-nss-3.126.tbz|sha256|682a23c2c547c2af85084d75bb9844c5d9a7b8fddf90fa02ea4958eddce30204
 camlp-streams|5.0.1|https://github.com/ocaml/camlp-streams/archive/v5.0.1.tar.gz|sha512|2efa8dd4a636217c8d49bac1e4e7e5558fc2f45cfea66514140a59fd99dd08d61fb9f1e17804997ff648b71b13820a5d4a1eb70fed9d848aa2abd6e41f853c86
@@ -155,6 +155,8 @@ ppx_compare|v0.17.0|https://github.com/janestreet/ppx_compare/archive/refs/tags/
 ppx_css|v0.17.0|https://github.com/janestreet/ppx_css/archive/refs/tags/v0.17.0.tar.gz|sha256|e60e31aadd820b131f7f05827f369164564400bd4fd51c199d066abf7e68753f
 ppx_custom_printf|v0.17.0|https://github.com/janestreet/ppx_custom_printf/archive/refs/tags/v0.17.0.tar.gz|sha256|cd3cf73c31f6b0e18677ce92ce0e6f866b0596d5ea1fc540212c422930a730a0
 ppx_derivers|1.2.1|https://github.com/ocaml-ppx/ppx_derivers/archive/1.2.1.tar.gz|sha256|b6595ee187dea792b31fc54a0e1524ab1e48bc6068d3066c45215a138cc73b95
+ppx_deriving|6.0.3|https://github.com/ocaml-ppx/ppx_deriving/releases/download/v6.0.3/ppx_deriving-6.0.3.tbz|sha256|374aa97b32c5e01c09a97810a48bfa218c213b5b649e4452101455ac19c94a6d
+ppx_deriving_yojson|3.9.1|https://github.com/ocaml-ppx/ppx_deriving_yojson/releases/download/v3.9.1/ppx_deriving_yojson-3.9.1.tbz|sha256|6a3ef7c7bb381f57448853f2a6d2287cf623628162a979587d1e8f7502114f4d
 ppx_diff|v0.17.0|https://github.com/janestreet/ppx_diff/archive/refs/tags/v0.17.0.tar.gz|sha256|5e817094edf127d384110227ecfdc3e23f0f130266d48d1f326a03f6f58a2609
 ppx_disable_unused_warnings|v0.17.0|https://github.com/janestreet/ppx_disable_unused_warnings/archive/refs/tags/v0.17.0.tar.gz|sha256|af5dfa6bb51aa90f5c322ab4920fb46583cffc9460f583439afb2ef851310fbf
 ppx_enumerate|v0.17.0|https://github.com/janestreet/ppx_enumerate/archive/refs/tags/v0.17.0.tar.gz|sha256|a27f1797b1315bdf7678fde783dff493bd348f1c5b644d7616b660bd295dad36
