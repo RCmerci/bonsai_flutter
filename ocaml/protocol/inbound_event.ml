@@ -144,6 +144,15 @@ type payload =
       { start : float
       ; end_ : float
       }
+  | Civil_date of
+      { year : int
+      ; month : int
+      ; day : int
+      }
+  | Civil_time of
+      { hour : int
+      ; minute : int
+      }
   | Tap of tap
   | Pointer of pointer
   | Key of key

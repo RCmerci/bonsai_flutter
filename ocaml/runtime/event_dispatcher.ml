@@ -64,6 +64,34 @@ let convert_tag tag =
   then Ok Range_slider_change_end
   else if tag = Id.delete
   then Ok Delete
+  else if tag = Id.tooltip_triggered
+  then Ok Tooltip_triggered
+  else if tag = Id.table_sort_requested
+  then Ok Table_sort_requested
+  else if tag = Id.table_row_selected
+  then Ok Table_row_selected
+  else if tag = Id.table_select_all
+  then Ok Table_select_all
+  else if tag = Id.table_cell_activated
+  then Ok Table_cell_activated
+  else if tag = Id.step_selected
+  then Ok Step_selected
+  else if tag = Id.step_continue
+  then Ok Step_continue
+  else if tag = Id.step_cancel
+  then Ok Step_cancel
+  else if tag = Id.expansion_changed
+  then Ok Expansion_changed
+  else if tag = Id.dialog_option_selected
+  then Ok Dialog_option_selected
+  else if tag = Id.civil_date_changed
+  then Ok Civil_date_changed
+  else if tag = Id.civil_time_changed
+  then Ok Civil_time_changed
+  else if tag = Id.search_opened
+  then Ok Search_opened
+  else if tag = Id.search_closed
+  then Ok Search_closed
   else invalid "unsupported event tag %d" (ID.Protocol.Event_tag.to_int tag)
 ;;
 
@@ -83,7 +111,9 @@ let convert_payload tag payload =
          || tag = Id.long_press
          || tag = Id.tooltip_triggered
          || tag = Id.step_continue
-         || tag = Id.step_cancel -> Ok Ui_event.Payload.Unit
+         || tag = Id.step_cancel
+         || tag = Id.search_opened
+         || tag = Id.search_closed -> Ok Ui_event.Payload.Unit
   | Bool value
     when tag = Id.focus_changed || tag = Id.value_changed || tag = Id.table_select_all ->
     Ok (Bool value)
@@ -156,6 +186,10 @@ let convert_payload tag payload =
   | Float_range { start; end_ }
     when tag = Id.range_slider_changed || tag = Id.range_slider_change_end ->
     Ok (Float_range { start; end_ })
+  | Civil_date { year; month; day } when tag = Id.civil_date_changed ->
+    Ok (Civil_date { year; month; day })
+  | Civil_time { hour; minute } when tag = Id.civil_time_changed ->
+    Ok (Civil_time { hour; minute })
   | Unit when tag = Id.delete -> Ok Unit
   | Scroll { pixels; delta } when tag = Id.scroll_notification ->
     Ok (Scroll { pixels; delta })

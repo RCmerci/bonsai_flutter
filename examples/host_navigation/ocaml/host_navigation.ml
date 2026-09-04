@@ -72,11 +72,11 @@ let component handlers graph =
           (Ui.Widget.column
              [ Ui.Widget.text "Host effects and navigation"
              ; Ui.Widget.text clipboard
-             ; Ui.Widget.button
+             ; Ui.Material.elevated_button
                  ~on_press:read_clipboard
                  ~child:(Ui.Widget.text "Read clipboard")
                  ()
-             ; Ui.Widget.button
+             ; Ui.Material.elevated_button
                  ~on_press:open_settings
                  ~child:(Ui.Widget.text "Open settings")
                  ()
@@ -96,10 +96,11 @@ let component handlers graph =
                      ~alignment:Ui.Navigation.Center
                      [ Ui.Widget.text "Overlay owned by OCaml" ]
                  ; Ui.Material.Dialog.alert
+                     ~title:"Settings"
                      ~content:(Ui.Widget.text "Dialog owned by OCaml")
                      ~actions:[]
                      ()
-                 ; Ui.Widget.button
+                 ; Ui.Material.elevated_button
                      ~on_press:close_settings
                      ~child:(Ui.Widget.text "Close settings")
                      ()

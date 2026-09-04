@@ -4,7 +4,8 @@ import 'dart:ui' show ImageByteFormat, PointerDeviceKind, SemanticsAction;
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:bonsai_flutter/src/navigation/navigation_host.dart';
 import 'package:bonsai_flutter/src/navigation/modal_bottom_sheet_route.dart';
-import 'package:flutter/material.dart';
+import 'package:material_3_expressive/material_3_expressive.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart' show OffsetLayer;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -29,7 +30,7 @@ void main() {
 
     expect(find.text('Settings'), findsOneWidget);
     expect(find.text('Overlay content'), findsOneWidget);
-    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.byType(M3EDialog), findsOneWidget);
 
     await tester.state<NavigatorState>(find.byType(Navigator).last).maybePop();
     await tester.pumpAndSettle();
@@ -796,7 +797,7 @@ void main() {
         isFalse,
       );
 
-      await tester.tap(find.byType(TextField));
+      await tester.tap(find.byType(EditableText));
       await tester.pump();
 
       final route =
@@ -1016,9 +1017,10 @@ void main() {
               viewInsets: const EdgeInsets.only(bottom: 80),
             );
 
-            final expectedColor = Theme.of(
-              tester.element(find.text('Modal editor')),
-            ).colorScheme.surface;
+            final context = tester.element(find.text('Modal editor'));
+            final expressiveTheme = M3ETheme.of(context);
+            final expectedColor = expressiveTheme.bottomSheetTheme
+                .containerColor(expressiveTheme.colorScheme);
             expect(await _readPixelColor(tester, 4, 560), expectedColor);
             expect(await _readPixelColor(tester, 396, 560), expectedColor);
           },
@@ -2080,12 +2082,26 @@ Frame _navigationSnapshot() => const Frame(
     ),
     CreateNode(
       nodeId: 9,
-      kind: NodeKind.materialAlertDialog,
-      props: MaterialAlertDialogProps(
-        hasIcon: false,
-        hasTitle: false,
-        hasContent: true,
-        actionCount: 0,
+      kind: NodeKind.materialExpressive,
+      props: MaterialExpressiveProps(
+        component: 27,
+        variant: 0,
+        flags: 2,
+        primaryText: 'Confirm',
+        secondaryText: null,
+        value: null,
+        endValue: null,
+        selectedIds: [],
+        items: [
+          MaterialExpressiveItemProps(
+            id: 0,
+            kind: 0,
+            label: '',
+            enabled: true,
+            selected: false,
+            childCount: 0,
+          ),
+        ],
       ),
       eventBindings: [],
     ),
@@ -2157,8 +2173,8 @@ final class _ModalFixture {
           ),
           const CreateNode(
             nodeId: 9,
-            kind: NodeKind.textInput,
-            props: TextInputProps(
+            kind: NodeKind.materialTextField,
+            props: MaterialTextFieldProps(
               sessionId: 74,
               documentRevision: 1,
               value: TextEditingStateValue(
@@ -2174,6 +2190,14 @@ final class _ModalFixture {
               acceptedLocalRevision: 0,
               updateMode: TextUpdateMode.forceReplace,
               autofocus: true,
+              maxUtf8Bytes: null,
+              variant: 0,
+              label: null,
+              supportingText: null,
+              errorText: null,
+              hasLeading: false,
+              hasTrailing: false,
+              maxLines: 1,
             ),
             eventBindings: [],
           ),
@@ -2233,8 +2257,8 @@ final class _ModalFixture {
             ),
             const CreateNode(
               nodeId: 24,
-              kind: NodeKind.textInput,
-              props: TextInputProps(
+              kind: NodeKind.materialTextField,
+              props: MaterialTextFieldProps(
                 sessionId: 75,
                 documentRevision: 1,
                 value: TextEditingStateValue(
@@ -2250,6 +2274,14 @@ final class _ModalFixture {
                 acceptedLocalRevision: 0,
                 updateMode: TextUpdateMode.forceReplace,
                 autofocus: true,
+                maxUtf8Bytes: null,
+                variant: 0,
+                label: null,
+                supportingText: null,
+                errorText: null,
+                hasLeading: false,
+                hasTrailing: false,
+                maxLines: 1,
               ),
               eventBindings: [],
             ),
@@ -2537,8 +2569,8 @@ Frame _modalSnapshot(
     ),
     const CreateNode(
       nodeId: 4,
-      kind: NodeKind.button,
-      props: ButtonProps(enabled: true),
+      kind: NodeKind.pressable,
+      props: PressableProps(overlayColorArgb: 0x181c2026, releaseDelayMs: 80),
       eventBindings: [EventBinding(eventTag: EventTagId.press, handlerId: 741)],
     ),
     const CreateNode(
@@ -2574,8 +2606,8 @@ Frame _modalSnapshot(
       ),
       const CreateNode(
         nodeId: 9,
-        kind: NodeKind.textInput,
-        props: TextInputProps(
+        kind: NodeKind.materialTextField,
+        props: MaterialTextFieldProps(
           sessionId: 74,
           documentRevision: 1,
           value: TextEditingStateValue(
@@ -2591,6 +2623,14 @@ Frame _modalSnapshot(
           acceptedLocalRevision: 0,
           updateMode: TextUpdateMode.forceReplace,
           autofocus: true,
+          maxUtf8Bytes: null,
+          variant: 0,
+          label: null,
+          supportingText: null,
+          errorText: null,
+          hasLeading: false,
+          hasTrailing: false,
+          maxLines: 1,
         ),
         eventBindings: [],
       ),
@@ -2656,38 +2696,38 @@ void _expectRoundedModalSheetSurface(
   required String childText,
 }) {
   final childContext = tester.element(find.text(childText));
-  final expectedColor = Theme.of(childContext).colorScheme.surface;
+  final expressiveTheme = M3ETheme.of(childContext);
+  final expectedColor = expressiveTheme.bottomSheetTheme.containerColor(
+    expressiveTheme.colorScheme,
+  );
   final expectedBorderRadius = const BorderRadius.vertical(
-    top: Radius.circular(24),
+    top: Radius.circular(28),
   );
   final textDirection = Directionality.of(childContext);
   final matchingSurfaces = tester
-      .widgetList<Material>(
+      .widgetList<Container>(
         find.descendant(
           of: find.byType(BottomSheet),
-          matching: find.byType(Material),
+          matching: find.byType(Container),
         ),
       )
-      .where((material) {
-        final shape = material.shape;
-        return material.color == expectedColor &&
-            material.clipBehavior == Clip.antiAlias &&
-            shape is RoundedRectangleBorder &&
-            shape.borderRadius.resolve(textDirection) == expectedBorderRadius;
+      .where((container) {
+        final decoration = container.decoration;
+        return decoration is BoxDecoration &&
+            decoration.color == expectedColor &&
+            decoration.borderRadius?.resolve(textDirection) ==
+                expectedBorderRadius;
       })
       .toList(growable: false);
 
   expect(matchingSurfaces, hasLength(1));
+  expect(find.byType(M3EBottomSheet), findsOneWidget);
 }
 
 Finder _roundedModalSheetSurfaceFinder() => find.byWidgetPredicate((widget) {
-  if (widget is! Material || widget.clipBehavior != Clip.antiAlias) {
-    return false;
-  }
-  final shape = widget.shape;
-  return shape is RoundedRectangleBorder &&
-      shape.borderRadius ==
-          const BorderRadius.vertical(top: Radius.circular(24));
+  return widget is ClipRRect &&
+      widget.borderRadius ==
+          const BorderRadius.vertical(top: Radius.circular(28));
 });
 
 double _sheetHeight(WidgetTester tester) =>
@@ -2998,8 +3038,8 @@ Frame _detentedSnapshot({
     ),
     CreateNode(
       nodeId: 9,
-      kind: NodeKind.textInput,
-      props: TextInputProps(
+      kind: NodeKind.materialTextField,
+      props: MaterialTextFieldProps(
         sessionId: 76,
         documentRevision: 1,
         value: TextEditingStateValue(
@@ -3015,6 +3055,14 @@ Frame _detentedSnapshot({
         acceptedLocalRevision: 0,
         updateMode: TextUpdateMode.forceReplace,
         autofocus: textInputAutofocus,
+        maxUtf8Bytes: null,
+        variant: 0,
+        label: null,
+        supportingText: null,
+        errorText: null,
+        hasLeading: false,
+        hasTrailing: false,
+        maxLines: 1,
       ),
       eventBindings: [],
     ),

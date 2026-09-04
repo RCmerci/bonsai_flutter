@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../test/support/runtime_harness.dart';
@@ -214,8 +214,8 @@ Frame _textInputFrame() => const Frame(
   operations: [
     CreateNode(
       nodeId: 1,
-      kind: NodeKind.textInput,
-      props: TextInputProps(
+      kind: NodeKind.materialTextField,
+      props: MaterialTextFieldProps(
         sessionId: 1,
         documentRevision: 1,
         value: TextEditingStateValue(
@@ -231,6 +231,14 @@ Frame _textInputFrame() => const Frame(
         acceptedLocalRevision: 0,
         updateMode: TextUpdateMode.ack,
         autofocus: false,
+        maxUtf8Bytes: null,
+        variant: 0,
+        label: null,
+        supportingText: null,
+        errorText: null,
+        hasLeading: false,
+        hasTrailing: false,
+        maxLines: 1,
       ),
       eventBindings: [
         EventBinding(eventTag: EventTagId.textEdit, handlerId: 1),

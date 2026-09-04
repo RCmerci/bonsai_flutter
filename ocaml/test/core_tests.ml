@@ -1031,7 +1031,9 @@ let test_handler_deltas_avoid_full_tree_collection () =
   let reconciler = Reconciler.create ~runtime_epoch:501L in
   let handler = press_handler (fun () -> ()) in
   let key = Key.string "stable-button" in
-  let view label = Widget.button ~key ~on_press:handler ~child:(Widget.text label) () in
+  let view label =
+    Widget.pressable ~key ~on_press:handler ~child:(Widget.text label) ()
+  in
   let first =
     reconcile_exn reconciler ~base_revision:0L ~target_revision:1L ~old:None (view "one")
   in
@@ -1057,7 +1059,7 @@ let test_handler_deltas_avoid_full_tree_collection () =
   let first_handler = press_handler (fun () -> ()) in
   let second_handler = press_handler (fun () -> ()) in
   let keyed_button key handler =
-    Widget.button ~key:(Key.string key) ~on_press:handler ~child:(Widget.text key) ()
+    Widget.pressable ~key:(Key.string key) ~on_press:handler ~child:(Widget.text key) ()
   in
   let ordered =
     reconcile_exn
@@ -1207,7 +1209,7 @@ let test_handler_change_gets_new_id_and_one_revision_grace () =
       ~base_revision:0L
       ~target_revision:1L
       ~old:None
-      (Widget.button ~key ~on_press:old_handler ~child:(Widget.text "save") ())
+      (Widget.pressable ~key ~on_press:old_handler ~child:(Widget.text "save") ())
   in
   ok (Handler_registry.install registry first.handler_frame);
   ok (Handler_registry.commit_displayed_revision registry ~revision:1L);
@@ -1219,7 +1221,7 @@ let test_handler_change_gets_new_id_and_one_revision_grace () =
       ~base_revision:1L
       ~target_revision:2L
       ~old:(Some first.mounted_tree)
-      (Widget.button ~key ~on_press:new_handler ~child:(Widget.text "save") ())
+      (Widget.pressable ~key ~on_press:new_handler ~child:(Widget.text "save") ())
   in
   ok (Handler_registry.install registry second.handler_frame);
   let second_node = node_by_key (Mounted_tree.snapshot second.mounted_tree) key in
@@ -1291,7 +1293,7 @@ let test_handler_change_gets_new_id_and_one_revision_grace () =
       ~base_revision:2L
       ~target_revision:3L
       ~old:(Some second.mounted_tree)
-      (Widget.button ~key ~on_press:new_handler ~child:(Widget.text "save") ())
+      (Widget.pressable ~key ~on_press:new_handler ~child:(Widget.text "save") ())
   in
   ok (Handler_registry.install registry third.handler_frame);
   ok (Handler_registry.commit_displayed_revision registry ~revision:3L);
@@ -1322,7 +1324,7 @@ let test_unchanged_handler_reuses_id () =
       ~base_revision:0L
       ~target_revision:1L
       ~old:None
-      (Widget.button ~key ~on_press:handler ~child:(Widget.text "one") ())
+      (Widget.pressable ~key ~on_press:handler ~child:(Widget.text "one") ())
   in
   let first_binding =
     binding_exn
@@ -1335,7 +1337,7 @@ let test_unchanged_handler_reuses_id () =
       ~base_revision:1L
       ~target_revision:2L
       ~old:(Some first.mounted_tree)
-      (Widget.button ~key ~on_press:handler ~child:(Widget.text "two") ())
+      (Widget.pressable ~key ~on_press:handler ~child:(Widget.text "two") ())
   in
   let second_binding =
     binding_exn
@@ -1363,7 +1365,7 @@ let test_handler_registry_validates_epoch_sequence_and_binding () =
       ~base_revision:0L
       ~target_revision:1L
       ~old:None
-      (Widget.button
+      (Widget.pressable
          ~key
          ~on_press:(press_handler (fun () -> incr calls))
          ~child:(Widget.text "go")
@@ -1417,7 +1419,7 @@ let test_handler_exception_is_structured () =
       ~base_revision:0L
       ~target_revision:1L
       ~old:None
-      (Widget.button
+      (Widget.pressable
          ~key
          ~on_press:(press_handler (fun () -> failwith "handler exploded"))
          ~child:(Widget.text "go")
@@ -1456,7 +1458,7 @@ let test_handler_retirement_is_separate_from_presentation_marking () =
       ~base_revision:0L
       ~target_revision:1L
       ~old:None
-      (Widget.button ~on_press:handler ~child:(Widget.text "one") ())
+      (Widget.pressable ~on_press:handler ~child:(Widget.text "one") ())
   in
   let second =
     reconcile_exn
@@ -1464,7 +1466,7 @@ let test_handler_retirement_is_separate_from_presentation_marking () =
       ~base_revision:1L
       ~target_revision:2L
       ~old:(Some first.mounted_tree)
-      (Widget.button ~on_press:handler ~child:(Widget.text "two") ())
+      (Widget.pressable ~on_press:handler ~child:(Widget.text "two") ())
   in
   ok (Handler_registry.install registry first.handler_frame);
   ok (Handler_registry.install registry second.handler_frame);
@@ -1700,8 +1702,8 @@ let test_segmented_button_reconciles_controlled_selection_and_dispatches () =
       | _ -> ())
   in
   let segments =
-    [ Ui.Material.Segmented_button.segment ~id:1L ~label:(Widget.text "One") ()
-    ; Ui.Material.Segmented_button.segment ~id:2L ~label:(Widget.text "Two") ()
+    [ Ui.Material.Segmented_button.segment ~id:1L ~label:"One" ()
+    ; Ui.Material.Segmented_button.segment ~id:2L ~label:"Two" ()
     ]
   in
   let tree selected_ids =
@@ -1750,7 +1752,7 @@ let test_segmented_button_reconciles_controlled_selection_and_dispatches () =
   check (!received = Some [ 1L; 2L ]) "segmented button lost typed selected IDs"
 ;;
 
-let test_text_input_props_and_typed_edit_are_incremental () =
+let test_material_text_field_props_and_typed_edit_are_incremental () =
   let reconciler = Reconciler.create ~runtime_epoch:60L in
   let edits = ref [] in
   let on_edit =
@@ -1768,7 +1770,7 @@ let test_text_input_props_and_typed_edit_are_incremental () =
     Ui.Text_editing.Value.create ~text ~selection ()
   in
   let tree ~document_revision ~accepted_local_revision ~update_mode value =
-    Widget.text_input
+    Ui.Material.text_field
       ~key
       ~session_id:(ID.Text_input.Session_id.of_int64 7L)
       ~document_revision:(ID.Text_input.Document_revision.of_int64 document_revision)
@@ -1839,7 +1841,7 @@ let test_text_input_props_and_typed_edit_are_incremental () =
   apply_and_compare ~old_snapshot:(Some (Mounted_tree.snapshot first.mounted_tree)) second
 ;;
 
-let test_text_input_utf8_limit_contract () =
+let test_material_text_field_utf8_limit_contract () =
   let handler = Event.Handler.create (fun _ -> ()) in
   let value =
     Ui.Text_editing.Value.create
@@ -1848,7 +1850,7 @@ let test_text_input_utf8_limit_contract () =
       ()
   in
   let create_widget max_utf8_bytes =
-    Widget.text_input
+    Ui.Material.text_field
       ~max_utf8_bytes
       ~session_id:(ID.Text_input.Session_id.of_int64 7L)
       ~document_revision:(ID.Text_input.Document_revision.of_int64 9L)
@@ -1864,14 +1866,14 @@ let test_text_input_utf8_limit_contract () =
   let widget = create_widget 64 in
   let (Av view) = Widget.Private.view widget in
   (match view.node with
-   | Widget.Private.Text_input { max_utf8_bytes = Some 64; _ } -> ()
-   | _ -> fail "text input did not retain max_utf8_bytes");
+   | Widget.Private.Material_text_field { max_utf8_bytes = Some 64; _ } -> ()
+   | _ -> fail "Material text field did not retain max_utf8_bytes");
   check
     (Array.exists
        (fun binding ->
           Event.Tag.equal binding.Widget.Private.tag Event.Tag.Text_limit_reached)
        view.event_bindings)
-    "text input did not bind on_limit_reached";
+    "Material text field did not bind on_limit_reached";
   ignore
     (Ui.Material.text_field
        ~max_utf8_bytes:64
@@ -1889,10 +1891,10 @@ let test_text_input_utf8_limit_contract () =
     (fun max_utf8_bytes ->
        expect_invalid_argument
          (fun () -> ignore (create_widget max_utf8_bytes))
-         "text input accepted an invalid UTF-8 byte limit")
+         "Material text field accepted an invalid UTF-8 byte limit")
     [ 0; -1; 0x1_0000_0000 ];
   ignore
-    (Widget.text_input
+    (Ui.Material.text_field
        ~session_id:(ID.Text_input.Session_id.of_int64 7L)
        ~document_revision:(ID.Text_input.Document_revision.of_int64 9L)
        ~accepted_local_revision:(ID.Text_input.Local_revision.of_int64 0L)
@@ -1953,8 +1955,9 @@ let tests =
   ; ( "segmented button reconciles and dispatches controlled selection"
     , test_segmented_button_reconciles_controlled_selection_and_dispatches )
   ; ( "text input props and typed edit are incremental"
-    , test_text_input_props_and_typed_edit_are_incremental )
-  ; "text input UTF-8 limit contract", test_text_input_utf8_limit_contract
+    , test_material_text_field_props_and_typed_edit_are_incremental )
+  ; ( "Material text field UTF-8 limit contract"
+    , test_material_text_field_utf8_limit_contract )
   ]
 ;;
 

@@ -56,6 +56,56 @@ void main() {
     },
   );
 
+  test('date and time pickers preserve typed civil values', () async {
+    final resources = _FakeRendererHostResources();
+    final implementation = FlutterHostEffectImplementation(
+      resources: resources,
+    );
+    const first = CivilDateValue(year: 2024, month: 1, day: 1);
+    const last = CivilDateValue(year: 2026, month: 12, day: 31);
+    const date = CivilDateValue(year: 2025, month: 9, day: 3);
+    const range = CivilDateRangeValue(start: first, end: date);
+    const time = CivilTimeValue(hour: 18, minute: 45);
+
+    expect(
+      await implementation.execute(
+        80,
+        const PickDateRequest(
+          initial: date,
+          first: first,
+          last: last,
+          current: date,
+          inputMode: false,
+        ),
+      ),
+      isA<HostCivilDateValue>().having((value) => value.value, 'value', date),
+    );
+    expect(
+      await implementation.execute(
+        81,
+        const PickDateRangeRequest(
+          initial: range,
+          first: first,
+          last: last,
+          current: date,
+          inputMode: true,
+        ),
+      ),
+      isA<HostCivilDateRangeValue>().having(
+        (value) => value.value,
+        'value',
+        range,
+      ),
+    );
+    expect(
+      await implementation.execute(
+        82,
+        const PickTimeRequest(initial: time, use24Hour: true, inputMode: false),
+      ),
+      isA<HostCivilTimeValue>().having((value) => value.value, 'value', time),
+    );
+  });
+
   test(
     'typed host requests return success, error, and cancellation events',
     () async {
@@ -241,6 +291,19 @@ final class _FakeRendererHostResources implements RendererHostResources {
   Future<void> cancelSnackBar(int requestId) async {
     cancelledSnackBars.add(requestId);
   }
+
+  @override
+  Future<CivilDateValue?> pickDate(PickDateRequest request) async =>
+      request.initial;
+
+  @override
+  Future<CivilDateRangeValue?> pickDateRange(
+    PickDateRangeRequest request,
+  ) async => request.initial;
+
+  @override
+  Future<CivilTimeValue?> pickTime(PickTimeRequest request) async =>
+      request.initial;
 }
 
 final class _FakeHostEffects implements HostEffectImplementation {

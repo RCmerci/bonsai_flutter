@@ -1,7 +1,7 @@
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:bonsai_flutter/src/navigation/modal_bottom_sheet_route.dart';
 import 'package:bonsai_flutter/src/text_input/text_input_host.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -200,7 +200,10 @@ final class _ProfileHarnessState extends State<_ProfileHarness> {
     super.initState();
     _inputStore.apply(_textInputSnapshot());
     _resources.synchronize(_inputStore);
-    _inputHandle = _resources.acquireTextInput(9, _textInputProps);
+    _inputHandle = _resources.acquireTextInput(
+      9,
+      _textInputProps.textInputProps,
+    );
     _inputHandle.focusNode.addListener(_recordFocus);
     _observer = _ProfileNavigatorObserver(_observeComposeRoute);
   }
@@ -273,7 +276,7 @@ final class _ProfileHarnessState extends State<_ProfileHarness> {
                 const Text('New message'),
                 TextInputHost(
                   node: _inputStore.nodes[9]!,
-                  props: _textInputProps,
+                  props: _textInputProps.textInputProps,
                   resources: _resources,
                 ),
               ],
@@ -297,7 +300,7 @@ final class _ProfileNavigatorObserver extends NavigatorObserver {
   }
 }
 
-const _textInputProps = TextInputProps(
+const _textInputProps = MaterialTextFieldProps(
   sessionId: 98,
   documentRevision: 1,
   value: TextEditingStateValue(
@@ -313,6 +316,14 @@ const _textInputProps = TextInputProps(
   acceptedLocalRevision: 0,
   updateMode: TextUpdateMode.forceReplace,
   autofocus: true,
+  maxUtf8Bytes: null,
+  variant: 0,
+  label: null,
+  supportingText: null,
+  errorText: null,
+  hasLeading: false,
+  hasTrailing: false,
+  maxLines: 1,
 );
 
 Frame _textInputSnapshot() => const Frame(
@@ -323,7 +334,7 @@ Frame _textInputSnapshot() => const Frame(
   operations: [
     CreateNode(
       nodeId: 9,
-      kind: NodeKind.textInput,
+      kind: NodeKind.materialTextField,
       props: _textInputProps,
       eventBindings: [],
     ),

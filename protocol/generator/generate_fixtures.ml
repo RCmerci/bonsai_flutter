@@ -242,19 +242,6 @@ let additional_material_frame : Protocol.Wire_frame.t =
         ; hint_text = Some "Search"
         ; has_on_tap = true
         }
-    ; Material_tooltip_props
-        { message = "Details"
-        ; enabled = true
-        ; exclude_from_semantics = false
-        ; prefer_below = false
-        ; trigger_mode = Tooltip_tap
-        ; wait_duration_ms = 20
-        ; show_duration_ms = 1500
-        ; exit_duration_ms = 100
-        ; enable_tap_to_dismiss = true
-        ; enable_feedback = false
-        ; has_on_triggered = true
-        }
     ; Material_data_table_props
         { columns =
             [ { column_id = 11L; tooltip = Some "Name"; numeric = false; sortable = true }
@@ -300,10 +287,7 @@ let additional_material_frame : Protocol.Wire_frame.t =
         ; presentation = Elevated_chip
         ; enabled = true
         ; selected = false
-        ; has_avatar = true
-        ; has_delete_icon = false
-        ; has_on_press = true
-        ; has_on_selected = false
+        ; has_leading = true
         ; has_on_delete = false
         }
     ; Material_card_props { variant = Filled_card; elevation = 2. }
@@ -493,7 +477,7 @@ let fixtures : (string * Protocol.Wire_frame.t) list =
               }
           ]
       } )
-  ; ( "ocaml_bounded_text_input.hex"
+  ; ( "ocaml_bounded_material_text_field.hex"
     , { runtime_epoch = epoch 10L
       ; base_revision = revision 4L
       ; target_revision = revision 5L
@@ -502,7 +486,7 @@ let fixtures : (string * Protocol.Wire_frame.t) list =
           [ Update_props
               { node_id = node 12L
               ; props =
-                  Text_input_props
+                  Material_text_field_props
                     { session_id = ID.Text_input.Session_id.of_int64 7L
                     ; document_revision = ID.Text_input.Document_revision.of_int64 9L
                     ; value =
@@ -519,6 +503,13 @@ let fixtures : (string * Protocol.Wire_frame.t) list =
                     ; update_mode = Correction
                     ; autofocus = true
                     ; max_utf8_bytes = Some 64
+                    ; variant = 0
+                    ; label = None
+                    ; supporting_text = None
+                    ; error_text = None
+                    ; has_leading = false
+                    ; has_trailing = false
+                    ; max_lines = 1
                     }
               }
           ]

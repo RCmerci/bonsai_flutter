@@ -239,16 +239,16 @@ void main() {
       );
     });
 
-    test('decodes a bounded text input introduced in protocol 1.15', () {
-      final frame = decodeOcamlFixture('ocaml_bounded_text_input.hex');
+    test('decodes a bounded Material text field', () {
+      final frame = decodeOcamlFixture('ocaml_bounded_material_text_field.hex');
       final update = frame.operations.single as UpdateProps;
-      final props = update.props as TextInputProps;
+      final props = update.props as MaterialTextFieldProps;
 
       expect(update.nodeId, 12);
       expect(props.maxUtf8Bytes, 64);
       expect(props.value.text, '拼😀音');
       expectFixtureMatchesDartEncoding(
-        'ocaml_bounded_text_input.hex',
+        'ocaml_bounded_material_text_field.hex',
         const Frame(
           runtimeEpoch: 10,
           baseRevision: 4,
@@ -257,7 +257,7 @@ void main() {
           operations: [
             UpdateProps(
               nodeId: 12,
-              props: TextInputProps(
+              props: MaterialTextFieldProps(
                 sessionId: 7,
                 documentRevision: 9,
                 value: TextEditingStateValue(
@@ -274,6 +274,13 @@ void main() {
                 updateMode: TextUpdateMode.correction,
                 autofocus: true,
                 maxUtf8Bytes: 64,
+                variant: 0,
+                label: null,
+                supportingText: null,
+                errorText: null,
+                hasLeading: false,
+                hasTrailing: false,
+                maxLines: 1,
               ),
             ),
           ],
@@ -397,7 +404,6 @@ void main() {
 
       expect(props.map((value) => value.runtimeType), [
         MaterialSearchBarProps,
-        MaterialTooltipProps,
         MaterialDataTableProps,
         MaterialStepperProps,
         MaterialExpansionPanelListProps,
@@ -413,17 +419,17 @@ void main() {
         search.value.selection,
         const TextRangeValue(startUtf16: 1, endUtf16: 4),
       );
-      final table = props[2] as MaterialDataTableProps;
+      final table = props[1] as MaterialDataTableProps;
       expect(table.sortColumnId, 11);
       expect(table.selectedRowIds, [21]);
-      final chip = props[7] as MaterialChipProps;
+      final chip = props[6] as MaterialChipProps;
       expect(chip.presentation, MaterialChipPresentation.elevated);
       expect(
-        (props[8] as MaterialCardProps).variant,
+        (props[7] as MaterialCardProps).variant,
         MaterialCardVariant.filled,
       );
       expect(
-        (props[9] as MaterialDividerProps).orientation,
+        (props[8] as MaterialDividerProps).orientation,
         MaterialDividerOrientation.vertical,
       );
       expectFixtureMatchesDartEncoding(

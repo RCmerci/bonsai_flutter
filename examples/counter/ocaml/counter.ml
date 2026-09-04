@@ -14,7 +14,7 @@ let component handlers graph =
   in
   Bonsai.Cont.map2 count increment ~f:(fun count increment ->
     Ui.Material.scaffold
-      ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Counter") ())
+      ~app_bar:(Ui.Material.App_bar.top ~title:(Ui.Widget.text "Counter") ())
       ~body:
         (Ui.Widget.Body.static
            (Ui.Widget.center

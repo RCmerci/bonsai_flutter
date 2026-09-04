@@ -1,18 +1,32 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:material_3_expressive/material_3_expressive.dart';
 
 import '../protocol/frame.dart';
 import 'detented_modal_sheet_host.dart';
 import 'modal_sheet_background_transition.dart';
 import 'modal_sheet_keyboard_coordinator.dart';
 
-const _modalSheetBorderRadius = BorderRadius.vertical(top: Radius.circular(24));
-
-Widget _buildModalSheetSurface(BuildContext context, Widget child) => Material(
-  color: Theme.of(context).colorScheme.surface,
-  shape: const RoundedRectangleBorder(borderRadius: _modalSheetBorderRadius),
-  clipBehavior: Clip.antiAlias,
-  child: child,
-);
+Widget _buildModalSheetSurface(BuildContext context, Widget child) {
+  final theme = M3ETheme.of(context);
+  final radius = Radius.circular(theme.bottomSheetTheme.topCornerRadius);
+  return Stack(
+    fit: StackFit.passthrough,
+    children: [
+      Positioned.fill(
+        child: IgnorePointer(
+          child: M3EBottomSheet(
+            showDragHandle: false,
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ),
+      ClipRRect(
+        borderRadius: BorderRadius.vertical(top: radius),
+        child: child,
+      ),
+    ],
+  );
+}
 
 final class BonsaiModalBottomSheetPage extends Page<void> {
   const BonsaiModalBottomSheetPage({
@@ -102,7 +116,10 @@ final class BonsaiModalBottomSheetRoute extends ModalBottomSheetRoute<void> {
   @override
   WidgetBuilder get builder => (context) {
     final sizing = _presentation.sizing;
-    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final expressiveTheme = M3ETheme.of(context);
+    final surfaceColor = expressiveTheme.bottomSheetTheme.containerColor(
+      expressiveTheme.colorScheme,
+    );
     final usesFixedLargeShell = sizing is ScrollControlledModalSheetSizing;
     Widget child = _page.child;
     if (sizing is DetentedModalSheetSizing) {

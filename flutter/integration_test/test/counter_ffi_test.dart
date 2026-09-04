@@ -7,7 +7,7 @@ import 'dart:typed_data';
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:bonsai_flutter_native/bonsai_flutter_native.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/runtime_harness.dart';

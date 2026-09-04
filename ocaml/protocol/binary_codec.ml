@@ -484,33 +484,14 @@ let validate_cache_extent = function
   | None | Some _ -> ()
 ;;
 
-let validate_sliver_app_bar
-      ~expanded_height
-      ~collapsed_height
-      ~floating
-      ~snap
-      ~toolbar_height
-      ~elevation
-  =
-  let optional_nonnegative label = function
-    | Some value when (not (Float.is_finite value)) || Float.compare value 0. < 0 ->
-      fail Invalid_props "%s must be non-negative and finite" label
-    | None | Some _ -> ()
-  in
-  if (not (Float.is_finite toolbar_height)) || Float.compare toolbar_height 0. <= 0
-  then fail Invalid_props "sliver toolbar_height must be positive and finite";
-  optional_nonnegative "expanded_height" expanded_height;
-  optional_nonnegative "collapsed_height" collapsed_height;
-  optional_nonnegative "elevation" elevation;
-  (match expanded_height, collapsed_height with
-   | Some expanded, Some collapsed when Float.compare collapsed expanded > 0 ->
-     fail Invalid_props "collapsed_height must not exceed expanded_height"
-   | _ -> ());
-  (match collapsed_height with
-   | Some collapsed when Float.compare collapsed toolbar_height < 0 ->
-     fail Invalid_props "collapsed_height must be at least toolbar_height"
-   | None | Some _ -> ());
-  if snap && not floating then fail Invalid_props "sliver snap requires floating"
+let validate_sliver_app_bar ~floating ~snap ~action_count ~variant ~shape ~density =
+  if snap && not floating then fail Invalid_props "sliver snap requires floating";
+  check_u32 "sliver app bar action count" action_count;
+  if variant < 0 || variant > 2
+  then fail Invalid_props "invalid app bar variant %d" variant;
+  if shape < 0 || shape > 1 then fail Invalid_props "invalid app bar shape %d" shape;
+  if density < 0 || density > 1
+  then fail Invalid_props "invalid app bar density %d" density
 ;;
 
 let semantics_role_id = function
@@ -668,18 +649,32 @@ let write_page_presentation writer = function
     write_bool writer false;
     Writer.u32 writer 0;
     Writer.u32 writer 0
-  | Modal_dialog
-      { barrier_dismissible
-      ; barrier_color_argb
-      ; barrier_label
-      ; use_safe_area
-      ; request_focus
-      ; transition_duration_ms
-      ; reverse_transition_duration_ms
-      } ->
+  | (Modal_dialog
+       { barrier_dismissible
+       ; barrier_color_argb
+       ; barrier_label
+       ; use_safe_area
+       ; request_focus
+       ; transition_duration_ms
+       ; reverse_transition_duration_ms
+       } as presentation)
+  | (Modal_side_sheet
+       { barrier_dismissible
+       ; barrier_color_argb
+       ; barrier_label
+       ; use_safe_area
+       ; request_focus
+       ; transition_duration_ms
+       ; reverse_transition_duration_ms
+       } as presentation) ->
     check_u32 "dialog transition duration" transition_duration_ms;
     check_u32 "dialog reverse transition duration" reverse_transition_duration_ms;
-    Writer.u8 writer 2;
+    Writer.u8
+      writer
+      (match presentation with
+       | Modal_dialog _ -> 2
+       | Modal_side_sheet _ -> 3
+       | _ -> assert false);
     write_bool writer false;
     write_optional_argb32 writer None;
     write_optional_string writer None;
@@ -767,7 +762,13 @@ let validate_navigation ~selected_index destinations =
   List.iter
     (fun (destination : Wire_frame.material_navigation_destination) ->
        if String.length (String.trim destination.label) = 0
-       then fail Invalid_props "navigation destination label must not be empty")
+       then fail Invalid_props "navigation destination label must not be empty";
+       match destination.badge_count with
+       | Some count when count < 0 ->
+         fail Invalid_props "navigation destination badge count must be non-negative"
+       | Some _ when destination.badge_dot ->
+         fail Invalid_props "navigation destination cannot have a badge count and dot"
+       | None | Some _ -> ())
     destinations
 ;;
 
@@ -785,22 +786,12 @@ let validate_radio_group ~selected_id options =
   | None | Some _ -> ()
 ;;
 
-let validate_segmented_button
-      ~selected_ids
-      ~multi_selection_enabled
-      ~empty_selection_allowed
-      ~expanded_insets
-      ~show_selected_icon
-      ~has_selected_icon
-      segments
-  =
+let validate_segmented_button ~selected_ids ~multi_selection_enabled segments =
   if List.is_empty segments
   then fail Invalid_props "segmented button requires at least one segment";
   let ids = Hashtbl.create (List.length segments) in
   List.iter
     (fun (segment : Wire_frame.material_segment) ->
-       if not (segment.has_icon || segment.has_label)
-       then fail Invalid_props "segmented button segment requires an icon or label";
        if Hashtbl.mem ids segment.segment_id
        then fail Invalid_props "segmented button segment IDs must be unique";
        Hashtbl.add ids segment.segment_id ())
@@ -820,70 +811,29 @@ let validate_segmented_button
   validate_selected selected_ids;
   if (not multi_selection_enabled) && List.length selected_ids > 1
   then fail Invalid_props "segmented single-selection mode accepts at most one ID";
-  if (not empty_selection_allowed) && List.is_empty selected_ids
-  then fail Invalid_props "segmented selection must not be empty";
-  if has_selected_icon && not show_selected_icon
-  then fail Invalid_props "segmented selected icon cannot be supplied while hidden";
-  Option.iter
-    (fun (left, top, right, bottom) ->
-       List.iter
-         (fun value ->
-            if (not (Float.is_finite value)) || Float.compare value 0. < 0
-            then
-              fail
-                Invalid_props
-                "segmented expanded insets must be finite and non-negative")
-         [ left; top; right; bottom ])
-    expanded_insets
+  if (not multi_selection_enabled) && List.is_empty selected_ids
+  then fail Invalid_props "segmented selection must not be empty"
 ;;
 
 let write_segmented_button
       writer
       ~selected_ids
       ~enabled
-      ~direction
       ~multi_selection_enabled
-      ~empty_selection_allowed
-      ~expanded_insets
-      ~show_selected_icon
-      ~has_selected_icon
       ~segments
   =
-  validate_segmented_button
-    ~selected_ids
-    ~multi_selection_enabled
-    ~empty_selection_allowed
-    ~expanded_insets
-    ~show_selected_icon
-    ~has_selected_icon
-    segments;
+  validate_segmented_button ~selected_ids ~multi_selection_enabled segments;
   check_u16 "segmented selected ID count" (List.length selected_ids);
   Writer.u16 writer (List.length selected_ids);
   List.iter (Writer.u64 writer) selected_ids;
   write_bool writer enabled;
-  Writer.u8
-    writer
-    (match direction with
-     | Horizontal -> 0
-     | Vertical -> 1);
   write_bool writer multi_selection_enabled;
-  write_bool writer empty_selection_allowed;
-  (match expanded_insets with
-   | None -> Writer.u8 writer 0
-   | Some (left, top, right, bottom) ->
-     Writer.u8 writer 1;
-     List.iter (Writer.f64 writer) [ left; top; right; bottom ]);
-  write_bool writer show_selected_icon;
-  write_bool writer has_selected_icon;
   check_u16 "segmented segment count" (List.length segments);
   Writer.u16 writer (List.length segments);
   List.iter
     (fun (segment : Wire_frame.material_segment) ->
        Writer.u64 writer segment.segment_id;
-       write_bool writer segment.enabled;
-       write_optional_string writer segment.tooltip;
-       write_bool writer segment.has_icon;
-       write_bool writer segment.has_label)
+       write_bool writer segment.has_icon)
     segments
 ;;
 
@@ -944,7 +894,6 @@ let node_kind_id = function
   | Row -> Generated_protocol.Node_kind.row
   | Column -> Generated_protocol.Node_kind.column
   | Stack -> Generated_protocol.Node_kind.stack
-  | Button -> Generated_protocol.Node_kind.button
   | Padding -> Generated_protocol.Node_kind.padding
   | Align -> Generated_protocol.Node_kind.align
   | Center -> Generated_protocol.Node_kind.center
@@ -972,7 +921,6 @@ let node_kind_id = function
   | Semantics -> Generated_protocol.Node_kind.semantics
   | Theme -> Generated_protocol.Node_kind.theme
   | Material_scaffold -> Generated_protocol.Node_kind.material_scaffold
-  | Material_app_bar -> Generated_protocol.Node_kind.material_app_bar
   | Material_elevated_button -> Generated_protocol.Node_kind.material_elevated_button
   | Material_text_button -> Generated_protocol.Node_kind.material_text_button
   | Material_icon_button -> Generated_protocol.Node_kind.material_icon_button
@@ -990,9 +938,8 @@ let node_kind_id = function
   | Material_filter_chip -> Generated_protocol.Node_kind.material_filter_chip
   | Material_choice_chip -> Generated_protocol.Node_kind.material_choice_chip
   | Material_input_chip -> Generated_protocol.Node_kind.material_input_chip
-  | Material_alert_dialog -> Generated_protocol.Node_kind.material_alert_dialog
   | Material_search_bar -> Generated_protocol.Node_kind.material_search_bar
-  | Material_tooltip -> Generated_protocol.Node_kind.material_tooltip
+  | Material_text_field -> Generated_protocol.Node_kind.material_text_field
   | Material_data_table -> Generated_protocol.Node_kind.material_data_table
   | Material_stepper -> Generated_protocol.Node_kind.material_stepper
   | Material_expansion_panel_list ->
@@ -1001,7 +948,6 @@ let node_kind_id = function
   | Material_fullscreen_dialog -> Generated_protocol.Node_kind.material_fullscreen_dialog
   | Material_checkbox -> Generated_protocol.Node_kind.material_checkbox
   | Material_switch -> Generated_protocol.Node_kind.material_switch
-  | Material_list_tile -> Generated_protocol.Node_kind.material_list_tile
   | Material_divider -> Generated_protocol.Node_kind.material_divider
   | Material_card -> Generated_protocol.Node_kind.material_card
   | Material_circular_progress_indicator ->
@@ -1009,9 +955,9 @@ let node_kind_id = function
   | Material_linear_progress_indicator ->
     Generated_protocol.Node_kind.material_linear_progress_indicator
   | Material_segmented_button -> Generated_protocol.Node_kind.material_segmented_button
+  | Material_expressive -> Generated_protocol.Node_kind.material_expressive
   | Cupertino_button -> Generated_protocol.Node_kind.cupertino_button
   | Cupertino_switch -> Generated_protocol.Node_kind.cupertino_switch
-  | Text_input -> Generated_protocol.Node_kind.text_input
   | Overlay -> Generated_protocol.Node_kind.overlay
   | Navigator -> Generated_protocol.Node_kind.navigator
   | Page -> Generated_protocol.Node_kind.page
@@ -1024,6 +970,74 @@ let write_i64_list writer label values =
   check_u16 (label ^ " count") (List.length values);
   Writer.u16 writer (List.length values);
   List.iter (Writer.u64 writer) values
+;;
+
+let write_material_expressive_items writer items =
+  check_u16 "material expressive item count" (List.length items);
+  Writer.u16 writer (List.length items);
+  List.iter
+    (fun (item : Wire_frame.material_expressive_item) ->
+       check_u16 "material expressive child count" item.child_count;
+       if item.kind < 0 || item.kind > 0xff
+       then fail Invalid_props "material expressive item kind is outside u8";
+       Writer.u64 writer item.item_id;
+       Writer.u8 writer item.kind;
+       write_string writer item.label;
+       write_bool writer item.enabled;
+       write_bool writer item.selected;
+       Writer.u16 writer item.child_count)
+    items
+;;
+
+let write_material_expressive_text_input writer = function
+  | None -> Writer.u8 writer 0
+  | Some (fields : Wire_frame.material_expressive_text_input) ->
+    let session_id = ID.Text_input.Session_id.to_int64 fields.session_id in
+    let document_revision =
+      ID.Text_input.Document_revision.to_int64 fields.document_revision
+    in
+    let accepted_local_revision =
+      ID.Text_input.Local_revision.to_int64 fields.accepted_local_revision
+    in
+    check_u64 "expressive search session ID" session_id;
+    check_u64 "expressive search document revision" document_revision;
+    check_u64 "expressive search accepted local revision" accepted_local_revision;
+    Option.iter
+      (fun value ->
+         if value > Generated_protocol.Limits.max_string_bytes
+         then fail Invalid_props "expressive search UTF-8 limit exceeds string limit")
+      fields.max_utf8_bytes;
+    Writer.u8 writer 1;
+    Writer.u64 writer session_id;
+    Writer.u64 writer document_revision;
+    write_text_editing_value writer fields.value;
+    write_bool writer fields.enabled;
+    write_bool writer fields.read_only;
+    write_bool writer fields.obscure_text;
+    Writer.u8 writer (text_keyboard_type_id fields.keyboard_type);
+    Writer.u8 writer (text_input_action_id fields.input_action);
+    Writer.u64 writer accepted_local_revision;
+    Writer.u8 writer (text_update_mode_id fields.update_mode);
+    write_bool writer fields.autofocus;
+    write_optional_u32 writer "expressive search max UTF-8 bytes" fields.max_utf8_bytes
+;;
+
+let write_material_expressive_props writer (fields : Wire_frame.material_expressive_props)
+  =
+  if fields.component < 0 || fields.component > 0xff
+  then fail Invalid_props "material expressive component is outside u8";
+  if fields.variant < 0 || fields.variant > 0xff
+  then fail Invalid_props "material expressive variant is outside u8";
+  Writer.u8 writer fields.component;
+  Writer.u8 writer fields.variant;
+  Writer.u64 writer fields.flags;
+  write_optional_string writer fields.primary_text;
+  write_optional_string writer fields.secondary_text;
+  write_optional_f64 writer fields.value;
+  write_optional_f64 writer fields.end_value;
+  write_i64_list writer "material expressive selected IDs" fields.selected_ids;
+  write_material_expressive_items writer fields.items;
+  write_material_expressive_text_input writer fields.text_input
 ;;
 
 let unique_i64_set label ids =
@@ -1160,26 +1174,45 @@ let write_additional_material_props writer = function
     Writer.u32 writer fields.trailing_count;
     write_optional_string writer fields.hint_text;
     write_bool writer fields.has_on_tap
-  | Material_tooltip_props fields ->
-    if String.length (String.trim fields.message) = 0
-    then fail Invalid_props "tooltip message is empty";
-    write_string writer fields.message;
+  | Material_text_field_props fields ->
+    let session_id = ID.Text_input.Session_id.to_int64 fields.session_id in
+    let document_revision =
+      ID.Text_input.Document_revision.to_int64 fields.document_revision
+    in
+    let accepted_local_revision =
+      ID.Text_input.Local_revision.to_int64 fields.accepted_local_revision
+    in
+    check_u64 "text field session ID" session_id;
+    check_u64 "text field document revision" document_revision;
+    check_u64 "text field accepted local revision" accepted_local_revision;
+    (match fields.max_utf8_bytes with
+     | Some value when value > Generated_protocol.Limits.max_string_bytes ->
+       fail Invalid_props "text field max UTF-8 bytes exceeds the protocol string limit"
+     | None | Some _ -> ());
+    if fields.variant < 0 || fields.variant > 1
+    then fail Invalid_props "invalid text field variant %d" fields.variant;
+    if fields.max_lines <= 0
+    then fail Invalid_props "text field max lines must be positive";
+    Writer.u64 writer session_id;
+    Writer.u64 writer document_revision;
+    write_text_editing_value writer fields.value;
     write_bool writer fields.enabled;
-    write_bool writer fields.exclude_from_semantics;
-    write_bool writer fields.prefer_below;
-    Writer.u8
-      writer
-      (match fields.trigger_mode with
-       | Tooltip_long_press -> 0
-       | Tooltip_tap -> 1);
-    List.iter
-      (fun value ->
-         check_u32 "tooltip duration" value;
-         Writer.u32 writer value)
-      [ fields.wait_duration_ms; fields.show_duration_ms; fields.exit_duration_ms ];
-    write_bool writer fields.enable_tap_to_dismiss;
-    write_bool writer fields.enable_feedback;
-    write_bool writer fields.has_on_triggered
+    write_bool writer fields.read_only;
+    write_bool writer fields.obscure_text;
+    Writer.u8 writer (text_keyboard_type_id fields.keyboard_type);
+    Writer.u8 writer (text_input_action_id fields.input_action);
+    Writer.u64 writer accepted_local_revision;
+    Writer.u8 writer (text_update_mode_id fields.update_mode);
+    write_optional_u32 writer "text field max UTF-8 bytes" fields.max_utf8_bytes;
+    Writer.u8 writer fields.variant;
+    write_optional_string writer fields.label;
+    write_optional_string writer fields.supporting_text;
+    write_optional_string writer fields.error_text;
+    write_bool writer fields.has_leading;
+    write_bool writer fields.has_trailing;
+    check_u32 "text field max lines" fields.max_lines;
+    Writer.u32 writer fields.max_lines;
+    write_bool writer fields.autofocus
   | Material_data_table_props fields ->
     validate_data_table
       ~columns:fields.columns
@@ -1305,7 +1338,6 @@ let write_props writer kind props =
     Writer.u8 writer (image_fit_id fit);
     write_optional_f64 writer width;
     write_optional_f64 writer height
-  | Button, Button_props { enabled } -> write_bool writer enabled
   | Pressable, Pressable_props { overlay_color_argb; release_delay_ms } ->
     check_pressable_release_delay release_delay_ms;
     Writer.u32 writer (Int32.to_int overlay_color_argb);
@@ -1386,47 +1418,31 @@ let write_props writer kind props =
   | ( Sliver_app_bar
     , Sliver_app_bar_props
         { pinned
-        ; expanded_height
-        ; collapsed_height
         ; floating
         ; snap
-        ; stretch
-        ; toolbar_height
         ; has_leading
-        ; has_flexible_space
-        ; has_bottom
-        ; has_actions
-        ; force_elevated
-        ; automatically_imply_leading
-        ; center_title
         ; background_color
         ; foreground_color
-        ; elevation
+        ; action_count
+        ; center_title
+        ; variant
+        ; shape
+        ; density
+        ; semantic_label
         } ) ->
-    validate_sliver_app_bar
-      ~expanded_height
-      ~collapsed_height
-      ~floating
-      ~snap
-      ~toolbar_height
-      ~elevation;
+    validate_sliver_app_bar ~floating ~snap ~action_count ~variant ~shape ~density;
     write_bool writer pinned;
-    write_optional_f64 writer expanded_height;
-    write_optional_f64 writer collapsed_height;
     write_bool writer floating;
     write_bool writer snap;
-    write_bool writer stretch;
-    Writer.f64 writer toolbar_height;
     write_bool writer has_leading;
-    write_bool writer has_flexible_space;
-    write_bool writer has_bottom;
-    write_bool writer has_actions;
-    write_bool writer force_elevated;
-    write_bool writer automatically_imply_leading;
-    write_optional_bool writer center_title;
     write_optional_argb32 writer background_color;
     write_optional_argb32 writer foreground_color;
-    write_optional_f64 writer elevation
+    Writer.u32 writer action_count;
+    write_bool writer center_title;
+    Writer.u8 writer variant;
+    Writer.u8 writer shape;
+    Writer.u8 writer density;
+    write_optional_string writer semantic_label
   | Preferred_size, Preferred_size_props { height } -> Writer.f64 writer height
   | Gesture, Gesture_props -> ()
   | Focus_scope, Focus_scope_props { autofocus } -> write_bool writer autofocus
@@ -1482,25 +1498,36 @@ let write_props writer kind props =
     Writer.u8 writer (material_fab_location_id floating_action_button_location);
     write_bool writer has_bottom_navigation_bar;
     write_bool writer has_bottom_sheet
-  | Material_app_bar, Material_app_bar_props { center_title } ->
-    write_bool writer center_title
   | ( ( Material_elevated_button
       | Material_text_button
-      | Material_icon_button
       | Material_filled_button
       | Material_filled_tonal_button
       | Material_outlined_button )
     , Material_button_props { enabled; autofocus; _ } ) ->
     write_bool writer enabled;
     write_bool writer autofocus
+  | Material_icon_button, Material_button_props { enabled; _ } ->
+    write_bool writer enabled
   | ( Material_floating_action_button
-    , Material_floating_action_button_props { variant; enabled; autofocus; has_icon } ) ->
+    , Material_floating_action_button_props { variant; enabled; autofocus } ) ->
     Writer.u8 writer (material_fab_variant_id variant);
     write_bool writer enabled;
-    write_bool writer autofocus;
-    write_bool writer has_icon
+    write_bool writer autofocus
   | ( Material_navigation_bar
-    , Material_navigation_bar_props { selected_index; destinations } ) ->
+    , Material_navigation_bar_props
+        { selected_index
+        ; destinations
+        ; auto_layout
+        ; layout
+        ; alignment
+        ; label_behavior
+        ; icon_behavior
+        ; size
+        ; shape
+        ; density
+        ; safe_area
+        ; semantic_label
+        } ) ->
     validate_navigation ~selected_index destinations;
     check_u32 "navigation selected index" selected_index;
     check_u16 "navigation destination count" (List.length destinations);
@@ -1509,9 +1536,21 @@ let write_props writer kind props =
     List.iter
       (fun (destination : Wire_frame.material_navigation_destination) ->
          write_string writer destination.label;
-         write_bool writer destination.enabled;
-         write_bool writer destination.has_selected_icon)
-      destinations
+         write_bool writer destination.has_selected_icon;
+         write_optional_u32 writer "navigation badge count" destination.badge_count;
+         write_bool writer destination.badge_dot;
+         write_optional_string writer destination.semantic_label)
+      destinations;
+    write_bool writer auto_layout;
+    Writer.u8 writer layout;
+    Writer.u8 writer alignment;
+    Writer.u8 writer label_behavior;
+    Writer.u8 writer icon_behavior;
+    Writer.u8 writer size;
+    Writer.u8 writer shape;
+    Writer.u8 writer density;
+    write_bool writer safe_area;
+    write_optional_string writer semantic_label
   | Material_radio_group, Material_radio_group_props { selected_id; options } ->
     validate_radio_group ~selected_id options;
     (match selected_id with
@@ -1528,8 +1567,8 @@ let write_props writer kind props =
          write_bool writer option.has_label)
       options
   | ( Material_slider
-    , Material_slider_props { value; min; max; divisions; label; enabled; has_on_change }
-    ) ->
+    , Material_slider_props
+        { value; min; max; divisions; label; enabled; has_on_change; kind } ) ->
     validate_slider ~value ~min ~max ~divisions;
     Writer.f64 writer value;
     Writer.f64 writer min;
@@ -1537,7 +1576,9 @@ let write_props writer kind props =
     write_optional_u32 writer "slider divisions" divisions;
     write_optional_string writer label;
     write_bool writer enabled;
-    write_bool writer has_on_change
+    write_bool writer has_on_change;
+    if kind < 0 || kind > 5 then fail Invalid_props "invalid slider kind %d" kind;
+    Writer.u8 writer kind
   | ( Material_range_slider
     , Material_range_slider_props
         { start
@@ -1549,6 +1590,7 @@ let write_props writer kind props =
         ; label_end
         ; enabled
         ; has_on_change
+        ; kind
         } ) ->
     validate_slider ~value:start ~min ~max ~divisions;
     validate_slider ~value:end_ ~min ~max ~divisions;
@@ -1562,46 +1604,29 @@ let write_props writer kind props =
     write_optional_string writer label_start;
     write_optional_string writer label_end;
     write_bool writer enabled;
-    write_bool writer has_on_change
+    write_bool writer has_on_change;
+    if kind < 0 || kind > 1 then fail Invalid_props "invalid range slider kind %d" kind;
+    Writer.u8 writer kind
   | ( ( Material_action_chip
       | Material_filter_chip
       | Material_choice_chip
       | Material_input_chip )
     , Material_chip_props
-        { variant
-        ; presentation
-        ; enabled
-        ; selected
-        ; has_avatar
-        ; has_delete_icon
-        ; has_on_press
-        ; has_on_selected
-        ; has_on_delete
-        } ) ->
+        { variant; presentation; enabled; selected; has_leading; has_on_delete } ) ->
     ignore (material_chip_variant_id variant);
     if variant = Input_chip && presentation = Elevated_chip
     then fail Invalid_props "input chip cannot be elevated";
     write_bool writer enabled;
     write_bool writer selected;
-    write_bool writer has_avatar;
-    write_bool writer has_delete_icon;
-    write_bool writer has_on_press;
-    write_bool writer has_on_selected;
+    write_bool writer has_leading;
     write_bool writer has_on_delete;
     Writer.u8
       writer
       (match presentation with
        | Flat_chip -> 0
        | Elevated_chip -> 1)
-  | ( Material_alert_dialog
-    , Material_alert_dialog_props { has_icon; has_title; has_content; action_count } ) ->
-    check_u32 "alert dialog action count" action_count;
-    write_bool writer has_icon;
-    write_bool writer has_title;
-    write_bool writer has_content;
-    Writer.u32 writer action_count
   | Material_search_bar, (Material_search_bar_props _ as props)
-  | Material_tooltip, (Material_tooltip_props _ as props)
+  | Material_text_field, (Material_text_field_props _ as props)
   | Material_data_table, (Material_data_table_props _ as props)
   | Material_stepper, (Material_stepper_props _ as props)
   | Material_expansion_panel_list, (Material_expansion_panel_list_props _ as props)
@@ -1614,14 +1639,6 @@ let write_props writer kind props =
   | Material_switch, Material_switch_props { value; enabled } ->
     write_bool writer value;
     write_bool writer enabled
-  | ( Material_list_tile
-    , Material_list_tile_props
-        { enabled; selected; has_subtitle; has_leading; has_trailing } ) ->
-    write_bool writer enabled;
-    write_bool writer selected;
-    write_bool writer has_subtitle;
-    write_bool writer has_leading;
-    write_bool writer has_trailing
   | ( Material_divider
     , Material_divider_props { orientation; thickness; spacing; indent; end_indent } ) ->
     validate_nonnegative_finite
@@ -1642,67 +1659,28 @@ let write_props writer kind props =
        | Elevated_card -> 0
        | Filled_card -> 1
        | Outlined_card -> 2)
-  | Material_circular_progress_indicator, Material_circular_progress_props { value } ->
+  | Material_circular_progress_indicator, Material_circular_progress_props { value; wavy }
+    ->
     validate_progress_value value;
-    write_optional_f64 writer value
-  | Material_linear_progress_indicator, Material_linear_progress_props { value } ->
+    write_optional_f64 writer value;
+    write_bool writer wavy
+  | Material_linear_progress_indicator, Material_linear_progress_props { value; wavy } ->
     validate_progress_value value;
-    write_optional_f64 writer value
+    write_optional_f64 writer value;
+    write_bool writer wavy
   | Material_segmented_button, Material_segmented_button_props fields ->
     write_segmented_button
       writer
       ~selected_ids:fields.selected_ids
       ~enabled:fields.enabled
-      ~direction:fields.direction
       ~multi_selection_enabled:fields.multi_selection_enabled
-      ~empty_selection_allowed:fields.empty_selection_allowed
-      ~expanded_insets:fields.expanded_insets
-      ~show_selected_icon:fields.show_selected_icon
-      ~has_selected_icon:fields.has_selected_icon
       ~segments:fields.segments
+  | Material_expressive, Material_expressive_props fields ->
+    write_material_expressive_props writer fields
   | Cupertino_button, Cupertino_button_props { enabled } -> write_bool writer enabled
   | Cupertino_switch, Cupertino_switch_props { value; enabled } ->
     write_bool writer value;
     write_bool writer enabled
-  | ( Text_input
-    , Text_input_props
-        { session_id
-        ; document_revision
-        ; value
-        ; enabled
-        ; read_only
-        ; obscure_text
-        ; keyboard_type
-        ; input_action
-        ; accepted_local_revision
-        ; update_mode
-        ; autofocus
-        ; max_utf8_bytes
-        } ) ->
-    let session_id = ID.Text_input.Session_id.to_int64 session_id in
-    let document_revision = ID.Text_input.Document_revision.to_int64 document_revision in
-    let accepted_local_revision =
-      ID.Text_input.Local_revision.to_int64 accepted_local_revision
-    in
-    check_u64 "text session ID" session_id;
-    check_u64 "document revision" document_revision;
-    check_u64 "accepted local revision" accepted_local_revision;
-    Writer.u64 writer session_id;
-    Writer.u64 writer document_revision;
-    write_text_editing_value writer value;
-    write_bool writer enabled;
-    write_bool writer read_only;
-    write_bool writer obscure_text;
-    Writer.u8 writer (text_keyboard_type_id keyboard_type);
-    Writer.u8 writer (text_input_action_id input_action);
-    Writer.u64 writer accepted_local_revision;
-    Writer.u8 writer (text_update_mode_id update_mode);
-    write_bool writer autofocus;
-    (match max_utf8_bytes with
-     | Some value when value > Generated_protocol.Limits.max_string_bytes ->
-       fail Invalid_props "text input max UTF-8 bytes exceeds the protocol string limit"
-     | None | Some _ -> ());
-    write_optional_u32 writer "text input max UTF-8 bytes" max_utf8_bytes
   | Overlay, Overlay_props { alignment; dismissible } ->
     Writer.u8 writer (overlay_alignment_id alignment);
     write_bool writer dismissible
@@ -1717,7 +1695,7 @@ let write_props writer kind props =
       (page_transition_id
          (match presentation with
           | Wire_frame.Standard_page transition -> transition
-          | Modal_bottom_sheet _ | Modal_dialog _ -> No_transition));
+          | Modal_bottom_sheet _ | Modal_dialog _ | Modal_side_sheet _ -> No_transition));
     write_bool writer can_pop;
     write_optional_string
       writer
@@ -1762,7 +1740,6 @@ let props_kind_id = function
   | Icon_props _ -> Generated_protocol.Node_kind.icon
   | Image_props _ -> Generated_protocol.Node_kind.image
   | Linear_props -> Generated_protocol.Node_kind.row
-  | Button_props _ -> Generated_protocol.Node_kind.button
   | Pressable_props _ -> Generated_protocol.Node_kind.pressable
   | Padding_props _ -> Generated_protocol.Node_kind.padding
   | Align_props _ -> Generated_protocol.Node_kind.align
@@ -1790,7 +1767,6 @@ let props_kind_id = function
   | Semantics_props _ -> Generated_protocol.Node_kind.semantics
   | Theme_props _ -> Generated_protocol.Node_kind.theme
   | Material_scaffold_props _ -> Generated_protocol.Node_kind.material_scaffold
-  | Material_app_bar_props _ -> Generated_protocol.Node_kind.material_app_bar
   | Material_button_props { variant; _ } ->
     (match variant with
      | Filled -> Generated_protocol.Node_kind.material_filled_button
@@ -1812,9 +1788,8 @@ let props_kind_id = function
      | Filter_chip -> Generated_protocol.Node_kind.material_filter_chip
      | Choice_chip -> Generated_protocol.Node_kind.material_choice_chip
      | Input_chip -> Generated_protocol.Node_kind.material_input_chip)
-  | Material_alert_dialog_props _ -> Generated_protocol.Node_kind.material_alert_dialog
   | Material_search_bar_props _ -> Generated_protocol.Node_kind.material_search_bar
-  | Material_tooltip_props _ -> Generated_protocol.Node_kind.material_tooltip
+  | Material_text_field_props _ -> Generated_protocol.Node_kind.material_text_field
   | Material_data_table_props _ -> Generated_protocol.Node_kind.material_data_table
   | Material_stepper_props _ -> Generated_protocol.Node_kind.material_stepper
   | Material_expansion_panel_list_props _ ->
@@ -1824,7 +1799,6 @@ let props_kind_id = function
     Generated_protocol.Node_kind.material_fullscreen_dialog
   | Material_checkbox_props _ -> Generated_protocol.Node_kind.material_checkbox
   | Material_switch_props _ -> Generated_protocol.Node_kind.material_switch
-  | Material_list_tile_props _ -> Generated_protocol.Node_kind.material_list_tile
   | Material_divider_props _ -> Generated_protocol.Node_kind.material_divider
   | Material_card_props _ -> Generated_protocol.Node_kind.material_card
   | Material_circular_progress_props _ ->
@@ -1833,9 +1807,9 @@ let props_kind_id = function
     Generated_protocol.Node_kind.material_linear_progress_indicator
   | Material_segmented_button_props _ ->
     Generated_protocol.Node_kind.material_segmented_button
+  | Material_expressive_props _ -> Generated_protocol.Node_kind.material_expressive
   | Cupertino_button_props _ -> Generated_protocol.Node_kind.cupertino_button
   | Cupertino_switch_props _ -> Generated_protocol.Node_kind.cupertino_switch
-  | Text_input_props _ -> Generated_protocol.Node_kind.text_input
   | Overlay_props _ -> Generated_protocol.Node_kind.overlay
   | Navigator_props _ -> Generated_protocol.Node_kind.navigator
   | Page_props _ -> Generated_protocol.Node_kind.page
@@ -1881,7 +1855,6 @@ let changed_fields = function
       ; field_mask Generated_protocol.Image_prop.width
       ; field_mask Generated_protocol.Image_prop.height
       ]
-  | Button_props _ -> field_mask Generated_protocol.Button_prop.enabled
   | Pressable_props _ ->
     Int64.logor
       (field_mask Generated_protocol.Pressable_prop.overlay_color)
@@ -1963,22 +1936,17 @@ let changed_fields = function
       Int64.logor
       0L
       [ field_mask Generated_protocol.Sliver_app_bar_prop.pinned
-      ; field_mask Generated_protocol.Sliver_app_bar_prop.expanded_height
-      ; field_mask Generated_protocol.Sliver_app_bar_prop.collapsed_height
       ; field_mask Generated_protocol.Sliver_app_bar_prop.floating
       ; field_mask Generated_protocol.Sliver_app_bar_prop.snap
-      ; field_mask Generated_protocol.Sliver_app_bar_prop.stretch
-      ; field_mask Generated_protocol.Sliver_app_bar_prop.toolbar_height
       ; field_mask Generated_protocol.Sliver_app_bar_prop.has_leading
-      ; field_mask Generated_protocol.Sliver_app_bar_prop.has_flexible_space
-      ; field_mask Generated_protocol.Sliver_app_bar_prop.has_bottom
-      ; field_mask Generated_protocol.Sliver_app_bar_prop.has_actions
-      ; field_mask Generated_protocol.Sliver_app_bar_prop.force_elevated
-      ; field_mask Generated_protocol.Sliver_app_bar_prop.automatically_imply_leading
-      ; field_mask Generated_protocol.Sliver_app_bar_prop.center_title
       ; field_mask Generated_protocol.Sliver_app_bar_prop.background_color
       ; field_mask Generated_protocol.Sliver_app_bar_prop.foreground_color
-      ; field_mask Generated_protocol.Sliver_app_bar_prop.elevation
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.action_count
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.center_title_value
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.variant
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.shape
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.density
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.semantic_label
       ]
   | Preferred_size_props _ -> field_mask Generated_protocol.Preferred_size_prop.height
   | Focus_scope_props _ -> field_mask Generated_protocol.Focus_scope_prop.autofocus
@@ -2017,31 +1985,32 @@ let changed_fields = function
       ; field_mask Generated_protocol.Material_scaffold_prop.has_bottom_navigation_bar
       ; field_mask Generated_protocol.Material_scaffold_prop.has_bottom_sheet
       ]
-  | Material_app_bar_props _ ->
-    field_mask Generated_protocol.Material_app_bar_prop.center_title
   | Material_button_props { variant; _ } ->
-    let enabled, autofocus =
+    let fields =
       match variant with
       | Filled ->
-        ( Generated_protocol.Material_filled_button_prop.enabled
-        , Generated_protocol.Material_filled_button_prop.autofocus )
+        [ Generated_protocol.Material_filled_button_prop.enabled
+        ; Generated_protocol.Material_filled_button_prop.autofocus
+        ]
       | Filled_tonal ->
-        ( Generated_protocol.Material_filled_tonal_button_prop.enabled
-        , Generated_protocol.Material_filled_tonal_button_prop.autofocus )
+        [ Generated_protocol.Material_filled_tonal_button_prop.enabled
+        ; Generated_protocol.Material_filled_tonal_button_prop.autofocus
+        ]
       | Outlined ->
-        ( Generated_protocol.Material_outlined_button_prop.enabled
-        , Generated_protocol.Material_outlined_button_prop.autofocus )
+        [ Generated_protocol.Material_outlined_button_prop.enabled
+        ; Generated_protocol.Material_outlined_button_prop.autofocus
+        ]
       | Elevated ->
-        ( Generated_protocol.Material_elevated_button_prop.enabled
-        , Generated_protocol.Material_elevated_button_prop.autofocus )
+        [ Generated_protocol.Material_elevated_button_prop.enabled
+        ; Generated_protocol.Material_elevated_button_prop.autofocus
+        ]
       | Text_button ->
-        ( Generated_protocol.Material_text_button_prop.enabled
-        , Generated_protocol.Material_text_button_prop.autofocus )
-      | Icon_button ->
-        ( Generated_protocol.Material_icon_button_prop.enabled
-        , Generated_protocol.Material_icon_button_prop.autofocus )
+        [ Generated_protocol.Material_text_button_prop.enabled
+        ; Generated_protocol.Material_text_button_prop.autofocus
+        ]
+      | Icon_button -> [ Generated_protocol.Material_icon_button_prop.enabled ]
     in
-    Int64.logor (field_mask enabled) (field_mask autofocus)
+    List.fold_left Int64.logor 0L (List.map field_mask fields)
   | Material_floating_action_button_props _ ->
     List.fold_left
       Int64.logor
@@ -2049,12 +2018,24 @@ let changed_fields = function
       [ field_mask Generated_protocol.Material_floating_action_button_prop.variant
       ; field_mask Generated_protocol.Material_floating_action_button_prop.enabled
       ; field_mask Generated_protocol.Material_floating_action_button_prop.autofocus
-      ; field_mask Generated_protocol.Material_floating_action_button_prop.has_icon
       ]
   | Material_navigation_bar_props _ ->
-    Int64.logor
-      (field_mask Generated_protocol.Material_navigation_bar_prop.selected_index)
-      (field_mask Generated_protocol.Material_navigation_bar_prop.destinations)
+    List.fold_left
+      Int64.logor
+      0L
+      [ field_mask Generated_protocol.Material_navigation_bar_prop.selected_index
+      ; field_mask Generated_protocol.Material_navigation_bar_prop.destinations
+      ; field_mask Generated_protocol.Material_navigation_bar_prop.auto_layout
+      ; field_mask Generated_protocol.Material_navigation_bar_prop.layout
+      ; field_mask Generated_protocol.Material_navigation_bar_prop.alignment
+      ; field_mask Generated_protocol.Material_navigation_bar_prop.label_behavior
+      ; field_mask Generated_protocol.Material_navigation_bar_prop.icon_behavior
+      ; field_mask Generated_protocol.Material_navigation_bar_prop.size
+      ; field_mask Generated_protocol.Material_navigation_bar_prop.shape
+      ; field_mask Generated_protocol.Material_navigation_bar_prop.density
+      ; field_mask Generated_protocol.Material_navigation_bar_prop.safe_area
+      ; field_mask Generated_protocol.Material_navigation_bar_prop.semantic_label
+      ]
   | Material_radio_group_props _ ->
     Int64.logor
       (field_mask Generated_protocol.Material_radio_group_prop.selected_id)
@@ -2086,84 +2067,29 @@ let changed_fields = function
       ; field_mask Generated_protocol.Material_range_slider_prop.has_on_change
       ]
   | Material_chip_props { variant; _ } ->
-    let ( enabled
-        , selected
-        , avatar
-        , delete_icon
-        , press
-        , on_selected
-        , on_delete
-        , presentation )
-      =
+    let enabled, selected, leading, on_delete, presentation =
       match variant with
       | Action_chip ->
         let module P = Generated_protocol.Material_action_chip_prop in
-        ( P.enabled
-        , P.selected
-        , P.has_avatar
-        , P.has_delete_icon
-        , P.has_on_press
-        , P.has_on_selected
-        , P.has_on_delete
-        , P.presentation )
+        P.enabled, P.selected, P.has_leading, P.has_on_delete, P.presentation
       | Filter_chip ->
         let module P = Generated_protocol.Material_filter_chip_prop in
-        ( P.enabled
-        , P.selected
-        , P.has_avatar
-        , P.has_delete_icon
-        , P.has_on_press
-        , P.has_on_selected
-        , P.has_on_delete
-        , P.presentation )
+        P.enabled, P.selected, P.has_leading, P.has_on_delete, P.presentation
       | Choice_chip ->
         let module P = Generated_protocol.Material_choice_chip_prop in
-        ( P.enabled
-        , P.selected
-        , P.has_avatar
-        , P.has_delete_icon
-        , P.has_on_press
-        , P.has_on_selected
-        , P.has_on_delete
-        , P.presentation )
+        P.enabled, P.selected, P.has_leading, P.has_on_delete, P.presentation
       | Input_chip ->
         let module P = Generated_protocol.Material_input_chip_prop in
-        ( P.enabled
-        , P.selected
-        , P.has_avatar
-        , P.has_delete_icon
-        , P.has_on_press
-        , P.has_on_selected
-        , P.has_on_delete
-        , P.presentation )
+        P.enabled, P.selected, P.has_leading, P.has_on_delete, P.presentation
     in
     List.fold_left
       Int64.logor
       0L
-      (List.map
-         field_mask
-         [ enabled
-         ; selected
-         ; avatar
-         ; delete_icon
-         ; press
-         ; on_selected
-         ; on_delete
-         ; presentation
-         ])
-  | Material_alert_dialog_props _ ->
-    List.fold_left
-      Int64.logor
-      0L
-      [ field_mask Generated_protocol.Material_alert_dialog_prop.has_icon
-      ; field_mask Generated_protocol.Material_alert_dialog_prop.has_title
-      ; field_mask Generated_protocol.Material_alert_dialog_prop.has_content
-      ; field_mask Generated_protocol.Material_alert_dialog_prop.action_count
-      ]
+      (List.map field_mask [ enabled; selected; leading; on_delete; presentation ])
   | Material_search_bar_props _ ->
     List.fold_left Int64.logor 0L (List.init 15 (fun index -> Int64.shift_left 1L index))
-  | Material_tooltip_props _ ->
-    List.fold_left Int64.logor 0L (List.init 11 (fun index -> Int64.shift_left 1L index))
+  | Material_text_field_props _ ->
+    List.fold_left Int64.logor 0L (List.init 19 (fun index -> Int64.shift_left 1L index))
   | Material_data_table_props _ ->
     List.fold_left Int64.logor 0L (List.init 9 (fun index -> Int64.shift_left 1L index))
   | Material_stepper_props _ ->
@@ -2181,16 +2107,6 @@ let changed_fields = function
     Int64.logor
       (field_mask Generated_protocol.Material_switch_prop.value)
       (field_mask Generated_protocol.Material_switch_prop.enabled)
-  | Material_list_tile_props _ ->
-    List.fold_left
-      Int64.logor
-      0L
-      [ field_mask Generated_protocol.Material_list_tile_prop.enabled
-      ; field_mask Generated_protocol.Material_list_tile_prop.selected
-      ; field_mask Generated_protocol.Material_list_tile_prop.has_subtitle
-      ; field_mask Generated_protocol.Material_list_tile_prop.has_leading
-      ; field_mask Generated_protocol.Material_list_tile_prop.has_trailing
-      ]
   | Material_divider_props _ ->
     List.fold_left Int64.logor 0L (List.init 5 (fun index -> Int64.shift_left 1L index))
   | Material_card_props _ ->
@@ -2208,37 +2124,17 @@ let changed_fields = function
       0L
       [ field_mask P.selected_ids
       ; field_mask P.enabled
-      ; field_mask P.direction
       ; field_mask P.multi_selection_enabled
-      ; field_mask P.empty_selection_allowed
-      ; field_mask P.expanded_insets
-      ; field_mask P.show_selected_icon
-      ; field_mask P.has_selected_icon
       ; field_mask P.segments
       ]
+  | Material_expressive_props _ ->
+    List.fold_left Int64.logor 0L (List.init 10 (fun index -> Int64.shift_left 1L index))
   | Cupertino_button_props _ ->
     field_mask Generated_protocol.Cupertino_button_prop.enabled
   | Cupertino_switch_props _ ->
     Int64.logor
       (field_mask Generated_protocol.Cupertino_switch_prop.value)
       (field_mask Generated_protocol.Cupertino_switch_prop.enabled)
-  | Text_input_props _ ->
-    List.fold_left
-      Int64.logor
-      0L
-      [ field_mask Generated_protocol.Text_input_prop.session_id
-      ; field_mask Generated_protocol.Text_input_prop.document_revision
-      ; field_mask Generated_protocol.Text_input_prop.value
-      ; field_mask Generated_protocol.Text_input_prop.enabled
-      ; field_mask Generated_protocol.Text_input_prop.read_only
-      ; field_mask Generated_protocol.Text_input_prop.obscure_text
-      ; field_mask Generated_protocol.Text_input_prop.keyboard_type
-      ; field_mask Generated_protocol.Text_input_prop.input_action
-      ; field_mask Generated_protocol.Text_input_prop.accepted_local_revision
-      ; field_mask Generated_protocol.Text_input_prop.update_mode
-      ; field_mask Generated_protocol.Text_input_prop.autofocus
-      ; field_mask Generated_protocol.Text_input_prop.max_utf8_bytes
-      ]
   | Overlay_props _ ->
     Int64.logor
       (field_mask Generated_protocol.Overlay_prop.alignment)
@@ -2322,7 +2218,6 @@ let write_update_props writer props =
     Writer.u8 writer (image_fit_id fit);
     write_optional_f64 writer width;
     write_optional_f64 writer height
-  | Button_props { enabled } -> write_bool writer enabled
   | Pressable_props { overlay_color_argb; release_delay_ms } ->
     check_pressable_release_delay release_delay_ms;
     Writer.u32 writer (Int32.to_int overlay_color_argb);
@@ -2397,47 +2292,31 @@ let write_update_props writer props =
     Writer.f64 writer bottom
   | Sliver_app_bar_props
       { pinned
-      ; expanded_height
-      ; collapsed_height
       ; floating
       ; snap
-      ; stretch
-      ; toolbar_height
       ; has_leading
-      ; has_flexible_space
-      ; has_bottom
-      ; has_actions
-      ; force_elevated
-      ; automatically_imply_leading
-      ; center_title
       ; background_color
       ; foreground_color
-      ; elevation
+      ; action_count
+      ; center_title
+      ; variant
+      ; shape
+      ; density
+      ; semantic_label
       } ->
-    validate_sliver_app_bar
-      ~expanded_height
-      ~collapsed_height
-      ~floating
-      ~snap
-      ~toolbar_height
-      ~elevation;
+    validate_sliver_app_bar ~floating ~snap ~action_count ~variant ~shape ~density;
     write_bool writer pinned;
-    write_optional_f64 writer expanded_height;
-    write_optional_f64 writer collapsed_height;
     write_bool writer floating;
     write_bool writer snap;
-    write_bool writer stretch;
-    Writer.f64 writer toolbar_height;
     write_bool writer has_leading;
-    write_bool writer has_flexible_space;
-    write_bool writer has_bottom;
-    write_bool writer has_actions;
-    write_bool writer force_elevated;
-    write_bool writer automatically_imply_leading;
-    write_optional_bool writer center_title;
     write_optional_argb32 writer background_color;
     write_optional_argb32 writer foreground_color;
-    write_optional_f64 writer elevation
+    Writer.u32 writer action_count;
+    write_bool writer center_title;
+    Writer.u8 writer variant;
+    Writer.u8 writer shape;
+    Writer.u8 writer density;
+    write_optional_string writer semantic_label
   | Preferred_size_props { height } -> Writer.f64 writer height
   | Focus_scope_props { autofocus } -> write_bool writer autofocus
   | Mouse_region_props { opaque } -> write_bool writer opaque
@@ -2490,25 +2369,50 @@ let write_update_props writer props =
     Writer.u8 writer (material_fab_location_id floating_action_button_location);
     write_bool writer has_bottom_navigation_bar;
     write_bool writer has_bottom_sheet
-  | Material_app_bar_props { center_title } -> write_bool writer center_title
+  | Material_button_props { variant = Icon_button; enabled; _ } ->
+    write_bool writer enabled
   | Material_button_props { enabled; autofocus; _ } ->
     write_bool writer enabled;
     write_bool writer autofocus
-  | Material_floating_action_button_props { variant; enabled; autofocus; has_icon } ->
+  | Material_floating_action_button_props { variant; enabled; autofocus } ->
     Writer.u8 writer (material_fab_variant_id variant);
     write_bool writer enabled;
-    write_bool writer autofocus;
-    write_bool writer has_icon
-  | Material_navigation_bar_props { selected_index; destinations } ->
+    write_bool writer autofocus
+  | Material_navigation_bar_props
+      { selected_index
+      ; destinations
+      ; auto_layout
+      ; layout
+      ; alignment
+      ; label_behavior
+      ; icon_behavior
+      ; size
+      ; shape
+      ; density
+      ; safe_area
+      ; semantic_label
+      } ->
     validate_navigation ~selected_index destinations;
     Writer.u32 writer selected_index;
     Writer.u16 writer (List.length destinations);
     List.iter
       (fun (destination : Wire_frame.material_navigation_destination) ->
          write_string writer destination.label;
-         write_bool writer destination.enabled;
-         write_bool writer destination.has_selected_icon)
-      destinations
+         write_bool writer destination.has_selected_icon;
+         write_optional_u32 writer "navigation badge count" destination.badge_count;
+         write_bool writer destination.badge_dot;
+         write_optional_string writer destination.semantic_label)
+      destinations;
+    write_bool writer auto_layout;
+    Writer.u8 writer layout;
+    Writer.u8 writer alignment;
+    Writer.u8 writer label_behavior;
+    Writer.u8 writer icon_behavior;
+    Writer.u8 writer size;
+    Writer.u8 writer shape;
+    Writer.u8 writer density;
+    write_bool writer safe_area;
+    write_optional_string writer semantic_label
   | Material_radio_group_props { selected_id; options } ->
     validate_radio_group ~selected_id options;
     (match selected_id with
@@ -2523,7 +2427,8 @@ let write_update_props writer props =
          write_bool writer option.enabled;
          write_bool writer option.has_label)
       options
-  | Material_slider_props { value; min; max; divisions; label; enabled; has_on_change } ->
+  | Material_slider_props
+      { value; min; max; divisions; label; enabled; has_on_change; kind } ->
     validate_slider ~value ~min ~max ~divisions;
     Writer.f64 writer value;
     Writer.f64 writer min;
@@ -2531,10 +2436,21 @@ let write_update_props writer props =
     write_optional_u32 writer "slider divisions" divisions;
     write_optional_string writer label;
     write_bool writer enabled;
-    write_bool writer has_on_change
+    write_bool writer has_on_change;
+    if kind < 0 || kind > 5 then fail Invalid_props "invalid slider kind %d" kind;
+    Writer.u8 writer kind
   | Material_range_slider_props
-      { start; end_; min; max; divisions; label_start; label_end; enabled; has_on_change }
-    ->
+      { start
+      ; end_
+      ; min
+      ; max
+      ; divisions
+      ; label_start
+      ; label_end
+      ; enabled
+      ; has_on_change
+      ; kind
+      } ->
     validate_slider ~value:start ~min ~max ~divisions;
     validate_slider ~value:end_ ~min ~max ~divisions;
     if Float.compare start end_ > 0
@@ -2547,41 +2463,25 @@ let write_update_props writer props =
     write_optional_string writer label_start;
     write_optional_string writer label_end;
     write_bool writer enabled;
-    write_bool writer has_on_change
+    write_bool writer has_on_change;
+    if kind < 0 || kind > 1 then fail Invalid_props "invalid range slider kind %d" kind;
+    Writer.u8 writer kind
   | Material_chip_props
-      { variant
-      ; presentation
-      ; enabled
-      ; selected
-      ; has_avatar
-      ; has_delete_icon
-      ; has_on_press
-      ; has_on_selected
-      ; has_on_delete
-      } ->
+      { variant; presentation; enabled; selected; has_leading; has_on_delete } ->
     ignore (material_chip_variant_id variant);
     if variant = Input_chip && presentation = Elevated_chip
     then fail Invalid_props "input chip cannot be elevated";
     write_bool writer enabled;
     write_bool writer selected;
-    write_bool writer has_avatar;
-    write_bool writer has_delete_icon;
-    write_bool writer has_on_press;
-    write_bool writer has_on_selected;
+    write_bool writer has_leading;
     write_bool writer has_on_delete;
     Writer.u8
       writer
       (match presentation with
        | Flat_chip -> 0
        | Elevated_chip -> 1)
-  | Material_alert_dialog_props { has_icon; has_title; has_content; action_count } ->
-    check_u32 "alert dialog action count" action_count;
-    write_bool writer has_icon;
-    write_bool writer has_title;
-    write_bool writer has_content;
-    Writer.u32 writer action_count
   | (Material_search_bar_props _ as props)
-  | (Material_tooltip_props _ as props)
+  | (Material_text_field_props _ as props)
   | (Material_data_table_props _ as props)
   | (Material_stepper_props _ as props)
   | (Material_expansion_panel_list_props _ as props)
@@ -2594,13 +2494,6 @@ let write_update_props writer props =
   | Material_switch_props { value; enabled } ->
     write_bool writer value;
     write_bool writer enabled
-  | Material_list_tile_props
-      { enabled; selected; has_subtitle; has_leading; has_trailing } ->
-    write_bool writer enabled;
-    write_bool writer selected;
-    write_bool writer has_subtitle;
-    write_bool writer has_leading;
-    write_bool writer has_trailing
   | Material_divider_props { orientation; thickness; spacing; indent; end_indent } ->
     validate_nonnegative_finite
       "divider geometry"
@@ -2620,66 +2513,26 @@ let write_update_props writer props =
        | Elevated_card -> 0
        | Filled_card -> 1
        | Outlined_card -> 2)
-  | Material_circular_progress_props { value } ->
+  | Material_circular_progress_props { value; wavy } ->
     validate_progress_value value;
-    write_optional_f64 writer value
-  | Material_linear_progress_props { value } ->
+    write_optional_f64 writer value;
+    write_bool writer wavy
+  | Material_linear_progress_props { value; wavy } ->
     validate_progress_value value;
-    write_optional_f64 writer value
+    write_optional_f64 writer value;
+    write_bool writer wavy
   | Material_segmented_button_props fields ->
     write_segmented_button
       writer
       ~selected_ids:fields.selected_ids
       ~enabled:fields.enabled
-      ~direction:fields.direction
       ~multi_selection_enabled:fields.multi_selection_enabled
-      ~empty_selection_allowed:fields.empty_selection_allowed
-      ~expanded_insets:fields.expanded_insets
-      ~show_selected_icon:fields.show_selected_icon
-      ~has_selected_icon:fields.has_selected_icon
       ~segments:fields.segments
+  | Material_expressive_props fields -> write_material_expressive_props writer fields
   | Cupertino_button_props { enabled } -> write_bool writer enabled
   | Cupertino_switch_props { value; enabled } ->
     write_bool writer value;
     write_bool writer enabled
-  | Text_input_props
-      { session_id
-      ; document_revision
-      ; value
-      ; enabled
-      ; read_only
-      ; obscure_text
-      ; keyboard_type
-      ; input_action
-      ; accepted_local_revision
-      ; update_mode
-      ; autofocus
-      ; max_utf8_bytes
-      } ->
-    let session_id = ID.Text_input.Session_id.to_int64 session_id in
-    let document_revision = ID.Text_input.Document_revision.to_int64 document_revision in
-    let accepted_local_revision =
-      ID.Text_input.Local_revision.to_int64 accepted_local_revision
-    in
-    check_u64 "text session ID" session_id;
-    check_u64 "document revision" document_revision;
-    check_u64 "accepted local revision" accepted_local_revision;
-    Writer.u64 writer session_id;
-    Writer.u64 writer document_revision;
-    write_text_editing_value writer value;
-    write_bool writer enabled;
-    write_bool writer read_only;
-    write_bool writer obscure_text;
-    Writer.u8 writer (text_keyboard_type_id keyboard_type);
-    Writer.u8 writer (text_input_action_id input_action);
-    Writer.u64 writer accepted_local_revision;
-    Writer.u8 writer (text_update_mode_id update_mode);
-    write_bool writer autofocus;
-    (match max_utf8_bytes with
-     | Some value when value > Generated_protocol.Limits.max_string_bytes ->
-       fail Invalid_props "text input max UTF-8 bytes exceeds the protocol string limit"
-     | None | Some _ -> ());
-    write_optional_u32 writer "text input max UTF-8 bytes" max_utf8_bytes
   | Overlay_props { alignment; dismissible } ->
     Writer.u8 writer (overlay_alignment_id alignment);
     write_bool writer dismissible
@@ -2694,7 +2547,7 @@ let write_update_props writer props =
       (page_transition_id
          (match presentation with
           | Wire_frame.Standard_page transition -> transition
-          | Modal_bottom_sheet _ | Modal_dialog _ -> No_transition));
+          | Modal_bottom_sheet _ | Modal_dialog _ | Modal_side_sheet _ -> No_transition));
     write_bool writer can_pop;
     write_optional_string
       writer
@@ -2741,6 +2594,45 @@ let write_string_list writer values =
   check_u16 "string list length" (List.length values);
   Writer.u16 writer (List.length values);
   List.iter (write_string writer) values
+;;
+
+let write_civil_date writer (date : Wire_frame.civil_date) =
+  check_u16 "civil date year" date.year;
+  if date.month < 0 || date.month > 0xff
+  then fail Invalid_props "civil date month is outside u8";
+  if date.day < 0 || date.day > 0xff
+  then fail Invalid_props "civil date day is outside u8";
+  Writer.u16 writer date.year;
+  Writer.u8 writer date.month;
+  Writer.u8 writer date.day
+;;
+
+let write_optional_civil_date writer = function
+  | None -> Writer.u8 writer 0
+  | Some date ->
+    Writer.u8 writer 1;
+    write_civil_date writer date
+;;
+
+let write_civil_date_range writer (range : Wire_frame.civil_date_range) =
+  write_civil_date writer range.start;
+  write_civil_date writer range.end_
+;;
+
+let write_optional_civil_date_range writer = function
+  | None -> Writer.u8 writer 0
+  | Some range ->
+    Writer.u8 writer 1;
+    write_civil_date_range writer range
+;;
+
+let write_civil_time writer (time : Wire_frame.civil_time) =
+  if time.hour < 0 || time.hour > 0xff
+  then fail Invalid_props "civil time hour is outside u8";
+  if time.minute < 0 || time.minute > 0xff
+  then fail Invalid_props "civil time minute is outside u8";
+  Writer.u8 writer time.hour;
+  Writer.u8 writer time.minute
 ;;
 
 let write_host_request body request_id payload =
@@ -2840,6 +2732,28 @@ let write_host_request body request_id payload =
           write_string body message;
           write_optional_string body action_label;
           Writer.u32 body duration_ms )
+    | Pick_date { initial; first; last; current; input_mode } ->
+      ( Generated_protocol.Host_request.pick_date
+      , fun () ->
+          write_optional_civil_date body initial;
+          write_civil_date body first;
+          write_civil_date body last;
+          write_optional_civil_date body current;
+          write_bool body input_mode )
+    | Pick_date_range { initial; first; last; current; input_mode } ->
+      ( Generated_protocol.Host_request.pick_date_range
+      , fun () ->
+          write_optional_civil_date_range body initial;
+          write_civil_date body first;
+          write_civil_date body last;
+          write_optional_civil_date body current;
+          write_bool body input_mode )
+    | Pick_time { initial; input_mode; use_24_hour } ->
+      ( Generated_protocol.Host_request.pick_time
+      , fun () ->
+          write_civil_time body initial;
+          write_bool body input_mode;
+          write_bool body use_24_hour )
   in
   Writer.u16 body (ID.Protocol.Host_request_kind.to_int request_kind);
   write_payload ()
@@ -3642,7 +3556,6 @@ let read_node_kind reader =
   | value when value = Generated_protocol.Node_kind.row -> Row
   | value when value = Generated_protocol.Node_kind.column -> Column
   | value when value = Generated_protocol.Node_kind.stack -> Stack
-  | value when value = Generated_protocol.Node_kind.button -> Button
   | value when value = Generated_protocol.Node_kind.padding -> Padding
   | value when value = Generated_protocol.Node_kind.align -> Align
   | value when value = Generated_protocol.Node_kind.center -> Center
@@ -3672,7 +3585,6 @@ let read_node_kind reader =
   | value when value = Generated_protocol.Node_kind.semantics -> Semantics
   | value when value = Generated_protocol.Node_kind.theme -> Theme
   | value when value = Generated_protocol.Node_kind.material_scaffold -> Material_scaffold
-  | value when value = Generated_protocol.Node_kind.material_app_bar -> Material_app_bar
   | value when value = Generated_protocol.Node_kind.material_elevated_button ->
     Material_elevated_button
   | value when value = Generated_protocol.Node_kind.material_text_button ->
@@ -3702,11 +3614,10 @@ let read_node_kind reader =
     Material_choice_chip
   | value when value = Generated_protocol.Node_kind.material_input_chip ->
     Material_input_chip
-  | value when value = Generated_protocol.Node_kind.material_alert_dialog ->
-    Material_alert_dialog
   | value when value = Generated_protocol.Node_kind.material_search_bar ->
     Material_search_bar
-  | value when value = Generated_protocol.Node_kind.material_tooltip -> Material_tooltip
+  | value when value = Generated_protocol.Node_kind.material_text_field ->
+    Material_text_field
   | value when value = Generated_protocol.Node_kind.material_data_table ->
     Material_data_table
   | value when value = Generated_protocol.Node_kind.material_stepper -> Material_stepper
@@ -3718,8 +3629,6 @@ let read_node_kind reader =
     Material_fullscreen_dialog
   | value when value = Generated_protocol.Node_kind.material_checkbox -> Material_checkbox
   | value when value = Generated_protocol.Node_kind.material_switch -> Material_switch
-  | value when value = Generated_protocol.Node_kind.material_list_tile ->
-    Material_list_tile
   | value when value = Generated_protocol.Node_kind.material_divider -> Material_divider
   | value when value = Generated_protocol.Node_kind.material_card -> Material_card
   | value when value = Generated_protocol.Node_kind.material_circular_progress_indicator
@@ -3728,9 +3637,10 @@ let read_node_kind reader =
     Material_linear_progress_indicator
   | value when value = Generated_protocol.Node_kind.material_segmented_button ->
     Material_segmented_button
+  | value when value = Generated_protocol.Node_kind.material_expressive ->
+    Material_expressive
   | value when value = Generated_protocol.Node_kind.cupertino_button -> Cupertino_button
   | value when value = Generated_protocol.Node_kind.cupertino_switch -> Cupertino_switch
-  | value when value = Generated_protocol.Node_kind.text_input -> Text_input
   | value when value = Generated_protocol.Node_kind.overlay -> Overlay
   | value when value = Generated_protocol.Node_kind.navigator -> Navigator
   | value when value = Generated_protocol.Node_kind.page -> Page
@@ -3778,7 +3688,6 @@ let read_props reader kind ~protocol_minor =
     let height = read_optional_f64 reader in
     Image_props { uri; fit; width; height }
   | Row | Column -> Linear_props
-  | Button -> Button_props { enabled = read_bool reader }
   | Pressable ->
     let overlay_color_argb = Int32.of_int (Reader.u32 reader) in
     let release_delay_ms = Reader.u16 reader in
@@ -3915,47 +3824,31 @@ let read_props reader kind ~protocol_minor =
     Sliver_padding_props { left; top; right; bottom }
   | Sliver_app_bar ->
     let pinned = read_bool reader in
-    let expanded_height = read_optional_f64 reader in
-    let collapsed_height = read_optional_f64 reader in
     let floating = read_bool reader in
     let snap = read_bool reader in
-    let stretch = read_bool reader in
-    let toolbar_height = read_finite_f64 reader in
     let has_leading = read_bool reader in
-    let has_flexible_space = read_bool reader in
-    let has_bottom = read_bool reader in
-    let has_actions = read_bool reader in
-    let force_elevated = read_bool reader in
-    let automatically_imply_leading = read_bool reader in
-    let center_title = read_optional_bool reader in
     let background_color = read_optional_argb32 reader in
     let foreground_color = read_optional_argb32 reader in
-    let elevation = read_optional_f64 reader in
-    validate_sliver_app_bar
-      ~expanded_height
-      ~collapsed_height
-      ~floating
-      ~snap
-      ~toolbar_height
-      ~elevation;
+    let action_count = Reader.u32 reader in
+    let center_title = read_bool reader in
+    let variant = Reader.u8 reader in
+    let shape = Reader.u8 reader in
+    let density = Reader.u8 reader in
+    let semantic_label = read_optional_string reader in
+    validate_sliver_app_bar ~floating ~snap ~action_count ~variant ~shape ~density;
     Sliver_app_bar_props
       { pinned
-      ; expanded_height
-      ; collapsed_height
       ; floating
       ; snap
-      ; stretch
-      ; toolbar_height
       ; has_leading
-      ; has_flexible_space
-      ; has_bottom
-      ; has_actions
-      ; force_elevated
-      ; automatically_imply_leading
-      ; center_title
       ; background_color
       ; foreground_color
-      ; elevation
+      ; action_count
+      ; center_title
+      ; variant
+      ; shape
+      ; density
+      ; semantic_label
       }
   | Preferred_size ->
     let height = read_finite_f64 reader in
@@ -4033,7 +3926,6 @@ let read_props reader kind ~protocol_minor =
       ; has_bottom_navigation_bar
       ; has_bottom_sheet
       }
-  | Material_app_bar -> Material_app_bar_props { center_title = read_bool reader }
   | Material_elevated_button ->
     let enabled = read_bool reader in
     let autofocus = read_bool reader in
@@ -4044,8 +3936,7 @@ let read_props reader kind ~protocol_minor =
     Material_button_props { variant = Text_button; enabled; autofocus }
   | Material_icon_button ->
     let enabled = read_bool reader in
-    let autofocus = read_bool reader in
-    Material_button_props { variant = Icon_button; enabled; autofocus }
+    Material_button_props { variant = Icon_button; enabled; autofocus = false }
   | Material_filled_button ->
     let enabled = read_bool reader in
     let autofocus = read_bool reader in
@@ -4067,23 +3958,45 @@ let read_props reader kind ~protocol_minor =
       | 3 -> Extended
       | value -> fail Invalid_props "invalid floating action button variant %d" value
     in
-    Material_floating_action_button_props
-      { variant
-      ; enabled = read_bool reader
-      ; autofocus = read_bool reader
-      ; has_icon = read_bool reader
-      }
+    let enabled = read_bool reader in
+    let autofocus = read_bool reader in
+    Material_floating_action_button_props { variant; enabled; autofocus }
   | Material_navigation_bar ->
     let selected_index = Reader.u32 reader in
     let destinations =
       List.init (Reader.u16 reader) (fun _ ->
         let label = read_string reader in
-        let enabled = read_bool reader in
         let has_selected_icon = read_bool reader in
-        Wire_frame.{ label; enabled; has_selected_icon })
+        let badge_count = read_optional_u32 reader in
+        let badge_dot = read_bool reader in
+        let semantic_label = read_optional_string reader in
+        Wire_frame.{ label; has_selected_icon; badge_count; badge_dot; semantic_label })
     in
+    let auto_layout = read_bool reader in
+    let layout = Reader.u8 reader in
+    let alignment = Reader.u8 reader in
+    let label_behavior = Reader.u8 reader in
+    let icon_behavior = Reader.u8 reader in
+    let size = Reader.u8 reader in
+    let shape = Reader.u8 reader in
+    let density = Reader.u8 reader in
+    let safe_area = read_bool reader in
+    let semantic_label = read_optional_string reader in
     validate_navigation ~selected_index destinations;
-    Material_navigation_bar_props { selected_index; destinations }
+    Material_navigation_bar_props
+      { selected_index
+      ; destinations
+      ; auto_layout
+      ; layout
+      ; alignment
+      ; label_behavior
+      ; icon_behavior
+      ; size
+      ; shape
+      ; density
+      ; safe_area
+      ; semantic_label
+      }
   | Material_radio_group ->
     let selected_id =
       match Reader.u8 reader with
@@ -4108,8 +4021,11 @@ let read_props reader kind ~protocol_minor =
     let label = read_optional_string reader in
     let enabled = read_bool reader in
     let has_on_change = read_bool reader in
+    let kind = Reader.u8 reader in
+    if kind > 5 then fail Invalid_props "invalid slider kind %d" kind;
     validate_slider ~value ~min ~max ~divisions;
-    Material_slider_props { value; min; max; divisions; label; enabled; has_on_change }
+    Material_slider_props
+      { value; min; max; divisions; label; enabled; has_on_change; kind }
   | Material_range_slider ->
     let start = read_finite_f64 reader in
     let end_ = read_finite_f64 reader in
@@ -4120,12 +4036,24 @@ let read_props reader kind ~protocol_minor =
     let label_end = read_optional_string reader in
     let enabled = read_bool reader in
     let has_on_change = read_bool reader in
+    let kind = Reader.u8 reader in
+    if kind > 1 then fail Invalid_props "invalid range slider kind %d" kind;
     validate_slider ~value:start ~min ~max ~divisions;
     validate_slider ~value:end_ ~min ~max ~divisions;
     if Float.compare start end_ > 0
     then fail Invalid_props "range slider selection is reversed";
     Material_range_slider_props
-      { start; end_; min; max; divisions; label_start; label_end; enabled; has_on_change }
+      { start
+      ; end_
+      ; min
+      ; max
+      ; divisions
+      ; label_start
+      ; label_end
+      ; enabled
+      ; has_on_change
+      ; kind
+      }
   | ( Material_action_chip
     | Material_filter_chip
     | Material_choice_chip
@@ -4140,10 +4068,7 @@ let read_props reader kind ~protocol_minor =
     in
     let enabled = read_bool reader in
     let selected = read_bool reader in
-    let has_avatar = read_bool reader in
-    let has_delete_icon = read_bool reader in
-    let has_on_press = read_bool reader in
-    let has_on_selected = read_bool reader in
+    let has_leading = read_bool reader in
     let has_on_delete = read_bool reader in
     let presentation =
       match Reader.u8 reader with
@@ -4154,22 +4079,7 @@ let read_props reader kind ~protocol_minor =
     if variant = Input_chip && presentation = Elevated_chip
     then fail Invalid_props "input chip cannot be elevated";
     Material_chip_props
-      { variant
-      ; presentation
-      ; enabled
-      ; selected
-      ; has_avatar
-      ; has_delete_icon
-      ; has_on_press
-      ; has_on_selected
-      ; has_on_delete
-      }
-  | Material_alert_dialog ->
-    let has_icon = read_bool reader in
-    let has_title = read_bool reader in
-    let has_content = read_bool reader in
-    let action_count = Reader.u32 reader in
-    Material_alert_dialog_props { has_icon; has_title; has_content; action_count }
+      { variant; presentation; enabled; selected; has_leading; has_on_delete }
   | Material_search_bar ->
     let session_id_int64 = Reader.u64 reader in
     let document_revision_int64 = Reader.u64 reader in
@@ -4256,37 +4166,101 @@ let read_props reader kind ~protocol_minor =
       ; hint_text
       ; has_on_tap
       }
-  | Material_tooltip ->
-    let message = read_string reader in
-    if String.length (String.trim message) = 0
-    then fail Invalid_props "tooltip message is empty";
-    let enabled = read_bool reader in
-    let exclude_from_semantics = read_bool reader in
-    let prefer_below = read_bool reader in
-    let trigger_mode =
-      match Reader.u8 reader with
-      | 0 -> Wire_frame.Tooltip_long_press
-      | 1 -> Tooltip_tap
-      | value -> fail Invalid_props "invalid tooltip trigger %d" value
+  | Material_text_field ->
+    let session_id_int64 = Reader.u64 reader in
+    let document_revision_int64 = Reader.u64 reader in
+    check_u64 "text field session ID" session_id_int64;
+    check_u64 "text field document revision" document_revision_int64;
+    let session_id = ID.Text_input.Session_id.of_int64 session_id_int64 in
+    let document_revision =
+      ID.Text_input.Document_revision.of_int64 document_revision_int64
     in
-    let wait_duration_ms = Reader.u32 reader in
-    let show_duration_ms = Reader.u32 reader in
-    let exit_duration_ms = Reader.u32 reader in
-    let enable_tap_to_dismiss = read_bool reader in
-    let enable_feedback = read_bool reader in
-    let has_on_triggered = read_bool reader in
-    Material_tooltip_props
-      { message
+    let text = read_string reader in
+    let read_range () =
+      let start_utf16 = Reader.u32 reader in
+      let end_utf16 = Reader.u32 reader in
+      let range = Wire_frame.{ start_utf16; end_utf16 } in
+      validate_text_range text range;
+      range
+    in
+    let selection = read_range () in
+    let composing =
+      match Reader.u8 reader with
+      | 0 -> None
+      | 1 -> Some (read_range ())
+      | value -> fail Invalid_props "invalid composing tag %d" value
+    in
+    let enabled = read_bool reader in
+    let read_only = read_bool reader in
+    let obscure_text = read_bool reader in
+    let keyboard_type =
+      match Reader.u8 reader with
+      | 0 -> Wire_frame.Keyboard_text
+      | 1 -> Keyboard_multiline
+      | 2 -> Keyboard_number
+      | 3 -> Keyboard_email
+      | 4 -> Keyboard_phone
+      | 5 -> Keyboard_url
+      | value -> fail Invalid_props "invalid keyboard type %d" value
+    in
+    let input_action =
+      match Reader.u8 reader with
+      | 0 -> Wire_frame.Done
+      | 1 -> Newline
+      | 2 -> Next
+      | 3 -> Previous
+      | 4 -> Search
+      | 5 -> Send
+      | 6 -> Go
+      | value -> fail Invalid_props "invalid input action %d" value
+    in
+    let accepted_local_revision_int64 = Reader.u64 reader in
+    check_u64 "text field accepted local revision" accepted_local_revision_int64;
+    let accepted_local_revision =
+      ID.Text_input.Local_revision.of_int64 accepted_local_revision_int64
+    in
+    let update_mode =
+      match Reader.u8 reader with
+      | 0 -> Wire_frame.Ack
+      | 1 -> Correction
+      | 2 -> Force_replace
+      | value -> fail Invalid_props "invalid update mode %d" value
+    in
+    let max_utf8_bytes = read_optional_positive_u32 reader "text field max UTF-8 bytes" in
+    (match max_utf8_bytes with
+     | Some value when value > Generated_protocol.Limits.max_string_bytes ->
+       fail Invalid_props "text field max UTF-8 bytes exceeds the protocol string limit"
+     | None | Some _ -> ());
+    let variant = Reader.u8 reader in
+    if variant > 1 then fail Invalid_props "invalid text field variant %d" variant;
+    let label = read_optional_string reader in
+    let supporting_text = read_optional_string reader in
+    let error_text = read_optional_string reader in
+    let has_leading = read_bool reader in
+    let has_trailing = read_bool reader in
+    let max_lines = Reader.u32 reader in
+    if max_lines <= 0 then fail Invalid_props "text field max lines must be positive";
+    let autofocus = read_bool reader in
+    Material_text_field_props
+      { session_id
+      ; document_revision
+      ; value = { text; selection; composing }
       ; enabled
-      ; exclude_from_semantics
-      ; prefer_below
-      ; trigger_mode
-      ; wait_duration_ms
-      ; show_duration_ms
-      ; exit_duration_ms
-      ; enable_tap_to_dismiss
-      ; enable_feedback
-      ; has_on_triggered
+      ; read_only
+      ; obscure_text
+      ; keyboard_type
+      ; input_action
+      ; accepted_local_revision
+      ; update_mode
+      ; max_utf8_bytes
+      ; variant
+      ; label
+      ; supporting_text
+      ; error_text
+      ; has_leading
+      ; has_trailing
+      ; max_lines
+      ; autofocus
       }
   | Material_data_table ->
     let columns =
@@ -4398,14 +4372,6 @@ let read_props reader kind ~protocol_minor =
     let value = read_bool reader in
     let enabled = read_bool reader in
     Material_switch_props { value; enabled }
-  | Material_list_tile ->
-    Material_list_tile_props
-      { enabled = read_bool reader
-      ; selected = read_bool reader
-      ; has_subtitle = read_bool reader
-      ; has_leading = read_bool reader
-      ; has_trailing = read_bool reader
-      }
   | Material_divider ->
     let orientation =
       match Reader.u8 reader with
@@ -4435,141 +4401,139 @@ let read_props reader kind ~protocol_minor =
   | Material_circular_progress_indicator ->
     let value = read_optional_f64 reader in
     validate_progress_value value;
-    Material_circular_progress_props { value }
+    let wavy = read_bool reader in
+    Material_circular_progress_props { value; wavy }
   | Material_linear_progress_indicator ->
     let value = read_optional_f64 reader in
     validate_progress_value value;
-    Material_linear_progress_props { value }
+    let wavy = read_bool reader in
+    Material_linear_progress_props { value; wavy }
   | Material_segmented_button ->
     let selected_ids = List.init (Reader.u16 reader) (fun _ -> Reader.u64 reader) in
     let enabled = read_bool reader in
-    let direction =
-      match Reader.u8 reader with
-      | 0 -> Wire_frame.Horizontal
-      | 1 -> Vertical
-      | value -> fail Invalid_props "invalid segmented button direction %d" value
-    in
     let multi_selection_enabled = read_bool reader in
-    let empty_selection_allowed = read_bool reader in
-    let expanded_insets =
-      match Reader.u8 reader with
-      | 0 -> None
-      | 1 ->
-        let left = read_finite_f64 reader in
-        let top = read_finite_f64 reader in
-        let right = read_finite_f64 reader in
-        let bottom = read_finite_f64 reader in
-        Some (left, top, right, bottom)
-      | value -> fail Invalid_props "invalid segmented expanded insets tag %d" value
-    in
-    let show_selected_icon = read_bool reader in
-    let has_selected_icon = read_bool reader in
     let segments =
       List.init (Reader.u16 reader) (fun _ ->
         let segment_id = Reader.u64 reader in
-        let enabled = read_bool reader in
-        let tooltip = read_optional_string reader in
         let has_icon = read_bool reader in
-        let has_label = read_bool reader in
-        Wire_frame.{ segment_id; enabled; tooltip; has_icon; has_label })
+        Wire_frame.{ segment_id; has_icon })
     in
-    validate_segmented_button
-      ~selected_ids
-      ~multi_selection_enabled
-      ~empty_selection_allowed
-      ~expanded_insets
-      ~show_selected_icon
-      ~has_selected_icon
-      segments;
+    validate_segmented_button ~selected_ids ~multi_selection_enabled segments;
     Material_segmented_button_props
-      { selected_ids
-      ; enabled
-      ; direction
-      ; multi_selection_enabled
-      ; empty_selection_allowed
-      ; expanded_insets
-      ; show_selected_icon
-      ; has_selected_icon
-      ; segments
+      { selected_ids; enabled; multi_selection_enabled; segments }
+  | Material_expressive ->
+    let component = Reader.u8 reader in
+    let variant = Reader.u8 reader in
+    let flags = Reader.u64 reader in
+    let primary_text = read_optional_string reader in
+    let secondary_text = read_optional_string reader in
+    let value = read_optional_f64 reader in
+    let end_value = read_optional_f64 reader in
+    let selected_ids = List.init (Reader.u16 reader) (fun _ -> Reader.u64 reader) in
+    let items =
+      List.init (Reader.u16 reader) (fun _ ->
+        let item_id = Reader.u64 reader in
+        let kind = Reader.u8 reader in
+        let label = read_string reader in
+        let enabled = read_bool reader in
+        let selected = read_bool reader in
+        let child_count = Reader.u16 reader in
+        Wire_frame.{ item_id; kind; label; enabled; selected; child_count })
+    in
+    let text_input =
+      match Reader.u8 reader with
+      | 0 -> None
+      | 1 ->
+        let session_id = Reader.u64 reader |> ID.Text_input.Session_id.of_int64 in
+        let document_revision =
+          Reader.u64 reader |> ID.Text_input.Document_revision.of_int64
+        in
+        let text = read_string reader in
+        let read_range () =
+          let start_utf16 = Reader.u32 reader in
+          let end_utf16 = Reader.u32 reader in
+          if start_utf16 > end_utf16 then fail Invalid_props "text range is reversed";
+          let range = Wire_frame.{ start_utf16; end_utf16 } in
+          validate_text_range text range;
+          range
+        in
+        let selection = read_range () in
+        let composing =
+          match Reader.u8 reader with
+          | 0 -> None
+          | 1 -> Some (read_range ())
+          | value -> fail Invalid_props "invalid composing tag %d" value
+        in
+        let enabled = read_bool reader in
+        let read_only = read_bool reader in
+        let obscure_text = read_bool reader in
+        let keyboard_type =
+          match Reader.u8 reader with
+          | 0 -> Wire_frame.Keyboard_text
+          | 1 -> Keyboard_multiline
+          | 2 -> Keyboard_number
+          | 3 -> Keyboard_email
+          | 4 -> Keyboard_phone
+          | 5 -> Keyboard_url
+          | value -> fail Invalid_props "invalid keyboard type %d" value
+        in
+        let input_action =
+          match Reader.u8 reader with
+          | 0 -> Wire_frame.Done
+          | 1 -> Newline
+          | 2 -> Next
+          | 3 -> Previous
+          | 4 -> Search
+          | 5 -> Send
+          | 6 -> Go
+          | value -> fail Invalid_props "invalid text input action %d" value
+        in
+        let accepted_local_revision =
+          Reader.u64 reader |> ID.Text_input.Local_revision.of_int64
+        in
+        let update_mode =
+          match Reader.u8 reader with
+          | 0 -> Wire_frame.Ack
+          | 1 -> Correction
+          | 2 -> Force_replace
+          | value -> fail Invalid_props "invalid text update mode %d" value
+        in
+        let autofocus = read_bool reader in
+        let max_utf8_bytes =
+          read_optional_positive_u32 reader "expressive search max UTF-8 bytes"
+        in
+        Some
+          Wire_frame.
+            { session_id
+            ; document_revision
+            ; value = { text; selection; composing }
+            ; enabled
+            ; read_only
+            ; obscure_text
+            ; keyboard_type
+            ; input_action
+            ; accepted_local_revision
+            ; update_mode
+            ; autofocus
+            ; max_utf8_bytes
+            }
+      | value -> fail Invalid_props "invalid expressive search text input tag %d" value
+    in
+    Material_expressive_props
+      { component
+      ; variant
+      ; flags
+      ; primary_text
+      ; secondary_text
+      ; value
+      ; end_value
+      ; selected_ids
+      ; items
+      ; text_input
       }
   | Cupertino_button -> Cupertino_button_props { enabled = read_bool reader }
   | Cupertino_switch ->
     Cupertino_switch_props { value = read_bool reader; enabled = read_bool reader }
-  | Text_input ->
-    let session_id = Reader.u64 reader |> ID.Text_input.Session_id.of_int64 in
-    let document_revision =
-      Reader.u64 reader |> ID.Text_input.Document_revision.of_int64
-    in
-    let text = read_string reader in
-    let read_text_range () =
-      let start_utf16 = Reader.u32 reader in
-      let end_utf16 = Reader.u32 reader in
-      if start_utf16 > end_utf16 then fail Invalid_props "text range is reversed";
-      let range = Wire_frame.{ start_utf16; end_utf16 } in
-      validate_text_range text range;
-      range
-    in
-    let selection = read_text_range () in
-    let composing =
-      match Reader.u8 reader with
-      | 0 -> None
-      | 1 -> Some (read_text_range ())
-      | value -> fail Invalid_props "invalid composing tag %d" value
-    in
-    let enabled = read_bool reader in
-    let read_only = read_bool reader in
-    let obscure_text = read_bool reader in
-    let keyboard_type =
-      match Reader.u8 reader with
-      | 0 -> Wire_frame.Keyboard_text
-      | 1 -> Keyboard_multiline
-      | 2 -> Keyboard_number
-      | 3 -> Keyboard_email
-      | 4 -> Keyboard_phone
-      | 5 -> Keyboard_url
-      | value -> fail Invalid_props "invalid keyboard type %d" value
-    in
-    let input_action =
-      match Reader.u8 reader with
-      | 0 -> Wire_frame.Done
-      | 1 -> Newline
-      | 2 -> Next
-      | 3 -> Previous
-      | 4 -> Search
-      | 5 -> Send
-      | 6 -> Go
-      | value -> fail Invalid_props "invalid text input action %d" value
-    in
-    let accepted_local_revision =
-      Reader.u64 reader |> ID.Text_input.Local_revision.of_int64
-    in
-    let update_mode =
-      match Reader.u8 reader with
-      | 0 -> Wire_frame.Ack
-      | 1 -> Correction
-      | 2 -> Force_replace
-      | value -> fail Invalid_props "invalid text update mode %d" value
-    in
-    let autofocus = read_bool reader in
-    let max_utf8_bytes = read_optional_positive_u32 reader "text input max UTF-8 bytes" in
-    (match max_utf8_bytes with
-     | Some value when value > Generated_protocol.Limits.max_string_bytes ->
-       fail Invalid_props "text input max UTF-8 bytes exceeds the protocol string limit"
-     | None | Some _ -> ());
-    Text_input_props
-      { session_id
-      ; document_revision
-      ; value = { text; selection; composing }
-      ; enabled
-      ; read_only
-      ; obscure_text
-      ; keyboard_type
-      ; input_action
-      ; accepted_local_revision
-      ; update_mode
-      ; autofocus
-      ; max_utf8_bytes
-      }
   | Overlay ->
     let alignment =
       match Reader.u8 reader with
@@ -4723,9 +4687,9 @@ let read_props reader kind ~protocol_minor =
           ; transition_duration_ms
           ; reverse_transition_duration_ms
           }
-      | 2 ->
+      | (2 | 3) as kind ->
         if transition <> Wire_frame.No_transition
-        then fail Invalid_props "modal dialog cannot carry a standard transition";
+        then fail Invalid_props "modal surface cannot carry a standard transition";
         if
           barrier_dismissible
           || Option.is_some barrier_color_argb
@@ -4741,9 +4705,9 @@ let read_props reader kind ~protocol_minor =
           || Option.is_some handle_semantics_label
           || Option.is_some medium_semantics_value
           || Option.is_some large_semantics_value
-        then fail Invalid_props "modal dialog has bottom-sheet properties";
-        Modal_dialog
-          { barrier_dismissible = dialog_barrier_dismissible
+        then fail Invalid_props "modal surface has bottom-sheet properties";
+        let fields =
+          { Wire_frame.barrier_dismissible = dialog_barrier_dismissible
           ; barrier_color_argb = dialog_barrier_color_argb
           ; barrier_label = dialog_barrier_label
           ; use_safe_area = dialog_use_safe_area
@@ -4751,6 +4715,8 @@ let read_props reader kind ~protocol_minor =
           ; transition_duration_ms = dialog_transition_duration_ms
           ; reverse_transition_duration_ms = dialog_reverse_transition_duration_ms
           }
+        in
+        if kind = 2 then Modal_dialog fields else Modal_side_sheet fields
       | value -> fail Invalid_props "invalid page presentation %d" value
     in
     Page_props { page_key; presentation; can_pop; restoration_id }
@@ -4810,6 +4776,33 @@ let read_bytes reader =
 let read_string_list reader =
   let count = Reader.u16 reader in
   List.init count (fun _ -> read_string reader)
+;;
+
+let read_civil_date reader =
+  Wire_frame.
+    { year = Reader.u16 reader; month = Reader.u8 reader; day = Reader.u8 reader }
+;;
+
+let read_optional_civil_date reader =
+  match Reader.u8 reader with
+  | 0 -> None
+  | 1 -> Some (read_civil_date reader)
+  | value -> fail Invalid_props "invalid optional civil date tag %d" value
+;;
+
+let read_civil_date_range reader =
+  Wire_frame.{ start = read_civil_date reader; end_ = read_civil_date reader }
+;;
+
+let read_optional_civil_date_range reader =
+  match Reader.u8 reader with
+  | 0 -> None
+  | 1 -> Some (read_civil_date_range reader)
+  | value -> fail Invalid_props "invalid optional civil date range tag %d" value
+;;
+
+let read_civil_time reader =
+  Wire_frame.{ hour = Reader.u8 reader; minute = Reader.u8 reader }
 ;;
 
 let read_host_request body request_id request_kind =
@@ -4885,6 +4878,31 @@ let read_host_request body request_id request_kind =
        | None | Some _ -> ());
       if duration_ms <= 0 then fail Invalid_props "snack bar duration must be positive";
       Show_snack_bar { message; action_label; duration_ms })
+    else if request_kind = Generated_protocol.Host_request.pick_date
+    then
+      Pick_date
+        { initial = read_optional_civil_date body
+        ; first = read_civil_date body
+        ; last = read_civil_date body
+        ; current = read_optional_civil_date body
+        ; input_mode = read_bool body
+        }
+    else if request_kind = Generated_protocol.Host_request.pick_date_range
+    then
+      Pick_date_range
+        { initial = read_optional_civil_date_range body
+        ; first = read_civil_date body
+        ; last = read_civil_date body
+        ; current = read_optional_civil_date body
+        ; input_mode = read_bool body
+        }
+    else if request_kind = Generated_protocol.Host_request.pick_time
+    then
+      Pick_time
+        { initial = read_civil_time body
+        ; input_mode = read_bool body
+        ; use_24_hour = read_bool body
+        }
     else
       fail
         Invalid_props

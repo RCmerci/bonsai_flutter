@@ -289,7 +289,7 @@ let core_section handlers =
         ~minimum:(Ui.Layout.Edge_insets.only ~top:4. ())
         (Ui.Widget.environment_boundary
            (Ui.Widget.text "SafeArea and Environment boundary"))
-    ; Ui.Widget.button
+    ; Ui.Material.elevated_button
         ~on_press:handlers.press
         ~child:(Ui.Widget.text "Core typed button")
         ()
@@ -313,23 +313,9 @@ let material_section model handlers =
     ]
   in
   let segmented_options =
-    [ Ui.Material.Segmented_button.segment
-        ~id:1L
-        ~icon:(icon 0xe8ef)
-        ~label:(Ui.Widget.text "List")
-        ~tooltip:"List view"
-        ()
-    ; Ui.Material.Segmented_button.segment
-        ~id:2L
-        ~icon:(icon 0xe3ec)
-        ~label:(Ui.Widget.text "Grid")
-        ~tooltip:"Grid view"
-        ()
-    ; Ui.Material.Segmented_button.segment
-        ~id:3L
-        ~enabled:false
-        ~label:(Ui.Widget.text "Disabled")
-        ()
+    [ Ui.Material.Segmented_button.segment ~id:1L ~icon:(icon 0xe8ef) ~label:"List" ()
+    ; Ui.Material.Segmented_button.segment ~id:2L ~icon:(icon 0xe3ec) ~label:"Grid" ()
+    ; Ui.Material.Segmented_button.segment ~id:3L ~label:"Disabled" ()
     ]
   in
   section
@@ -358,26 +344,30 @@ let material_section model handlers =
         ~on_press:handlers.press
         ~icon:(Ui.Widget.icon ~font_family:"MaterialIcons" ~code_point:0xe87d ())
         ()
-    ; Ui.Widget.row
-        [ Ui.Material.Floating_action_button.icon
-            ~size:Ui.Material.Floating_action_button.Small
-            ~on_press:handlers.press
-            ~icon:(icon 0xe145)
-            ()
-        ; Ui.Material.Floating_action_button.icon
-            ~on_press:handlers.press
-            ~icon:(icon 0xe145)
-            ()
-        ; Ui.Material.Floating_action_button.icon
-            ~size:Ui.Material.Floating_action_button.Large
-            ~on_press:handlers.press
-            ~icon:(icon 0xe145)
-            ()
-        ; Ui.Material.Floating_action_button.extended
-            ~on_press:handlers.press
-            ~icon:(icon 0xe145)
-            ~label:(Ui.Widget.text "Create")
-            ()
+    ; Ui.Widget.column
+        [ Ui.Widget.row
+            [ Ui.Material.Floating_action_button.icon
+                ~size:Ui.Material.Floating_action_button.Small
+                ~on_press:handlers.press
+                ~icon:(icon 0xe145)
+                ()
+            ; Ui.Material.Floating_action_button.icon
+                ~on_press:handlers.press
+                ~icon:(icon 0xe145)
+                ()
+            ]
+        ; Ui.Widget.row
+            [ Ui.Material.Floating_action_button.icon
+                ~size:Ui.Material.Floating_action_button.Large
+                ~on_press:handlers.press
+                ~icon:(icon 0xe145)
+                ()
+            ; Ui.Material.Floating_action_button.extended
+                ~on_press:handlers.press
+                ~icon:(icon 0xe145)
+                ~label:"Create"
+                ()
+            ]
         ]
     ; Ui.Material.navigation_bar
         ~selected_index:0
@@ -390,16 +380,12 @@ let material_section model handlers =
         radio_options
         ()
     ; Ui.Material.Segmented_button.create
-        ~expanded_insets:(Ui.Layout.Edge_insets.symmetric ~horizontal:12. ())
         ~selected_ids:model.segmented_single_ids
         ~on_selection_changed:handlers.segmented_single
         segmented_options
         ()
     ; Ui.Material.Segmented_button.create
-        ~direction:Ui.Layout.Axis.Vertical
         ~multi_selection_enabled:true
-        ~empty_selection_allowed:true
-        ~selected_icon:(icon 0xe876)
         ~selected_ids:model.segmented_multi_ids
         ~on_selection_changed:handlers.segmented_multi
         segmented_options
@@ -425,40 +411,45 @@ let material_section model handlers =
         ~on_change:handlers.press
         ~on_change_end:handlers.press
         ()
-    ; Ui.Widget.row
-        [ Ui.Material.action_chip
-            ~avatar:(icon 0xe8b6)
-            ~on_press:handlers.press
-            ~label:(Ui.Widget.text "Assist")
-            ()
-        ; Ui.Material.action_chip
-            ~presentation:Ui.Material.Elevated
-            ~on_press:handlers.press
-            ~label:(Ui.Widget.text "Suggestion")
-            ()
-        ; Ui.Material.filter_chip
-            ~presentation:Ui.Material.Elevated
+    ; Ui.Widget.column
+        [ Ui.Widget.row
+            [ Ui.Material.Chip.assist
+                ~leading:(icon 0xe8b6)
+                ~on_press:handlers.press
+                ~label:"Assist"
+                ()
+            ; Ui.Material.Chip.suggestion
+                ~presentation:Ui.Material.Chip.Elevated
+                ~on_press:handlers.press
+                ~label:"Suggestion"
+                ()
+            ]
+        ; Ui.Widget.row
+            [ Ui.Material.Chip.filter
+                ~presentation:Ui.Material.Chip.Elevated
+                ~selected:model.checked
+                ~on_press:handlers.toggle
+                ~label:"Filter"
+                ()
+            ; Ui.Material.Chip.suggestion
+                ~presentation:Ui.Material.Chip.Elevated
+                ~selected:(not model.checked)
+                ~on_press:handlers.toggle
+                ~label:"Suggestion selected"
+                ()
+            ]
+        ; Ui.Material.Chip.input
             ~selected:model.checked
-            ~on_selected:handlers.toggle
-            ~label:(Ui.Widget.text "Filter")
-            ()
-        ; Ui.Material.choice_chip
-            ~presentation:Ui.Material.Elevated
-            ~selected:(not model.checked)
-            ~on_selected:handlers.toggle
-            ~label:(Ui.Widget.text "Choice")
-            ()
-        ; Ui.Material.input_chip
-            ~selected:model.checked
             ~on_press:handlers.press
-            ~on_selected:handlers.toggle
             ~on_delete:handlers.press
-            ~label:(Ui.Widget.text "Input")
+            ~label:"Input"
             ()
         ]
     ; Ui.Material.Dialog.alert
         ~icon:(icon 0xe002)
-        ~title:(Ui.Widget.text "AlertDialog")
+        ~title:"Alert dialog"
+        ~top_divider:true
+        ~bottom_divider:true
         ~content:(Ui.Widget.text "Declarative dialog content")
         ~actions:
           [ Ui.Material.text_button
@@ -479,10 +470,19 @@ let material_section model handlers =
         ]
         ()
     ; Ui.Material.Dialog.fullscreen (Ui.Widget.text "Fullscreen dialog surface")
-    ; Ui.Material.tooltip
+    ; Ui.Material.Tooltip.plain
         ~message:"General Material tooltip"
-        ~on_triggered:handlers.interaction
         (Ui.Widget.text "Long-press for tooltip")
+    ; Ui.Material.Tooltip.rich
+        ~title:"Expressive tooltip"
+        ~message:"Rich tooltips can include logical action children."
+        ~actions:
+          [ Ui.Material.text_button
+              ~on_press:handlers.press
+              ~child:(Ui.Widget.text "Action")
+              ()
+          ]
+        (Ui.Widget.text "Long-press for rich tooltip")
     ; Ui.Material.search_bar
         ~session_id:(ID.Text_input.Session_id.of_int64 2L)
         ~document_revision:model.document_revision
@@ -509,8 +509,16 @@ let material_section model handlers =
         ~on_row_selected:handlers.interaction
         ~on_cell_activate:handlers.interaction
         ~columns:
-          [ Ui.Material.Data_table.column ~id:1L ~sortable:true ~label:(Ui.Widget.text "Name") ()
-          ; Ui.Material.Data_table.column ~id:2L ~numeric:true ~label:(Ui.Widget.text "Score") ()
+          [ Ui.Material.Data_table.column
+              ~id:1L
+              ~sortable:true
+              ~label:(Ui.Widget.text "Name")
+              ()
+          ; Ui.Material.Data_table.column
+              ~id:2L
+              ~numeric:true
+              ~label:(Ui.Widget.text "Score")
+              ()
           ]
         ~rows:
           [ Ui.Material.Data_table.row
@@ -521,22 +529,41 @@ let material_section model handlers =
               ]
           ]
         ()
-    ; Ui.Material.Stepper.create
-        ~orientation:Ui.Material.Stepper.Horizontal
-        ~current_step_id:1L
-        ~on_step_selected:handlers.interaction
-        ~on_continue:handlers.press
-        ~on_cancel:handlers.press
-        [ Ui.Material.Stepper.step ~id:1L ~title:(Ui.Widget.text "Edit") ~content:(Ui.Widget.text "Edit content") ()
-        ; Ui.Material.Stepper.step ~id:2L ~state:Ui.Material.Stepper.Complete ~title:(Ui.Widget.text "Review") ~content:(Ui.Widget.text "Review content") ()
-        ]
-        ()
+    ; Ui.Widget.sized_box
+        ~height:280.
+        (Ui.Material.Stepper.create
+           ~orientation:Ui.Material.Stepper.Horizontal
+           ~current_step_id:1L
+           ~on_step_selected:handlers.interaction
+           ~on_continue:handlers.press
+           ~on_cancel:handlers.press
+           [ Ui.Material.Stepper.step
+               ~id:1L
+               ~title:(Ui.Widget.text "Edit")
+               ~content:(Ui.Widget.text "Edit content")
+               ()
+           ; Ui.Material.Stepper.step
+               ~id:2L
+               ~state:Ui.Material.Stepper.Complete
+               ~title:(Ui.Widget.text "Review")
+               ~content:(Ui.Widget.text "Review content")
+               ()
+           ]
+           ())
     ; Ui.Material.Expansion_panel_list.create
         ~policy:Ui.Material.Expansion_panel_list.Single
         ~expanded_ids:[ 1L ]
         ~on_expansion_changed:handlers.interaction
-        [ Ui.Material.Expansion_panel_list.panel ~id:1L ~header:(Ui.Widget.text "Panel one") ~body:(Ui.Widget.text "Panel body") ()
-        ; Ui.Material.Expansion_panel_list.panel ~id:2L ~header:(Ui.Widget.text "Panel two") ~body:(Ui.Widget.text "Second body") ()
+        [ Ui.Material.Expansion_panel_list.panel
+            ~id:1L
+            ~header:(Ui.Widget.text "Panel one")
+            ~body:(Ui.Widget.text "Panel body")
+            ()
+        ; Ui.Material.Expansion_panel_list.panel
+            ~id:2L
+            ~header:(Ui.Widget.text "Panel two")
+            ~body:(Ui.Widget.text "Second body")
+            ()
         ]
         ()
     ; Ui.Widget.row
@@ -546,11 +573,12 @@ let material_section model handlers =
         ]
     ; Ui.Material.list_tile
         ~selected:model.checked
-        ~subtitle:(Ui.Widget.text "Selection truth lives in Bonsai")
+        ~supporting_text:"Selection truth lives in Bonsai"
+        ~overline:"Expressive list"
         ~leading:(Ui.Widget.icon ~font_family:"MaterialIcons" ~code_point:0xe88a ())
         ~trailing:(Ui.Widget.text "OCaml")
         ~on_press:handlers.toggle
-        ~title:(Ui.Widget.text "Typed ListTile")
+        ~headline:"Typed list item"
         ()
     ; Ui.Widget.row
         [ Ui.Material.card ~variant:Ui.Material.Elevated (Ui.Widget.text "Elevated card")
@@ -561,7 +589,7 @@ let material_section model handlers =
     ; Ui.Material.divider ~thickness:1. ()
     ; Ui.Widget.row
         [ Ui.Material.circular_progress_indicator ~value:0.68 ()
-        ; Ui.Cupertino.button handlers.press ~child:(Ui.Widget.text "Cupertino button") ()
+        ; Ui.Cupertino.button handlers.press ~child:(Ui.Widget.text "Cupertino") ()
         ]
     ; Ui.Widget.column
         [ Ui.Widget.text "Determinate linear progress"
@@ -571,6 +599,279 @@ let material_section model handlers =
         ; Ui.Widget.text "Indeterminate linear progress"
         ; Ui.Widget.sized_box ~width:240. (Ui.Material.linear_progress_indicator ())
         ]
+    ]
+;;
+
+let expressive_catalog_section handlers =
+  let icon code_point = Ui.Widget.icon ~font_family:"MaterialIcons" ~code_point () in
+  let search_value text =
+    let offset = Ui.Text_editing.Utf16.length text in
+    let selection =
+      Ui.Text_editing.Range.create ~text ~start_utf16:offset ~end_utf16:offset
+    in
+    Ui.Text_editing.Value.create ~text ~selection ()
+  in
+  let menu =
+    [ Ui.Material.Menu.entry ~id:100L ~label:"Open" ()
+    ; Ui.Material.Menu.selectable ~id:101L ~label:"Selected" ~selected:true ()
+    ; Ui.Material.Menu.toggleable ~id:102L ~label:"Pinned" ~checked:false ()
+    ; Ui.Material.Menu.divider
+    ; Ui.Material.Menu.group
+        ~label:"Export"
+        [ Ui.Material.Menu.submenu
+            ~id:103L
+            ~label:"Format"
+            [ Ui.Material.Menu.entry ~id:104L ~label:"PDF" () ]
+        ]
+    ]
+  in
+  let date = Ui.Material.Date.create ~year:2026 ~month:9 ~day:3 in
+  let cards =
+    [ Ui.Material.Card_list.item ~id:120L (Ui.Widget.text "First expressive card")
+    ; Ui.Material.Card_list.item ~id:121L (Ui.Widget.text "Second expressive card")
+    ]
+  in
+  let expandable =
+    [ Ui.Material.Expandable_list.item
+        ~id:130L
+        ~header:"Expandable item"
+        ~body:(Ui.Widget.text "Expanded content")
+        ()
+    ]
+  in
+  section
+    "Material 3 Expressive catalog"
+    [ Ui.Material.Fab_menu.create
+        ~position:Ui.Material.Fab_menu.Right
+        ~expand_icon:(icon 0xe145)
+        ~collapse_icon:(icon 0xe5cd)
+        ~on_select:handlers.interaction
+        [ Ui.Material.Fab_menu.item ~id:105L ~icon:(icon 0xe0be) ~label:"Compose" () ]
+        ()
+    ; Ui.Material.Button_group.create
+        ~group_type:Ui.Material.Button_group.Connected
+        ~style:Ui.Material.Button_group.Tonal
+        ~overflow:Ui.Material.Button_group.Menu
+        ~selection:(Ui.Material.Button_group.Multiple [ 106L ])
+        ~on_selection_changed:handlers.interaction
+        [ Ui.Material.Button_group.action ~id:106L ~icon:(icon 0xe8ef) ~label:"List" ()
+        ; Ui.Material.Button_group.action ~id:107L ~icon:(icon 0xe3ec) ~label:"Grid" ()
+        ]
+        ()
+    ; Ui.Material.Toggle_button.create
+        ~style:Ui.Material.Toggle_button.Tonal
+        ~checked:true
+        ~on_changed:handlers.toggle
+        ~icon:(icon 0xe8ef)
+        ~checked_icon:(icon 0xe5ca)
+        ~label:(Ui.Widget.text "Toggle")
+        ()
+    ; Ui.Material.Split_button.create
+        ~label:"Export"
+        ~on_press:handlers.press
+        ~on_select:handlers.interaction
+        ~menu
+        ()
+    ; Ui.Material.Dropdown_menu.create
+        ~searchable:true
+        ~query:"ma"
+        ~on_query_changed:handlers.text_submit
+        ~selection:(Ui.Material.Dropdown_menu.Single (Some 108L))
+        ~on_selection_changed:handlers.interaction
+        (Ui.Material.Dropdown_menu.Items
+           [ Ui.Material.Dropdown_menu.item ~id:108L ~label:"Mail" ()
+           ; Ui.Material.Dropdown_menu.item ~id:109L ~label:"Maps" ()
+           ])
+        ()
+    ; Ui.Widget.row
+        [ Ui.Widget.sized_box
+            ~width:180.
+            (Ui.Material.slider
+               ~kind:Ui.Material.Centered
+               ~value:0.35
+               ~on_change_end:handlers.interaction
+               ())
+        ; Ui.Widget.sized_box
+            ~width:180.
+            (Ui.Material.slider
+               ~kind:Ui.Material.Wavy
+               ~value:0.65
+               ~on_change_end:handlers.interaction
+               ())
+        ; Ui.Widget.sized_box
+            ~width:80.
+            ~height:180.
+            (Ui.Material.slider
+               ~kind:Ui.Material.Vertical_centered
+               ~value:0.5
+               ~on_change_end:handlers.interaction
+               ())
+        ]
+    ; Ui.Material.range_slider
+        ~kind:Ui.Material.Wavy
+        ~value:(Ui.Material.Range.create ~start:0.2 ~end_:0.8)
+        ~on_change_end:handlers.interaction
+        ()
+    ; Ui.Material.Date_picker.calendar
+        ~mode:Ui.Material.Date_picker.Year
+        ~selected:date
+        ~current:date
+        ~first:(Ui.Material.Date.create ~year:2026 ~month:1 ~day:1)
+        ~last:(Ui.Material.Date.create ~year:2026 ~month:12 ~day:31)
+        ~selectable_dates:[ date ]
+        ~on_select:handlers.interaction
+        ()
+    ; Ui.Material.Time_picker.dial
+        ~format:Ui.Material.Time_picker.Hour_24
+        ~value:(Ui.Material.Time.create ~hour:14 ~minute:30)
+        ~on_changed:handlers.interaction
+        ()
+    ; Ui.Widget.sized_box
+        ~height:240.
+        (Ui.Material.Carousel.create
+           ~layout:Ui.Material.Carousel.Hero
+           ~on_select:handlers.interaction
+           ~on_layout_changed:handlers.interaction
+           [ Ui.Material.Carousel.item ~id:110L (Ui.Widget.text "Hero card")
+           ; Ui.Material.Carousel.item ~id:111L (Ui.Widget.text "Second card")
+           ]
+           ())
+    ; Ui.Material.Card_list.finite ~on_select:handlers.interaction cards ()
+    ; Ui.Material.Selection.create
+        ~item_ids:[ 112L ]
+        ~selected_ids:[ 112L ]
+        ~on_selection_changed:handlers.interaction
+        (Ui.Material.Selection.leading
+           ~id:112L
+           ~selected:true
+           ~on_toggle:handlers.interaction
+           ~unselected:(Ui.Widget.text "Select")
+           ~selected_child:(Ui.Widget.text "Selected")
+           ())
+    ; Ui.Material.Dismissible_list.column
+        ~request_token:1L
+        ~request_state:Ui.Material.Dismissible_list.Ready
+        ~on_dismiss_request:handlers.interaction
+        [ Ui.Material.Dismissible_list.item ~id:113L (Ui.Widget.text "Swipe vertically") ]
+        ()
+    ; Ui.Material.Dismissible_list.horizontal
+        ~request_token:2L
+        ~request_state:Ui.Material.Dismissible_list.Ready
+        ~on_dismiss_request:handlers.interaction
+        [ Ui.Material.Dismissible_list.item ~id:114L (Ui.Widget.text "Swipe horizontally")
+        ]
+        ()
+    ; Ui.Material.Expandable_list.finite
+        ~expanded_ids:[ 130L ]
+        ~on_expansion_changed:handlers.interaction
+        expandable
+        ()
+    ; Ui.Material.Bottom_sheet.surface (Ui.Widget.text "Bottom sheet surface")
+    ; Ui.Material.Side_sheet.surface
+        ~title:(Ui.Widget.text "Side sheet")
+        ~body:(Ui.Widget.text "Side sheet surface")
+        ()
+    ; Ui.Material.App_bar.bottom
+        ~actions:[ icon 0xe8b6 ]
+        ~floating_action_button:
+          (Ui.Material.Floating_action_button.icon
+             ~on_press:handlers.press
+             ~icon:(icon 0xe145)
+             ())
+        ()
+    ; Ui.Material.App_bar.search
+        ~session_id:(ID.Text_input.Session_id.of_int64 10L)
+        ~document_revision:(ID.Text_input.Document_revision.of_int64 1L)
+        ~accepted_local_revision:(ID.Text_input.Local_revision.of_int64 0L)
+        ~update_mode:Ui.Text_editing.Force_replace
+        ~value:(search_value "expressive")
+        ~on_edit:handlers.text_edit
+        ~on_submit:handlers.text_submit
+        ~on_focus_changed:handlers.focus_changed
+        ~on_select:handlers.interaction
+        [ Ui.Material.App_bar.search_suggestion ~id:115L ~label:"Expressive result" () ]
+        ()
+    ; Ui.Material.Tabs.create
+        ~selected_id:116L
+        ~on_select:handlers.interaction
+        [ Ui.Material.Tabs.tab ~id:116L ~label:"Primary" ~icon:(icon 0xe88a) ()
+        ; Ui.Material.Tabs.tab ~id:120L ~label:"Secondary" ~icon:(icon 0xe8b8) ()
+        ]
+        ()
+    ; Ui.Material.Navigation_rail.create
+        ~modality:Ui.Material.Navigation_rail.Modal
+        ~expanded:true
+        ~selected_id:117L
+        ~on_select:handlers.interaction
+        ~on_expanded_changed:handlers.interaction
+        ~trailing:(Ui.Widget.text "Trailing")
+        ~fab:
+          (Ui.Material.Navigation_rail.fab ~id:118L ~icon:(icon 0xe145) ~label:"New" ())
+        [ Ui.Material.Navigation_rail.section
+            [ Ui.Material.Navigation_rail.destination
+                ~id:117L
+                ~icon:(icon 0xe88a)
+                ~label:"Home"
+                ()
+            ]
+        ]
+        ()
+    ; Ui.Material.Navigation_drawer.create
+        ~headline:"Navigation"
+        ~selected_id:119L
+        ~on_select:handlers.interaction
+        [ Ui.Material.Navigation_drawer.destination
+            ~id:119L
+            ~icon:(icon 0xe88a)
+            ~label:"Home"
+            ()
+        ]
+        ()
+    ; Ui.Material.Toolbar.create
+        ~placement:Ui.Material.Toolbar.Floating
+        ~expanded:true
+        ~active_action_id:(Some 122L)
+        ~on_action:handlers.interaction
+        ~on_expanded_changed:handlers.interaction
+        ~on_active_action_changed:handlers.interaction
+        ~fab:
+          (Ui.Material.Toolbar.fab ~id:123L ~icon:(icon 0xe145) ~label:"Create" ())
+        [ Ui.Material.Toolbar.action
+            ~id:122L
+            ~icon:Ui.Material.Toolbar.Edit
+            ~label:"Edit"
+            ()
+        ]
+        ()
+    ; Ui.Material.Menu.create
+        ~on_select:handlers.interaction
+        ~entries:menu
+        ~anchor:(Ui.Widget.text "Open nested menu")
+        ()
+    ; Ui.Widget.row
+        [ Ui.Material.badge ~count:8 (icon 0xe7f4)
+        ; Ui.Material.loading_indicator ~variant:Ui.Material.Contained ~progress:0.25 ()
+        ; Ui.Material.circular_progress_indicator ~kind:Ui.Material.Wavy ~value:0.6 ()
+        ]
+    ; Ui.Material.linear_progress_indicator ~kind:Ui.Material.Wavy ~value:0.6 ()
+    ; Ui.Material.Refresh_indicator.create
+        ~request_token:3L
+        ~request_state:Ui.Material.Refresh_indicator.Ready
+        ~on_refresh_request:handlers.interaction
+        (Ui.Widget.text "Pull to refresh")
+    ; Ui.Material.Search_anchor.create
+        ~presentation:Ui.Material.Search_anchor.Docked
+        ~session_id:(ID.Text_input.Session_id.of_int64 11L)
+        ~document_revision:(ID.Text_input.Document_revision.of_int64 1L)
+        ~accepted_local_revision:(ID.Text_input.Local_revision.of_int64 0L)
+        ~update_mode:Ui.Text_editing.Force_replace
+        ~value:(search_value "query")
+        ~on_edit:handlers.text_edit
+        ~on_submit:handlers.text_submit
+        ~on_focus_changed:handlers.focus_changed
+        ~on_select:handlers.interaction
+        [ Ui.Material.Search_anchor.suggestion ~id:123L ~label:"Suggestion" () ]
+        ()
     ]
 ;;
 
@@ -628,6 +929,7 @@ let native_section model handlers =
 ;;
 
 let view model handlers =
+  let icon code_point = Ui.Widget.icon ~font_family:"MaterialIcons" ~code_point () in
   let bottom_destinations =
     [ Ui.Material.Navigation_destination.create
         ~icon:(Ui.Widget.icon ~font_family:"MaterialIcons" ~code_point:0xe88a ())
@@ -644,6 +946,7 @@ let view model handlers =
       [ Ui.Widget.text "OCaml owns every value and handler on this page"
       ; core_section handlers
       ; material_section model handlers
+      ; expressive_catalog_section handlers
       ; interaction_section model handlers
       ; text_input_section model handlers
       ; native_section model handlers
@@ -653,7 +956,15 @@ let view model handlers =
     Ui.Widget.Scroll_view.vertical
       ~key:(Ui.Key.string "gallery-scroll")
       ~on_scroll:handlers.scroll
-      [ Ui.Widget.Sliver.box body ]
+      [ Ui.Material.App_bar.sliver
+          ~variant:Ui.Material.App_bar.Large
+          ~shape:Ui.Material.App_bar.Round
+          ~density:Ui.Material.App_bar.Compact
+          ~semantic_label:"Expressive gallery app bar"
+          ~title:(Ui.Widget.text "Material 3 Expressive")
+          ()
+      ; Ui.Widget.Sliver.box body
+      ]
       ()
     |> Ui.Widget.Viewport.Vertical.padding
          ~insets:(Ui.Layout.Edge_insets.symmetric ~horizontal:24. ~vertical:16. ())
@@ -668,11 +979,18 @@ let view model handlers =
   in
   let body = Ui.Widget.Body.Vertical.create [ Ui.Widget.Body.Vertical.fill viewport ] in
   Ui.Material.scaffold
-    ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Bonsai Flutter Gallery") ())
+    ~app_bar:
+      (Ui.Material.App_bar.top
+         ~actions:[ icon 0xe8b6; icon 0xe5d4 ]
+         ~safe_area:true
+         ~semantic_label:"Bonsai Flutter gallery app bar"
+         ~title:(Ui.Widget.text "Bonsai Flutter Gallery")
+         ())
     ~floating_action_button:
       (Ui.Material.Floating_action_button.extended
          ~on_press:handlers.press
-         ~label:(Ui.Widget.text "New")
+         ~icon:(icon 0xe145)
+         ~label:"New"
          ())
     ~floating_action_button_location:Ui.Material.End_docked
     ~bottom_navigation_bar:

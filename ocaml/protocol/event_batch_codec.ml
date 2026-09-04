@@ -229,6 +229,19 @@ let read_bool reader =
   | value -> fail Invalid_payload "invalid bool %d" value
 ;;
 
+let valid_civil_date ~year ~month ~day =
+  let leap = year mod 400 = 0 || (year mod 4 = 0 && year mod 100 <> 0) in
+  let days =
+    [| 31; (if leap then 29 else 28); 31; 30; 31; 30; 31; 31; 30; 31; 30; 31 |]
+  in
+  year >= 1
+  && year <= 9999
+  && month >= 1
+  && month <= 12
+  && day >= 1
+  && day <= days.(month - 1)
+;;
+
 let read_finite_f64 reader =
   let value = Reader.f64 reader in
   if not (Float.is_finite value)
@@ -304,6 +317,8 @@ let read_payload reader event_tag =
     || event_tag = Generated_protocol.Event_tag.tooltip_triggered
     || event_tag = Generated_protocol.Event_tag.step_continue
     || event_tag = Generated_protocol.Event_tag.step_cancel
+    || event_tag = Generated_protocol.Event_tag.search_opened
+    || event_tag = Generated_protocol.Event_tag.search_closed
   then Inbound_event.Unit
   else if
     event_tag = Generated_protocol.Event_tag.tap
@@ -418,6 +433,20 @@ let read_payload reader event_tag =
     if Float.compare start end_ > 0
     then fail Invalid_payload "range slider values are reversed";
     Float_range { start; end_ })
+  else if event_tag = Generated_protocol.Event_tag.civil_date_changed
+  then (
+    let year = Reader.u16 reader in
+    let month = Reader.u8 reader in
+    let day = Reader.u8 reader in
+    if not (valid_civil_date ~year ~month ~day)
+    then fail Invalid_payload "civil date is invalid";
+    Civil_date { year; month; day })
+  else if event_tag = Generated_protocol.Event_tag.civil_time_changed
+  then (
+    let hour = Reader.u8 reader in
+    let minute = Reader.u8 reader in
+    if hour > 23 || minute > 59 then fail Invalid_payload "civil time is invalid";
+    Civil_time { hour; minute })
   else if event_tag = Generated_protocol.Event_tag.scroll_notification
   then (
     let pixels = Reader.f64 reader in
@@ -642,6 +671,8 @@ let write_payload writer event_tag payload =
       && event_tag <> Generated_protocol.Event_tag.tooltip_triggered
       && event_tag <> Generated_protocol.Event_tag.step_continue
       && event_tag <> Generated_protocol.Event_tag.step_cancel
+      && event_tag <> Generated_protocol.Event_tag.search_opened
+      && event_tag <> Generated_protocol.Event_tag.search_closed
     then fail Invalid_payload "unit payload does not match event tag"
   | Bool value ->
     if
@@ -736,6 +767,21 @@ let write_payload writer event_tag payload =
     then fail Invalid_payload "range slider values are reversed";
     Writer.f64 writer start;
     Writer.f64 writer end_
+  | Civil_date { year; month; day } ->
+    if event_tag <> Generated_protocol.Event_tag.civil_date_changed
+    then fail Invalid_payload "civil date payload does not match event tag";
+    if not (valid_civil_date ~year ~month ~day)
+    then fail Invalid_payload "civil date is invalid";
+    Writer.u16 writer year;
+    Writer.u8 writer month;
+    Writer.u8 writer day
+  | Civil_time { hour; minute } ->
+    if event_tag <> Generated_protocol.Event_tag.civil_time_changed
+    then fail Invalid_payload "civil time payload does not match event tag";
+    if hour < 0 || hour > 23 || minute < 0 || minute > 59
+    then fail Invalid_payload "civil time is invalid";
+    Writer.u8 writer hour;
+    Writer.u8 writer minute
   | Tap { local_x; local_y; global_x; global_y; pointer_kind } ->
     if
       event_tag <> Generated_protocol.Event_tag.tap

@@ -121,24 +121,24 @@ let component ~activations ~after_displays handlers graph =
   Bonsai.Cont.map2 count increment_handler ~f:(fun count increment_handler ->
     Ui.Widget.column
       [ Ui.Widget.text (Printf.sprintf "Count: %d" count)
-      ; Ui.Widget.button
+      ; Ui.Widget.pressable
           ~on_press:increment_handler
           ~child:(Ui.Widget.text "Increment")
           ()
       ])
 ;;
 
-let find_button_binding (frame : Protocol.Wire_frame.t) =
+let find_pressable_binding (frame : Protocol.Wire_frame.t) =
   List.find_map
     (function
       | Protocol.Wire_frame.Create_node
-          { node_id; kind = Button; event_bindings = [ { event_tag; handler_id } ]; _ } ->
-        Some (node_id, event_tag, handler_id)
+          { node_id; kind = Pressable; event_bindings = [ { event_tag; handler_id } ]; _ }
+        -> Some (node_id, event_tag, handler_id)
       | _ -> None)
     frame.operations
   |> function
   | Some binding -> binding
-  | None -> fail "initial frame has no Button press binding"
+  | None -> fail "initial frame has no Pressable press binding"
 ;;
 
 let () =
@@ -186,10 +186,10 @@ let () =
     | Ok frame -> frame
     | Error error -> fail "initial frame did not decode: %s" error.message
   in
-  let node_id, event_tag, handler_id = find_button_binding initial_wire in
+  let node_id, event_tag, handler_id = find_pressable_binding initial_wire in
   require
     (event_tag = Protocol.Generated_protocol.Event_tag.press)
-    "Button must encode the press event tag";
+    "Pressable must encode the press event tag";
   require
     (!activations = 0 && !after_displays = 0)
     "initial pump must not trigger presentation-gated lifecycle events";
@@ -374,7 +374,7 @@ let host_effect_component ?cancellation host_ref handlers graph =
   Bonsai.Cont.map2 text request_clipboard ~f:(fun text request_clipboard ->
     Ui.Widget.column
       [ Ui.Widget.text text
-      ; Ui.Widget.button
+      ; Ui.Widget.pressable
           ~on_press:request_clipboard
           ~child:(Ui.Widget.text "Read clipboard")
           ()
@@ -394,7 +394,7 @@ let test_host_effect_round_trip () =
     | None -> fail "host-effect component did not mount"
   in
   let initial_wire = decode_frame initial.bytes in
-  let node_id, event_tag, handler_id = find_button_binding initial_wire in
+  let node_id, event_tag, handler_id = find_pressable_binding initial_wire in
   ok (present driver ~revision:initial.revision);
   let press =
     Protocol.Inbound_event.
@@ -488,7 +488,7 @@ let test_host_effect_cancellation () =
     | None -> fail "cancellation component did not mount"
   in
   let initial_wire = decode_frame initial.bytes in
-  let node_id, event_tag, handler_id = find_button_binding initial_wire in
+  let node_id, event_tag, handler_id = find_pressable_binding initial_wire in
   ok (present driver ~revision:initial.revision);
   let press =
     Protocol.Inbound_event.
@@ -692,7 +692,10 @@ let handler_dependency_component handlers graph =
       in
       Ui.Widget.column
         [ Ui.Widget.text ("Observed: " ^ observed_mode)
-        ; Ui.Widget.button ~on_press:toggle_mode ~child:(Ui.Widget.text "Toggle mode") ()
+        ; Ui.Widget.pressable
+            ~on_press:toggle_mode
+            ~child:(Ui.Widget.text "Toggle mode")
+            ()
         ; Ui.Material.text_button
             ~on_press:observe_mode
             ~child:(Ui.Widget.text "Observe mode")
@@ -740,7 +743,7 @@ let test_handler_dependencies_control_identity () =
   in
   let initial_wire = decode_frame initial.bytes in
   let toggle_node, toggle_binding =
-    find_single_binding_for_kind initial_wire Protocol.Wire_frame.Button
+    find_single_binding_for_kind initial_wire Protocol.Wire_frame.Pressable
   in
   let observe_node, initial_observe_binding =
     find_single_binding_for_kind initial_wire Protocol.Wire_frame.Material_text_button
@@ -847,7 +850,7 @@ let application_platform_component
   let second = request "second" (Bytes.of_string "\128two\000") in
   Bonsai.Cont.map2 first second ~f:(fun first second ->
     Ui.Widget.column
-      [ Ui.Widget.button ~on_press:first ~child:(Ui.Widget.text "First") ()
+      [ Ui.Widget.pressable ~on_press:first ~child:(Ui.Widget.text "First") ()
       ; Ui.Material.text_button ~on_press:second ~child:(Ui.Widget.text "Second") ()
       ])
 ;;
@@ -887,7 +890,7 @@ let test_application_platform_requests_events_and_cancellation () =
   in
   let initial_wire = decode_frame initial.bytes in
   let first_node, first_binding =
-    find_single_binding_for_kind initial_wire Protocol.Wire_frame.Button
+    find_single_binding_for_kind initial_wire Protocol.Wire_frame.Pressable
   in
   let second_node, second_binding =
     find_single_binding_for_kind initial_wire Protocol.Wire_frame.Material_text_button
@@ -1042,7 +1045,7 @@ let single_application_request_component ~platform_ref ~payload ~results handler
         ~f:(fun result ->
           Bonsai.Effect.of_thunk (fun () -> results := !results @ [ result ])))
   |> Bonsai.Cont.map ~f:(fun handler ->
-    Ui.Widget.button ~on_press:handler ~child:(Ui.Widget.text "Request") ())
+    Ui.Widget.pressable ~on_press:handler ~child:(Ui.Widget.text "Request") ())
 ;;
 
 let start_single_application_request driver runtime_epoch =
@@ -1051,7 +1054,9 @@ let start_single_application_request driver runtime_epoch =
     | Some frame -> frame
     | None -> fail "single application request component did not mount"
   in
-  let node_id, event_tag, handler_id = find_button_binding (decode_frame initial.bytes) in
+  let node_id, event_tag, handler_id =
+    find_pressable_binding (decode_frame initial.bytes)
+  in
   ok (present driver ~revision:initial.revision);
   let press =
     Protocol.Inbound_event.
@@ -1253,7 +1258,8 @@ let test_application_theme_is_atomic_and_diffed_independently () =
       let mode = if dark then Ui.Theme.Dark else Ui.Theme.Light in
       Driver.View.create
         ~theme:(Ui.Theme.application ~mode ~light:light_data ~dark:dark_data ())
-        ~body:(Ui.Widget.button ~on_press:toggle ~child:(Ui.Widget.text "Theme body") ()))
+        ~body:
+          (Ui.Widget.pressable ~on_press:toggle ~child:(Ui.Widget.text "Theme body") ()))
   in
   let runtime_epoch = ID.Runtime.Epoch.of_int64 102L in
   let driver =
@@ -1280,7 +1286,7 @@ let test_application_theme_is_atomic_and_diffed_independently () =
          | _ -> false)
        initial_operations)
     "full snapshot omitted the application theme";
-  let node_id, event_tag, handler_id = find_button_binding initial_wire in
+  let node_id, event_tag, handler_id = find_pressable_binding initial_wire in
   ok (present driver ~revision:initial.revision);
   let events =
     Protocol.Inbound_event.

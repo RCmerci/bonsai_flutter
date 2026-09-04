@@ -140,6 +140,14 @@ let (_ : Ui.Navigation.page_presentation) =
        ())
 ;;
 
+let (_ : Ui.Navigation.page_presentation) =
+  Ui.Navigation.Modal_side_sheet
+    (Ui.Navigation.Modal_side_sheet.create
+       ~barrier_label:"Close side sheet"
+       ~use_safe_area:true
+       ())
+;;
+
 let (_ : Ui.Viewport.Vertical.t) =
   Ui.Widget.Scroll_view.vertical
     ~primary:true

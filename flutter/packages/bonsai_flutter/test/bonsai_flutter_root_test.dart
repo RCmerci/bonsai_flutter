@@ -5,8 +5,7 @@ import 'dart:isolate';
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:bonsai_flutter/src/runtime/foreground_frame_loop.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/pump_bonsai.dart';
@@ -82,11 +81,13 @@ void main() {
       final rendererState = tester.state(find.byType(BonsaiFlutterView));
       final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
       expect(
-        app.localizationsDelegates,
-        containsAll(const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
+        app.localizationsDelegates!.map(
+          (delegate) => delegate.runtimeType.toString(),
+        ),
+        containsAll([
+          '_MaterialLocalizationsDelegate',
+          '_GlobalCupertinoLocalizationsDelegate',
+          '_WidgetsLocalizationsDelegate',
         ]),
       );
       expect(
@@ -418,8 +419,12 @@ void main() {
     expect(runtime.presentedRevisions, everyElement(1));
     expect(runtime.environmentBatchCount, 1);
 
-    await tester.tap(find.byType(ElevatedButton));
-    await pumpBonsaiFrames(tester, count: 6);
+    await tester.tap(find.text('Increment'));
+    await pumpBonsaiUntil(
+      tester,
+      () => find.text('Count: 1').evaluate().isNotEmpty,
+      maxFrames: 12,
+    );
 
     expect(find.text('Count: 1'), findsOneWidget);
     expect(runtime.eventBatchCount, 1);
@@ -585,8 +590,12 @@ void main() {
     await pumpBonsaiFrames(tester, count: 6);
     expect(find.text('Count: 0'), findsOneWidget);
 
-    await tester.tap(find.byType(ElevatedButton));
-    await pumpBonsaiFrames(tester, count: 6);
+    await tester.tap(find.text('Increment'));
+    await pumpBonsaiUntil(
+      tester,
+      () => find.text('Count: 1').evaluate().isNotEmpty,
+      maxFrames: 12,
+    );
 
     expect(find.text('Count: 1'), findsOneWidget);
     expect(find.textContaining('Bonsai runtime error'), findsNothing);
@@ -612,14 +621,22 @@ void main() {
       );
       await pumpBonsaiFrames(tester, count: 6);
 
-      await tester.tap(find.byType(ElevatedButton));
-      await pumpBonsaiFrames(tester, count: 6);
+      await tester.tap(find.text('Increment'));
+      await pumpBonsaiUntil(
+        tester,
+        () => runtime.pressBatchCount == 1,
+        maxFrames: 12,
+      );
 
       expect(find.text('Count: 0'), findsOneWidget);
       expect(find.textContaining('Bonsai runtime error'), findsNothing);
 
-      await tester.tap(find.byType(ElevatedButton));
-      await pumpBonsaiFrames(tester, count: 6);
+      await tester.tap(find.text('Increment'));
+      await pumpBonsaiUntil(
+        tester,
+        () => find.text('Count: 1').evaluate().isNotEmpty,
+        maxFrames: 12,
+      );
 
       expect(find.text('Count: 1'), findsOneWidget);
       expect(find.textContaining('Bonsai runtime error'), findsNothing);
@@ -1269,8 +1286,8 @@ final class _FocusHostRequestRuntimeSession
           ),
           CreateNode(
             nodeId: 7,
-            kind: NodeKind.textInput,
-            props: TextInputProps(
+            kind: NodeKind.materialTextField,
+            props: MaterialTextFieldProps(
               sessionId: 1,
               documentRevision: 1,
               value: TextEditingStateValue(
@@ -1286,6 +1303,14 @@ final class _FocusHostRequestRuntimeSession
               acceptedLocalRevision: 0,
               updateMode: TextUpdateMode.forceReplace,
               autofocus: false,
+              maxUtf8Bytes: null,
+              variant: 0,
+              label: null,
+              supportingText: null,
+              errorText: null,
+              hasLeading: false,
+              hasTrailing: false,
+              maxLines: 1,
             ),
             eventBindings: [],
           ),
@@ -1526,8 +1551,11 @@ final class _ResyncRuntimeSession extends _LegacyRuntimeSessionAdapter {
               ),
               CreateNode(
                 nodeId: 13,
-                kind: NodeKind.button,
-                props: ButtonProps(enabled: true),
+                kind: NodeKind.pressable,
+                props: PressableProps(
+                  overlayColorArgb: 0x181c2026,
+                  releaseDelayMs: 80,
+                ),
                 eventBindings: [
                   EventBinding(eventTag: EventTagId.press, handlerId: 9101),
                 ],
@@ -1589,8 +1617,8 @@ Frame counterWidgetSnapshot() => const Frame(
     ),
     CreateNode(
       nodeId: 3,
-      kind: NodeKind.button,
-      props: ButtonProps(enabled: true),
+      kind: NodeKind.pressable,
+      props: PressableProps(overlayColorArgb: 0x181c2026, releaseDelayMs: 80),
       eventBindings: [
         EventBinding(eventTag: EventTagId.press, handlerId: 9001),
       ],

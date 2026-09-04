@@ -224,7 +224,7 @@ platform, locale, safe-area and keyboard insets, accessibility flags,
 orientation, and a pointer-kind bitset. Flutter emits it only when the
 semantic snapshot changes.
 
-`protocol/generated/fixtures/dart_counter_press.hex` is the canonical Button
+`protocol/generated/fixtures/dart_counter_press.hex` is the canonical press
 event. Dart produces it with `EventBatchCodec`, and OCaml decodes and validates
 the same bytes.
 

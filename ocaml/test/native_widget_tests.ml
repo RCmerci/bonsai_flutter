@@ -479,13 +479,14 @@ let test_sliver_fill_and_padding () =
 ;;
 
 let test_sliver_app_bar_contract () =
-  let bottom = Ui.Widget.preferred_size ~height:36. (Ui.Widget.text "Bottom") in
   let viewport =
     Ui.Widget.Scroll_view.vertical
       ~on_scroll:(Ui.Event.Handler.create (fun _ -> ()))
-      [ Ui.Widget.Sliver.app_bar
+      [ Ui.Material.App_bar.sliver
           ~pinned:true
-          ~bottom
+          ~variant:Ui.Material.App_bar.Large
+          ~shape:Ui.Material.App_bar.Square
+          ~density:Ui.Material.App_bar.Compact
           ~actions:[ Ui.Widget.text "Search"; Ui.Widget.text "Settings" ]
           ~title:(Ui.Widget.text "Title")
           ()
@@ -493,11 +494,11 @@ let test_sliver_app_bar_contract () =
       ()
   in
   let (Av app_bar) = Ui.Widget.Private.view (scroll_view_child viewport) in
-  check (Array.length app_bar.children = 4) "app bar exposes bottom and every action";
+  check (Array.length app_bar.children = 3) "app bar exposes every action";
   (match app_bar.node with
-   | Ui.Widget.Private.Sliver_app_bar { has_bottom; has_actions; _ } ->
-     check has_bottom "app bar bottom flag";
-     check has_actions "app bar actions flag"
+   | Ui.Widget.Private.Sliver_app_bar { action_count; variant; shape; density; _ } ->
+     check (action_count = 2) "app bar action count";
+     check (variant = 2 && shape = 1 && density = 1) "app bar expressive variants"
    | _ -> failwith "sliver app bar node");
   let child_text index =
     let (Av child) = Ui.Widget.Private.view app_bar.children.(index).widget in
@@ -506,70 +507,28 @@ let test_sliver_app_bar_contract () =
     | _ -> None
   in
   check (child_text 0 = Some "Title") "app bar title order";
-  check (child_text 2 = Some "Search") "app bar first action order";
-  check (child_text 3 = Some "Settings") "app bar second action order";
+  check (child_text 1 = Some "Search") "app bar first action order";
+  check (child_text 2 = Some "Settings") "app bar second action order";
   let empty_actions =
     Ui.Widget.Scroll_view.vertical
       ~on_scroll:(Ui.Event.Handler.create (fun _ -> ()))
-      [ Ui.Widget.Sliver.app_bar ~actions:[] ~title:(Ui.Widget.text "Title") () ]
+      [ Ui.Material.App_bar.sliver ~actions:[] ~title:(Ui.Widget.text "Title") () ]
       ()
   in
   let (Av empty) = Ui.Widget.Private.view (scroll_view_child empty_actions) in
   match empty.node with
-  | Ui.Widget.Private.Sliver_app_bar { has_actions; _ } ->
-    check (not has_actions) "empty actions do not set the actions flag"
+  | Ui.Widget.Private.Sliver_app_bar { action_count; _ } ->
+    check (action_count = 0) "empty actions have a zero action count"
   | _ -> failwith "sliver app bar empty actions node"
 ;;
 
 let test_sliver_app_bar_validation () =
-  let create
-        ?(floating = false)
-        ?(snap = false)
-        ?expanded_height
-        ?collapsed_height
-        ?(toolbar_height = 56.)
-        ?elevation
-        ?bottom
-        ()
-    =
-    ignore
-      (Ui.Widget.Sliver.app_bar
-         ~floating
-         ~snap
-         ?expanded_height
-         ?collapsed_height
-         ~toolbar_height
-         ?elevation
-         ?bottom
-         ~title:(Ui.Widget.text "Title")
-         ())
+  let create ?(floating = false) ?(snap = false) () =
+    ignore (Ui.Material.App_bar.sliver ~floating ~snap ~title:(Ui.Widget.text "Title") ())
   in
-  List.iter
-    (fun (build, message) -> expect_invalid_argument build message)
-    [ (fun () -> create ~snap:true ()), "sliver app bar accepted snap without floating"
-    ; ( (fun () -> create ~toolbar_height:0. ())
-      , "sliver app bar accepted a zero toolbar height" )
-    ; ( (fun () -> create ~toolbar_height:(-1.) ())
-      , "sliver app bar accepted a negative toolbar height" )
-    ; ( (fun () -> create ~toolbar_height:Float.nan ())
-      , "sliver app bar accepted a non-finite toolbar height" )
-    ; ( (fun () -> create ~toolbar_height:Float.infinity ())
-      , "sliver app bar accepted an infinite toolbar height" )
-    ; ( (fun () -> create ~expanded_height:(-1.) ())
-      , "sliver app bar accepted a negative expanded height" )
-    ; ( (fun () -> create ~expanded_height:100. ~collapsed_height:120. ())
-      , "sliver app bar accepted collapsed height above expanded height" )
-    ; ( (fun () -> create ~collapsed_height:40. ())
-      , "sliver app bar accepted collapsed height below toolbar height" )
-    ; ( (fun () -> create ~elevation:(-1.) ())
-      , "sliver app bar accepted a negative elevation" )
-    ; ( (fun () -> create ~elevation:Float.nan ())
-      , "sliver app bar accepted a NaN elevation" )
-    ; ( (fun () -> create ~elevation:Float.infinity ())
-      , "sliver app bar accepted an infinite elevation" )
-    ; ( (fun () -> create ~bottom:(Ui.Widget.text "Bottom") ())
-      , "sliver app bar accepted a bottom without preferred size" )
-    ]
+  expect_invalid_argument
+    (fun () -> create ~snap:true ())
+    "sliver app bar accepted snap without floating"
 ;;
 
 (* ------------------------------------------------------------------ *)

@@ -94,6 +94,16 @@ void main() {
           EventTagId.rangeSliderChangeEnd,
           FloatRangeEventPayload(start: 0.2, end: 0.8),
         ),
+        (
+          EventTagId.civilDateChanged,
+          CivilDateEventPayload(year: 2026, month: 9, day: 4),
+        ),
+        (
+          EventTagId.civilTimeChanged,
+          CivilTimeEventPayload(hour: 14, minute: 30),
+        ),
+        (EventTagId.searchOpened, UnitEventPayload()),
+        (EventTagId.searchClosed, UnitEventPayload()),
       ];
       final batch = EventBatch(
         runtimeEpoch: 21,

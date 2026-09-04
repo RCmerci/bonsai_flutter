@@ -120,10 +120,15 @@ module Modal_dialog : sig
   end
 end
 
+(** Route-owned side-sheet mechanics. The logical page child should be a
+    [Material.Side_sheet.surface]. *)
+module Modal_side_sheet : module type of Modal_dialog
+
 type page_presentation =
   | Standard of page_transition
   | Modal_bottom_sheet of Modal_bottom_sheet.t
   | Modal_dialog of Modal_dialog.t
+  | Modal_side_sheet of Modal_side_sheet.t
 
 type overlay_alignment =
   | Top_start

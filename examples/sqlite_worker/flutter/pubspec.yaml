@@ -25,6 +25,7 @@ dependencies:
   # bonsai-flutter:end packages
   flutter:
     sdk: flutter
+  material_ui: 1.1.1
   path: ^1.9.1
   path_provider: ^2.1.5
 

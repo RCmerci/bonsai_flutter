@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:bonsai_flutter/src/native_widget/sparse_extent_transition_scope.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -134,6 +134,37 @@ void main() {
       expect(material.elevation, 3);
       expect(material.borderRadius, BorderRadius.circular(16));
     });
+
+    testWidgets(
+      'clips fixed content while parent geometry catches up',
+      (tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Center(
+              child: SizedBox(
+                width: 320,
+                height: 132,
+                child: MorphingSurfaceHost(
+                  progress: 1,
+                  expanded: true,
+                  sharedContent: const SizedBox.shrink(),
+                  compactContent: const SizedBox(height: 88),
+                  expandedContent: const SizedBox(
+                    height: 272,
+                    child: Column(
+                      children: [SizedBox(height: 200), SizedBox(height: 72)],
+                    ),
+                  ),
+                  expandedStyle: const MorphingSurfaceStyle(verticalInset: 6),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets(
       'finishes the corner radius in the first half of the transition',

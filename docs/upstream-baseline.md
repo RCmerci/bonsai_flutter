@@ -97,12 +97,13 @@ retain `LC_BUILD_VERSION platform IOS` metadata even for package C stubs.
 
 The target closure is resolved per application from pinned opam metadata and
 Dune library roots. The checked-in DataScript SQLite fixture lock currently
-contains 121 packages: 69 target packages, 51 host-only packages, one
+contains 123 packages: 69 target packages, 53 host-only packages, one
 target-build package, and 106 target findlib components. Those values are
 lock-derived metadata that the verifier recomputes, not fixed policy. The
 fixture includes exact Eio `1.2`, `eio_posix` `1.2`, SQLite `5.4.0`, the pinned
-DataScript native stack, and an extra pure OCaml `astring` root. Host PPX
-executables remain macOS processes. Supported Dune and Topkg pure OCaml
+DataScript native stack, and the target runtime components required by a
+`ppx_deriving_yojson` codec. Host PPX executables remain macOS processes.
+Supported Dune and Topkg pure OCaml
 packages compile generically; platform capabilities require an explicit
 iPhoneOS recipe and feature gate.
 

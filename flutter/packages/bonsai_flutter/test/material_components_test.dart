@@ -1,5 +1,6 @@
 import 'package:bonsai_flutter/bonsai_flutter.dart';
-import 'package:flutter/material.dart';
+import 'package:material_3_expressive/material_3_expressive.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -62,25 +63,29 @@ void main() {
         (
           NodeKind.materialFilledButton,
           MaterialButtonVariant.filled,
-          FilledButton,
+          M3EButton,
         ),
         (
           NodeKind.materialFilledTonalButton,
           MaterialButtonVariant.filledTonal,
-          FilledButton,
+          M3EButton,
         ),
         (
           NodeKind.materialOutlinedButton,
           MaterialButtonVariant.outlined,
-          OutlinedButton,
+          M3EButton,
         ),
         (
           NodeKind.materialElevatedButton,
           MaterialButtonVariant.elevated,
-          ElevatedButton,
+          M3EButton,
         ),
-        (NodeKind.materialTextButton, MaterialButtonVariant.text, TextButton),
-        (NodeKind.materialIconButton, MaterialButtonVariant.icon, IconButton),
+        (NodeKind.materialTextButton, MaterialButtonVariant.text, M3EButton),
+        (
+          NodeKind.materialIconButton,
+          MaterialButtonVariant.icon,
+          M3EIconButton,
+        ),
       ];
       for (final (kind, variant, widgetType) in cases) {
         await tester.pumpWidget(
@@ -103,21 +108,12 @@ void main() {
         expect(find.byType(widgetType), findsOneWidget, reason: '$variant');
       }
 
-      final fabCases = <(MaterialFloatingActionButtonVariant, Finder)>[
-        (
-          MaterialFloatingActionButtonVariant.small,
-          find.byType(FloatingActionButton),
-        ),
-        (
-          MaterialFloatingActionButtonVariant.standard,
-          find.byType(FloatingActionButton),
-        ),
-        (
-          MaterialFloatingActionButtonVariant.large,
-          find.byType(FloatingActionButton),
-        ),
+      final fabCases = <MaterialFloatingActionButtonVariant>[
+        MaterialFloatingActionButtonVariant.small,
+        MaterialFloatingActionButtonVariant.standard,
+        MaterialFloatingActionButtonVariant.large,
       ];
-      for (final (variant, finder) in fabCases) {
+      for (final variant in fabCases) {
         await tester.pumpWidget(
           render(
             _node(
@@ -126,7 +122,6 @@ void main() {
                 variant: variant,
                 enabled: true,
                 autofocus: false,
-                hasIcon: true,
               ),
               bindings: const [
                 EventBinding(eventTag: EventTagId.press, handlerId: 11),
@@ -136,7 +131,7 @@ void main() {
             events: <RendererEvent>[],
           ),
         );
-        expect(finder, findsOneWidget);
+        expect(find.byType(M3EFab), findsOneWidget);
       }
 
       await tester.pumpWidget(
@@ -147,7 +142,6 @@ void main() {
               variant: MaterialFloatingActionButtonVariant.extended,
               enabled: true,
               autofocus: false,
-              hasIcon: true,
             ),
             bindings: const [
               EventBinding(eventTag: EventTagId.press, handlerId: 12),
@@ -157,10 +151,7 @@ void main() {
           events: <RendererEvent>[],
         ),
       );
-      final extended = tester.widget<FloatingActionButton>(
-        find.byType(FloatingActionButton),
-      );
-      expect(extended.isExtended, isTrue);
+      expect(find.byType(M3EExtendedFab), findsOneWidget);
     },
   );
 
@@ -177,12 +168,10 @@ void main() {
             destinations: [
               MaterialNavigationDestinationProps(
                 label: 'Home',
-                enabled: true,
                 hasSelectedIcon: true,
               ),
               MaterialNavigationDestinationProps(
                 label: 'Settings',
-                enabled: false,
                 hasSelectedIcon: false,
               ),
             ],
@@ -199,10 +188,9 @@ void main() {
       ),
     );
 
-    final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    final bar = tester.widget<M3ENavigationBar>(find.byType(M3ENavigationBar));
     expect(bar.selectedIndex, 0);
     expect(bar.destinations, hasLength(2));
-    expect((bar.destinations.last as NavigationDestination).enabled, isFalse);
     bar.onDestinationSelected!(1);
     expect(events.single.payload, const Int64EventPayload(1));
     expect(events.single.eventTag, EventTagId.navigationDestinationSelected);
@@ -232,11 +220,12 @@ void main() {
       ),
     );
 
-    expect(find.byType(RadioGroup<int>), findsOneWidget);
-    final group = tester.widget<RadioGroup<int>>(find.byType(RadioGroup<int>));
-    expect(group.groupValue, -7);
-    group.onChanged(9);
-    expect(events.single.payload, const Int64EventPayload(9));
+    expect(find.byType(M3ERadio<int>), findsNWidgets(2));
+    final radios = tester.widgetList<M3ERadio<int>>(find.byType(M3ERadio<int>));
+    expect(radios.first.groupValue, -7);
+    expect(radios.last.onChanged, isNull);
+    radios.first.onChanged!(-7);
+    expect(events.single.payload, const Int64EventPayload(-7));
   });
 
   testWidgets('sliders coalesce change and always deliver change-end', (
@@ -255,6 +244,7 @@ void main() {
             label: 'Quarter',
             enabled: true,
             hasOnChange: true,
+            kind: 0,
           ),
           bindings: const [
             EventBinding(eventTag: EventTagId.sliderChanged, handlerId: 40),
@@ -265,7 +255,7 @@ void main() {
         events: events,
       ),
     );
-    final slider = tester.widget<Slider>(find.byType(Slider));
+    final slider = tester.widget<M3ESlider>(find.byType(M3ESlider));
     slider.onChanged!(0.5);
     slider.onChanged!(0.75);
     expect(events, isEmpty);
@@ -289,6 +279,7 @@ void main() {
             labelEnd: null,
             enabled: true,
             hasOnChange: false,
+            kind: 0,
           ),
           bindings: const [
             EventBinding(
@@ -301,79 +292,47 @@ void main() {
         events: events,
       ),
     );
-    final range = tester.widget<RangeSlider>(find.byType(RangeSlider));
+    final range = tester.widget<M3ERangeSlider>(find.byType(M3ERangeSlider));
     expect(range.onChanged, isNull);
-    range.onChangeEnd!(const RangeValues(0.1, 0.9));
+    range.onChangeEnd!(const M3ESliderRange(0.1, 0.9));
     expect(
       events.last.payload,
       const FloatRangeEventPayload(start: 0.1, end: 0.9),
     );
   });
 
-  testWidgets(
-    'alert dialog and all chip roles preserve child slots and events',
-    (tester) async {
+  testWidgets('all chip roles preserve child slots and events', (tester) async {
+    const chipCases = <(NodeKind, MaterialChipVariant, Type)>[
+      (NodeKind.materialActionChip, MaterialChipVariant.action, M3EChip),
+      (NodeKind.materialFilterChip, MaterialChipVariant.filter, M3EChip),
+      (NodeKind.materialChoiceChip, MaterialChipVariant.choice, M3EChip),
+      (NodeKind.materialInputChip, MaterialChipVariant.input, M3EChip),
+    ];
+    for (final (kind, variant, type) in chipCases) {
       await tester.pumpWidget(
         render(
           _node(
-            NodeKind.materialAlertDialog,
-            const MaterialAlertDialogProps(
-              hasIcon: true,
-              hasTitle: true,
-              hasContent: true,
-              actionCount: 2,
+            kind,
+            MaterialChipProps(
+              variant: variant,
+              enabled: true,
+              selected: true,
+              hasLeading: false,
+              hasOnDelete: variant == MaterialChipVariant.input,
             ),
+            bindings: const [
+              EventBinding(eventTag: EventTagId.press, handlerId: 50),
+              EventBinding(eventTag: EventTagId.valueChanged, handlerId: 51),
+              EventBinding(eventTag: EventTagId.delete, handlerId: 52),
+            ],
           ),
-          const [
-            Text('Icon'),
-            Text('Title'),
-            Text('Content'),
-            Text('No'),
-            Text('Yes'),
-          ],
+          const [Text('Chip')],
+          events: <RendererEvent>[],
         ),
       );
-      final dialog = tester.widget<AlertDialog>(find.byType(AlertDialog));
-      expect(dialog.icon, isA<Text>());
-      expect(dialog.title, isA<Text>());
-      expect(dialog.content, isA<Text>());
-      expect(dialog.actions, hasLength(2));
-
-      const chipCases = <(NodeKind, MaterialChipVariant, Type)>[
-        (NodeKind.materialActionChip, MaterialChipVariant.action, ActionChip),
-        (NodeKind.materialFilterChip, MaterialChipVariant.filter, FilterChip),
-        (NodeKind.materialChoiceChip, MaterialChipVariant.choice, ChoiceChip),
-        (NodeKind.materialInputChip, MaterialChipVariant.input, InputChip),
-      ];
-      for (final (kind, variant, type) in chipCases) {
-        await tester.pumpWidget(
-          render(
-            _node(
-              kind,
-              MaterialChipProps(
-                variant: variant,
-                enabled: true,
-                selected: true,
-                hasAvatar: false,
-                hasDeleteIcon: false,
-                hasOnPress: variant == MaterialChipVariant.action,
-                hasOnSelected: variant != MaterialChipVariant.action,
-                hasOnDelete: variant == MaterialChipVariant.input,
-              ),
-              bindings: const [
-                EventBinding(eventTag: EventTagId.press, handlerId: 50),
-                EventBinding(eventTag: EventTagId.valueChanged, handlerId: 51),
-                EventBinding(eventTag: EventTagId.delete, handlerId: 52),
-              ],
-            ),
-            const [Text('Chip')],
-            events: <RendererEvent>[],
-          ),
-        );
-        expect(find.byType(type), findsOneWidget, reason: '$variant');
-      }
-    },
-  );
+      expect(find.byType(type), findsOneWidget, reason: '$variant');
+    }
+  });
 
   testWidgets('chip, card, and divider variants map to Material constructors', (
     tester,
@@ -387,10 +346,7 @@ void main() {
             presentation: MaterialChipPresentation.elevated,
             enabled: true,
             selected: false,
-            hasAvatar: false,
-            hasDeleteIcon: false,
-            hasOnPress: true,
-            hasOnSelected: false,
+            hasLeading: false,
             hasOnDelete: false,
           ),
           bindings: const [
@@ -401,15 +357,8 @@ void main() {
         events: <RendererEvent>[],
       ),
     );
-    final chipMaterial = tester.widget<Material>(
-      find
-          .descendant(
-            of: find.byType(ActionChip),
-            matching: find.byType(Material),
-          )
-          .first,
-    );
-    expect(chipMaterial.elevation, greaterThan(0));
+    final chip = tester.widget<M3EChip>(find.byType(M3EChip));
+    expect(chip.elevated, isTrue);
 
     await tester.pumpWidget(
       render(
@@ -423,12 +372,9 @@ void main() {
         const [Text('Card')],
       ),
     );
-    final cardMaterial = tester.widget<Material>(
-      find
-          .descendant(of: find.byType(Card), matching: find.byType(Material))
-          .first,
-    );
-    expect((cardMaterial.shape! as OutlinedBorder).side.width, greaterThan(0));
+    final card = tester.widget<M3ECard>(find.byType(M3ECard));
+    expect(card.variant, M3ECardVariant.outlined);
+    expect(card.padding, EdgeInsets.zero);
 
     await tester.pumpWidget(
       render(
@@ -445,49 +391,17 @@ void main() {
         const [],
       ),
     );
-    final divider = tester.widget<VerticalDivider>(
-      find.byType(VerticalDivider),
-    );
-    expect(divider.width, 20);
+    final divider = tester.widget<M3EDivider>(find.byType(M3EDivider));
+    expect(divider.axis, M3EDividerAxis.vertical);
     expect(divider.thickness, 2);
     expect(divider.indent, 3);
     expect(divider.endIndent, 4);
   });
 
-  testWidgets('tooltip and dialog family map child slots and typed events', (
+  testWidgets('dialog family maps child slots and typed events', (
     tester,
   ) async {
     final events = <RendererEvent>[];
-    await tester.pumpWidget(
-      render(
-        _node(
-          NodeKind.materialTooltip,
-          const MaterialTooltipProps(
-            message: 'Details',
-            enabled: true,
-            excludeFromSemantics: false,
-            preferBelow: false,
-            triggerMode: MaterialTooltipTriggerMode.tap,
-            waitDurationMs: 10,
-            showDurationMs: 1000,
-            exitDurationMs: 100,
-            enableTapToDismiss: true,
-            enableFeedback: true,
-            hasOnTriggered: true,
-          ),
-          bindings: const [
-            EventBinding(eventTag: EventTagId.tooltipTriggered, handlerId: 71),
-          ],
-        ),
-        const [Text('Info')],
-        events: events,
-      ),
-    );
-    final tooltip = tester.widget<Tooltip>(find.byType(Tooltip));
-    expect(tooltip.preferBelow, isFalse);
-    tooltip.onTriggered!();
-    expect(events.single.eventTag, EventTagId.tooltipTriggered);
-
     await tester.pumpWidget(
       render(
         _node(
@@ -690,12 +604,13 @@ void main() {
     await tester.pumpWidget(
       render(
         _node(
-          NodeKind.materialAlertDialog,
-          const MaterialAlertDialogProps(
-            hasIcon: true,
-            hasTitle: true,
-            hasContent: false,
-            actionCount: 1,
+          NodeKind.materialInputChip,
+          const MaterialChipProps(
+            variant: MaterialChipVariant.input,
+            enabled: true,
+            selected: false,
+            hasLeading: true,
+            hasOnDelete: false,
           ),
         ),
         const [Text('Only one child')],

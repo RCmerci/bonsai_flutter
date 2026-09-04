@@ -203,34 +203,6 @@ module Sliver : sig
   (** SliverPadding wrapper. *)
   val padding : ?key:Key.t -> insets:Layout.Edge_insets.t -> t -> t
 
-  (** Collapsible app bar. Heights and elevation must be finite and
-      non-negative, [toolbar_height] is strictly positive,
-      [collapsed_height] is at least the toolbar and no greater than
-      [expanded_height], and [snap] requires [floating]. [bottom] must be a
-      [preferred_size] widget. *)
-  val app_bar
-    :  ?key:Key.t
-    -> ?pinned:bool
-    -> ?expanded_height:float
-    -> ?collapsed_height:float
-    -> ?floating:bool
-    -> ?snap:bool
-    -> ?stretch:bool
-    -> ?toolbar_height:float
-    -> ?force_elevated:bool
-    -> ?automatically_imply_leading:bool
-    -> ?center_title:bool
-    -> ?background_color:int32
-    -> ?foreground_color:int32
-    -> ?elevation:float
-    -> ?leading:widget
-    -> ?flexible_space:widget
-    -> ?bottom:widget
-    -> ?actions:widget list
-    -> title:widget
-    -> unit
-    -> t
-
   val visible_range_of_payload : Event.Payload.t -> Event.Payload.visible_range option
 end
 
@@ -340,35 +312,6 @@ val overlay
   -> t list
   -> t
 
-val text_input
-  :  ?key:Key.t
-  -> ?enabled:bool
-  -> ?read_only:bool
-  -> ?obscure_text:bool
-  -> ?keyboard_type:Text_editing.keyboard_type
-  -> ?input_action:Text_editing.input_action
-  -> ?autofocus:bool
-  -> ?max_utf8_bytes:int
-  -> session_id:Bonsai_flutter_spec.Id.Text_input.session_id
-  -> document_revision:Bonsai_flutter_spec.Id.Text_input.document_revision
-  -> accepted_local_revision:Bonsai_flutter_spec.Id.Text_input.local_revision
-  -> update_mode:Text_editing.update_mode
-  -> value:Text_editing.Value.t
-  -> on_edit:Event.Handler.t
-  -> on_submit:Event.Handler.t
-  -> on_focus_changed:Event.Handler.t
-  -> ?on_limit_reached:Event.Handler.t
-  -> unit
-  -> t
-
-val button
-  :  ?key:Key.t
-  -> ?enabled:bool
-  -> on_press:Event.Handler.t
-  -> child:t
-  -> unit
-  -> t
-
 val pressable
   :  ?key:Key.t
   -> ?overlay_color:Style.Color.t
@@ -465,7 +408,6 @@ module Private : sig
     | K_flex_row
     | K_flex_column
     | K_stack
-    | K_button
     | K_padding
     | K_align
     | K_center
@@ -493,7 +435,6 @@ module Private : sig
     | K_semantics
     | K_theme
     | K_material_scaffold
-    | K_material_app_bar
     | K_material_elevated_button
     | K_material_text_button
     | K_material_icon_button
@@ -510,9 +451,8 @@ module Private : sig
     | K_material_filter_chip
     | K_material_choice_chip
     | K_material_input_chip
-    | K_material_alert_dialog
     | K_material_search_bar
-    | K_material_tooltip
+    | K_material_text_field
     | K_material_data_table
     | K_material_stepper
     | K_material_expansion_panel_list
@@ -520,14 +460,13 @@ module Private : sig
     | K_material_fullscreen_dialog
     | K_material_checkbox
     | K_material_switch
-    | K_material_list_tile
     | K_material_divider
     | K_material_card
     | K_material_circular_progress_indicator
     | K_material_linear_progress_indicator
+    | K_material_expressive
     | K_cupertino_button
     | K_cupertino_switch
-    | K_text_input
     | K_overlay
     | K_navigator
     | K_page
@@ -584,9 +523,38 @@ module Private : sig
 
   type material_navigation_destination =
     { label : string
-    ; enabled : bool
     ; has_selected_icon : bool
+    ; badge_count : int option
+    ; badge_dot : bool
+    ; semantic_label : string option
     }
+
+  type material_navigation_bar_layout =
+    | Auto
+    | Compact
+    | Wide
+
+  type material_navigation_bar_visibility =
+    | Always
+    | Selected
+    | Never
+
+  type material_navigation_bar_alignment =
+    | Start
+    | Center
+    | End
+
+  type material_navigation_bar_size =
+    | Small_bar
+    | Medium_bar
+
+  type material_navigation_bar_shape =
+    | Round_bar
+    | Square_bar
+
+  type material_navigation_bar_density =
+    | Regular_bar
+    | Compact_bar
 
   type material_radio_option =
     { option_id : int64
@@ -596,10 +564,7 @@ module Private : sig
 
   type material_segment =
     { segment_id : int64
-    ; enabled : bool
-    ; tooltip : string option
     ; has_icon : bool
-    ; has_label : bool
     }
 
   type material_chip_variant =
@@ -616,10 +581,6 @@ module Private : sig
     | Elevated_card
     | Filled_card
     | Outlined_card
-
-  type material_tooltip_trigger_mode =
-    | Tooltip_long_press
-    | Tooltip_tap
 
   type material_data_table_column =
     { column_id : int64
@@ -671,6 +632,30 @@ module Private : sig
     ; enabled : bool
     }
 
+  type material_expressive_item =
+    { item_id : int64
+    ; kind : int
+    ; label : string
+    ; enabled : bool
+    ; selected : bool
+    ; child_count : int
+    }
+
+  type material_expressive_text_input =
+    { session_id : Bonsai_flutter_spec.Id.Text_input.session_id
+    ; document_revision : Bonsai_flutter_spec.Id.Text_input.document_revision
+    ; value : Text_editing.Value.t
+    ; enabled : bool
+    ; read_only : bool
+    ; obscure_text : bool
+    ; keyboard_type : Text_editing.keyboard_type
+    ; input_action : Text_editing.input_action
+    ; accepted_local_revision : Bonsai_flutter_spec.Id.Text_input.local_revision
+    ; update_mode : Text_editing.update_mode
+    ; autofocus : bool
+    ; max_utf8_bytes : int option
+    }
+
   type 'k node =
     | Empty : [ `Empty ] node
     | Text :
@@ -701,7 +686,6 @@ module Private : sig
     | Flex_row : [ `Flex_row ] node
     | Flex_column : [ `Flex_column ] node
     | Stack : [ `Stack ] node
-    | Button : { enabled : bool } -> [ `Button ] node
     | Pressable :
         { overlay_color : Style.Color.t
         ; release_delay_ms : int
@@ -780,22 +764,17 @@ module Private : sig
         -> [ `Sliver_padding ] node
     | Sliver_app_bar :
         { pinned : bool
-        ; expanded_height : float option
-        ; collapsed_height : float option
         ; floating : bool
         ; snap : bool
-        ; stretch : bool
-        ; toolbar_height : float
         ; has_leading : bool
-        ; has_flexible_space : bool
-        ; has_bottom : bool
-        ; has_actions : bool
-        ; force_elevated : bool
-        ; automatically_imply_leading : bool
-        ; center_title : bool option
         ; background_color : int32 option
         ; foreground_color : int32 option
-        ; elevation : float option
+        ; action_count : int
+        ; center_title : bool
+        ; variant : int
+        ; shape : int
+        ; density : int
+        ; semantic_label : string option
         }
         -> [ `Sliver_app_bar ] node
     | Preferred_size : { height : float } -> [ `Preferred_size ] node
@@ -832,7 +811,6 @@ module Private : sig
         ; has_bottom_sheet : bool
         }
         -> [ `Material_scaffold ] node
-    | Material_app_bar : { center_title : bool } -> [ `Material_app_bar ] node
     | Material_elevated_button :
         { variant : material_button_variant
         ; enabled : bool
@@ -848,7 +826,6 @@ module Private : sig
     | Material_icon_button :
         { variant : material_button_variant
         ; enabled : bool
-        ; autofocus : bool
         }
         -> [ `Material_icon_button ] node
     | Material_filled_button :
@@ -873,12 +850,20 @@ module Private : sig
         { variant : material_floating_action_button_variant
         ; enabled : bool
         ; autofocus : bool
-        ; has_icon : bool
         }
         -> [ `Material_floating_action_button ] node
     | Material_navigation_bar :
         { selected_index : int
         ; destinations : material_navigation_destination list
+        ; layout : material_navigation_bar_layout
+        ; alignment : material_navigation_bar_alignment
+        ; label_behavior : material_navigation_bar_visibility
+        ; icon_behavior : material_navigation_bar_visibility
+        ; size : material_navigation_bar_size
+        ; shape : material_navigation_bar_shape
+        ; density : material_navigation_bar_density
+        ; safe_area : bool
+        ; semantic_label : string option
         }
         -> [ `Material_navigation_bar ] node
     | Material_radio_group :
@@ -889,12 +874,7 @@ module Private : sig
     | Material_segmented_button :
         { selected_ids : int64 list
         ; enabled : bool
-        ; direction : Layout.Axis.t
         ; multi_selection_enabled : bool
-        ; empty_selection_allowed : bool
-        ; expanded_insets : (float * float * float * float) option
-        ; show_selected_icon : bool
-        ; has_selected_icon : bool
         ; segments : material_segment list
         }
         -> [ `Material_segmented_button ] node
@@ -906,6 +886,7 @@ module Private : sig
         ; label : string option
         ; enabled : bool
         ; has_on_change : bool
+        ; kind : int
         }
         -> [ `Material_slider ] node
     | Material_range_slider :
@@ -918,6 +899,7 @@ module Private : sig
         ; label_end : string option
         ; enabled : bool
         ; has_on_change : bool
+        ; kind : int
         }
         -> [ `Material_range_slider ] node
     | Material_action_chip :
@@ -925,10 +907,7 @@ module Private : sig
         ; presentation : material_chip_presentation
         ; enabled : bool
         ; selected : bool
-        ; has_avatar : bool
-        ; has_delete_icon : bool
-        ; has_on_press : bool
-        ; has_on_selected : bool
+        ; has_leading : bool
         ; has_on_delete : bool
         }
         -> [ `Material_action_chip ] node
@@ -937,10 +916,7 @@ module Private : sig
         ; presentation : material_chip_presentation
         ; enabled : bool
         ; selected : bool
-        ; has_avatar : bool
-        ; has_delete_icon : bool
-        ; has_on_press : bool
-        ; has_on_selected : bool
+        ; has_leading : bool
         ; has_on_delete : bool
         }
         -> [ `Material_filter_chip ] node
@@ -949,10 +925,7 @@ module Private : sig
         ; presentation : material_chip_presentation
         ; enabled : bool
         ; selected : bool
-        ; has_avatar : bool
-        ; has_delete_icon : bool
-        ; has_on_press : bool
-        ; has_on_selected : bool
+        ; has_leading : bool
         ; has_on_delete : bool
         }
         -> [ `Material_choice_chip ] node
@@ -961,20 +934,10 @@ module Private : sig
         ; presentation : material_chip_presentation
         ; enabled : bool
         ; selected : bool
-        ; has_avatar : bool
-        ; has_delete_icon : bool
-        ; has_on_press : bool
-        ; has_on_selected : bool
+        ; has_leading : bool
         ; has_on_delete : bool
         }
         -> [ `Material_input_chip ] node
-    | Material_alert_dialog :
-        { has_icon : bool
-        ; has_title : bool
-        ; has_content : bool
-        ; action_count : int
-        }
-        -> [ `Material_alert_dialog ] node
     | Material_search_bar :
         { session_id : Bonsai_flutter_spec.Id.Text_input.session_id
         ; document_revision : Bonsai_flutter_spec.Id.Text_input.document_revision
@@ -993,20 +956,28 @@ module Private : sig
         ; has_on_tap : bool
         }
         -> [ `Material_search_bar ] node
-    | Material_tooltip :
-        { message : string
+    | Material_text_field :
+        { session_id : Bonsai_flutter_spec.Id.Text_input.session_id
+        ; document_revision : Bonsai_flutter_spec.Id.Text_input.document_revision
+        ; value : Text_editing.Value.t
         ; enabled : bool
-        ; exclude_from_semantics : bool
-        ; prefer_below : bool
-        ; trigger_mode : material_tooltip_trigger_mode
-        ; wait_duration_ms : int
-        ; show_duration_ms : int
-        ; exit_duration_ms : int
-        ; enable_tap_to_dismiss : bool
-        ; enable_feedback : bool
-        ; has_on_triggered : bool
+        ; read_only : bool
+        ; obscure_text : bool
+        ; keyboard_type : Text_editing.keyboard_type
+        ; input_action : Text_editing.input_action
+        ; accepted_local_revision : Bonsai_flutter_spec.Id.Text_input.local_revision
+        ; update_mode : Text_editing.update_mode
+        ; max_utf8_bytes : int option
+        ; variant : int
+        ; label : string option
+        ; supporting_text : string option
+        ; error_text : string option
+        ; has_leading : bool
+        ; has_trailing : bool
+        ; max_lines : int
+        ; autofocus : bool
         }
-        -> [ `Material_tooltip ] node
+        -> [ `Material_text_field ] node
     | Material_data_table :
         { columns : material_data_table_column list
         ; rows : material_data_table_row list
@@ -1047,14 +1018,6 @@ module Private : sig
         ; enabled : bool
         }
         -> [ `Material_switch ] node
-    | Material_list_tile :
-        { enabled : bool
-        ; selected : bool
-        ; has_subtitle : bool
-        ; has_leading : bool
-        ; has_trailing : bool
-        }
-        -> [ `Material_list_tile ] node
     | Material_divider :
         { orientation : Layout.Axis.t
         ; thickness : float
@@ -1069,32 +1032,34 @@ module Private : sig
         }
         -> [ `Material_card ] node
     | Material_circular_progress_indicator :
-        { value : float option }
+        { value : float option
+        ; wavy : bool
+        }
         -> [ `Material_circular_progress_indicator ] node
     | Material_linear_progress_indicator :
-        { value : float option }
+        { value : float option
+        ; wavy : bool
+        }
         -> [ `Material_linear_progress_indicator ] node
+    | Material_expressive :
+        { component : int
+        ; variant : int
+        ; flags : int64
+        ; primary_text : string option
+        ; secondary_text : string option
+        ; value : float option
+        ; end_value : float option
+        ; selected_ids : int64 list
+        ; items : material_expressive_item list
+        ; text_input : material_expressive_text_input option
+        }
+        -> [ `Material_expressive ] node
     | Cupertino_button : { enabled : bool } -> [ `Cupertino_button ] node
     | Cupertino_switch :
         { value : bool
         ; enabled : bool
         }
         -> [ `Cupertino_switch ] node
-    | Text_input :
-        { session_id : Bonsai_flutter_spec.Id.Text_input.session_id
-        ; document_revision : Bonsai_flutter_spec.Id.Text_input.document_revision
-        ; value : Text_editing.Value.t
-        ; enabled : bool
-        ; read_only : bool
-        ; obscure_text : bool
-        ; keyboard_type : Text_editing.keyboard_type
-        ; input_action : Text_editing.input_action
-        ; accepted_local_revision : Bonsai_flutter_spec.Id.Text_input.local_revision
-        ; update_mode : Text_editing.update_mode
-        ; autofocus : bool
-        ; max_utf8_bytes : int option
-        }
-        -> [ `Text_input ] node
     | Overlay :
         { alignment : Navigation.overlay_alignment
         ; dismissible : bool
@@ -1179,8 +1144,6 @@ module Private : sig
     -> unit
     -> t
 
-  val material_app_bar : ?key:Key.t -> ?center_title:bool -> title:t -> unit -> t
-
   val material_button
     :  ?key:Key.t
     -> ?enabled:bool
@@ -1197,7 +1160,7 @@ module Private : sig
     -> ?autofocus:bool
     -> variant:material_floating_action_button_variant
     -> on_press:Event.Handler.t
-    -> ?icon:t
+    -> icon:t
     -> label:t
     -> unit
     -> t
@@ -1206,6 +1169,15 @@ module Private : sig
     :  ?key:Key.t
     -> selected_index:int
     -> destinations:material_navigation_destination list
+    -> layout:material_navigation_bar_layout
+    -> alignment:material_navigation_bar_alignment
+    -> label_behavior:material_navigation_bar_visibility
+    -> icon_behavior:material_navigation_bar_visibility
+    -> size:material_navigation_bar_size
+    -> shape:material_navigation_bar_shape
+    -> density:material_navigation_bar_density
+    -> safe_area:bool
+    -> semantic_label:string option
     -> children:t list
     -> on_select:Event.Handler.t
     -> unit
@@ -1224,12 +1196,7 @@ module Private : sig
     :  ?key:Key.t
     -> selected_ids:int64 list
     -> enabled:bool
-    -> direction:Layout.Axis.t
     -> multi_selection_enabled:bool
-    -> empty_selection_allowed:bool
-    -> expanded_insets:(float * float * float * float) option
-    -> show_selected_icon:bool
-    -> has_selected_icon:bool
     -> segments:material_segment list
     -> children:t list
     -> on_selection_changed:Event.Handler.t
@@ -1244,6 +1211,7 @@ module Private : sig
     -> divisions:int option
     -> label:string option
     -> enabled:bool
+    -> kind:int
     -> on_change:Event.Handler.t option
     -> on_change_end:Event.Handler.t
     -> unit
@@ -1259,6 +1227,7 @@ module Private : sig
     -> label_start:string option
     -> label_end:string option
     -> enabled:bool
+    -> kind:int
     -> on_change:Event.Handler.t option
     -> on_change_end:Event.Handler.t
     -> unit
@@ -1271,20 +1240,9 @@ module Private : sig
     -> enabled:bool
     -> selected:bool
     -> ?avatar:t
-    -> ?delete_icon:t
-    -> ?on_press:Event.Handler.t
-    -> ?on_selected:Event.Handler.t
+    -> on_press:Event.Handler.t
     -> ?on_delete:Event.Handler.t
     -> label:t
-    -> unit
-    -> t
-
-  val material_alert_dialog
-    :  ?key:Key.t
-    -> ?icon:t
-    -> ?title:t
-    -> ?content:t
-    -> actions:t list
     -> unit
     -> t
 
@@ -1312,21 +1270,51 @@ module Private : sig
     -> unit
     -> t
 
-  val material_tooltip
+  val material_text_field
     :  ?key:Key.t
-    -> message:string
+    -> session_id:Bonsai_flutter_spec.Id.Text_input.session_id
+    -> document_revision:Bonsai_flutter_spec.Id.Text_input.document_revision
+    -> accepted_local_revision:Bonsai_flutter_spec.Id.Text_input.local_revision
+    -> update_mode:Text_editing.update_mode
+    -> value:Text_editing.Value.t
     -> enabled:bool
-    -> exclude_from_semantics:bool
-    -> prefer_below:bool
-    -> trigger_mode:material_tooltip_trigger_mode
-    -> wait_duration_ms:int
-    -> show_duration_ms:int
-    -> exit_duration_ms:int
-    -> enable_tap_to_dismiss:bool
-    -> enable_feedback:bool
-    -> on_triggered:Event.Handler.t option
+    -> read_only:bool
+    -> obscure_text:bool
+    -> keyboard_type:Text_editing.keyboard_type
+    -> input_action:Text_editing.input_action
+    -> max_utf8_bytes:int option
+    -> variant:int
+    -> label:string option
+    -> supporting_text:string option
+    -> error_text:string option
+    -> leading:t option
+    -> trailing:t option
+    -> max_lines:int
+    -> autofocus:bool
+    -> on_edit:Event.Handler.t
+    -> on_submit:Event.Handler.t
+    -> on_focus_changed:Event.Handler.t
+    -> on_limit_reached:Event.Handler.t option
+    -> unit
     -> t
-    -> t
+
+  val material_sliver_app_bar
+    :  ?key:Key.t
+    -> pinned:bool
+    -> floating:bool
+    -> snap:bool
+    -> center_title:bool
+    -> ?background_color:int32
+    -> ?foreground_color:int32
+    -> ?leading:t
+    -> actions:t list
+    -> variant:int
+    -> shape:int
+    -> density:int
+    -> ?semantic_label:string
+    -> title:t
+    -> unit
+    -> Sliver.t
 
   val material_data_table
     :  ?key:Key.t
@@ -1384,18 +1372,6 @@ module Private : sig
     -> unit
     -> t
 
-  val material_list_tile
-    :  ?key:Key.t
-    -> ?enabled:bool
-    -> ?selected:bool
-    -> ?subtitle:t
-    -> ?leading:t
-    -> ?trailing:t
-    -> on_press:Event.Handler.t
-    -> title:t
-    -> unit
-    -> t
-
   val material_divider
     :  ?key:Key.t
     -> ?orientation:Layout.Axis.t
@@ -1413,8 +1389,39 @@ module Private : sig
     -> t
     -> t
 
-  val material_circular_progress : ?key:Key.t -> ?value:float -> unit -> t
-  val material_linear_progress : ?key:Key.t -> ?value:float -> unit -> t
+  val material_circular_progress : ?key:Key.t -> ?value:float -> wavy:bool -> unit -> t
+  val material_linear_progress : ?key:Key.t -> ?value:float -> wavy:bool -> unit -> t
+
+  val material_expressive
+    :  ?key:Key.t
+    -> component:int
+    -> ?variant:int
+    -> ?flags:int64
+    -> ?primary_text:string
+    -> ?secondary_text:string
+    -> ?value:float
+    -> ?end_value:float
+    -> ?selected_ids:int64 list
+    -> ?items:material_expressive_item list
+    -> ?text_input:material_expressive_text_input
+    -> ?on_press:Event.Handler.t
+    -> ?on_select:Event.Handler.t
+    -> ?on_selection_changed:Event.Handler.t
+    -> ?on_active_changed:Event.Handler.t
+    -> ?on_value_changed:Event.Handler.t
+    -> ?on_change_end:Event.Handler.t
+    -> ?on_text_changed:Event.Handler.t
+    -> ?on_text_edit:Event.Handler.t
+    -> ?on_text_submit:Event.Handler.t
+    -> ?on_focus_changed:Event.Handler.t
+    -> ?on_limit_reached:Event.Handler.t
+    -> ?on_civil_date_changed:Event.Handler.t
+    -> ?on_civil_time_changed:Event.Handler.t
+    -> ?on_search_opened:Event.Handler.t
+    -> ?on_search_closed:Event.Handler.t
+    -> children:t list
+    -> unit
+    -> t
 
   val cupertino_button
     :  ?key:Key.t

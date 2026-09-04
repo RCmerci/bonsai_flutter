@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 import 'dart:ui' show lerpDouble;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../protocol/frame.dart';
 import 'native_widget_registry.dart';
@@ -212,11 +212,13 @@ final class MorphingSurfaceHost extends StatelessWidget {
   }
 
   Widget _buildChangingContent(double effectiveProgress) {
-    if (effectiveProgress <= 0 && !expanded) {
-      return compactContent;
+    final hasExplicitContentExtent =
+        compactContentExtent != null || expandedContentExtent != null;
+    if (!hasExplicitContentExtent && effectiveProgress <= 0 && !expanded) {
+      return _clipFixedContent(compactContent);
     }
-    if (effectiveProgress >= 1 && expanded) {
-      return expandedContent;
+    if (!hasExplicitContentExtent && effectiveProgress >= 1 && expanded) {
+      return _clipFixedContent(expandedContent);
     }
 
     final compactOpacity = (1 - effectiveProgress / 0.35).clamp(0.0, 1.0);
@@ -245,6 +247,13 @@ final class MorphingSurfaceHost extends StatelessWidget {
             ],
     );
   }
+
+  Widget _clipFixedContent(Widget child) => OverflowBox(
+    alignment: Alignment.topCenter,
+    minHeight: 0,
+    maxHeight: double.infinity,
+    child: child,
+  );
 
   Widget _position(Widget child, double? extent) => extent == null
       ? Positioned.fill(child: child)

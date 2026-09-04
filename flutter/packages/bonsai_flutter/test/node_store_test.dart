@@ -592,7 +592,7 @@ void main() {
             CreateNode(
               nodeId: 1,
               kind: NodeKind.materialLinearProgressIndicator,
-              props: MaterialLinearProgressProps(value: 0.5),
+              props: MaterialLinearProgressProps(value: 0.5, wavy: false),
               eventBindings: [],
             ),
             SetRoot(1),
@@ -623,7 +623,7 @@ void main() {
             CreateNode(
               nodeId: 1,
               kind: NodeKind.materialLinearProgressIndicator,
-              props: MaterialCircularProgressProps(value: 0.5),
+              props: MaterialCircularProgressProps(value: 0.5, wavy: false),
               eventBindings: [],
             ),
             SetRoot(1),

@@ -4,6 +4,191 @@ let handler = Ui.Event.Handler.create (fun _ -> ())
 let text value = Ui.Widget.text value
 let expect condition message = if not condition then failwith message
 
+let text_value text =
+  let offset = Ui.Text_editing.Utf16.length text in
+  let selection =
+    Ui.Text_editing.Range.create ~text ~start_utf16:offset ~end_utf16:offset
+  in
+  Ui.Text_editing.Value.create ~text ~selection ()
+;;
+
+let material_text_field ?(read_only = false) ?(autofocus = false) () =
+  Ui.Material.text_field
+    ~read_only
+    ~autofocus
+    ~session_id:(Bonsai_flutter_spec.Id.Text_input.Session_id.of_int64 9L)
+    ~document_revision:(Bonsai_flutter_spec.Id.Text_input.Document_revision.of_int64 3L)
+    ~accepted_local_revision:
+      (Bonsai_flutter_spec.Id.Text_input.Local_revision.of_int64 2L)
+    ~update_mode:Ui.Text_editing.Ack
+    ~value:(text_value "draft")
+    ~on_edit:handler
+    ~on_submit:handler
+    ~on_focus_changed:handler
+    ()
+;;
+
+let expressive_widgets =
+  let menu_entries =
+    [ Ui.Material.Menu.entry ~id:1L ~label:"Open" ()
+    ; Ui.Material.Menu.divider
+    ; Ui.Material.Menu.toggleable ~id:2L ~label:"Pinned" ~checked:true ()
+    ]
+  in
+  [ Ui.Material.Fab_menu.create
+      ~expand_icon:(text "Add")
+      ~collapse_icon:(text "Close")
+      ~on_select:handler
+      [ Ui.Material.Fab_menu.item ~id:1L ~icon:(text "Edit") ~label:"Edit" () ]
+      ()
+  ; Ui.Material.Button_group.create
+      ~selection:(Ui.Material.Button_group.Single (Some 1L))
+      ~on_selection_changed:handler
+      [ Ui.Material.Button_group.action ~id:1L ~label:"One" ()
+      ; Ui.Material.Button_group.action ~id:2L ~label:"Two" ()
+      ]
+      ()
+  ; Ui.Material.Toggle_button.create
+      ~checked:true
+      ~on_changed:handler
+      ~icon:(text "Favorite")
+      ~checked_icon:(text "Favorited")
+      ~label:(text "Favorite")
+      ()
+  ; Ui.Material.Split_button.create
+      ~label:"Save"
+      ~on_press:handler
+      ~on_select:handler
+      ~menu:menu_entries
+      ()
+  ; Ui.Material.Dropdown_menu.create
+      ~selection:(Ui.Material.Dropdown_menu.Single (Some 1L))
+      ~on_selection_changed:handler
+      (Ui.Material.Dropdown_menu.Items
+         [ Ui.Material.Dropdown_menu.item ~id:1L ~label:"One" () ])
+      ()
+  ; Ui.Material.Date_picker.calendar
+      ~selected:(Ui.Material.Date.create ~year:2026 ~month:9 ~day:3)
+      ~first:(Ui.Material.Date.create ~year:2020 ~month:1 ~day:1)
+      ~last:(Ui.Material.Date.create ~year:2030 ~month:12 ~day:31)
+      ~on_select:handler
+      ()
+  ; Ui.Material.Time_picker.dial
+      ~value:(Ui.Material.Time.create ~hour:9 ~minute:30)
+      ~on_changed:handler
+      ()
+  ; Ui.Material.Carousel.create
+      ~on_select:handler
+      ~on_layout_changed:handler
+      [ Ui.Material.Carousel.item ~id:1L (text "Card one")
+      ; Ui.Material.Carousel.item ~id:2L (text "Card two")
+      ]
+      ()
+  ; Ui.Material.Card_list.finite
+      ~on_select:handler
+      [ Ui.Material.Card_list.item ~id:1L (text "List one")
+      ; Ui.Material.Card_list.item ~id:2L (text "List two")
+      ]
+      ()
+  ; Ui.Material.Selection.create
+      ~item_ids:[ 1L ]
+      ~selected_ids:[ 1L ]
+      ~on_selection_changed:handler
+      (text "Selectable content")
+  ; Ui.Material.Dismissible_list.column
+      ~request_token:1L
+      ~request_state:Ui.Material.Dismissible_list.Ready
+      ~on_dismiss_request:handler
+      [ Ui.Material.Dismissible_list.item ~id:1L (text "Dismiss one") ]
+      ()
+  ; Ui.Material.Dismissible_list.horizontal
+      ~request_token:2L
+      ~request_state:Ui.Material.Dismissible_list.Pending
+      ~on_dismiss_request:handler
+      [ Ui.Material.Dismissible_list.item ~id:1L (text "Dismiss two") ]
+      ()
+  ; Ui.Material.Expandable_list.finite
+      ~expanded_ids:[ 1L ]
+      ~on_expansion_changed:handler
+      [ Ui.Material.Expandable_list.item
+          ~id:1L
+          ~header:"Details"
+          ~body:(text "Expanded body")
+          ()
+      ]
+      ()
+  ; Ui.Material.Bottom_sheet.surface (text "Bottom sheet")
+  ; Ui.Material.Side_sheet.surface ~title:(text "Side sheet") ~body:(text "Body") ()
+  ; Ui.Material.App_bar.bottom ~actions:[ text "Action" ] ()
+  ; Ui.Material.Tabs.create
+      ~selected_id:1L
+      ~on_select:handler
+      [ Ui.Material.Tabs.tab ~id:1L ~label:"Overview" ()
+      ; Ui.Material.Tabs.tab ~id:2L ~label:"Activity" ()
+      ]
+      ()
+  ; Ui.Material.Navigation_rail.create
+      ~expanded:false
+      ~selected_id:1L
+      ~on_select:handler
+      ~on_expanded_changed:handler
+      [ Ui.Material.Navigation_rail.section
+          [ Ui.Material.Navigation_rail.destination
+              ~id:1L
+              ~icon:(text "Home")
+              ~label:"Home"
+              ()
+          ]
+      ]
+      ()
+  ; Ui.Material.Navigation_drawer.create
+      ~headline:"Mail"
+      ~selected_id:1L
+      ~on_select:handler
+      [ Ui.Material.Navigation_drawer.destination
+          ~id:1L
+          ~icon:(text "Inbox")
+          ~label:"Inbox"
+          ()
+      ]
+      ()
+  ; Ui.Material.Toolbar.create
+      ~expanded:true
+      ~active_action_id:(Some 1L)
+      ~on_action:handler
+      ~on_expanded_changed:handler
+      ~on_active_action_changed:handler
+      [ Ui.Material.Toolbar.action ~id:1L ~icon:Ui.Material.Toolbar.Edit ~label:"Edit" ()
+      ]
+      ()
+  ; Ui.Material.Menu.create
+      ~on_select:handler
+      ~entries:menu_entries
+      ~anchor:(text "Menu")
+      ()
+  ; Ui.Material.badge ~count:3 (text "Notifications")
+  ; Ui.Material.loading_indicator ()
+  ; Ui.Material.Refresh_indicator.create
+      ~request_token:3L
+      ~request_state:Ui.Material.Refresh_indicator.Ready
+      ~on_refresh_request:handler
+      (text "Refresh body")
+  ; Ui.Material.Search_anchor.create
+      ~session_id:(Bonsai_flutter_spec.Id.Text_input.Session_id.of_int64 1L)
+      ~document_revision:(Bonsai_flutter_spec.Id.Text_input.Document_revision.of_int64 1L)
+      ~accepted_local_revision:
+        (Bonsai_flutter_spec.Id.Text_input.Local_revision.of_int64 0L)
+      ~update_mode:Ui.Text_editing.Force_replace
+      ~value:(text_value "bon")
+      ~on_edit:handler
+      ~on_submit:handler
+      ~on_focus_changed:handler
+      ~on_select:handler
+      [ Ui.Material.Search_anchor.suggestion ~id:1L ~label:"Bonsai" () ]
+      ()
+  ]
+;;
+
 let expect_invalid_arg label f =
   match f () with
   | exception Invalid_argument _ -> ()
@@ -14,10 +199,11 @@ let destinations =
   [ Ui.Material.Navigation_destination.create
       ~icon:(text "Home icon")
       ~selected_icon:(text "Selected home icon")
+      ~badge_count:3
+      ~semantic_label:"Home destination"
       ~label:"Home"
       ()
   ; Ui.Material.Navigation_destination.create
-      ~enabled:false
       ~icon:(text "Settings icon")
       ~label:"Settings"
       ()
@@ -34,10 +220,9 @@ let segmented_segments =
   [ Ui.Material.Segmented_button.segment
       ~id:(-10L)
       ~icon:(text "List icon")
-      ~label:(text "List")
-      ~tooltip:"List view"
+      ~label:"List"
       ()
-  ; Ui.Material.Segmented_button.segment ~id:20L ~enabled:false ~label:(text "Grid") ()
+  ; Ui.Material.Segmented_button.segment ~id:20L ~label:"Grid" ()
   ]
 ;;
 
@@ -96,7 +281,7 @@ let panels =
 
 let widgets =
   [ Ui.Material.scaffold
-      ~app_bar:(Ui.Material.app_bar ~title:(text "Title") ())
+      ~app_bar:(Ui.Material.App_bar.top ~title:(text "Title") ())
       ~floating_action_button:
         (Ui.Material.Floating_action_button.icon
            ~size:Ui.Material.Floating_action_button.Large
@@ -124,12 +309,12 @@ let widgets =
   ; Ui.Material.Floating_action_button.extended
       ~on_press:handler
       ~icon:(text "Extended icon")
-      ~label:(text "Extended")
+      ~label:"Extended"
       ()
   ; Ui.Material.navigation_bar ~selected_index:0 ~on_select:handler destinations ()
   ; Ui.Material.Dialog.alert
       ~icon:(text "Warning")
-      ~title:(text "Delete item?")
+      ~title:"Delete item?"
       ~content:(text "This cannot be undone")
       ~actions:[ text "Cancel"; text "Delete" ]
       ()
@@ -148,11 +333,11 @@ let widgets =
       ~hint_text:"Search items"
       ~on_tap:handler
       ()
-  ; Ui.Material.tooltip
+  ; material_text_field ~read_only:true ~autofocus:true ()
+  ; Ui.Material.Tooltip.rich
+      ~title:"Details"
       ~message:"More information"
-      ~placement:Ui.Material.Tooltip.Above
-      ~trigger_mode:Ui.Material.Tooltip.Tap
-      ~on_triggered:handler
+      ~actions:[ text "Dismiss" ]
       (text "Info")
   ; Ui.Material.Data_table.create
       ~sort_column_id:10L
@@ -190,11 +375,7 @@ let widgets =
       radio_options
       ()
   ; Ui.Material.Segmented_button.create
-      ~direction:Ui.Layout.Axis.Vertical
       ~multi_selection_enabled:true
-      ~empty_selection_allowed:true
-      ~expanded_insets:(Ui.Layout.Edge_insets.symmetric ~horizontal:8. ())
-      ~selected_icon:(text "Selected")
       ~selected_ids:[ 20L; -10L ]
       ~on_selection_changed:handler
       segmented_segments
@@ -216,36 +397,36 @@ let widgets =
       ~on_change:handler
       ~on_change_end:handler
       ()
-  ; Ui.Material.action_chip
-      ~presentation:Ui.Material.Elevated
+  ; Ui.Material.Chip.assist
+      ~presentation:Ui.Material.Chip.Elevated
       ~on_press:handler
-      ~label:(text "Action")
+      ~label:"Assist"
       ()
-  ; Ui.Material.filter_chip
-      ~presentation:Ui.Material.Elevated
+  ; Ui.Material.Chip.filter
+      ~presentation:Ui.Material.Chip.Elevated
       ~selected:true
-      ~on_selected:handler
-      ~label:(text "Filter")
+      ~on_press:handler
+      ~label:"Filter"
       ()
-  ; Ui.Material.choice_chip
-      ~presentation:Ui.Material.Elevated
+  ; Ui.Material.Chip.suggestion
+      ~presentation:Ui.Material.Chip.Elevated
       ~selected:false
-      ~on_selected:handler
-      ~label:(text "Choice")
+      ~on_press:handler
+      ~label:"Suggestion"
       ()
-  ; Ui.Material.input_chip
+  ; Ui.Material.Chip.input
       ~selected:true
       ~on_press:handler
-      ~on_selected:handler
       ~on_delete:handler
-      ~label:(text "Input")
+      ~label:"Input"
       ()
   ; Ui.Material.switch ~value:true ~on_changed:handler ()
   ; Ui.Material.list_tile
       ~selected:true
       ~on_press:handler
-      ~title:(text "Item")
-      ~subtitle:(text "Subtitle")
+      ~headline:"Item"
+      ~supporting_text:"Subtitle"
+      ~overline:"Category"
       ()
   ; Ui.Material.divider
       ~orientation:Ui.Material.Vertical
@@ -275,9 +456,10 @@ let expected =
   ; "Material_floating_action_button"
   ; "Material_floating_action_button"
   ; "Material_navigation_bar"
-  ; "Material_alert_dialog"
+  ; "Material_expressive"
   ; "Material_search_bar"
-  ; "Material_tooltip"
+  ; "Material_text_field"
+  ; "Material_expressive"
   ; "Material_data_table"
   ; "Material_stepper"
   ; "Material_expansion_panel_list"
@@ -292,7 +474,7 @@ let expected =
   ; "Material_choice_chip"
   ; "Material_input_chip"
   ; "Material_switch"
-  ; "Material_list_tile"
+  ; "Material_expressive"
   ; "Material_divider"
   ; "Material_card"
   ; "Material_circular_progress_indicator"
@@ -305,12 +487,38 @@ let expected =
 
 let test_constructor_kinds () =
   let actual = List.map Ui.Widget.For_testing.kind_name widgets in
-  expect (actual = expected) "Material constructors produced incorrect logical kinds"
+  if List.length actual <> List.length expected
+  then failwith "Material constructor-kind list lengths differ";
+  List.iteri
+    (fun index actual ->
+       let expected = List.nth expected index in
+       if not (String.equal actual expected)
+       then
+         failwith
+           (Printf.sprintf
+              "Material constructor kind %d is %s, expected %s"
+              index
+              actual
+              expected))
+    actual
 ;;
 
 let test_navigation_validation () =
   expect_invalid_arg "empty destination label" (fun () ->
     Ui.Material.Navigation_destination.create ~icon:(text "icon") ~label:"  " ());
+  expect_invalid_arg "negative navigation badge" (fun () ->
+    Ui.Material.Navigation_destination.create
+      ~icon:(text "icon")
+      ~label:"Home"
+      ~badge_count:(-1)
+      ());
+  expect_invalid_arg "ambiguous navigation badge" (fun () ->
+    Ui.Material.Navigation_destination.create
+      ~icon:(text "icon")
+      ~label:"Home"
+      ~badge_count:1
+      ~badge_dot:true
+      ());
   expect_invalid_arg "one navigation destination" (fun () ->
     Ui.Material.navigation_bar
       ~selected_index:0
@@ -342,16 +550,10 @@ let segmented
       ?(segments = segmented_segments)
       ?(selected_ids = [ -10L ])
       ?(multi_selection_enabled = false)
-      ?(empty_selection_allowed = false)
-      ?(show_selected_icon = true)
-      ?selected_icon
       ()
   =
   Ui.Material.Segmented_button.create
     ~multi_selection_enabled
-    ~empty_selection_allowed
-    ~show_selected_icon
-    ?selected_icon
     ~selected_ids
     ~on_selection_changed:handler
     segments
@@ -360,13 +562,13 @@ let segmented
 
 let test_segmented_button_validation () =
   expect_invalid_arg "empty segmented button" (fun () -> segmented ~segments:[] ());
-  expect_invalid_arg "segment without icon or label" (fun () ->
-    segmented ~segments:[ Ui.Material.Segmented_button.segment ~id:1L () ] ());
+  expect_invalid_arg "segment without label" (fun () ->
+    segmented ~segments:[ Ui.Material.Segmented_button.segment ~id:1L ~label:"" () ] ());
   expect_invalid_arg "duplicate segment IDs" (fun () ->
     segmented
       ~segments:
-        [ Ui.Material.Segmented_button.segment ~id:1L ~label:(text "A") ()
-        ; Ui.Material.Segmented_button.segment ~id:1L ~label:(text "B") ()
+        [ Ui.Material.Segmented_button.segment ~id:1L ~label:"A" ()
+        ; Ui.Material.Segmented_button.segment ~id:1L ~label:"B" ()
         ]
       ~selected_ids:[ 1L ]
       ());
@@ -376,16 +578,7 @@ let test_segmented_button_validation () =
   expect_invalid_arg "multiple selections in single mode" (fun () ->
     segmented ~selected_ids:[ -10L; 20L ] ());
   expect_invalid_arg "empty selection when forbidden" (fun () ->
-    segmented ~selected_ids:[] ());
-  expect_invalid_arg "selected icon while hidden" (fun () ->
-    segmented ~show_selected_icon:false ~selected_icon:(text "Selected") ());
-  ignore
-    (segmented
-       ~multi_selection_enabled:true
-       ~empty_selection_allowed:true
-       ~selected_ids:[]
-       ());
-  ignore (segmented ~show_selected_icon:false ())
+    segmented ~selected_ids:[] ())
 ;;
 
 let test_segmented_button_canonical_identity () =
@@ -423,11 +616,25 @@ let test_fingerprints_include_controlled_values () =
     "slider controlled value was omitted from logical equality"
 ;;
 
+let test_text_field_identity_includes_read_only_and_autofocus () =
+  let default = material_text_field () in
+  expect
+    (not
+       (Ui.Widget.Private.node_equal_widgets
+          default
+          (material_text_field ~read_only:true ())))
+    "text field read_only was omitted from logical equality";
+  expect
+    (not
+       (Ui.Widget.Private.node_equal_widgets
+          default
+          (material_text_field ~autofocus:true ())))
+    "text field autofocus was omitted from logical equality"
+;;
+
 let test_additional_component_validation () =
   expect_invalid_arg "empty tooltip message" (fun () ->
-    Ui.Material.tooltip ~message:"  " (text "child"));
-  expect_invalid_arg "negative tooltip duration" (fun () ->
-    Ui.Material.tooltip ~message:"tip" ~wait_duration_ms:(-1) (text "child"));
+    Ui.Material.Tooltip.plain ~message:"  " (text "child"));
   expect_invalid_arg "empty table columns" (fun () ->
     Ui.Material.Data_table.create ~columns:[] ~rows:[] ());
   expect_invalid_arg "duplicate table column IDs" (fun () ->
@@ -544,6 +751,15 @@ let test_linear_progress_identity_includes_kind_and_value () =
     "linear and circular progress shared a fingerprint"
 ;;
 
+let test_expressive_catalog_kinds () =
+  List.iter
+    (fun widget ->
+       expect
+         (String.equal (Ui.Widget.For_testing.kind_name widget) "Material_expressive")
+         "expressive catalog entry did not create the typed expressive node")
+    expressive_widgets
+;;
+
 let () =
   test_constructor_kinds ();
   test_navigation_validation ();
@@ -552,8 +768,10 @@ let () =
   test_segmented_button_canonical_identity ();
   test_slider_validation ();
   test_fingerprints_include_controlled_values ();
+  test_text_field_identity_includes_read_only_and_autofocus ();
   test_additional_component_validation ();
   test_additional_component_identity ();
   test_linear_progress_validation ();
-  test_linear_progress_identity_includes_kind_and_value ()
+  test_linear_progress_identity_includes_kind_and_value ();
+  test_expressive_catalog_kinds ()
 ;;

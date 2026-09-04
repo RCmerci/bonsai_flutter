@@ -1,7 +1,11 @@
+import 'dart:async';
 import 'dart:collection';
 import 'dart:ui' show PointerDeviceKind;
 import 'package:flutter/cupertino.dart' as cupertino;
-import 'package:flutter/material.dart';
+import 'package:material_3_expressive/material_3_expressive.dart';
+import 'package:material_3_expressive/components/lists/components/m3e_card_list_item.dart'
+    show M3ECardListItem;
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/semantics.dart';
@@ -68,7 +72,6 @@ final class WidgetRegistry {
       NodeKind.row: _buildRow,
       NodeKind.column: _buildColumn,
       NodeKind.stack: _buildStack,
-      NodeKind.button: _buildButton,
       NodeKind.pressable: _buildPressable,
       NodeKind.padding: _buildPadding,
       NodeKind.align: _buildAlign,
@@ -96,7 +99,6 @@ final class WidgetRegistry {
       NodeKind.semantics: _buildSemantics,
       NodeKind.theme: _buildTheme,
       NodeKind.materialScaffold: _buildMaterialScaffold,
-      NodeKind.materialAppBar: _buildMaterialAppBar,
       NodeKind.materialElevatedButton: _buildMaterialButton,
       NodeKind.materialTextButton: _buildMaterialButton,
       NodeKind.materialIconButton: _buildMaterialButton,
@@ -113,9 +115,8 @@ final class WidgetRegistry {
       NodeKind.materialFilterChip: _buildMaterialChip,
       NodeKind.materialChoiceChip: _buildMaterialChip,
       NodeKind.materialInputChip: _buildMaterialChip,
-      NodeKind.materialAlertDialog: _buildMaterialAlertDialog,
       NodeKind.materialSearchBar: _buildMaterialSearchBar,
-      NodeKind.materialTooltip: _buildMaterialTooltip,
+      NodeKind.materialTextField: _buildMaterialTextField,
       NodeKind.materialDataTable: _buildMaterialDataTable,
       NodeKind.materialStepper: _buildMaterialStepper,
       NodeKind.materialExpansionPanelList: _buildMaterialExpansionPanelList,
@@ -123,15 +124,14 @@ final class WidgetRegistry {
       NodeKind.materialFullscreenDialog: _buildMaterialFullscreenDialog,
       NodeKind.materialCheckbox: _buildMaterialCheckbox,
       NodeKind.materialSwitch: _buildMaterialSwitch,
-      NodeKind.materialListTile: _buildMaterialListTile,
       NodeKind.materialDivider: _buildMaterialDivider,
       NodeKind.materialCard: _buildMaterialCard,
       NodeKind.materialCircularProgressIndicator:
           _buildMaterialCircularProgress,
       NodeKind.materialLinearProgressIndicator: _buildMaterialLinearProgress,
+      NodeKind.materialExpressive: _buildMaterialExpressive,
       NodeKind.cupertinoButton: _buildCupertinoButton,
       NodeKind.cupertinoSwitch: _buildCupertinoSwitch,
-      NodeKind.textInput: _buildTextInput,
       NodeKind.overlay: _buildOverlay,
       NodeKind.navigator: _buildNavigator,
       NodeKind.page: _buildPage,
@@ -346,30 +346,6 @@ Widget _buildStack(
 ) {
   _expectProps<EmptyProps>(node);
   return Stack(children: children);
-}
-
-Widget _buildButton(
-  BuildContext context,
-  UiNode node,
-  List<Widget> children,
-  RendererEventCallback? onEvent,
-) {
-  _expectChildCount(node, children, 1);
-  final props = _expectProps<ButtonProps>(node);
-  final binding = _binding(node, EventTagId.press);
-  return ElevatedButton(
-    onPressed: !props.enabled || binding == null || onEvent == null
-        ? null
-        : () => onEvent(
-            RendererEvent(
-              nodeId: node.id,
-              eventTag: binding.eventTag,
-              handlerId: binding.handlerId,
-              payload: const UnitEventPayload(),
-            ),
-          ),
-    child: children.single,
-  );
 }
 
 Widget _buildPadding(
@@ -665,7 +641,24 @@ Widget _buildSliverBox(
 ) {
   _expectChildCount(node, children, 1);
   _expectProps<EmptyProps>(node);
-  return SliverToBoxAdapter(child: children.single);
+  final child = children.single;
+  if (child is _ExpressiveSliverPayload) {
+    return child.sliverBuilder();
+  }
+  return SliverToBoxAdapter(child: child);
+}
+
+final class _ExpressiveSliverPayload extends StatelessWidget {
+  const _ExpressiveSliverPayload({required this.sliverBuilder});
+
+  final Widget Function() sliverBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    throw const RendererBuildException(
+      'An expressive sliver payload must be wrapped by Sliver.box',
+    );
+  }
 }
 
 Widget _buildSliverList(
@@ -773,41 +766,19 @@ Widget _buildSliverAppBar(
 ) {
   final props = _expectProps<SliverAppBarProps>(node);
   _validateSliverAppBarProps(node, props);
-  final slotCount =
-      1 +
-      (props.hasLeading ? 1 : 0) +
-      (props.hasFlexibleSpace ? 1 : 0) +
-      (props.hasBottom ? 1 : 0);
-  if (props.hasActions) {
-    if (children.length <= slotCount) {
-      throw RendererBuildException(
-        'Node ${node.id} of kind ${node.kind} requires at least one action',
-      );
-    }
-  } else {
-    _expectChildCount(node, children, slotCount);
-  }
+  _expectChildCount(
+    node,
+    children,
+    1 + (props.hasLeading ? 1 : 0) + props.actionCount,
+  );
   var index = 0;
   final leading = props.hasLeading ? children[index++] : null;
   final title = children[index++];
-  final flexibleSpace = props.hasFlexibleSpace ? children[index++] : null;
-  final bottom = props.hasBottom ? children[index++] : null;
-  if (bottom != null && bottom is! PreferredSizeWidget) {
-    throw RendererBuildException(
-      'Node ${node.id} of kind ${node.kind} requires a PreferredSize bottom',
-    );
-  }
-  final actions = props.hasActions ? children.sublist(index) : null;
-  return SliverAppBar(
+  final actions = children.sublist(index);
+  return M3EAppBar.sliver(
     pinned: props.pinned,
-    expandedHeight: props.expandedHeight,
-    collapsedHeight: props.collapsedHeight,
     floating: props.floating,
     snap: props.snap,
-    stretch: props.stretch,
-    toolbarHeight: props.toolbarHeight,
-    forceElevated: props.forceElevated,
-    automaticallyImplyLeading: props.automaticallyImplyLeading,
     centerTitle: props.centerTitle,
     backgroundColor: props.backgroundColor != null
         ? Color(props.backgroundColor!)
@@ -815,53 +786,52 @@ Widget _buildSliverAppBar(
     foregroundColor: props.foregroundColor != null
         ? Color(props.foregroundColor!)
         : null,
-    elevation: props.elevation,
     leading: leading,
-    title: title,
-    flexibleSpace: flexibleSpace,
-    bottom: bottom as PreferredSizeWidget?,
+    title: props.semanticLabel == null
+        ? title
+        : Semantics(
+            container: true,
+            label: props.semanticLabel,
+            textDirection: Directionality.of(context),
+            child: title,
+          ),
     actions: actions,
+    variant: switch (props.variant) {
+      0 => M3EAppBarVariant.small,
+      1 => M3EAppBarVariant.medium,
+      _ => M3EAppBarVariant.large,
+    },
+    shapeFamily: props.shape == 0
+        ? M3EAppBarShapeFamily.round
+        : M3EAppBarShapeFamily.square,
+    density: props.density == 0
+        ? M3EAppBarDensity.regular
+        : M3EAppBarDensity.compact,
   );
 }
 
 void _validateSliverAppBarProps(UiNode node, SliverAppBarProps props) {
-  void finiteNonNegative(String name, double? value) {
-    if (value != null && (!value.isFinite || value < 0)) {
-      throw RendererBuildException(
-        'Node ${node.id} of kind ${node.kind} requires $name to be finite '
-        'and non-negative',
-      );
-    }
-  }
-
-  if (!props.toolbarHeight.isFinite || props.toolbarHeight <= 0) {
+  if (props.actionCount < 0 || props.actionCount > 0xffffffff) {
     throw RendererBuildException(
-      'Node ${node.id} of kind ${node.kind} requires toolbarHeight to be '
-      'finite and strictly positive',
+      'Node ${node.id} of kind ${node.kind} has an invalid action count',
     );
   }
-  finiteNonNegative('expandedHeight', props.expandedHeight);
-  finiteNonNegative('collapsedHeight', props.collapsedHeight);
-  finiteNonNegative('elevation', props.elevation);
   if (props.snap && !props.floating) {
     throw RendererBuildException(
       'Node ${node.id} of kind ${node.kind} requires floating when snap is true',
     );
   }
-  final collapsedHeight = props.collapsedHeight;
-  if (collapsedHeight != null && collapsedHeight < props.toolbarHeight) {
+  if (props.variant < 0 || props.variant > 2) {
     throw RendererBuildException(
-      'Node ${node.id} of kind ${node.kind} requires collapsedHeight to be '
-      'at least toolbarHeight',
+      'Node ${node.id} of kind ${node.kind} has an invalid app bar variant',
     );
   }
-  final expandedHeight = props.expandedHeight;
-  if (collapsedHeight != null &&
-      expandedHeight != null &&
-      collapsedHeight > expandedHeight) {
+  if (props.shape < 0 ||
+      props.shape > 1 ||
+      props.density < 0 ||
+      props.density > 1) {
     throw RendererBuildException(
-      'Node ${node.id} of kind ${node.kind} requires collapsedHeight not to '
-      'exceed expandedHeight',
+      'Node ${node.id} of kind ${node.kind} has invalid shape or density',
     );
   }
 }
@@ -1215,7 +1185,7 @@ Widget _buildMaterialCheckbox(
   _expectChildCount(node, children, 0);
   final props = _expectProps<MaterialCheckboxProps>(node);
   final binding = _binding(node, EventTagId.valueChanged);
-  return Checkbox(
+  return M3ECheckbox(
     value: props.value,
     onChanged: !props.enabled || binding == null || onEvent == null
         ? null
@@ -1288,17 +1258,6 @@ Widget _buildMaterialScaffold(
   );
 }
 
-Widget _buildMaterialAppBar(
-  BuildContext context,
-  UiNode node,
-  List<Widget> children,
-  RendererEventCallback? onEvent,
-) {
-  _expectChildCount(node, children, 1);
-  final props = _expectProps<MaterialAppBarProps>(node);
-  return AppBar(title: children.single, centerTitle: props.centerTitle);
-}
-
 Widget _buildMaterialButton(
   BuildContext context,
   UiNode node,
@@ -1324,32 +1283,31 @@ Widget _buildMaterialButton(
       ? emit
       : null;
   return switch (props.variant) {
-    MaterialButtonVariant.elevated => ElevatedButton(
+    MaterialButtonVariant.elevated => M3EButton.elevated(
       autofocus: props.autofocus,
       onPressed: callback,
       child: children.single,
     ),
-    MaterialButtonVariant.text => TextButton(
+    MaterialButtonVariant.text => M3EButton.text(
       autofocus: props.autofocus,
       onPressed: callback,
       child: children.single,
     ),
-    MaterialButtonVariant.icon => IconButton(
-      autofocus: props.autofocus,
+    MaterialButtonVariant.icon => M3EIconButton(
       onPressed: callback,
       icon: children.single,
     ),
-    MaterialButtonVariant.filled => FilledButton(
+    MaterialButtonVariant.filled => M3EButton.filled(
       autofocus: props.autofocus,
       onPressed: callback,
       child: children.single,
     ),
-    MaterialButtonVariant.filledTonal => FilledButton.tonal(
+    MaterialButtonVariant.filledTonal => M3EButton.tonal(
       autofocus: props.autofocus,
       onPressed: callback,
       child: children.single,
     ),
-    MaterialButtonVariant.outlined => OutlinedButton(
+    MaterialButtonVariant.outlined => M3EButton.outlined(
       autofocus: props.autofocus,
       onPressed: callback,
       child: children.single,
@@ -1365,7 +1323,7 @@ Widget _buildMaterialFloatingActionButton(
 ) {
   final props = _expectProps<MaterialFloatingActionButtonProps>(node);
   final expected = props.variant == MaterialFloatingActionButtonVariant.extended
-      ? (props.hasIcon ? 2 : 1)
+      ? 2
       : 1;
   _expectChildCount(node, children, expected);
   final binding = _binding(node, EventTagId.press);
@@ -1380,28 +1338,30 @@ Widget _buildMaterialFloatingActionButton(
         )
       : null;
   return switch (props.variant) {
-    MaterialFloatingActionButtonVariant.small => FloatingActionButton.small(
+    MaterialFloatingActionButtonVariant.small => M3EFab(
       autofocus: props.autofocus,
       onPressed: callback,
-      child: children.single,
+      size: M3EFabSize.small,
+      icon: children.single,
     ),
-    MaterialFloatingActionButtonVariant.standard => FloatingActionButton(
+    MaterialFloatingActionButtonVariant.standard => M3EFab(
       autofocus: props.autofocus,
       onPressed: callback,
-      child: children.single,
+      size: M3EFabSize.medium,
+      icon: children.single,
     ),
-    MaterialFloatingActionButtonVariant.large => FloatingActionButton.large(
+    MaterialFloatingActionButtonVariant.large => M3EFab(
       autofocus: props.autofocus,
       onPressed: callback,
-      child: children.single,
+      size: M3EFabSize.large,
+      icon: children.single,
     ),
-    MaterialFloatingActionButtonVariant.extended =>
-      FloatingActionButton.extended(
-        autofocus: props.autofocus,
-        onPressed: callback,
-        icon: props.hasIcon ? children.first : null,
-        label: children.last,
-      ),
+    MaterialFloatingActionButtonVariant.extended => M3EExtendedFab(
+      autofocus: props.autofocus,
+      onPressed: callback,
+      icon: children.first,
+      label: _textLabel(children.last, 'extended FAB'),
+    ),
   };
 }
 
@@ -1418,25 +1378,37 @@ Widget _buildMaterialNavigationBar(
   );
   _expectChildCount(node, children, expected);
   var childIndex = 0;
-  final destinations = <NavigationDestination>[];
+  final destinations = <M3ENavigationBarDestination>[];
   for (final destination in props.destinations) {
     final icon = children[childIndex++];
     final selectedIcon = destination.hasSelectedIcon
         ? children[childIndex++]
         : null;
     destinations.add(
-      NavigationDestination(
+      M3ENavigationBarDestination(
         icon: icon,
         selectedIcon: selectedIcon,
         label: destination.label,
-        enabled: destination.enabled,
+        badgeCount: destination.badgeCount,
+        badgeDot: destination.badgeDot,
+        semanticLabel: destination.semanticLabel,
       ),
     );
   }
   final binding = _binding(node, EventTagId.navigationDestinationSelected);
-  return NavigationBar(
+  return M3ENavigationBar(
     selectedIndex: props.selectedIndex,
     destinations: destinations,
+    autoLayout: props.autoLayout,
+    layout: M3ENavBarLayout.values[props.layout],
+    alignment: M3ENavBarAlignment.values[props.alignment],
+    labelBehavior: M3ENavBarLabelBehavior.values[props.labelBehavior],
+    iconBehavior: M3ENavBarIconBehavior.values[props.iconBehavior],
+    size: M3ENavBarSize.values[props.size],
+    shapeFamily: M3ENavBarShapeFamily.values[props.shape],
+    density: M3ENavBarDensity.values[props.density],
+    safeArea: props.safeArea,
+    semanticLabel: props.semanticLabel,
     onDestinationSelected: binding == null || onEvent == null
         ? null
         : (index) => onEvent(
@@ -1460,38 +1432,29 @@ Widget _buildMaterialRadioGroup(
   final expected = props.options.where((option) => option.hasLabel).length;
   _expectChildCount(node, children, expected);
   var childIndex = 0;
+  final binding = _binding(node, EventTagId.radioSelected);
   final radios = <Widget>[];
   for (final option in props.options) {
-    final radio = Radio<int>(value: option.id, enabled: option.enabled);
+    final label = option.hasLabel ? children[childIndex++] : null;
     radios.add(
-      option.hasLabel
-          ? Row(
-              children: [
-                radio,
-                Expanded(child: children[childIndex++]),
-              ],
-            )
-          : radio,
+      M3ERadio<int>(
+        value: option.id,
+        groupValue: props.selectedId,
+        onChanged: !option.enabled || binding == null || onEvent == null
+            ? null
+            : (value) => onEvent(
+                RendererEvent(
+                  nodeId: node.id,
+                  eventTag: binding.eventTag,
+                  handlerId: binding.handlerId,
+                  payload: Int64EventPayload(value),
+                ),
+              ),
+        label: label,
+      ),
     );
   }
-  final binding = _binding(node, EventTagId.radioSelected);
-  return RadioGroup<int>(
-    groupValue: props.selectedId,
-    onChanged: binding == null || onEvent == null
-        ? (_) {}
-        : (value) {
-            if (value == null) return;
-            onEvent(
-              RendererEvent(
-                nodeId: node.id,
-                eventTag: binding.eventTag,
-                handlerId: binding.handlerId,
-                payload: Int64EventPayload(value),
-              ),
-            );
-          },
-    child: Column(mainAxisSize: MainAxisSize.min, children: radios),
-  );
+  return Column(mainAxisSize: MainAxisSize.min, children: radios);
 }
 
 Widget _buildMaterialSegmentedButton(
@@ -1501,36 +1464,24 @@ Widget _buildMaterialSegmentedButton(
   RendererEventCallback? onEvent,
 ) {
   final props = _expectProps<MaterialSegmentedButtonProps>(node);
-  final expected =
-      (props.hasSelectedIcon ? 1 : 0) +
-      props.segments.fold<int>(
-        0,
-        (count, segment) =>
-            count + (segment.hasIcon ? 1 : 0) + (segment.hasLabel ? 1 : 0),
-      );
+  final expected = props.segments.fold<int>(
+    0,
+    (count, segment) => count + (segment.hasIcon ? 2 : 1),
+  );
   _expectChildCount(node, children, expected);
   var childIndex = 0;
-  final selectedIcon = props.hasSelectedIcon ? children[childIndex++] : null;
-  final segments = <ButtonSegment<int>>[];
+  final segments = <M3ESegment<int>>[];
   for (final segment in props.segments) {
     final icon = segment.hasIcon ? children[childIndex++] : null;
-    final label = segment.hasLabel ? children[childIndex++] : null;
-    segments.add(
-      ButtonSegment<int>(
-        value: segment.id,
-        icon: icon,
-        label: label,
-        tooltip: segment.tooltip,
-        enabled: segment.enabled,
-      ),
-    );
+    final label = _textLabel(children[childIndex++], 'segmented button');
+    segments.add(M3ESegment<int>(value: segment.id, icon: icon, label: label));
   }
   final binding = _binding(node, EventTagId.segmentedSelectionChanged);
-  return SegmentedButton<int>(
+  return M3ESegmentedButton<int>(
     segments: segments,
     selected: props.selectedIds.toSet(),
     onSelectionChanged: !props.enabled || binding == null || onEvent == null
-        ? null
+        ? (_) {}
         : (selection) {
             final selectedIds = selection.toList()..sort();
             onEvent(
@@ -1542,23 +1493,7 @@ Widget _buildMaterialSegmentedButton(
               ),
             );
           },
-    multiSelectionEnabled: props.multiSelectionEnabled,
-    emptySelectionAllowed: props.emptySelectionAllowed,
-    direction: switch (props.direction) {
-      ScrollAxis.horizontal => Axis.horizontal,
-      ScrollAxis.vertical => Axis.vertical,
-    },
-    expandedInsets: switch (props.expandedInsets) {
-      null => null,
-      final insets => EdgeInsets.fromLTRB(
-        insets.left,
-        insets.top,
-        insets.right,
-        insets.bottom,
-      ),
-    },
-    showSelectedIcon: props.showSelectedIcon,
-    selectedIcon: selectedIcon,
+    multiSelect: props.multiSelectionEnabled,
   );
 }
 
@@ -1589,15 +1524,12 @@ Widget _buildMaterialChip(
   RendererEventCallback? onEvent,
 ) {
   final props = _expectProps<MaterialChipProps>(node);
-  final expected =
-      1 + (props.hasAvatar ? 1 : 0) + (props.hasDeleteIcon ? 1 : 0);
+  final expected = 1 + (props.hasLeading ? 1 : 0);
   _expectChildCount(node, children, expected);
   var childIndex = 0;
-  final avatar = props.hasAvatar ? children[childIndex++] : null;
-  final label = children[childIndex++];
-  final deleteIcon = props.hasDeleteIcon ? children[childIndex] : null;
+  final leading = props.hasLeading ? children[childIndex++] : null;
+  final label = _textLabel(children[childIndex++], 'chip');
   final pressBinding = _binding(node, EventTagId.press);
-  final selectedBinding = _binding(node, EventTagId.valueChanged);
   final deleteBinding = _binding(node, EventTagId.delete);
   VoidCallback? unitCallback(EventBinding? binding, bool enabled) =>
       enabled && binding != null && onEvent != null
@@ -1610,110 +1542,29 @@ Widget _buildMaterialChip(
           ),
         )
       : null;
-  final onSelected =
-      props.enabled &&
-          props.hasOnSelected &&
-          selectedBinding != null &&
-          onEvent != null
-      ? (bool value) => onEvent(
-          RendererEvent(
-            nodeId: node.id,
-            eventTag: selectedBinding.eventTag,
-            handlerId: selectedBinding.handlerId,
-            payload: BoolEventPayload(value),
-          ),
-        )
-      : null;
-  return switch (props.variant) {
-    MaterialChipVariant.action
-        when props.presentation == MaterialChipPresentation.elevated =>
-      ActionChip.elevated(
-        avatar: avatar,
-        label: label,
-        onPressed: unitCallback(
-          pressBinding,
-          props.enabled && props.hasOnPress,
-        ),
-      ),
-    MaterialChipVariant.action => ActionChip(
-      avatar: avatar,
-      label: label,
-      onPressed: unitCallback(pressBinding, props.enabled && props.hasOnPress),
-    ),
-    MaterialChipVariant.filter
-        when props.presentation == MaterialChipPresentation.elevated =>
-      FilterChip.elevated(
-        avatar: avatar,
-        label: label,
-        selected: props.selected,
-        onSelected: onSelected,
-      ),
-    MaterialChipVariant.filter => FilterChip(
-      avatar: avatar,
-      label: label,
-      selected: props.selected,
-      onSelected: onSelected,
-    ),
-    MaterialChipVariant.choice
-        when props.presentation == MaterialChipPresentation.elevated =>
-      ChoiceChip.elevated(
-        avatar: avatar,
-        label: label,
-        selected: props.selected,
-        onSelected: onSelected,
-      ),
-    MaterialChipVariant.choice => ChoiceChip(
-      avatar: avatar,
-      label: label,
-      selected: props.selected,
-      onSelected: onSelected,
-    ),
-    MaterialChipVariant.input => () {
-      final onPressed = unitCallback(
-        pressBinding,
-        props.enabled && props.hasOnPress,
-      );
-      final chip = InputChip(
-        avatar: avatar,
-        label: label,
-        selected: props.selected,
-        deleteIcon: deleteIcon,
-        onSelected: onSelected,
-        onDeleted: unitCallback(
-          deleteBinding,
-          props.enabled && props.hasOnDelete,
-        ),
-      );
-      return onPressed == null
-          ? chip
-          : GestureDetector(onTap: onPressed, child: chip);
-    }(),
-  };
+  return M3EChip(
+    label: label,
+    type: switch (props.variant) {
+      MaterialChipVariant.action => M3EChipType.assist,
+      MaterialChipVariant.choice => M3EChipType.suggestion,
+      MaterialChipVariant.filter => M3EChipType.filter,
+      MaterialChipVariant.input => M3EChipType.input,
+    },
+    leading: leading,
+    selected: props.selected,
+    elevated: props.presentation == MaterialChipPresentation.elevated,
+    onPressed: unitCallback(pressBinding, props.enabled),
+    onDeleted: unitCallback(deleteBinding, props.enabled && props.hasOnDelete),
+  );
 }
 
-Widget _buildMaterialAlertDialog(
-  BuildContext context,
-  UiNode node,
-  List<Widget> children,
-  RendererEventCallback? onEvent,
-) {
-  final props = _expectProps<MaterialAlertDialogProps>(node);
-  final expected =
-      (props.hasIcon ? 1 : 0) +
-      (props.hasTitle ? 1 : 0) +
-      (props.hasContent ? 1 : 0) +
-      props.actionCount;
-  _expectChildCount(node, children, expected);
-  var childIndex = 0;
-  final icon = props.hasIcon ? children[childIndex++] : null;
-  final title = props.hasTitle ? children[childIndex++] : null;
-  final content = props.hasContent ? children[childIndex++] : null;
-  return AlertDialog(
-    icon: icon,
-    title: title,
-    content: content,
-    actions: children.sublist(childIndex),
-  );
+String _textLabel(Widget widget, String component) {
+  if (widget is Text && widget.data != null) return widget.data!;
+  if (widget is NodeHost) {
+    final props = widget.store.node(widget.nodeId).props;
+    if (props is TextProps) return props.value;
+  }
+  throw RendererBuildException('$component requires a plain Text label');
 }
 
 void _emitMaterialEvent(
@@ -1788,7 +1639,7 @@ Widget _buildMaterialSearchBar(
     props: textProps,
     resources: RendererResourceScope.of(context),
     onEvent: onEvent,
-    builder: (context, controller, focusNode, onSubmitted) => SearchBar(
+    builder: (context, controller, focusNode, onSubmitted) => M3ESearchBar(
       controller: controller,
       focusNode: focusNode,
       leading: leading,
@@ -1796,6 +1647,7 @@ Widget _buildMaterialSearchBar(
       hintText: props.hintText,
       enabled: props.enabled,
       readOnly: props.readOnly,
+      autoFocus: props.autofocus,
       keyboardType: _materialKeyboardType(props.keyboardType),
       textInputAction: _materialInputAction(props.inputAction),
       onSubmitted: onSubmitted,
@@ -1811,36 +1663,44 @@ Widget _buildMaterialSearchBar(
   );
 }
 
-Widget _buildMaterialTooltip(
+Widget _buildMaterialTextField(
   BuildContext context,
   UiNode node,
   List<Widget> children,
   RendererEventCallback? onEvent,
 ) {
-  _expectChildCount(node, children, 1);
-  final props = _expectProps<MaterialTooltipProps>(node);
-  if (!props.enabled) return children.single;
-  return Tooltip(
-    message: props.message,
-    excludeFromSemantics: props.excludeFromSemantics,
-    preferBelow: props.preferBelow,
-    triggerMode: props.triggerMode == MaterialTooltipTriggerMode.tap
-        ? TooltipTriggerMode.tap
-        : TooltipTriggerMode.longPress,
-    waitDuration: Duration(milliseconds: props.waitDurationMs),
-    showDuration: Duration(milliseconds: props.showDurationMs),
-    exitDuration: Duration(milliseconds: props.exitDurationMs),
-    enableTapToDismiss: props.enableTapToDismiss,
-    enableFeedback: props.enableFeedback,
-    onTriggered: !props.hasOnTriggered
-        ? null
-        : () => _emitMaterialEvent(
-            node,
-            EventTagId.tooltipTriggered,
-            const UnitEventPayload(),
-            onEvent,
-          ),
-    child: children.single,
+  final props = _expectProps<MaterialTextFieldProps>(node);
+  _expectChildCount(
+    node,
+    children,
+    (props.hasLeading ? 1 : 0) + (props.hasTrailing ? 1 : 0),
+  );
+  var index = 0;
+  final leading = props.hasLeading ? children[index++] : null;
+  final trailing = props.hasTrailing ? children[index] : null;
+  return TextInputHost(
+    node: node,
+    props: props.textInputProps,
+    resources: RendererResourceScope.of(context),
+    onEvent: onEvent,
+    builder: (context, controller, focusNode, onSubmitted) => M3ETextField(
+      controller: controller,
+      focusNode: focusNode,
+      label: props.label,
+      supportingText: props.supportingText,
+      errorText: props.errorText,
+      leading: leading,
+      trailing: trailing,
+      variant: props.variant == 0
+          ? M3ETextFieldVariant.filled
+          : M3ETextFieldVariant.outlined,
+      obscureText: props.obscureText,
+      enabled: props.enabled && !props.readOnly,
+      keyboardType: _materialKeyboardType(props.keyboardType),
+      textInputAction: _materialInputAction(props.inputAction),
+      onSubmitted: onSubmitted,
+      maxLines: props.maxLines,
+    ),
   );
 }
 
@@ -2163,23 +2023,73 @@ final class _MaterialSliderHostState extends State<_MaterialSliderHost> {
     final props = widget.node.props as MaterialSliderProps;
     final changed = _binding(widget.node, EventTagId.sliderChanged);
     final ended = _binding(widget.node, EventTagId.sliderChangeEnd);
-    return Slider(
-      value: props.value,
-      min: props.min,
-      max: props.max,
-      divisions: props.divisions,
-      label: props.label,
-      onChanged:
-          props.enabled &&
-              props.hasOnChange &&
-              changed != null &&
-              widget.onEvent != null
-          ? (value) => _coalesce(changed, value)
-          : null,
-      onChangeEnd: props.enabled && ended != null && widget.onEvent != null
-          ? (value) => _emit(ended, value)
-          : null,
-    );
+    final ValueChanged<double>? onChanged =
+        props.enabled &&
+            props.hasOnChange &&
+            changed != null &&
+            widget.onEvent != null
+        ? (value) => _coalesce(changed, value)
+        : null;
+    final ValueChanged<double>? onChangeEnd =
+        props.enabled && ended != null && widget.onEvent != null
+        ? (value) => _emit(ended, value)
+        : null;
+    return switch (props.kind) {
+      0 => M3ESlider(
+        value: props.value,
+        min: props.min,
+        max: props.max,
+        divisions: props.divisions,
+        label: props.label,
+        onChanged: onChanged,
+        onChangeEnd: onChangeEnd,
+      ),
+      1 => M3ESlider.centered(
+        value: props.value,
+        min: props.min,
+        max: props.max,
+        divisions: props.divisions,
+        label: props.label,
+        onChanged: onChanged,
+        onChangeEnd: onChangeEnd,
+      ),
+      2 => M3ESlider.wavy(
+        value: props.value,
+        min: props.min,
+        max: props.max,
+        divisions: props.divisions,
+        label: props.label,
+        onChanged: onChanged,
+        onChangeEnd: onChangeEnd,
+      ),
+      3 => M3ESlider.wavyCentered(
+        value: props.value,
+        min: props.min,
+        max: props.max,
+        divisions: props.divisions,
+        label: props.label,
+        onChanged: onChanged,
+        onChangeEnd: onChangeEnd,
+      ),
+      4 => M3ESlider.vertical(
+        value: props.value,
+        min: props.min,
+        max: props.max,
+        divisions: props.divisions,
+        label: props.label,
+        onChanged: onChanged,
+        onChangeEnd: onChangeEnd,
+      ),
+      _ => M3ESlider.verticalCentered(
+        value: props.value,
+        min: props.min,
+        max: props.max,
+        divisions: props.divisions,
+        label: props.label,
+        onChanged: onChanged,
+        onChangeEnd: onChangeEnd,
+      ),
+    };
   }
 }
 
@@ -2195,10 +2105,10 @@ final class _MaterialRangeSliderHost extends StatefulWidget {
 
 final class _MaterialRangeSliderHostState
     extends State<_MaterialRangeSliderHost> {
-  RangeValues? _pending;
+  M3ESliderRange? _pending;
   bool _scheduled = false;
 
-  void _emit(EventBinding binding, RangeValues value) => widget.onEvent!(
+  void _emit(EventBinding binding, M3ESliderRange value) => widget.onEvent!(
     RendererEvent(
       nodeId: widget.node.id,
       eventTag: binding.eventTag,
@@ -2207,7 +2117,7 @@ final class _MaterialRangeSliderHostState
     ),
   );
 
-  void _coalesce(EventBinding binding, RangeValues value) {
+  void _coalesce(EventBinding binding, M3ESliderRange value) {
     _pending = value;
     if (_scheduled) return;
     _scheduled = true;
@@ -2224,14 +2134,14 @@ final class _MaterialRangeSliderHostState
     final props = widget.node.props as MaterialRangeSliderProps;
     final changed = _binding(widget.node, EventTagId.rangeSliderChanged);
     final ended = _binding(widget.node, EventTagId.rangeSliderChangeEnd);
-    return RangeSlider(
-      values: RangeValues(props.start, props.end),
+    final args = (
+      values: M3ESliderRange(props.start, props.end),
       min: props.min,
       max: props.max,
       divisions: props.divisions,
       labels: props.labelStart == null && props.labelEnd == null
           ? null
-          : RangeLabels(props.labelStart ?? '', props.labelEnd ?? ''),
+          : M3ESliderRangeLabels(props.labelStart ?? '', props.labelEnd ?? ''),
       onChanged:
           props.enabled &&
               props.hasOnChange &&
@@ -2243,6 +2153,25 @@ final class _MaterialRangeSliderHostState
           ? (value) => _emit(ended, value)
           : null,
     );
+    return props.kind == 0
+        ? M3ERangeSlider(
+            values: args.values,
+            min: args.min,
+            max: args.max,
+            divisions: args.divisions,
+            labels: args.labels,
+            onChanged: args.onChanged,
+            onChangeEnd: args.onChangeEnd,
+          )
+        : M3ERangeSlider.wavy(
+            values: args.values,
+            min: args.min,
+            max: args.max,
+            divisions: args.divisions,
+            labels: args.labels,
+            onChanged: args.onChanged,
+            onChangeEnd: args.onChangeEnd,
+          );
   }
 }
 
@@ -2255,7 +2184,7 @@ Widget _buildMaterialSwitch(
   _expectChildCount(node, children, 0);
   final props = _expectProps<MaterialSwitchProps>(node);
   final binding = _binding(node, EventTagId.valueChanged);
-  return Switch(
+  return M3ESwitch(
     value: props.value,
     onChanged: !props.enabled || binding == null || onEvent == null
         ? null
@@ -2270,45 +2199,6 @@ Widget _buildMaterialSwitch(
   );
 }
 
-Widget _buildMaterialListTile(
-  BuildContext context,
-  UiNode node,
-  List<Widget> children,
-  RendererEventCallback? onEvent,
-) {
-  final props = _expectProps<MaterialListTileProps>(node);
-  final expected =
-      1 +
-      (props.hasSubtitle ? 1 : 0) +
-      (props.hasLeading ? 1 : 0) +
-      (props.hasTrailing ? 1 : 0);
-  _expectChildCount(node, children, expected);
-  var index = 0;
-  final leading = props.hasLeading ? children[index++] : null;
-  final title = children[index++];
-  final subtitle = props.hasSubtitle ? children[index++] : null;
-  final trailing = props.hasTrailing ? children[index++] : null;
-  final binding = _binding(node, EventTagId.press);
-  return ListTile(
-    enabled: props.enabled,
-    selected: props.selected,
-    leading: leading,
-    title: title,
-    subtitle: subtitle,
-    trailing: trailing,
-    onTap: !props.enabled || binding == null || onEvent == null
-        ? null
-        : () => onEvent(
-            RendererEvent(
-              nodeId: node.id,
-              eventTag: binding.eventTag,
-              handlerId: binding.handlerId,
-              payload: const UnitEventPayload(),
-            ),
-          ),
-  );
-}
-
 Widget _buildMaterialDivider(
   BuildContext context,
   UiNode node,
@@ -2317,18 +2207,22 @@ Widget _buildMaterialDivider(
 ) {
   _expectChildCount(node, children, 0);
   final props = _expectProps<MaterialDividerProps>(node);
+  final divider = M3EDivider(
+    axis: props.orientation == MaterialDividerOrientation.horizontal
+        ? M3EDividerAxis.horizontal
+        : M3EDividerAxis.vertical,
+    thickness: props.thickness,
+    indent: props.indent,
+    endIndent: props.endIndent,
+  );
   return props.orientation == MaterialDividerOrientation.horizontal
-      ? Divider(
+      ? SizedBox(
           height: props.spacing,
-          thickness: props.thickness,
-          indent: props.indent,
-          endIndent: props.endIndent,
+          child: Center(child: divider),
         )
-      : VerticalDivider(
+      : SizedBox(
           width: props.spacing,
-          thickness: props.thickness,
-          indent: props.indent,
-          endIndent: props.endIndent,
+          child: Center(child: divider),
         );
 }
 
@@ -2341,16 +2235,21 @@ Widget _buildMaterialCard(
   _expectChildCount(node, children, 1);
   final props = _expectProps<MaterialCardProps>(node);
   return switch (props.variant) {
-    MaterialCardVariant.elevated => Card(
+    MaterialCardVariant.elevated => M3ECard(
       elevation: props.elevation,
+      padding: EdgeInsets.zero,
       child: children.single,
     ),
-    MaterialCardVariant.filled => Card.filled(
+    MaterialCardVariant.filled => M3ECard(
+      variant: M3ECardVariant.filled,
       elevation: props.elevation,
+      padding: EdgeInsets.zero,
       child: children.single,
     ),
-    MaterialCardVariant.outlined => Card.outlined(
+    MaterialCardVariant.outlined => M3ECard(
+      variant: M3ECardVariant.outlined,
       elevation: props.elevation,
+      padding: EdgeInsets.zero,
       child: children.single,
     ),
   };
@@ -2364,7 +2263,9 @@ Widget _buildMaterialCircularProgress(
 ) {
   _expectChildCount(node, children, 0);
   final props = _expectProps<MaterialCircularProgressProps>(node);
-  return CircularProgressIndicator(value: props.value);
+  return props.wavy
+      ? M3EProgressIndicator.circularWavy(value: props.value)
+      : M3EProgressIndicator.circular(value: props.value);
 }
 
 Widget _buildMaterialLinearProgress(
@@ -2375,7 +2276,1179 @@ Widget _buildMaterialLinearProgress(
 ) {
   _expectChildCount(node, children, 0);
   final props = _expectProps<MaterialLinearProgressProps>(node);
-  return LinearProgressIndicator(value: props.value);
+  return props.wavy
+      ? M3EProgressIndicator.linearWavy(value: props.value)
+      : M3EProgressIndicator.linear(value: props.value);
+}
+
+Widget _buildMaterialExpressive(
+  BuildContext context,
+  UiNode node,
+  List<Widget> children,
+  RendererEventCallback? onEvent,
+) {
+  final props = _expectProps<MaterialExpressiveProps>(node);
+
+  void emit(int tag, EventPayload payload) {
+    final binding = _binding(node, tag);
+    if (binding == null || onEvent == null) return;
+    onEvent(
+      RendererEvent(
+        nodeId: node.id,
+        eventTag: binding.eventTag,
+        handlerId: binding.handlerId,
+        payload: payload,
+      ),
+    );
+  }
+
+  void emitId(int id) =>
+      emit(EventTagId.navigationDestinationSelected, Int64EventPayload(id));
+  void emitActiveId(int id) =>
+      emit(EventTagId.radioSelected, Int64EventPayload(id));
+  void emitIds(Iterable<int> ids) => emit(
+    EventTagId.segmentedSelectionChanged,
+    Int64ListEventPayload((ids.toList()..sort())),
+  );
+  void emitOrderedIds(Iterable<int> ids) => emit(
+    EventTagId.segmentedSelectionChanged,
+    Int64ListEventPayload(ids.toList(growable: false)),
+  );
+  final selected = props.selectedIds.toSet();
+
+  switch (props.component) {
+    case 0:
+      if (children.length < 2) {
+        throw const RendererBuildException(
+          'FAB menu requires expand and collapse icons',
+        );
+      }
+      final itemChildren = _expressiveItemChildren(
+        node,
+        props.items,
+        children,
+        prefix: 2,
+      );
+      return M3EFabMenu(
+        position: props.variant == 0
+            ? M3EFabMenuPosition.left
+            : M3EFabMenuPosition.right,
+        expandIcon: children[0],
+        collapseIcon: children[1],
+        items: [
+          for (var index = 0; index < props.items.length; index++)
+            M3EFabMenuItem(
+              icon: itemChildren[index].single,
+              label: props.items[index].label,
+              onPressed: props.items[index].enabled
+                  ? () => emitId(props.items[index].id)
+                  : null,
+            ),
+        ],
+      );
+    case 1:
+      final itemChildren = _expressiveItemChildren(node, props.items, children);
+      final multiple = props.flags & (1 << 7) != 0;
+      final selectedIndices = <int>{
+        for (var index = 0; index < props.items.length; index++)
+          if (selected.contains(props.items[index].id)) index,
+      };
+      return M3EButtonGroup(
+        type: props.variant ~/ 5 == 0
+            ? M3EButtonGroupType.standard
+            : M3EButtonGroupType.connected,
+        style: _m3eButtonStyle(props.variant % 5),
+        size: _m3eButtonSize(props.flags & 7),
+        shape: props.flags & 8 == 0
+            ? M3EButtonShape.round
+            : M3EButtonShape.square,
+        direction: props.flags & 16 == 0 ? Axis.horizontal : Axis.vertical,
+        overflow: switch ((props.flags >> 5) & 3) {
+          0 => M3EButtonGroupOverflow.none,
+          1 => M3EButtonGroupOverflow.scroll,
+          _ => M3EButtonGroupOverflow.menu,
+        },
+        selectedIndex: multiple || selectedIndices.isEmpty
+            ? null
+            : selectedIndices.single,
+        selectedIndices: multiple ? selectedIndices : null,
+        onSelectedIndexChanged: multiple
+            ? null
+            : (index) => emitIds(
+                index == null ? const <int>[] : [props.items[index].id],
+              ),
+        onSelectedIndicesChanged: multiple
+            ? (indices) =>
+                  emitIds(indices.map((index) => props.items[index].id))
+            : null,
+        actions: [
+          for (var index = 0; index < props.items.length; index++)
+            M3EButtonGroupAction(
+              icon: itemChildren[index].firstOrNull,
+              label: props.items[index].label.isEmpty
+                  ? null
+                  : Text(props.items[index].label),
+              enabled: props.items[index].enabled,
+            ),
+        ],
+      );
+    case 2:
+      var childIndex = 0;
+      Widget? take(int bit) =>
+          props.flags & bit == 0 ? null : children[childIndex++];
+      final result = M3EToggleButton(
+        style: _m3eButtonStyle(props.variant),
+        enabled: props.flags & 1 != 0,
+        checked: props.flags & 2 != 0,
+        icon: take(4),
+        checkedIcon: take(8),
+        label: take(16),
+        onCheckedChange: (value) =>
+            emit(EventTagId.valueChanged, BoolEventPayload(value)),
+      );
+      if (childIndex != children.length) {
+        throw RendererBuildException(
+          'Node ${node.id} has unexpected toggle-button children',
+        );
+      }
+      return result;
+    case 3:
+      _expectChildCount(node, children, 0);
+      return M3ESplitButton<int>(
+        items: [
+          for (final item in props.items)
+            if (item.kind != 3 && item.kind != 4)
+              M3ESplitButtonItem(
+                value: item.id,
+                child: item.label,
+                enabled: item.enabled,
+              ),
+        ],
+        label: props.primaryText,
+        enabled: props.flags & 1 != 0,
+        style: _m3eButtonStyle(props.variant),
+        onPressed: () => emit(EventTagId.press, const UnitEventPayload()),
+        onSelected: emitId,
+      );
+    case 4:
+      _expectChildCount(node, children, 0);
+      return M3EDropdownMenu<int>(
+        items: [
+          for (final item in props.items)
+            M3EDropdownItem(
+              label: item.label,
+              value: item.id,
+              disabled: !item.enabled,
+              selected: selected.contains(item.id),
+            ),
+        ],
+        singleSelect: props.flags & 2 == 0,
+        searchEnabled: props.flags & 1 != 0,
+        onSearchChanged: (value) =>
+            emit(EventTagId.textSubmit, TextEventPayload(value)),
+        onSelectionChanged: (items) => emitIds(items.map((item) => item.value)),
+        emptyBuilder: (_) => props.variant == 1
+            ? const Center(child: M3ELoadingIndicator())
+            : Center(child: Text(props.secondaryText ?? 'No items')),
+      );
+    case 5:
+      _expectChildCount(node, children, 0);
+      final first = DateTime.parse(
+        props.items.singleWhere((item) => item.kind == 0).label,
+      );
+      final last = DateTime.parse(
+        props.items.singleWhere((item) => item.kind == 1).label,
+      );
+      final currentItem = props.items.where((item) => item.kind == 2);
+      final selectable = {
+        for (final item in props.items.where((item) => item.kind == 3))
+          DateTime.parse(item.label),
+      };
+      return M3ECalendarDatePicker(
+        initialDate: DateTime.parse(props.primaryText!),
+        firstDate: first,
+        lastDate: last,
+        currentDate: currentItem.isEmpty
+            ? null
+            : DateTime.parse(currentItem.single.label),
+        initialCalendarMode: props.variant == 0
+            ? M3EDatePickerMode.day
+            : M3EDatePickerMode.year,
+        selectableDayPredicate: selectable.isEmpty
+            ? null
+            : (date) => selectable.contains(DateUtils.dateOnly(date)),
+        onDateChanged: (date) => emit(
+          EventTagId.civilDateChanged,
+          CivilDateEventPayload(
+            year: date.year,
+            month: date.month,
+            day: date.day,
+          ),
+        ),
+      );
+    case 6:
+      _expectChildCount(node, children, 0);
+      final time = props.primaryText!.split(':').map(int.parse).toList();
+      return M3EDialTimePicker(
+        value: M3ETime(hour: time[0], minute: time[1]),
+        use24HourFormat: props.variant == 1,
+        onChanged: (value) => emit(
+          EventTagId.civilTimeChanged,
+          CivilTimeEventPayload(hour: value.hour, minute: value.minute),
+        ),
+      );
+    case 7:
+      final itemChildren = _expressiveItemChildren(node, props.items, children);
+      return M3ECarousel(
+        axis: props.flags & 1 == 0 ? Axis.horizontal : Axis.vertical,
+        type: M3ECarouselType.values[props.variant],
+        heroAlignment: M3ECarouselHeroAlignment.values[(props.flags >> 1) & 3],
+        onTap: (index) => emitId(props.items[index].id),
+        onChange: (details) => emitActiveId(props.items[details.focalIndex].id),
+        children: [for (final item in itemChildren) item.single],
+      );
+    case 8:
+      final itemChildren = _expressiveItemChildren(node, props.items, children);
+      if (props.variant == 2) {
+        return _ExpressiveSliverPayload(
+          sliverBuilder: () => SliverList.builder(
+            itemCount: props.items.length,
+            itemBuilder: (_, index) => M3ECardListItem(
+              index: index,
+              position: calculateCardPosition(index, props.items.length),
+              outerRadius: M3EListCardListTheme.defaultOuterRadius,
+              innerRadius: M3EListCardListTheme.defaultInnerRadius,
+              gap: M3EListCardListTheme.defaultGap,
+              padding: EdgeInsets.zero,
+              onTap: (_) => emitId(props.items[index].id),
+              child: itemChildren[index].single,
+            ),
+          ),
+        );
+      }
+      return props.variant == 0
+          ? M3ECardList(
+              itemCount: props.items.length,
+              padding: EdgeInsets.zero,
+              itemBuilder: (_, index) => itemChildren[index].single,
+              onTap: (index) => emitId(props.items[index].id),
+            )
+          : M3ECardList.builder(
+              itemCount: props.items.length,
+              padding: EdgeInsets.zero,
+              itemBuilder: (_, index) => itemChildren[index].single,
+              onTap: (index) => emitId(props.items[index].id),
+            );
+    case 9:
+      final actionCount = (props.flags >> 8) & 0xff;
+      _expectChildCount(node, children, actionCount + 2);
+      return _ExpressiveSelectionHost(
+        props: props,
+        idle: children.first,
+        actions: children.skip(1).take(actionCount).toList(growable: false),
+        body: children.last,
+        emitSelection: emitIds,
+      );
+    case 10:
+    case 11:
+      final itemChildren = _expressiveItemChildren(node, props.items, children);
+      return _ExpressiveDismissibleHost(
+        horizontal: props.component == 11,
+        props: props,
+        itemChildren: itemChildren,
+        emitRequest: emitOrderedIds,
+      );
+    case 12:
+      final itemChildren = _expressiveItemChildren(node, props.items, children);
+      final expandedIndices = <int>{
+        for (var index = 0; index < props.items.length; index++)
+          if (selected.contains(props.items[index].id)) index,
+      };
+      void onExpansionChanged(int index, {required bool isExpanded}) {
+        final next = {...selected};
+        if (isExpanded) {
+          if (props.variant == 1) next.clear();
+          next.add(props.items[index].id);
+        } else {
+          next.remove(props.items[index].id);
+        }
+        emitIds(next);
+      }
+      final key = ValueKey(Object.hashAll(props.selectedIds));
+      Widget headerBuilder(_, int index, double progress) =>
+          Text(props.items[index].label);
+      Widget bodyBuilder(_, int index, double progress) =>
+          itemChildren[index].single;
+      if (props.flags == 2) {
+        return _ExpressiveSliverPayload(
+          sliverBuilder: () => M3EExpandableList.sliverBuilder(
+            key: key,
+            itemCount: props.items.length,
+            initiallyExpanded: expandedIndices,
+            allowMultipleExpanded: props.variant == 0,
+            headerBuilder: headerBuilder,
+            bodyBuilder: bodyBuilder,
+            onExpansionChanged: onExpansionChanged,
+          ),
+        );
+      }
+      return props.flags == 1
+          ? M3EExpandableList.scrollableBuilder(
+              key: key,
+              itemCount: props.items.length,
+              initiallyExpanded: expandedIndices,
+              allowMultipleExpanded: props.variant == 0,
+              headerBuilder: headerBuilder,
+              bodyBuilder: bodyBuilder,
+              onExpansionChanged: onExpansionChanged,
+            )
+          : M3EExpandableList.builder(
+              key: key,
+              itemCount: props.items.length,
+              initiallyExpanded: expandedIndices,
+              allowMultipleExpanded: props.variant == 0,
+              headerBuilder: headerBuilder,
+              bodyBuilder: bodyBuilder,
+              onExpansionChanged: onExpansionChanged,
+            );
+    case 13:
+      _expectChildCount(node, children, 1);
+      return ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height,
+        ),
+        child: M3EBottomSheet(
+          showDragHandle: props.flags & 1 != 0,
+          child: children.single,
+        ),
+      );
+    case 14:
+      _expectChildCount(node, children, 2);
+      return ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height,
+        ),
+        child: M3ESideSheet(
+          title: _textLabel(children[0], 'side sheet'),
+          body: children[1],
+        ),
+      );
+    case 15:
+      final hasFloatingActionButton = props.flags & 2 != 0;
+      final actions = hasFloatingActionButton
+          ? children.take(children.length - 1).toList(growable: false)
+          : children;
+      return M3EAppBar.bottom(
+        actions: actions,
+        floatingActionButton: hasFloatingActionButton ? children.last : null,
+        safeArea: props.flags & 1 != 0,
+      );
+    case 16:
+      final itemChildren = _expressiveItemChildren(node, props.items, children);
+      final selectedIndex = props.items.indexWhere(
+        (item) => selected.contains(item.id),
+      );
+      return M3ETabs(
+        tabs: [
+          for (var index = 0; index < props.items.length; index++)
+            M3ETab(
+              label: props.items[index].label,
+              icon: itemChildren[index].firstOrNull,
+            ),
+        ],
+        selectedIndex: selectedIndex,
+        variant: props.variant == 0
+            ? M3ETabsVariant.primary
+            : M3ETabsVariant.secondary,
+        onTabSelected: (index) => emitId(props.items[index].id),
+      );
+    case 17:
+      final resources = RendererResourceScope.of(context);
+      Widget preserveResourceScope(Widget child) =>
+          RendererResourceScope(resources: resources, child: child);
+      final destinationChildCount = props.items.fold<int>(
+        0,
+        (count, item) => count + item.childCount,
+      );
+      final itemChildren = _expressiveItemChildren(
+        node,
+        props.items,
+        children.take(destinationChildCount).toList(growable: false),
+      );
+      var extraChildIndex = destinationChildCount;
+      final trailing = props.flags & 4 != 0
+          ? preserveResourceScope(children[extraChildIndex++])
+          : null;
+      final fabIcon = props.flags & 8 != 0
+          ? preserveResourceScope(children[extraChildIndex++])
+          : null;
+      if (extraChildIndex != children.length) {
+        throw RendererBuildException(
+          'Node ${node.id} has unexpected navigation rail children',
+        );
+      }
+      final selectedIndex = props.items.indexWhere(
+        (item) => selected.contains(item.id),
+      );
+      final sections = <M3ENavigationRailSection>[];
+      for (final sectionIndex in {
+        for (final item in props.items) item.kind,
+      }.toList()..sort()) {
+        sections.add(
+          M3ENavigationRailSection(
+            destinations: [
+              for (var index = 0; index < props.items.length; index++)
+                if (props.items[index].kind == sectionIndex)
+                  M3ENavigationRailDestination(
+                    icon: preserveResourceScope(itemChildren[index].single),
+                    label: props.items[index].label,
+                  ),
+            ],
+          ),
+        );
+      }
+      return M3ENavigationRail(
+        type: props.flags & 1 == 0
+            ? M3ENavigationRailType.collapsed
+            : M3ENavigationRailType.expanded,
+        modality: props.flags & 2 == 0
+            ? M3ENavigationRailModality.standard
+            : M3ENavigationRailModality.modal,
+        sections: sections,
+        selectedIndex: selectedIndex,
+        onDestinationSelected: (index) => emitId(props.items[index].id),
+        onTypeChanged: (type) => emit(
+          EventTagId.valueChanged,
+          BoolEventPayload(type == M3ENavigationRailType.expanded),
+        ),
+        trailing: trailing,
+        trailingAtBottom: props.flags & 16 != 0,
+        fab: fabIcon == null
+            ? null
+            : M3ENavigationRailFabSlot(
+                icon: fabIcon,
+                label: props.primaryText!,
+                onPressed: props.flags & 32 == 0
+                    ? null
+                    : () => emitId(int.parse(props.secondaryText!)),
+              ),
+      );
+    case 18:
+      final itemChildren = _expressiveItemChildren(node, props.items, children);
+      final selectedIndex = props.items.indexWhere(
+        (item) => selected.contains(item.id),
+      );
+      return M3ENavigationDrawer(
+        headline: props.primaryText,
+        destinations: [
+          for (var index = 0; index < props.items.length; index++)
+            M3ENavigationDestination(
+              icon: itemChildren[index].single,
+              label: props.items[index].label,
+            ),
+        ],
+        selectedIndex: selectedIndex,
+        onDestinationSelected: (index) => emitId(props.items[index].id),
+      );
+    case 19:
+      final hasFab = props.flags & 4 != 0;
+      final actionChildCount = props.items.fold<int>(
+        0,
+        (count, item) => count + item.childCount,
+      );
+      _expressiveItemChildren(
+        node,
+        props.items,
+        children.take(actionChildCount).toList(growable: false),
+      );
+      _expectChildCount(node, children, actionChildCount + (hasFab ? 1 : 0));
+      final activeIndex = props.items.indexWhere(
+        (item) => selected.contains(item.id),
+      );
+      final actions = <M3EToolbarItem>[
+        for (var index = 0; index < props.items.length; index++)
+          M3EToolbarAction(
+            icon: _m3eToolbarIconData(props.items[index].kind),
+            label: props.items[index].label.nullIfEmpty,
+            semanticLabel: props.items[index].label.nullIfEmpty,
+            enabled: props.items[index].enabled,
+            active: selected.contains(props.items[index].id),
+            onPressed: () => emitId(props.items[index].id),
+          ),
+      ];
+      return props.variant == 0
+          ? M3EToolbar(
+              axis: props.flags & 1 == 0 ? Axis.horizontal : Axis.vertical,
+              expanded: props.flags & 2 != 0,
+              onExpandedChanged: (value) =>
+                  emit(EventTagId.valueChanged, BoolEventPayload(value)),
+              maxInlineActions: (props.flags >> 8) & 0xff,
+              activeIndex: activeIndex < 0 ? null : activeIndex,
+              onActiveIndexChanged: (index) =>
+                  emitActiveId(props.items[index].id),
+              fabIcon: hasFab ? children.last : null,
+              onFabPressed: !hasFab || props.flags & 8 == 0
+                  ? null
+                  : () => emitId(int.parse(props.secondaryText!)),
+              actions: actions,
+            )
+          : M3EToolbar.docked(
+              maxInlineActions: (props.flags >> 8) & 0xff,
+              activeIndex: activeIndex < 0 ? null : activeIndex,
+              onActiveIndexChanged: (index) =>
+                  emitActiveId(props.items[index].id),
+              actions: actions,
+            );
+    case 20:
+      _expectChildCount(node, children, 1);
+      return M3EMenu(
+        anchorBuilder: (_, open) =>
+            GestureDetector(onTap: open, child: children.single),
+        children: _m3eMenuNodes(props.items, emitId),
+        onSelected: (value) {
+          if (value is int) emitId(value);
+        },
+      );
+    case 21:
+      _expectChildCount(node, children, 1);
+      return M3EBadge(
+        alignment: M3EBadgeAlignment.values[props.variant],
+        count: props.value?.toInt(),
+        showDot: props.value == null,
+        child: children.single,
+      );
+    case 22:
+      _expectChildCount(node, children, 0);
+      return M3ELoadingIndicator(
+        variant: props.variant == 0
+            ? M3ELoadingIndicatorVariant.defaultStyle
+            : M3ELoadingIndicatorVariant.contained,
+        rotationTurns: props.value,
+      );
+    case 23:
+      _expectChildCount(node, children, 1);
+      return _ExpressiveRefreshHost(
+        props: props,
+        emitRequest: emitOrderedIds,
+        child: children.single,
+      );
+    case 24:
+      final textProps = props.textInput;
+      if (textProps == null) {
+        throw RendererBuildException(
+          'Node ${node.id} search anchor requires revisioned text input state',
+        );
+      }
+      final hasBarLeading = props.flags & 2 != 0;
+      final barTrailingCount = (props.flags >> 8) & 0xff;
+      _expectChildCount(
+        node,
+        children,
+        (hasBarLeading ? 1 : 0) + barTrailingCount,
+      );
+      final barLeading = hasBarLeading ? children.first : null;
+      final barTrailing = children
+          .skip(hasBarLeading ? 1 : 0)
+          .toList(growable: false);
+      return TextInputHost(
+        node: node,
+        props: textProps,
+        resources: RendererResourceScope.of(context),
+        onEvent: onEvent,
+        controllerFactory: (value) => M3ESearchController()..value = value,
+        builder: (context, controller, focusNode, onSubmitted) {
+          final searchController = controller as M3ESearchController;
+          return M3ESearchAnchor.bar(
+            searchController: searchController,
+            isFullScreen: props.variant == 0,
+            barLeading: barLeading,
+            barTrailing: barTrailing,
+            barHintText: props.primaryText,
+            enabled: textProps.enabled,
+            keyboardType: _materialKeyboardType(textProps.keyboardType),
+            textInputAction: _materialInputAction(textProps.inputAction),
+            onSubmitted: onSubmitted,
+            onOpen: () {
+              focusNode.requestFocus();
+              emit(EventTagId.searchOpened, const UnitEventPayload());
+            },
+            onClose: () {
+              focusNode.unfocus();
+              emit(EventTagId.searchClosed, const UnitEventPayload());
+            },
+            suggestionsBuilder: (_, controller) => [
+              for (final suggestion in props.items)
+                M3EButton.text(
+                  onPressed: suggestion.enabled
+                      ? () {
+                          emitId(suggestion.id);
+                          controller.closeView(suggestion.label);
+                        }
+                      : null,
+                  child: Text(suggestion.label),
+                ),
+            ],
+          );
+        },
+      );
+    case 25:
+      if (children.isEmpty) {
+        throw const RendererBuildException('Tooltip requires an anchor child');
+      }
+      final actions = children.skip(1).toList(growable: false);
+      if (actions.length != props.flags) {
+        throw RendererBuildException(
+          'Node ${node.id} tooltip action count does not match its children',
+        );
+      }
+      return M3ETooltip(
+        message: props.variant == 0 ? props.secondaryText : null,
+        richTitle: props.variant == 1 ? props.primaryText : null,
+        richMessage: props.variant == 1 ? props.secondaryText : null,
+        actions: actions,
+        child: children.first,
+      );
+    case 26:
+      final hasLeading = props.flags & 4 != 0;
+      final hasTrailing = props.flags & 8 != 0;
+      _expectChildCount(
+        node,
+        children,
+        (hasLeading ? 1 : 0) + (hasTrailing ? 1 : 0),
+      );
+      var childIndex = 0;
+      final leading = hasLeading ? children[childIndex++] : null;
+      final trailing = hasTrailing ? children[childIndex++] : null;
+      return M3EListItem(
+        headline: props.primaryText!,
+        supportingText: props.secondaryText,
+        overline: props.items.single.label.nullIfEmpty,
+        leading: leading,
+        trailing: trailing,
+        selected: props.flags & 2 != 0,
+        onTap: props.flags & 1 == 0
+            ? null
+            : () => emit(EventTagId.press, const UnitEventPayload()),
+      );
+    case 27:
+      final hasIcon = props.flags & 1 != 0;
+      final hasContent = props.flags & 2 != 0;
+      final actionCount = props.items.single.childCount;
+      _expectChildCount(
+        node,
+        children,
+        (hasIcon ? 1 : 0) + (hasContent ? 1 : 0) + actionCount,
+      );
+      var childIndex = 0;
+      final icon = hasIcon ? children[childIndex++] : null;
+      final content = hasContent ? children[childIndex++] : null;
+      return M3EDialog(
+        title: props.primaryText!,
+        icon: icon,
+        content: content,
+        actions: children.skip(childIndex).toList(growable: false),
+        topDivider: props.flags & 4 != 0,
+        bottomDivider: props.flags & 8 != 0,
+      );
+    case 28:
+      final hasLeading = props.flags & 4 != 0;
+      final actionCount = (props.flags >> 8) & 0xff;
+      final hasBarLeading = props.flags & 8 != 0;
+      final barTrailingCount = (props.flags >> 16) & 0xff;
+      final appBarChildren = (hasLeading ? 1 : 0) + actionCount;
+      _expectChildCount(
+        node,
+        children,
+        appBarChildren + (hasBarLeading ? 1 : 0) + barTrailingCount,
+      );
+      final textProps = props.textInput;
+      if (textProps == null) {
+        throw RendererBuildException(
+          'Node ${node.id} search app bar requires revisioned text input state',
+        );
+      }
+      final leading = hasLeading ? children.first : null;
+      final actions = children
+          .skip(hasLeading ? 1 : 0)
+          .take(actionCount)
+          .toList(growable: false);
+      final barLeading = hasBarLeading ? children[appBarChildren] : null;
+      final barTrailing = children
+          .skip(appBarChildren + (hasBarLeading ? 1 : 0))
+          .toList(growable: false);
+      return TextInputHost(
+        node: node,
+        props: textProps,
+        resources: RendererResourceScope.of(context),
+        onEvent: onEvent,
+        controllerFactory: (value) => M3ESearchController()..value = value,
+        builder: (context, controller, focusNode, onSubmitted) {
+          final searchController = controller as M3ESearchController;
+          return M3EAppBar.search(
+            searchController: searchController,
+            suggestionsBuilder: (_, controller) => [
+              for (final suggestion in props.items)
+                M3EButton.text(
+                  onPressed: suggestion.enabled
+                      ? () {
+                          emitId(suggestion.id);
+                          controller.closeView(suggestion.label);
+                        }
+                      : null,
+                  child: Text(suggestion.label),
+                ),
+            ],
+            leading: leading,
+            actions: actions,
+            centerTitle: props.flags & 1 != 0,
+            isFullScreen: props.flags & 2 != 0,
+            barHintText: props.primaryText,
+            barLeading: barLeading,
+            barTrailing: barTrailing,
+            onSubmitted: onSubmitted,
+            onOpen: () {
+              focusNode.requestFocus();
+              emit(EventTagId.searchOpened, const UnitEventPayload());
+            },
+            onClose: () {
+              focusNode.unfocus();
+              emit(EventTagId.searchClosed, const UnitEventPayload());
+            },
+          );
+        },
+      );
+    case 29:
+      _expectChildCount(node, children, 2);
+      if (props.items.length != 1) {
+        throw RendererBuildException(
+          'Node ${node.id} selection leading requires one item descriptor',
+        );
+      }
+      return M3ESelectionLeading(
+        selected: props.flags & 1 != 0,
+        selectedChild: children.last,
+        onTap: () => emitId(props.items.single.id),
+        child: children.first,
+      );
+    case 30:
+      final hasLeading = props.flags & 2 != 0;
+      final actionCount = (props.flags >> 8) & 0xff;
+      _expectChildCount(node, children, (hasLeading ? 1 : 0) + 1 + actionCount);
+      final titleIndex = hasLeading ? 1 : 0;
+      return M3EAppBar.top(
+        leading: hasLeading ? children.first : null,
+        title: children[titleIndex],
+        actions: children.skip(titleIndex + 1).toList(growable: false),
+        centerTitle: props.flags & 1 != 0,
+        safeArea: props.flags & 4 != 0,
+        semanticLabel: props.primaryText,
+      );
+    default:
+      throw RendererBuildException(
+        'Unknown Material Expressive component ${props.component}',
+      );
+  }
+}
+
+final class _ExpressiveSelectionHost extends StatefulWidget {
+  const _ExpressiveSelectionHost({
+    required this.props,
+    required this.idle,
+    required this.actions,
+    required this.body,
+    required this.emitSelection,
+  });
+
+  final MaterialExpressiveProps props;
+  final Widget idle;
+  final List<Widget> actions;
+  final Widget body;
+  final ValueChanged<Iterable<int>> emitSelection;
+
+  @override
+  State<_ExpressiveSelectionHost> createState() =>
+      _ExpressiveSelectionHostState();
+}
+
+final class _ExpressiveSelectionHostState
+    extends State<_ExpressiveSelectionHost> {
+  late final M3ESelectionController _controller;
+
+  Set<int> get _selectedIndices => {
+    for (var index = 0; index < widget.props.items.length; index++)
+      if (widget.props.selectedIds.contains(widget.props.items[index].id))
+        index,
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = M3ESelectionController(initialSelected: _selectedIndices);
+  }
+
+  @override
+  void didUpdateWidget(_ExpressiveSelectionHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _synchronizeController();
+  }
+
+  void _synchronizeController() {
+    final desired = _selectedIndices;
+    final current = _controller.selectedIndices;
+    if (desired.length == current.length && desired.containsAll(current)) {
+      return;
+    }
+    _controller.clear();
+    for (final index in desired) {
+      _controller.select(index);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedIds = widget.props.selectedIds;
+    return PopScope<void>(
+      canPop: selectedIds.isEmpty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && selectedIds.isNotEmpty) {
+          widget.emitSelection(const <int>[]);
+        }
+      },
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final height = constraints.hasBoundedHeight
+              ? constraints.maxHeight
+              : MediaQuery.sizeOf(context).height;
+          return SizedBox(
+            height: height,
+            child: M3ESelection(
+              controller: _controller,
+              itemCount: widget.props.items.length,
+              scaffold: false,
+              appBar: M3ESelectionAppBar(
+                idle: widget.idle,
+                actions: widget.actions,
+                showSelectAll: widget.props.flags & 1 != 0,
+                onClear: () => widget.emitSelection(const <int>[]),
+                onAllSelected: (allSelected) => widget.emitSelection(
+                  allSelected
+                      ? widget.props.items.map((item) => item.id)
+                      : const <int>[],
+                ),
+              ),
+              body: widget.body,
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+final class _ExpressiveDismissibleHost extends StatefulWidget {
+  const _ExpressiveDismissibleHost({
+    required this.horizontal,
+    required this.props,
+    required this.itemChildren,
+    required this.emitRequest,
+  });
+
+  final bool horizontal;
+  final MaterialExpressiveProps props;
+  final List<List<Widget>> itemChildren;
+  final ValueChanged<Iterable<int>> emitRequest;
+
+  @override
+  State<_ExpressiveDismissibleHost> createState() =>
+      _ExpressiveDismissibleHostState();
+}
+
+final class _ExpressiveDismissibleHostState
+    extends State<_ExpressiveDismissibleHost> {
+  Completer<bool>? _pending;
+  int? _pendingToken;
+
+  int get _token => int.parse(widget.props.secondaryText!);
+  int get _state => widget.props.variant;
+
+  @override
+  void didUpdateWidget(_ExpressiveDismissibleHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final pending = _pending;
+    if (pending == null || pending.isCompleted) return;
+    if (_token != _pendingToken) {
+      pending.complete(false);
+      _clearPending();
+    } else if (_state == 2 || _state == 3) {
+      pending.complete(_state == 2);
+      _clearPending();
+    }
+  }
+
+  void _clearPending() {
+    _pending = null;
+    _pendingToken = null;
+  }
+
+  Future<bool> _dismiss(int index, DismissDirection direction) {
+    final current = _pending;
+    if (current != null && !current.isCompleted) return current.future;
+    final completer = Completer<bool>();
+    _pending = completer;
+    _pendingToken = _token;
+    final directionId = switch (direction) {
+      DismissDirection.startToEnd => 0,
+      DismissDirection.endToStart => 1,
+      DismissDirection.up => 2,
+      DismissDirection.down => 3,
+      DismissDirection.horizontal => 4,
+      DismissDirection.vertical => 5,
+      DismissDirection.none => 6,
+    };
+    widget.emitRequest([_token, widget.props.items[index].id, directionId]);
+    return completer.future;
+  }
+
+  @override
+  void dispose() {
+    final pending = _pending;
+    if (pending != null && !pending.isCompleted) pending.complete(false);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.horizontal) {
+      return M3EDismissibleColumn(
+        itemCount: widget.props.items.length,
+        itemBuilder: (_, index) => widget.itemChildren[index].single,
+        onDismiss: _dismiss,
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final nestedInVerticalScroll = !constraints.hasBoundedHeight;
+        return M3EDismissibleList(
+          itemCount: widget.props.items.length,
+          itemBuilder: (_, index) => widget.itemChildren[index].single,
+          onDismiss: _dismiss,
+          shrinkWrap: nestedInVerticalScroll,
+          physics: nestedInVerticalScroll
+              ? const NeverScrollableScrollPhysics()
+              : null,
+        );
+      },
+    );
+  }
+}
+
+final class _ExpressiveRefreshHost extends StatefulWidget {
+  const _ExpressiveRefreshHost({
+    required this.props,
+    required this.emitRequest,
+    required this.child,
+  });
+
+  final MaterialExpressiveProps props;
+  final ValueChanged<Iterable<int>> emitRequest;
+  final Widget child;
+
+  @override
+  State<_ExpressiveRefreshHost> createState() => _ExpressiveRefreshHostState();
+}
+
+final class _ExpressiveRefreshHostState extends State<_ExpressiveRefreshHost> {
+  final M3ERefreshIndicatorController _controller =
+      M3ERefreshIndicatorController();
+  Completer<void>? _pending;
+  int? _pendingToken;
+  int? _lastShownToken;
+
+  int get _token => int.parse(widget.props.secondaryText!);
+  int get _state => widget.props.flags;
+  int? get _showToken => int.tryParse(widget.props.primaryText ?? '');
+
+  @override
+  void didUpdateWidget(_ExpressiveRefreshHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final pending = _pending;
+    if (pending == null || pending.isCompleted) return;
+    if (_token != _pendingToken || _state == 2) {
+      pending.complete();
+      _pending = null;
+      _pendingToken = null;
+    }
+  }
+
+  Future<void> _refresh() {
+    final current = _pending;
+    if (current != null && !current.isCompleted) return current.future;
+    final completer = Completer<void>();
+    _pending = completer;
+    _pendingToken = _token;
+    widget.emitRequest([_token]);
+    return completer.future;
+  }
+
+  void _scheduleProgrammaticShow() {
+    final token = _showToken;
+    if (token == null || token == _lastShownToken) return;
+    _lastShownToken = token;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _showToken == token) {
+        _controller.show();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    final pending = _pending;
+    if (pending != null && !pending.isCompleted) pending.complete();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _scheduleProgrammaticShow();
+    return switch (widget.props.variant) {
+      0 => M3ERefreshIndicator(
+        controller: _controller,
+        onRefresh: _refresh,
+        child: widget.child,
+      ),
+      1 => M3ERefreshIndicator.contained(
+        controller: _controller,
+        onRefresh: _refresh,
+        child: widget.child,
+      ),
+      2 => M3ERefreshIndicator.material(
+        controller: _controller,
+        onRefresh: _refresh,
+        child: widget.child,
+      ),
+      3 => M3ERefreshIndicator.adaptive(
+        controller: _controller,
+        onRefresh: _refresh,
+        child: widget.child,
+      ),
+      _ => M3ERefreshIndicator.noSpinner(
+        controller: _controller,
+        onRefresh: _refresh,
+        child: widget.child,
+      ),
+    };
+  }
+}
+
+List<List<Widget>> _expressiveItemChildren(
+  UiNode node,
+  List<MaterialExpressiveItemProps> items,
+  List<Widget> children, {
+  int prefix = 0,
+}) {
+  var childIndex = prefix;
+  final result = <List<Widget>>[];
+  for (final item in items) {
+    final end = childIndex + item.childCount;
+    if (end > children.length) {
+      throw RendererBuildException(
+        'Node ${node.id} has fewer children than its item descriptors',
+      );
+    }
+    result.add(children.sublist(childIndex, end));
+    childIndex = end;
+  }
+  if (childIndex != children.length) {
+    throw RendererBuildException(
+      'Node ${node.id} has children not owned by an item descriptor',
+    );
+  }
+  return result;
+}
+
+M3EButtonStyle _m3eButtonStyle(int value) => switch (value) {
+  0 => M3EButtonStyle.filled,
+  1 => M3EButtonStyle.tonal,
+  2 => M3EButtonStyle.elevated,
+  3 => M3EButtonStyle.outlined,
+  _ => M3EButtonStyle.text,
+};
+
+M3EButtonSize _m3eButtonSize(int value) => switch (value) {
+  0 => M3EButtonSize.xs,
+  1 => M3EButtonSize.sm,
+  2 => M3EButtonSize.md,
+  3 => M3EButtonSize.lg,
+  _ => M3EButtonSize.xl,
+};
+
+IconData _m3eToolbarIconData(int value) => switch (value) {
+  0 => M3EIcons.add,
+  1 => M3EIcons.edit,
+  2 => M3EIcons.delete,
+  3 => M3EIcons.favorite,
+  4 => M3EIcons.more_vert,
+  5 => M3EIcons.search,
+  6 => M3EIcons.share,
+  _ => throw RendererBuildException('Unknown toolbar icon $value'),
+};
+
+List<M3EMenuNode> _m3eMenuNodes(
+  List<MaterialExpressiveItemProps> items,
+  void Function(int) onSelected,
+) {
+  var index = 0;
+
+  M3EMenuNode read() {
+    final item = items[index++];
+    final children = <M3EMenuNode>[
+      for (var i = 0; i < item.childCount; i++) read(),
+    ];
+    return switch (item.kind) {
+      1 => M3EMenuSelectable(
+        label: item.label,
+        value: item.id,
+        selected: item.selected,
+        enabled: item.enabled,
+      ),
+      2 => M3EMenuToggleable(
+        label: item.label,
+        checked: item.selected,
+        enabled: item.enabled,
+        onChanged: (_) => onSelected(item.id),
+      ),
+      3 => const M3EMenuDivider(),
+      4 => M3EMenuGroup(label: item.label.nullIfEmpty, children: children),
+      5 => M3EMenuSubmenu(
+        label: item.label,
+        enabled: item.enabled,
+        children: children,
+      ),
+      _ => M3EMenuEntry(
+        label: item.label,
+        value: item.id,
+        enabled: item.enabled,
+      ),
+    };
+  }
+
+  final result = <M3EMenuNode>[];
+  while (index < items.length) {
+    result.add(read());
+  }
+  return result;
+}
+
+extension on String {
+  String? get nullIfEmpty => isEmpty ? null : this;
 }
 
 Widget _buildCupertinoButton(
@@ -2423,22 +3496,6 @@ Widget _buildCupertinoSwitch(
               payload: BoolEventPayload(value),
             ),
           ),
-  );
-}
-
-Widget _buildTextInput(
-  BuildContext context,
-  UiNode node,
-  List<Widget> children,
-  RendererEventCallback? onEvent,
-) {
-  _expectChildCount(node, children, 0);
-  final props = _expectProps<TextInputProps>(node);
-  return TextInputHost(
-    node: node,
-    props: props,
-    resources: RendererResourceScope.of(context),
-    onEvent: onEvent,
   );
 }
 

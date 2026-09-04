@@ -886,7 +886,7 @@ let view ~timings model recurring_state deadline_state exact_now approx_now hand
   in
   let body = Ui.Widget.Body.Vertical.create [ Ui.Widget.Body.Vertical.fill viewport ] in
   Ui.Material.scaffold
-    ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Clock") ())
+    ~app_bar:(Ui.Material.App_bar.top ~title:(Ui.Widget.text "Clock") ())
     ~body
     ()
 ;;

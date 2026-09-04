@@ -13,7 +13,6 @@ type node_kind =
   | Row
   | Column
   | Stack
-  | Button
   | Padding
   | Align
   | Center
@@ -41,7 +40,6 @@ type node_kind =
   | Semantics
   | Theme
   | Material_scaffold
-  | Material_app_bar
   | Material_elevated_button
   | Material_text_button
   | Material_icon_button
@@ -57,9 +55,8 @@ type node_kind =
   | Material_filter_chip
   | Material_choice_chip
   | Material_input_chip
-  | Material_alert_dialog
   | Material_search_bar
-  | Material_tooltip
+  | Material_text_field
   | Material_data_table
   | Material_stepper
   | Material_expansion_panel_list
@@ -67,15 +64,14 @@ type node_kind =
   | Material_fullscreen_dialog
   | Material_checkbox
   | Material_switch
-  | Material_list_tile
   | Material_divider
   | Material_card
   | Material_circular_progress_indicator
   | Material_linear_progress_indicator
   | Material_segmented_button
+  | Material_expressive
   | Cupertino_button
   | Cupertino_switch
-  | Text_input
   | Overlay
   | Navigator
   | Page
@@ -312,6 +308,7 @@ type page_presentation =
   | Standard_page of page_transition
   | Modal_bottom_sheet of modal_bottom_sheet_presentation
   | Modal_dialog of modal_dialog_presentation
+  | Modal_side_sheet of modal_dialog_presentation
 
 and modal_dialog_presentation =
   { barrier_dismissible : bool
@@ -377,8 +374,10 @@ type material_floating_action_button_variant =
 
 type material_navigation_destination =
   { label : string
-  ; enabled : bool
   ; has_selected_icon : bool
+  ; badge_count : int option
+  ; badge_dot : bool
+  ; semantic_label : string option
   }
 
 type material_radio_option =
@@ -389,10 +388,7 @@ type material_radio_option =
 
 type material_segment =
   { segment_id : int64
-  ; enabled : bool
-  ; tooltip : string option
   ; has_icon : bool
-  ; has_label : bool
   }
 
 type material_chip_variant =
@@ -409,10 +405,6 @@ type material_card_variant =
   | Elevated_card
   | Filled_card
   | Outlined_card
-
-type material_tooltip_trigger_mode =
-  | Tooltip_long_press
-  | Tooltip_tap
 
 type material_data_table_column =
   { column_id : int64
@@ -462,6 +454,43 @@ type material_expansion_panel =
 type material_simple_dialog_option =
   { option_id : int64
   ; enabled : bool
+  }
+
+type material_expressive_item =
+  { item_id : int64
+  ; kind : int
+  ; label : string
+  ; enabled : bool
+  ; selected : bool
+  ; child_count : int
+  }
+
+type material_expressive_text_input =
+  { session_id : ID.Text_input.session_id
+  ; document_revision : ID.Text_input.document_revision
+  ; value : text_editing_value
+  ; enabled : bool
+  ; read_only : bool
+  ; obscure_text : bool
+  ; keyboard_type : text_keyboard_type
+  ; input_action : text_input_action
+  ; accepted_local_revision : ID.Text_input.local_revision
+  ; update_mode : text_update_mode
+  ; autofocus : bool
+  ; max_utf8_bytes : int option
+  }
+
+type material_expressive_props =
+  { component : int
+  ; variant : int
+  ; flags : int64
+  ; primary_text : string option
+  ; secondary_text : string option
+  ; value : float option
+  ; end_value : float option
+  ; selected_ids : int64 list
+  ; items : material_expressive_item list
+  ; text_input : material_expressive_text_input option
   }
 
 type key_policy =
@@ -518,7 +547,6 @@ type props =
       ; height : float option
       }
   | Linear_props
-  | Button_props of { enabled : bool }
   | Pressable_props of
       { overlay_color_argb : int32
       ; release_delay_ms : int
@@ -586,22 +614,17 @@ type props =
       }
   | Sliver_app_bar_props of
       { pinned : bool
-      ; expanded_height : float option
-      ; collapsed_height : float option
       ; floating : bool
       ; snap : bool
-      ; stretch : bool
-      ; toolbar_height : float
       ; has_leading : bool
-      ; has_flexible_space : bool
-      ; has_bottom : bool
-      ; has_actions : bool
-      ; force_elevated : bool
-      ; automatically_imply_leading : bool
-      ; center_title : bool option
       ; background_color : int32 option
       ; foreground_color : int32 option
-      ; elevation : float option
+      ; action_count : int
+      ; center_title : bool
+      ; variant : int
+      ; shape : int
+      ; density : int
+      ; semantic_label : string option
       }
   | Preferred_size_props of { height : float }
   | Gesture_props
@@ -634,7 +657,6 @@ type props =
       ; has_bottom_navigation_bar : bool
       ; has_bottom_sheet : bool
       }
-  | Material_app_bar_props of { center_title : bool }
   | Material_button_props of
       { variant : material_button_variant
       ; enabled : bool
@@ -644,11 +666,20 @@ type props =
       { variant : material_floating_action_button_variant
       ; enabled : bool
       ; autofocus : bool
-      ; has_icon : bool
       }
   | Material_navigation_bar_props of
       { selected_index : int
       ; destinations : material_navigation_destination list
+      ; auto_layout : bool
+      ; layout : int
+      ; alignment : int
+      ; label_behavior : int
+      ; icon_behavior : int
+      ; size : int
+      ; shape : int
+      ; density : int
+      ; safe_area : bool
+      ; semantic_label : string option
       }
   | Material_radio_group_props of
       { selected_id : int64 option
@@ -662,6 +693,7 @@ type props =
       ; label : string option
       ; enabled : bool
       ; has_on_change : bool
+      ; kind : int
       }
   | Material_range_slider_props of
       { start : float
@@ -673,23 +705,15 @@ type props =
       ; label_end : string option
       ; enabled : bool
       ; has_on_change : bool
+      ; kind : int
       }
   | Material_chip_props of
       { variant : material_chip_variant
       ; presentation : material_chip_presentation
       ; enabled : bool
       ; selected : bool
-      ; has_avatar : bool
-      ; has_delete_icon : bool
-      ; has_on_press : bool
-      ; has_on_selected : bool
+      ; has_leading : bool
       ; has_on_delete : bool
-      }
-  | Material_alert_dialog_props of
-      { has_icon : bool
-      ; has_title : bool
-      ; has_content : bool
-      ; action_count : int
       }
   | Material_search_bar_props of
       { session_id : ID.Text_input.session_id
@@ -708,18 +732,26 @@ type props =
       ; hint_text : string option
       ; has_on_tap : bool
       }
-  | Material_tooltip_props of
-      { message : string
+  | Material_text_field_props of
+      { session_id : Bonsai_flutter_spec.Id.Text_input.session_id
+      ; document_revision : Bonsai_flutter_spec.Id.Text_input.document_revision
+      ; value : text_editing_value
       ; enabled : bool
-      ; exclude_from_semantics : bool
-      ; prefer_below : bool
-      ; trigger_mode : material_tooltip_trigger_mode
-      ; wait_duration_ms : int
-      ; show_duration_ms : int
-      ; exit_duration_ms : int
-      ; enable_tap_to_dismiss : bool
-      ; enable_feedback : bool
-      ; has_on_triggered : bool
+      ; read_only : bool
+      ; obscure_text : bool
+      ; keyboard_type : text_keyboard_type
+      ; input_action : text_input_action
+      ; accepted_local_revision : Bonsai_flutter_spec.Id.Text_input.local_revision
+      ; update_mode : text_update_mode
+      ; max_utf8_bytes : int option
+      ; variant : int
+      ; label : string option
+      ; supporting_text : string option
+      ; error_text : string option
+      ; has_leading : bool
+      ; has_trailing : bool
+      ; max_lines : int
+      ; autofocus : bool
       }
   | Material_data_table_props of
       { columns : material_data_table_column list
@@ -755,13 +787,6 @@ type props =
       { value : bool
       ; enabled : bool
       }
-  | Material_list_tile_props of
-      { enabled : bool
-      ; selected : bool
-      ; has_subtitle : bool
-      ; has_leading : bool
-      ; has_trailing : bool
-      }
   | Material_divider_props of
       { orientation : axis
       ; thickness : float
@@ -773,37 +798,25 @@ type props =
       { variant : material_card_variant
       ; elevation : float
       }
-  | Material_circular_progress_props of { value : float option }
-  | Material_linear_progress_props of { value : float option }
+  | Material_circular_progress_props of
+      { value : float option
+      ; wavy : bool
+      }
+  | Material_linear_progress_props of
+      { value : float option
+      ; wavy : bool
+      }
   | Material_segmented_button_props of
       { selected_ids : int64 list
       ; enabled : bool
-      ; direction : axis
       ; multi_selection_enabled : bool
-      ; empty_selection_allowed : bool
-      ; expanded_insets : (float * float * float * float) option
-      ; show_selected_icon : bool
-      ; has_selected_icon : bool
       ; segments : material_segment list
       }
+  | Material_expressive_props of material_expressive_props
   | Cupertino_button_props of { enabled : bool }
   | Cupertino_switch_props of
       { value : bool
       ; enabled : bool
-      }
-  | Text_input_props of
-      { session_id : ID.Text_input.session_id
-      ; document_revision : ID.Text_input.document_revision
-      ; value : text_editing_value
-      ; enabled : bool
-      ; read_only : bool
-      ; obscure_text : bool
-      ; keyboard_type : text_keyboard_type
-      ; input_action : text_input_action
-      ; accepted_local_revision : ID.Text_input.local_revision
-      ; update_mode : text_update_mode
-      ; autofocus : bool
-      ; max_utf8_bytes : int option
       }
   | Overlay_props of
       { alignment : overlay_alignment
@@ -868,6 +881,22 @@ type haptic_kind =
   | Haptic_heavy
   | Haptic_selection
 
+type civil_date =
+  { year : int
+  ; month : int
+  ; day : int
+  }
+
+type civil_date_range =
+  { start : civil_date
+  ; end_ : civil_date
+  }
+
+type civil_time =
+  { hour : int
+  ; minute : int
+  }
+
 type host_request_payload =
   | Clipboard_read
   | Clipboard_write of { text : string }
@@ -887,6 +916,25 @@ type host_request_payload =
       { message : string
       ; action_label : string option
       ; duration_ms : int
+      }
+  | Pick_date of
+      { initial : civil_date option
+      ; first : civil_date
+      ; last : civil_date
+      ; current : civil_date option
+      ; input_mode : bool
+      }
+  | Pick_date_range of
+      { initial : civil_date_range option
+      ; first : civil_date
+      ; last : civil_date
+      ; current : civil_date option
+      ; input_mode : bool
+      }
+  | Pick_time of
+      { initial : civil_time
+      ; input_mode : bool
+      ; use_24_hour : bool
       }
 
 type event_binding =

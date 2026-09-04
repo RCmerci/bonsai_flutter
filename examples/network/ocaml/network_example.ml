@@ -546,7 +546,7 @@ let component ~https_endpoint ~websocket_endpoint client handlers graph =
         |> Ui.Widget.with_test_id (Ui.Test_id.string "websocket-panel")
       in
       Ui.Material.scaffold
-        ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Secure Network Lab") ())
+        ~app_bar:(Ui.Material.App_bar.top ~title:(Ui.Widget.text "Secure Network Lab") ())
         ~body:(Ui.Widget.Body.static (Ui.Widget.column [ https_panel; websocket_panel ]))
         ())
   in

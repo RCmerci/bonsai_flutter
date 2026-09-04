@@ -448,8 +448,6 @@ abstract final class FrameCodec {
           ..uint8(fit.index)
           ..optionalFloat64(width)
           ..optionalFloat64(height);
-      case (NodeKind.button, ButtonProps(:final enabled)):
-        writer.uint8(enabled ? 1 : 0);
       case (NodeKind.pressable, final PressableProps props):
         _writePressableProps(writer, props);
       case (NodeKind.padding, PaddingProps(:final insets)):
@@ -580,43 +578,33 @@ abstract final class FrameCodec {
         NodeKind.sliverAppBar,
         SliverAppBarProps(
           :final pinned,
-          :final expandedHeight,
-          :final collapsedHeight,
           :final floating,
           :final snap,
-          :final stretch,
-          :final toolbarHeight,
           :final hasLeading,
-          :final hasFlexibleSpace,
-          :final hasBottom,
-          :final hasActions,
-          :final forceElevated,
-          :final automaticallyImplyLeading,
-          :final centerTitle,
           :final backgroundColor,
           :final foregroundColor,
-          :final elevation,
+          :final actionCount,
+          :final centerTitle,
+          :final variant,
+          :final shape,
+          :final density,
+          :final semanticLabel,
         ),
       ):
         _writeSliverAppBar(
           writer,
           pinned: pinned,
-          expandedHeight: expandedHeight,
-          collapsedHeight: collapsedHeight,
           floating: floating,
           snap: snap,
-          stretch: stretch,
-          toolbarHeight: toolbarHeight,
           hasLeading: hasLeading,
-          hasFlexibleSpace: hasFlexibleSpace,
-          hasBottom: hasBottom,
-          hasActions: hasActions,
-          forceElevated: forceElevated,
-          automaticallyImplyLeading: automaticallyImplyLeading,
-          centerTitle: centerTitle,
           backgroundColor: backgroundColor,
           foregroundColor: foregroundColor,
-          elevation: elevation,
+          actionCount: actionCount,
+          centerTitle: centerTitle,
+          variant: variant,
+          shape: shape,
+          density: density,
+          semanticLabel: semanticLabel,
         );
       case (NodeKind.preferredSize, PreferredSizeProps(:final height)):
         writer.float64(height);
@@ -651,12 +639,9 @@ abstract final class FrameCodec {
           ..uint8(floatingActionButtonLocation.index)
           ..uint8(hasBottomNavigationBar ? 1 : 0)
           ..uint8(hasBottomSheet ? 1 : 0);
-      case (NodeKind.materialAppBar, MaterialAppBarProps(:final centerTitle)):
-        writer.uint8(centerTitle ? 1 : 0);
       case (
         NodeKind.materialElevatedButton ||
             NodeKind.materialTextButton ||
-            NodeKind.materialIconButton ||
             NodeKind.materialFilledButton ||
             NodeKind.materialFilledTonalButton ||
             NodeKind.materialOutlinedButton,
@@ -665,34 +650,47 @@ abstract final class FrameCodec {
         writer
           ..uint8(enabled ? 1 : 0)
           ..uint8(autofocus ? 1 : 0);
+      case (NodeKind.materialIconButton, MaterialButtonProps(:final enabled)):
+        writer.uint8(enabled ? 1 : 0);
       case (
         NodeKind.materialFloatingActionButton,
         MaterialFloatingActionButtonProps(
           :final variant,
           :final enabled,
           :final autofocus,
-          :final hasIcon,
         ),
       ):
         writer
           ..uint8(variant.index)
           ..uint8(enabled ? 1 : 0)
-          ..uint8(autofocus ? 1 : 0)
-          ..uint8(hasIcon ? 1 : 0);
+          ..uint8(autofocus ? 1 : 0);
       case (
         NodeKind.materialNavigationBar,
-        MaterialNavigationBarProps(:final selectedIndex, :final destinations),
+        final MaterialNavigationBarProps props,
       ):
-        _validateMaterialNavigation(selectedIndex, destinations);
+        _validateMaterialNavigation(props);
         writer
-          ..uint32(selectedIndex)
-          ..uint16(destinations.length);
-        for (final destination in destinations) {
+          ..uint32(props.selectedIndex)
+          ..uint16(props.destinations.length);
+        for (final destination in props.destinations) {
           writer
             ..string(destination.label)
-            ..uint8(destination.enabled ? 1 : 0)
-            ..uint8(destination.hasSelectedIcon ? 1 : 0);
+            ..uint8(destination.hasSelectedIcon ? 1 : 0)
+            ..optionalUint32(destination.badgeCount)
+            ..uint8(destination.badgeDot ? 1 : 0)
+            ..optionalString(destination.semanticLabel);
         }
+        writer
+          ..uint8(props.autoLayout ? 1 : 0)
+          ..uint8(props.layout)
+          ..uint8(props.alignment)
+          ..uint8(props.labelBehavior)
+          ..uint8(props.iconBehavior)
+          ..uint8(props.size)
+          ..uint8(props.shape)
+          ..uint8(props.density)
+          ..uint8(props.safeArea ? 1 : 0)
+          ..optionalString(props.semanticLabel);
       case (
         NodeKind.materialRadioGroup,
         MaterialRadioGroupProps(:final selectedId, :final options),
@@ -726,7 +724,8 @@ abstract final class FrameCodec {
           ..optionalUint32(props.divisions)
           ..optionalString(props.label)
           ..uint8(props.enabled ? 1 : 0)
-          ..uint8(props.hasOnChange ? 1 : 0);
+          ..uint8(props.hasOnChange ? 1 : 0)
+          ..uint8(props.kind);
       case (NodeKind.materialRangeSlider, final MaterialRangeSliderProps props):
         _validateMaterialRangeSlider(props);
         writer
@@ -738,7 +737,8 @@ abstract final class FrameCodec {
           ..optionalString(props.labelStart)
           ..optionalString(props.labelEnd)
           ..uint8(props.enabled ? 1 : 0)
-          ..uint8(props.hasOnChange ? 1 : 0);
+          ..uint8(props.hasOnChange ? 1 : 0)
+          ..uint8(props.kind);
       case (
         NodeKind.materialActionChip ||
             NodeKind.materialFilterChip ||
@@ -748,39 +748,18 @@ abstract final class FrameCodec {
           :final presentation,
           :final enabled,
           :final selected,
-          :final hasAvatar,
-          :final hasDeleteIcon,
-          :final hasOnPress,
-          :final hasOnSelected,
+          :final hasLeading,
           :final hasOnDelete,
         ),
       ):
         writer
           ..uint8(enabled ? 1 : 0)
           ..uint8(selected ? 1 : 0)
-          ..uint8(hasAvatar ? 1 : 0)
-          ..uint8(hasDeleteIcon ? 1 : 0)
-          ..uint8(hasOnPress ? 1 : 0)
-          ..uint8(hasOnSelected ? 1 : 0)
+          ..uint8(hasLeading ? 1 : 0)
           ..uint8(hasOnDelete ? 1 : 0)
           ..uint8(presentation.index);
       case (
-        NodeKind.materialAlertDialog,
-        MaterialAlertDialogProps(
-          :final hasIcon,
-          :final hasTitle,
-          :final hasContent,
-          :final actionCount,
-        ),
-      ):
-        writer
-          ..uint8(hasIcon ? 1 : 0)
-          ..uint8(hasTitle ? 1 : 0)
-          ..uint8(hasContent ? 1 : 0)
-          ..uint32(actionCount);
-      case (
         NodeKind.materialSearchBar ||
-            NodeKind.materialTooltip ||
             NodeKind.materialDataTable ||
             NodeKind.materialStepper ||
             NodeKind.materialExpansionPanelList ||
@@ -789,6 +768,8 @@ abstract final class FrameCodec {
         final UiProps props,
       ):
         _writeAdditionalMaterialProps(writer, props);
+      case (NodeKind.materialTextField, final MaterialTextFieldProps props):
+        _writeMaterialTextField(writer, props);
       case (
         NodeKind.materialCheckbox,
         MaterialCheckboxProps(:final value, :final enabled),
@@ -803,22 +784,6 @@ abstract final class FrameCodec {
         writer
           ..uint8(value ? 1 : 0)
           ..uint8(enabled ? 1 : 0);
-      case (
-        NodeKind.materialListTile,
-        MaterialListTileProps(
-          :final enabled,
-          :final selected,
-          :final hasSubtitle,
-          :final hasLeading,
-          :final hasTrailing,
-        ),
-      ):
-        writer
-          ..uint8(enabled ? 1 : 0)
-          ..uint8(selected ? 1 : 0)
-          ..uint8(hasSubtitle ? 1 : 0)
-          ..uint8(hasLeading ? 1 : 0)
-          ..uint8(hasTrailing ? 1 : 0);
       case (
         NodeKind.materialDivider,
         MaterialDividerProps(
@@ -844,16 +809,22 @@ abstract final class FrameCodec {
           ..uint8(variant.index);
       case (
         NodeKind.materialCircularProgressIndicator,
-        MaterialCircularProgressProps(:final value),
+        MaterialCircularProgressProps(:final value, :final wavy),
       ):
         _validateProgressValue(value);
-        writer.optionalFloat64(value);
+        writer
+          ..optionalFloat64(value)
+          ..uint8(wavy ? 1 : 0);
       case (
         NodeKind.materialLinearProgressIndicator,
-        MaterialLinearProgressProps(:final value),
+        MaterialLinearProgressProps(:final value, :final wavy),
       ):
         _validateProgressValue(value);
-        writer.optionalFloat64(value);
+        writer
+          ..optionalFloat64(value)
+          ..uint8(wavy ? 1 : 0);
+      case (NodeKind.materialExpressive, final MaterialExpressiveProps props):
+        _writeMaterialExpressive(writer, props);
       case (NodeKind.cupertinoButton, CupertinoButtonProps(:final enabled)):
         writer.uint8(enabled ? 1 : 0);
       case (
@@ -863,8 +834,6 @@ abstract final class FrameCodec {
         writer
           ..uint8(value ? 1 : 0)
           ..uint8(enabled ? 1 : 0);
-      case (NodeKind.textInput, final TextInputProps props):
-        _writeTextInputProps(writer, props);
       case (
         NodeKind.overlay,
         OverlayProps(:final alignment, :final dismissible),
@@ -947,11 +916,6 @@ abstract final class FrameCodec {
         writer
           ..uint16(NodeKindId.row)
           ..uint64(0);
-      case ButtonProps(:final enabled):
-        writer
-          ..uint16(NodeKindId.button)
-          ..uint64(1)
-          ..uint8(enabled ? 1 : 0);
       case final PressableProps props:
         writer
           ..uint16(NodeKindId.pressable)
@@ -1099,22 +1063,17 @@ abstract final class FrameCodec {
           ..float64(insets.bottom);
       case SliverAppBarProps(
         :final pinned,
-        :final expandedHeight,
-        :final collapsedHeight,
         :final floating,
         :final snap,
-        :final stretch,
-        :final toolbarHeight,
         :final hasLeading,
-        :final hasFlexibleSpace,
-        :final hasBottom,
-        :final hasActions,
-        :final forceElevated,
-        :final automaticallyImplyLeading,
-        :final centerTitle,
         :final backgroundColor,
         :final foregroundColor,
-        :final elevation,
+        :final actionCount,
+        :final centerTitle,
+        :final variant,
+        :final shape,
+        :final density,
+        :final semanticLabel,
       ):
         writer
           ..uint16(NodeKindId.sliverAppBar)
@@ -1122,22 +1081,17 @@ abstract final class FrameCodec {
         _writeSliverAppBar(
           writer,
           pinned: pinned,
-          expandedHeight: expandedHeight,
-          collapsedHeight: collapsedHeight,
           floating: floating,
           snap: snap,
-          stretch: stretch,
-          toolbarHeight: toolbarHeight,
           hasLeading: hasLeading,
-          hasFlexibleSpace: hasFlexibleSpace,
-          hasBottom: hasBottom,
-          hasActions: hasActions,
-          forceElevated: forceElevated,
-          automaticallyImplyLeading: automaticallyImplyLeading,
-          centerTitle: centerTitle,
           backgroundColor: backgroundColor,
           foregroundColor: foregroundColor,
-          elevation: elevation,
+          actionCount: actionCount,
+          centerTitle: centerTitle,
+          variant: variant,
+          shape: shape,
+          density: density,
+          semanticLabel: semanticLabel,
         );
       case PreferredSizeProps(:final height):
         writer
@@ -1193,11 +1147,6 @@ abstract final class FrameCodec {
           ..uint16(NodeKindId.materialScaffold)
           ..uint64(_changedFields(props));
         _writeCreateProps(writer, NodeKind.materialScaffold, props);
-      case MaterialAppBarProps(:final centerTitle):
-        writer
-          ..uint16(NodeKindId.materialAppBar)
-          ..uint64(_changedFields(props))
-          ..uint8(centerTitle ? 1 : 0);
       case MaterialButtonProps(
         :final variant,
         :final enabled,
@@ -1214,8 +1163,10 @@ abstract final class FrameCodec {
             MaterialButtonVariant.outlined => NodeKindId.materialOutlinedButton,
           })
           ..uint64(_changedFields(props))
-          ..uint8(enabled ? 1 : 0)
-          ..uint8(autofocus ? 1 : 0);
+          ..uint8(enabled ? 1 : 0);
+        if (variant != MaterialButtonVariant.icon) {
+          writer.uint8(autofocus ? 1 : 0);
+        }
       case final MaterialFloatingActionButtonProps props:
         writer
           ..uint16(NodeKindId.materialFloatingActionButton)
@@ -1258,21 +1209,16 @@ abstract final class FrameCodec {
           ..uint16(_nodeKindId(kind))
           ..uint64(_changedFields(props));
         _writeCreateProps(writer, kind, props);
-      case final MaterialAlertDialogProps props:
-        writer
-          ..uint16(NodeKindId.materialAlertDialog)
-          ..uint64(_changedFields(props));
-        _writeCreateProps(writer, NodeKind.materialAlertDialog, props);
       case final MaterialSearchBarProps props:
         writer
           ..uint16(NodeKindId.materialSearchBar)
           ..uint64(_changedFields(props));
         _writeAdditionalMaterialProps(writer, props);
-      case final MaterialTooltipProps props:
+      case final MaterialTextFieldProps props:
         writer
-          ..uint16(NodeKindId.materialTooltip)
+          ..uint16(NodeKindId.materialTextField)
           ..uint64(_changedFields(props));
-        _writeAdditionalMaterialProps(writer, props);
+        _writeMaterialTextField(writer, props);
       case final MaterialDataTableProps props:
         writer
           ..uint16(NodeKindId.materialDataTable)
@@ -1313,21 +1259,6 @@ abstract final class FrameCodec {
           ..uint64(_changedFields(props))
           ..uint8(value ? 1 : 0)
           ..uint8(enabled ? 1 : 0);
-      case MaterialListTileProps(
-        :final enabled,
-        :final selected,
-        :final hasSubtitle,
-        :final hasLeading,
-        :final hasTrailing,
-      ):
-        writer
-          ..uint16(NodeKindId.materialListTile)
-          ..uint64(_changedFields(props))
-          ..uint8(enabled ? 1 : 0)
-          ..uint8(selected ? 1 : 0)
-          ..uint8(hasSubtitle ? 1 : 0)
-          ..uint8(hasLeading ? 1 : 0)
-          ..uint8(hasTrailing ? 1 : 0);
       case MaterialDividerProps(
         :final orientation,
         :final thickness,
@@ -1351,18 +1282,25 @@ abstract final class FrameCodec {
           ..uint64(_changedFields(props))
           ..float64(elevation)
           ..uint8(variant.index);
-      case MaterialCircularProgressProps(:final value):
+      case MaterialCircularProgressProps(:final value, :final wavy):
         _validateProgressValue(value);
         writer
           ..uint16(NodeKindId.materialCircularProgressIndicator)
           ..uint64(_changedFields(props))
-          ..optionalFloat64(value);
-      case MaterialLinearProgressProps(:final value):
+          ..optionalFloat64(value)
+          ..uint8(wavy ? 1 : 0);
+      case MaterialLinearProgressProps(:final value, :final wavy):
         _validateProgressValue(value);
         writer
           ..uint16(NodeKindId.materialLinearProgressIndicator)
           ..uint64(_changedFields(props))
-          ..optionalFloat64(value);
+          ..optionalFloat64(value)
+          ..uint8(wavy ? 1 : 0);
+      case final MaterialExpressiveProps props:
+        writer
+          ..uint16(NodeKindId.materialExpressive)
+          ..uint64(_changedFields(props));
+        _writeMaterialExpressive(writer, props);
       case CupertinoButtonProps(:final enabled):
         writer
           ..uint16(NodeKindId.cupertinoButton)
@@ -1374,11 +1312,6 @@ abstract final class FrameCodec {
           ..uint64(_changedFields(props))
           ..uint8(value ? 1 : 0)
           ..uint8(enabled ? 1 : 0);
-      case final TextInputProps props:
-        writer
-          ..uint16(NodeKindId.textInput)
-          ..uint64(_changedFields(props));
-        _writeTextInputProps(writer, props);
       case OverlayProps(:final alignment, :final dismissible):
         writer
           ..uint16(NodeKindId.overlay)
@@ -1465,7 +1398,6 @@ abstract final class FrameCodec {
       height: reader.optionalFloat64(),
     ),
     NodeKind.row || NodeKind.column => const LinearProps(),
-    NodeKind.button => ButtonProps(enabled: reader.boolean()),
     NodeKind.pressable => () {
       final overlayColorArgb = reader.uint32();
       final releaseDelayMs = reader.uint16();
@@ -1553,9 +1485,6 @@ abstract final class FrameCodec {
       hasBottomNavigationBar: reader.boolean(),
       hasBottomSheet: reader.boolean(),
     ),
-    NodeKind.materialAppBar => MaterialAppBarProps(
-      centerTitle: reader.boolean(),
-    ),
     NodeKind.materialElevatedButton => MaterialButtonProps(
       variant: MaterialButtonVariant.elevated,
       enabled: reader.boolean(),
@@ -1569,7 +1498,7 @@ abstract final class FrameCodec {
     NodeKind.materialIconButton => MaterialButtonProps(
       variant: MaterialButtonVariant.icon,
       enabled: reader.boolean(),
-      autofocus: reader.boolean(),
+      autofocus: false,
     ),
     NodeKind.materialFilledButton => MaterialButtonProps(
       variant: MaterialButtonVariant.filled,
@@ -1594,7 +1523,6 @@ abstract final class FrameCodec {
       ),
       enabled: reader.boolean(),
       autofocus: reader.boolean(),
-      hasIcon: reader.boolean(),
     ),
     NodeKind.materialNavigationBar => _readMaterialNavigationBar(reader),
     NodeKind.materialRadioGroup => _readMaterialRadioGroup(reader),
@@ -1617,14 +1545,7 @@ abstract final class FrameCodec {
       reader,
       MaterialChipVariant.input,
     ),
-    NodeKind.materialAlertDialog => MaterialAlertDialogProps(
-      hasIcon: reader.boolean(),
-      hasTitle: reader.boolean(),
-      hasContent: reader.boolean(),
-      actionCount: reader.uint32(),
-    ),
     NodeKind.materialSearchBar ||
-    NodeKind.materialTooltip ||
     NodeKind.materialDataTable ||
     NodeKind.materialStepper ||
     NodeKind.materialExpansionPanelList ||
@@ -1633,6 +1554,7 @@ abstract final class FrameCodec {
       reader,
       kind,
     ),
+    NodeKind.materialTextField => _readMaterialTextField(reader),
     NodeKind.materialCheckbox => MaterialCheckboxProps(
       value: reader.boolean(),
       enabled: reader.boolean(),
@@ -1641,27 +1563,22 @@ abstract final class FrameCodec {
       value: reader.boolean(),
       enabled: reader.boolean(),
     ),
-    NodeKind.materialListTile => MaterialListTileProps(
-      enabled: reader.boolean(),
-      selected: reader.boolean(),
-      hasSubtitle: reader.boolean(),
-      hasLeading: reader.boolean(),
-      hasTrailing: reader.boolean(),
-    ),
     NodeKind.materialDivider => _readMaterialDivider(reader),
     NodeKind.materialCard => _readMaterialCard(reader),
     NodeKind.materialCircularProgressIndicator => MaterialCircularProgressProps(
       value: _readProgressValue(reader),
+      wavy: reader.boolean(),
     ),
     NodeKind.materialLinearProgressIndicator => MaterialLinearProgressProps(
       value: _readProgressValue(reader),
+      wavy: reader.boolean(),
     ),
+    NodeKind.materialExpressive => _readMaterialExpressive(reader),
     NodeKind.cupertinoButton => CupertinoButtonProps(enabled: reader.boolean()),
     NodeKind.cupertinoSwitch => CupertinoSwitchProps(
       value: reader.boolean(),
       enabled: reader.boolean(),
     ),
-    NodeKind.textInput => _readTextInputProps(reader),
     NodeKind.overlay => OverlayProps(
       alignment: _enumValue(
         OverlayAlignment.values,
@@ -1743,7 +1660,6 @@ abstract final class FrameCodec {
     NodeKind.row => NodeKindId.row,
     NodeKind.column => NodeKindId.column,
     NodeKind.stack => NodeKindId.stack,
-    NodeKind.button => NodeKindId.button,
     NodeKind.padding => NodeKindId.padding,
     NodeKind.align => NodeKindId.align,
     NodeKind.center => NodeKindId.center,
@@ -1771,7 +1687,6 @@ abstract final class FrameCodec {
     NodeKind.semantics => NodeKindId.semantics,
     NodeKind.theme => NodeKindId.theme,
     NodeKind.materialScaffold => NodeKindId.materialScaffold,
-    NodeKind.materialAppBar => NodeKindId.materialAppBar,
     NodeKind.materialElevatedButton => NodeKindId.materialElevatedButton,
     NodeKind.materialTextButton => NodeKindId.materialTextButton,
     NodeKind.materialIconButton => NodeKindId.materialIconButton,
@@ -1789,9 +1704,8 @@ abstract final class FrameCodec {
     NodeKind.materialFilterChip => NodeKindId.materialFilterChip,
     NodeKind.materialChoiceChip => NodeKindId.materialChoiceChip,
     NodeKind.materialInputChip => NodeKindId.materialInputChip,
-    NodeKind.materialAlertDialog => NodeKindId.materialAlertDialog,
     NodeKind.materialSearchBar => NodeKindId.materialSearchBar,
-    NodeKind.materialTooltip => NodeKindId.materialTooltip,
+    NodeKind.materialTextField => NodeKindId.materialTextField,
     NodeKind.materialDataTable => NodeKindId.materialDataTable,
     NodeKind.materialStepper => NodeKindId.materialStepper,
     NodeKind.materialExpansionPanelList =>
@@ -1800,16 +1714,15 @@ abstract final class FrameCodec {
     NodeKind.materialFullscreenDialog => NodeKindId.materialFullscreenDialog,
     NodeKind.materialCheckbox => NodeKindId.materialCheckbox,
     NodeKind.materialSwitch => NodeKindId.materialSwitch,
-    NodeKind.materialListTile => NodeKindId.materialListTile,
     NodeKind.materialDivider => NodeKindId.materialDivider,
     NodeKind.materialCard => NodeKindId.materialCard,
     NodeKind.materialCircularProgressIndicator =>
       NodeKindId.materialCircularProgressIndicator,
     NodeKind.materialLinearProgressIndicator =>
       NodeKindId.materialLinearProgressIndicator,
+    NodeKind.materialExpressive => NodeKindId.materialExpressive,
     NodeKind.cupertinoButton => NodeKindId.cupertinoButton,
     NodeKind.cupertinoSwitch => NodeKindId.cupertinoSwitch,
-    NodeKind.textInput => NodeKindId.textInput,
     NodeKind.overlay => NodeKindId.overlay,
     NodeKind.navigator => NodeKindId.navigator,
     NodeKind.page => NodeKindId.page,
@@ -1828,7 +1741,6 @@ abstract final class FrameCodec {
     if (value == NodeKindId.row) return NodeKind.row;
     if (value == NodeKindId.column) return NodeKind.column;
     if (value == NodeKindId.stack) return NodeKind.stack;
-    if (value == NodeKindId.button) return NodeKind.button;
     if (value == NodeKindId.padding) return NodeKind.padding;
     if (value == NodeKindId.align) return NodeKind.align;
     if (value == NodeKindId.center) return NodeKind.center;
@@ -1865,7 +1777,6 @@ abstract final class FrameCodec {
     if (value == NodeKindId.materialScaffold) {
       return NodeKind.materialScaffold;
     }
-    if (value == NodeKindId.materialAppBar) return NodeKind.materialAppBar;
     if (value == NodeKindId.materialElevatedButton) {
       return NodeKind.materialElevatedButton;
     }
@@ -1909,14 +1820,11 @@ abstract final class FrameCodec {
     if (value == NodeKindId.materialInputChip) {
       return NodeKind.materialInputChip;
     }
-    if (value == NodeKindId.materialAlertDialog) {
-      return NodeKind.materialAlertDialog;
-    }
     if (value == NodeKindId.materialSearchBar) {
       return NodeKind.materialSearchBar;
     }
-    if (value == NodeKindId.materialTooltip) {
-      return NodeKind.materialTooltip;
+    if (value == NodeKindId.materialTextField) {
+      return NodeKind.materialTextField;
     }
     if (value == NodeKindId.materialDataTable) {
       return NodeKind.materialDataTable;
@@ -1937,7 +1845,6 @@ abstract final class FrameCodec {
       return NodeKind.materialCheckbox;
     }
     if (value == NodeKindId.materialSwitch) return NodeKind.materialSwitch;
-    if (value == NodeKindId.materialListTile) return NodeKind.materialListTile;
     if (value == NodeKindId.materialDivider) return NodeKind.materialDivider;
     if (value == NodeKindId.materialCard) return NodeKind.materialCard;
     if (value == NodeKindId.materialCircularProgressIndicator) {
@@ -1949,9 +1856,11 @@ abstract final class FrameCodec {
     if (value == NodeKindId.materialSegmentedButton) {
       return NodeKind.materialSegmentedButton;
     }
+    if (value == NodeKindId.materialExpressive) {
+      return NodeKind.materialExpressive;
+    }
     if (value == NodeKindId.cupertinoButton) return NodeKind.cupertinoButton;
     if (value == NodeKindId.cupertinoSwitch) return NodeKind.cupertinoSwitch;
-    if (value == NodeKindId.textInput) return NodeKind.textInput;
     if (value == NodeKindId.overlay) return NodeKind.overlay;
     if (value == NodeKindId.navigator) return NodeKind.navigator;
     if (value == NodeKindId.page) return NodeKind.page;
@@ -2365,7 +2274,6 @@ int _changedFields(UiProps props) => switch (props) {
         _fieldMask(ImagePropId.fit) |
         _fieldMask(ImagePropId.width) |
         _fieldMask(ImagePropId.height),
-  ButtonProps() => _fieldMask(ButtonPropId.enabled),
   PressableProps() =>
     _fieldMask(PressablePropId.overlayColor) |
         _fieldMask(PressablePropId.releaseDelayMs),
@@ -2418,22 +2326,17 @@ int _changedFields(UiProps props) => switch (props) {
   SliverPaddingProps() => _fieldMask(SliverPaddingPropId.insets),
   SliverAppBarProps() =>
     _fieldMask(SliverAppBarPropId.pinned) |
-        _fieldMask(SliverAppBarPropId.expandedHeight) |
-        _fieldMask(SliverAppBarPropId.collapsedHeight) |
         _fieldMask(SliverAppBarPropId.floating) |
         _fieldMask(SliverAppBarPropId.snap) |
-        _fieldMask(SliverAppBarPropId.stretch) |
-        _fieldMask(SliverAppBarPropId.toolbarHeight) |
         _fieldMask(SliverAppBarPropId.hasLeading) |
-        _fieldMask(SliverAppBarPropId.hasFlexibleSpace) |
-        _fieldMask(SliverAppBarPropId.hasBottom) |
-        _fieldMask(SliverAppBarPropId.hasActions) |
-        _fieldMask(SliverAppBarPropId.forceElevated) |
-        _fieldMask(SliverAppBarPropId.automaticallyImplyLeading) |
-        _fieldMask(SliverAppBarPropId.centerTitle) |
         _fieldMask(SliverAppBarPropId.backgroundColor) |
         _fieldMask(SliverAppBarPropId.foregroundColor) |
-        _fieldMask(SliverAppBarPropId.elevation),
+        _fieldMask(SliverAppBarPropId.actionCount) |
+        _fieldMask(SliverAppBarPropId.centerTitleValue) |
+        _fieldMask(SliverAppBarPropId.variant) |
+        _fieldMask(SliverAppBarPropId.shape) |
+        _fieldMask(SliverAppBarPropId.density) |
+        _fieldMask(SliverAppBarPropId.semanticLabel),
   PreferredSizeProps() => _fieldMask(PreferredSizePropId.height),
   FocusScopeProps() => _fieldMask(FocusScopePropId.autofocus),
   MouseRegionProps() => _fieldMask(MouseRegionPropId.opaque),
@@ -2461,7 +2364,6 @@ int _changedFields(UiProps props) => switch (props) {
         _fieldMask(MaterialScaffoldPropId.floatingActionButtonLocation) |
         _fieldMask(MaterialScaffoldPropId.hasBottomNavigationBar) |
         _fieldMask(MaterialScaffoldPropId.hasBottomSheet),
-  MaterialAppBarProps() => _fieldMask(MaterialAppBarPropId.centerTitle),
   MaterialButtonProps(:final variant) => switch (variant) {
     MaterialButtonVariant.elevated =>
       _fieldMask(MaterialElevatedButtonPropId.enabled) |
@@ -2469,9 +2371,7 @@ int _changedFields(UiProps props) => switch (props) {
     MaterialButtonVariant.text =>
       _fieldMask(MaterialTextButtonPropId.enabled) |
           _fieldMask(MaterialTextButtonPropId.autofocus),
-    MaterialButtonVariant.icon =>
-      _fieldMask(MaterialIconButtonPropId.enabled) |
-          _fieldMask(MaterialIconButtonPropId.autofocus),
+    MaterialButtonVariant.icon => _fieldMask(MaterialIconButtonPropId.enabled),
     MaterialButtonVariant.filled =>
       _fieldMask(MaterialFilledButtonPropId.enabled) |
           _fieldMask(MaterialFilledButtonPropId.autofocus),
@@ -2485,23 +2385,27 @@ int _changedFields(UiProps props) => switch (props) {
   MaterialFloatingActionButtonProps() =>
     _fieldMask(MaterialFloatingActionButtonPropId.variant) |
         _fieldMask(MaterialFloatingActionButtonPropId.enabled) |
-        _fieldMask(MaterialFloatingActionButtonPropId.autofocus) |
-        _fieldMask(MaterialFloatingActionButtonPropId.hasIcon),
+        _fieldMask(MaterialFloatingActionButtonPropId.autofocus),
   MaterialNavigationBarProps() =>
     _fieldMask(MaterialNavigationBarPropId.selectedIndex) |
-        _fieldMask(MaterialNavigationBarPropId.destinations),
+        _fieldMask(MaterialNavigationBarPropId.destinations) |
+        _fieldMask(MaterialNavigationBarPropId.autoLayout) |
+        _fieldMask(MaterialNavigationBarPropId.layout) |
+        _fieldMask(MaterialNavigationBarPropId.alignment) |
+        _fieldMask(MaterialNavigationBarPropId.labelBehavior) |
+        _fieldMask(MaterialNavigationBarPropId.iconBehavior) |
+        _fieldMask(MaterialNavigationBarPropId.size) |
+        _fieldMask(MaterialNavigationBarPropId.shape) |
+        _fieldMask(MaterialNavigationBarPropId.density) |
+        _fieldMask(MaterialNavigationBarPropId.safeArea) |
+        _fieldMask(MaterialNavigationBarPropId.semanticLabel),
   MaterialRadioGroupProps() =>
     _fieldMask(MaterialRadioGroupPropId.selectedId) |
         _fieldMask(MaterialRadioGroupPropId.options),
   MaterialSegmentedButtonProps() =>
     _fieldMask(MaterialSegmentedButtonPropId.selectedIds) |
         _fieldMask(MaterialSegmentedButtonPropId.enabled) |
-        _fieldMask(MaterialSegmentedButtonPropId.direction) |
         _fieldMask(MaterialSegmentedButtonPropId.multiSelectionEnabled) |
-        _fieldMask(MaterialSegmentedButtonPropId.emptySelectionAllowed) |
-        _fieldMask(MaterialSegmentedButtonPropId.expandedInsets) |
-        _fieldMask(MaterialSegmentedButtonPropId.showSelectedIcon) |
-        _fieldMask(MaterialSegmentedButtonPropId.hasSelectedIcon) |
         _fieldMask(MaterialSegmentedButtonPropId.segments),
   MaterialSliderProps() =>
     _fieldMask(MaterialSliderPropId.value) |
@@ -2510,7 +2414,8 @@ int _changedFields(UiProps props) => switch (props) {
         _fieldMask(MaterialSliderPropId.divisions) |
         _fieldMask(MaterialSliderPropId.label) |
         _fieldMask(MaterialSliderPropId.enabled) |
-        _fieldMask(MaterialSliderPropId.hasOnChange),
+        _fieldMask(MaterialSliderPropId.hasOnChange) |
+        _fieldMask(MaterialSliderPropId.kind),
   MaterialRangeSliderProps() =>
     _fieldMask(MaterialRangeSliderPropId.start) |
         _fieldMask(MaterialRangeSliderPropId.endValue) |
@@ -2520,23 +2425,16 @@ int _changedFields(UiProps props) => switch (props) {
         _fieldMask(MaterialRangeSliderPropId.labelStart) |
         _fieldMask(MaterialRangeSliderPropId.labelEnd) |
         _fieldMask(MaterialRangeSliderPropId.enabled) |
-        _fieldMask(MaterialRangeSliderPropId.hasOnChange),
+        _fieldMask(MaterialRangeSliderPropId.hasOnChange) |
+        _fieldMask(MaterialRangeSliderPropId.kind),
   MaterialChipProps() =>
     _fieldMask(MaterialActionChipPropId.enabled) |
         _fieldMask(MaterialActionChipPropId.selected) |
-        _fieldMask(MaterialActionChipPropId.hasAvatar) |
-        _fieldMask(MaterialActionChipPropId.hasDeleteIcon) |
-        _fieldMask(MaterialActionChipPropId.hasOnPress) |
-        _fieldMask(MaterialActionChipPropId.hasOnSelected) |
+        _fieldMask(MaterialActionChipPropId.hasLeading) |
         _fieldMask(MaterialActionChipPropId.hasOnDelete) |
         _fieldMask(MaterialActionChipPropId.presentation),
-  MaterialAlertDialogProps() =>
-    _fieldMask(MaterialAlertDialogPropId.hasIcon) |
-        _fieldMask(MaterialAlertDialogPropId.hasTitle) |
-        _fieldMask(MaterialAlertDialogPropId.hasContent) |
-        _fieldMask(MaterialAlertDialogPropId.actionCount),
   MaterialSearchBarProps() => (1 << 15) - 1,
-  MaterialTooltipProps() => (1 << 11) - 1,
+  MaterialTextFieldProps() => (1 << 19) - 1,
   MaterialDataTableProps() => (1 << 9) - 1,
   MaterialStepperProps() => (1 << 3) - 1,
   MaterialExpansionPanelListProps() => (1 << 3) - 1,
@@ -2548,39 +2446,21 @@ int _changedFields(UiProps props) => switch (props) {
   MaterialSwitchProps() =>
     _fieldMask(MaterialSwitchPropId.value) |
         _fieldMask(MaterialSwitchPropId.enabled),
-  MaterialListTileProps() =>
-    _fieldMask(MaterialListTilePropId.enabled) |
-        _fieldMask(MaterialListTilePropId.selected) |
-        _fieldMask(MaterialListTilePropId.hasSubtitle) |
-        _fieldMask(MaterialListTilePropId.hasLeading) |
-        _fieldMask(MaterialListTilePropId.hasTrailing),
   MaterialDividerProps() => (1 << 5) - 1,
   MaterialCardProps() =>
     _fieldMask(MaterialCardPropId.elevation) |
         _fieldMask(MaterialCardPropId.variant),
-  MaterialCircularProgressProps() => _fieldMask(
-    MaterialCircularProgressIndicatorPropId.value,
-  ),
-  MaterialLinearProgressProps() => _fieldMask(
-    MaterialLinearProgressIndicatorPropId.value,
-  ),
+  MaterialCircularProgressProps() =>
+    _fieldMask(MaterialCircularProgressIndicatorPropId.value) |
+        _fieldMask(MaterialCircularProgressIndicatorPropId.wavy),
+  MaterialLinearProgressProps() =>
+    _fieldMask(MaterialLinearProgressIndicatorPropId.value) |
+        _fieldMask(MaterialLinearProgressIndicatorPropId.wavy),
+  MaterialExpressiveProps() => (1 << 10) - 1,
   CupertinoButtonProps() => _fieldMask(CupertinoButtonPropId.enabled),
   CupertinoSwitchProps() =>
     _fieldMask(CupertinoSwitchPropId.value) |
         _fieldMask(CupertinoSwitchPropId.enabled),
-  TextInputProps() =>
-    _fieldMask(TextInputPropId.sessionId) |
-        _fieldMask(TextInputPropId.documentRevision) |
-        _fieldMask(TextInputPropId.value) |
-        _fieldMask(TextInputPropId.enabled) |
-        _fieldMask(TextInputPropId.readOnly) |
-        _fieldMask(TextInputPropId.obscureText) |
-        _fieldMask(TextInputPropId.keyboardType) |
-        _fieldMask(TextInputPropId.inputAction) |
-        _fieldMask(TextInputPropId.acceptedLocalRevision) |
-        _fieldMask(TextInputPropId.updateMode) |
-        _fieldMask(TextInputPropId.autofocus) |
-        _fieldMask(TextInputPropId.maxUtf8Bytes),
   OverlayProps() =>
     _fieldMask(OverlayPropId.alignment) | _fieldMask(OverlayPropId.dismissible),
   NavigatorProps() => _fieldMask(NavigatorPropId.restorationScopeId),
@@ -2727,10 +2607,8 @@ RuntimeStatsOperation _readRuntimeStats(_Reader reader) =>
       resyncCount: reader.uint32(),
     );
 
-void _validateMaterialNavigation(
-  int selectedIndex,
-  List<MaterialNavigationDestinationProps> destinations,
-) {
+void _validateMaterialNavigation(MaterialNavigationBarProps props) {
+  final MaterialNavigationBarProps(:selectedIndex, :destinations) = props;
   if (destinations.length < 2) {
     _fail(
       ProtocolErrorCode.invalidProps,
@@ -2748,6 +2626,22 @@ void _validateMaterialNavigation(
       ProtocolErrorCode.invalidProps,
       'Navigation destination label is empty',
     );
+  }
+  if (destinations.any(
+    (destination) =>
+        (destination.badgeCount != null && destination.badgeCount! < 0) ||
+        (destination.badgeCount != null && destination.badgeDot),
+  )) {
+    _fail(ProtocolErrorCode.invalidProps, 'Invalid navigation badge');
+  }
+  if (props.layout > 1 ||
+      props.alignment > 2 ||
+      props.labelBehavior > 2 ||
+      props.iconBehavior > 2 ||
+      props.size > 1 ||
+      props.shape > 1 ||
+      props.density > 1) {
+    _fail(ProtocolErrorCode.invalidProps, 'Invalid navigation bar enum');
   }
 }
 
@@ -2772,12 +2666,6 @@ void _validateMaterialSegmentedButton(MaterialSegmentedButtonProps props) {
   }
   final segmentIds = <int>{};
   for (final segment in props.segments) {
-    if (!segment.hasIcon && !segment.hasLabel) {
-      _fail(
-        ProtocolErrorCode.invalidProps,
-        'SegmentedButton segment needs an icon or label',
-      );
-    }
     if (!segmentIds.add(segment.id)) {
       _fail(
         ProtocolErrorCode.invalidProps,
@@ -2806,29 +2694,10 @@ void _validateMaterialSegmentedButton(MaterialSegmentedButtonProps props) {
       'SegmentedButton single-selection mode has multiple IDs',
     );
   }
-  if (!props.emptySelectionAllowed && props.selectedIds.isEmpty) {
+  if (!props.multiSelectionEnabled && props.selectedIds.isEmpty) {
     _fail(
       ProtocolErrorCode.invalidProps,
-      'SegmentedButton selection must not be empty',
-    );
-  }
-  if (props.hasSelectedIcon && !props.showSelectedIcon) {
-    _fail(
-      ProtocolErrorCode.invalidProps,
-      'SegmentedButton selected icon cannot be supplied while hidden',
-    );
-  }
-  final insets = props.expandedInsets;
-  if (insets != null &&
-      [
-        insets.left,
-        insets.top,
-        insets.right,
-        insets.bottom,
-      ].any((value) => !value.isFinite || value < 0)) {
-    _fail(
-      ProtocolErrorCode.invalidProps,
-      'SegmentedButton expanded insets must be finite and non-negative',
+      'SegmentedButton single-selection mode requires a selected ID',
     );
   }
 }
@@ -2850,31 +2719,12 @@ void _writeMaterialSegmentedButton(
   }
   writer
     ..uint8(props.enabled ? 1 : 0)
-    ..uint8(props.direction.index)
     ..uint8(props.multiSelectionEnabled ? 1 : 0)
-    ..uint8(props.emptySelectionAllowed ? 1 : 0);
-  final insets = props.expandedInsets;
-  if (insets == null) {
-    writer.uint8(0);
-  } else {
-    writer
-      ..uint8(1)
-      ..float64(insets.left)
-      ..float64(insets.top)
-      ..float64(insets.right)
-      ..float64(insets.bottom);
-  }
-  writer
-    ..uint8(props.showSelectedIcon ? 1 : 0)
-    ..uint8(props.hasSelectedIcon ? 1 : 0)
     ..uint16(props.segments.length);
   for (final segment in props.segments) {
     writer
       ..int64(segment.id)
-      ..uint8(segment.enabled ? 1 : 0)
-      ..optionalString(segment.tooltip)
-      ..uint8(segment.hasIcon ? 1 : 0)
-      ..uint8(segment.hasLabel ? 1 : 0);
+      ..uint8(segment.hasIcon ? 1 : 0);
   }
 }
 
@@ -2889,6 +2739,9 @@ void _validateMaterialSlider(MaterialSliderProps props) {
   }
   if (props.divisions case final divisions? when divisions <= 0) {
     _fail(ProtocolErrorCode.invalidProps, 'Slider divisions must be positive');
+  }
+  if (props.kind < 0 || props.kind > 5) {
+    _fail(ProtocolErrorCode.invalidProps, 'Invalid slider kind');
   }
 }
 
@@ -2908,6 +2761,9 @@ double? _readProgressValue(_Reader reader) {
 }
 
 void _validateMaterialRangeSlider(MaterialRangeSliderProps props) {
+  if (props.kind < 0 || props.kind > 1) {
+    _fail(ProtocolErrorCode.invalidProps, 'Invalid range slider kind');
+  }
   _validateMaterialSlider(
     MaterialSliderProps(
       value: props.start,
@@ -2917,6 +2773,7 @@ void _validateMaterialRangeSlider(MaterialRangeSliderProps props) {
       label: props.labelStart,
       enabled: props.enabled,
       hasOnChange: props.hasOnChange,
+      kind: 0,
     ),
   );
   _validateMaterialSlider(
@@ -2928,6 +2785,7 @@ void _validateMaterialRangeSlider(MaterialRangeSliderProps props) {
       label: props.labelEnd,
       enabled: props.enabled,
       hasOnChange: props.hasOnChange,
+      kind: 0,
     ),
   );
   if (props.start > props.end) {
@@ -2941,15 +2799,28 @@ MaterialNavigationBarProps _readMaterialNavigationBar(_Reader reader) {
     reader.uint16(),
     (_) => MaterialNavigationDestinationProps(
       label: reader.string(),
-      enabled: reader.boolean(),
       hasSelectedIcon: reader.boolean(),
+      badgeCount: reader.optionalUint32(),
+      badgeDot: reader.boolean(),
+      semanticLabel: reader.optionalString(),
     ),
   );
-  _validateMaterialNavigation(selectedIndex, destinations);
-  return MaterialNavigationBarProps(
+  final props = MaterialNavigationBarProps(
     selectedIndex: selectedIndex,
     destinations: destinations,
+    autoLayout: reader.boolean(),
+    layout: reader.uint8(),
+    alignment: reader.uint8(),
+    labelBehavior: reader.uint8(),
+    iconBehavior: reader.uint8(),
+    size: reader.uint8(),
+    shape: reader.uint8(),
+    density: reader.uint8(),
+    safeArea: reader.boolean(),
+    semanticLabel: reader.optionalString(),
   );
+  _validateMaterialNavigation(props);
+  return props;
 }
 
 MaterialRadioGroupProps _readMaterialRadioGroup(_Reader reader) {
@@ -2979,47 +2850,15 @@ MaterialSegmentedButtonProps _readMaterialSegmentedButton(_Reader reader) {
     (_) => reader.int64(),
   );
   final enabled = reader.boolean();
-  final direction = _enumValue(
-    ScrollAxis.values,
-    reader.uint8(),
-    'segmented button direction',
-  );
   final multiSelectionEnabled = reader.boolean();
-  final emptySelectionAllowed = reader.boolean();
-  final expandedInsets = switch (reader.uint8()) {
-    0 => null,
-    1 => EdgeInsetsValue(
-      left: reader.finiteFloat64(),
-      top: reader.finiteFloat64(),
-      right: reader.finiteFloat64(),
-      bottom: reader.finiteFloat64(),
-    ),
-    final value => _fail(
-      ProtocolErrorCode.invalidProps,
-      'Invalid segmented expanded insets tag $value',
-    ),
-  };
-  final showSelectedIcon = reader.boolean();
-  final hasSelectedIcon = reader.boolean();
   final segments = List<MaterialSegmentProps>.generate(
     reader.uint16(),
-    (_) => MaterialSegmentProps(
-      id: reader.int64(),
-      enabled: reader.boolean(),
-      tooltip: reader.optionalString(),
-      hasIcon: reader.boolean(),
-      hasLabel: reader.boolean(),
-    ),
+    (_) => MaterialSegmentProps(id: reader.int64(), hasIcon: reader.boolean()),
   );
   final props = MaterialSegmentedButtonProps(
     selectedIds: selectedIds,
     enabled: enabled,
-    direction: direction,
     multiSelectionEnabled: multiSelectionEnabled,
-    emptySelectionAllowed: emptySelectionAllowed,
-    expandedInsets: expandedInsets,
-    showSelectedIcon: showSelectedIcon,
-    hasSelectedIcon: hasSelectedIcon,
     segments: segments,
   );
   _validateMaterialSegmentedButton(props);
@@ -3035,6 +2874,7 @@ MaterialSliderProps _readMaterialSlider(_Reader reader) {
     label: reader.optionalString(),
     enabled: reader.boolean(),
     hasOnChange: reader.boolean(),
+    kind: reader.uint8(),
   );
   _validateMaterialSlider(props);
   return props;
@@ -3051,9 +2891,110 @@ MaterialRangeSliderProps _readMaterialRangeSlider(_Reader reader) {
     labelEnd: reader.optionalString(),
     enabled: reader.boolean(),
     hasOnChange: reader.boolean(),
+    kind: reader.uint8(),
   );
   _validateMaterialRangeSlider(props);
   return props;
+}
+
+void _writeMaterialExpressive(_Writer writer, MaterialExpressiveProps props) {
+  if (props.component < 0 || props.component > 0xff) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Material expressive component is outside u8',
+    );
+  }
+  if (props.variant < 0 || props.variant > 0xff) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Material expressive variant is outside u8',
+    );
+  }
+  if (props.items.length > 0xffff || props.selectedIds.length > 0xffff) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'Material expressive descriptor count is outside u16',
+    );
+  }
+  writer
+    ..uint8(props.component)
+    ..uint8(props.variant)
+    ..uint64(props.flags)
+    ..optionalString(props.primaryText)
+    ..optionalString(props.secondaryText)
+    ..optionalFloat64(props.value)
+    ..optionalFloat64(props.endValue)
+    ..uint16(props.selectedIds.length);
+  for (final id in props.selectedIds) {
+    writer.int64(id);
+  }
+  writer.uint16(props.items.length);
+  for (final item in props.items) {
+    if (item.kind < 0 || item.kind > 0xff || item.childCount > 0xffff) {
+      _fail(
+        ProtocolErrorCode.invalidProps,
+        'Material expressive item metadata is outside its wire range',
+      );
+    }
+    writer
+      ..int64(item.id)
+      ..uint8(item.kind)
+      ..string(item.label)
+      ..uint8(item.enabled ? 1 : 0)
+      ..uint8(item.selected ? 1 : 0)
+      ..uint16(item.childCount);
+  }
+  writer.uint8(props.textInput == null ? 0 : 1);
+  if (props.textInput case final textInput?) {
+    _writeTextInputProps(writer, textInput);
+  }
+}
+
+MaterialExpressiveProps _readMaterialExpressive(_Reader reader) {
+  final component = reader.uint8();
+  final variant = reader.uint8();
+  final flags = reader.uint64();
+  final primaryText = reader.optionalString();
+  final secondaryText = reader.optionalString();
+  final value = reader.optionalFloat64();
+  final endValue = reader.optionalFloat64();
+  final selectedIds = List<int>.generate(
+    reader.uint16(),
+    (_) => reader.int64(),
+    growable: false,
+  );
+  final items = List<MaterialExpressiveItemProps>.generate(
+    reader.uint16(),
+    (_) => MaterialExpressiveItemProps(
+      id: reader.int64(),
+      kind: reader.uint8(),
+      label: reader.string(),
+      enabled: reader.boolean(),
+      selected: reader.boolean(),
+      childCount: reader.uint16(),
+    ),
+    growable: false,
+  );
+  final textInput = switch (reader.uint8()) {
+    0 => null,
+    1 => _readTextInputProps(reader),
+    final value => _fail(
+      ProtocolErrorCode.invalidProps,
+      'Invalid expressive search text input tag $value',
+    ),
+  };
+  return MaterialExpressiveProps(
+    component: component,
+    variant: variant,
+    flags: flags,
+    primaryText: primaryText,
+    secondaryText: secondaryText,
+    value: value,
+    endValue: endValue,
+    selectedIds: selectedIds,
+    items: items,
+    textInput: textInput,
+  );
 }
 
 MaterialChipProps _readMaterialChip(
@@ -3064,10 +3005,7 @@ MaterialChipProps _readMaterialChip(
     variant: variant,
     enabled: reader.boolean(),
     selected: reader.boolean(),
-    hasAvatar: reader.boolean(),
-    hasDeleteIcon: reader.boolean(),
-    hasOnPress: reader.boolean(),
-    hasOnSelected: reader.boolean(),
+    hasLeading: reader.boolean(),
     hasOnDelete: reader.boolean(),
     presentation: _enumValue(
       MaterialChipPresentation.values,
@@ -3164,19 +3102,116 @@ void _validateMaterialSearchBar(MaterialSearchBarProps props) {
   }
 }
 
-void _validateMaterialTooltip(MaterialTooltipProps props) {
-  if (props.message.trim().isEmpty) {
-    _fail(ProtocolErrorCode.invalidProps, 'Tooltip message must not be empty');
+void _validateMaterialTextField(MaterialTextFieldProps props) {
+  _checkUint64('text field session ID', props.sessionId);
+  _checkUint64('text field document revision', props.documentRevision);
+  _checkUint64(
+    'text field accepted local revision',
+    props.acceptedLocalRevision,
+  );
+  final maxUtf8Bytes = props.maxUtf8Bytes;
+  if (maxUtf8Bytes != null &&
+      (maxUtf8Bytes <= 0 || maxUtf8Bytes > ProtocolLimits.maxStringBytes)) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'TextField max UTF-8 bytes is outside the protocol string limit',
+    );
   }
-  for (final duration in [
-    props.waitDurationMs,
-    props.showDurationMs,
-    props.exitDurationMs,
-  ]) {
-    if (duration < 0 || duration > 0xffffffff) {
-      _fail(ProtocolErrorCode.invalidProps, 'Tooltip duration must fit uint32');
-    }
+  if (props.variant < 0 || props.variant > 1) {
+    _fail(ProtocolErrorCode.invalidProps, 'Invalid text field variant');
   }
+  if (props.maxLines <= 0 || props.maxLines > 0xffffffff) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'TextField max lines must fit uint32',
+    );
+  }
+}
+
+void _writeMaterialTextField(_Writer writer, MaterialTextFieldProps props) {
+  _validateMaterialTextField(props);
+  writer
+    ..uint64(props.sessionId)
+    ..uint64(props.documentRevision)
+    ..string(props.value.text);
+  _writeTextRange(writer, props.value.text, props.value.selection);
+  if (props.value.composing case final composing?) {
+    writer.uint8(1);
+    _writeTextRange(writer, props.value.text, composing);
+  } else {
+    writer.uint8(0);
+  }
+  writer
+    ..uint8(props.enabled ? 1 : 0)
+    ..uint8(props.readOnly ? 1 : 0)
+    ..uint8(props.obscureText ? 1 : 0)
+    ..uint8(props.keyboardType.index)
+    ..uint8(props.inputAction.index)
+    ..uint64(props.acceptedLocalRevision)
+    ..uint8(props.updateMode.index)
+    ..optionalUint32(props.maxUtf8Bytes)
+    ..uint8(props.variant)
+    ..optionalString(props.label)
+    ..optionalString(props.supportingText)
+    ..optionalString(props.errorText)
+    ..uint8(props.hasLeading ? 1 : 0)
+    ..uint8(props.hasTrailing ? 1 : 0)
+    ..uint32(props.maxLines)
+    ..uint8(props.autofocus ? 1 : 0);
+}
+
+MaterialTextFieldProps _readMaterialTextField(_Reader reader) {
+  final sessionId = reader.uint64();
+  final documentRevision = reader.uint64();
+  final text = reader.string();
+  final selection = _readTextRange(reader, text);
+  final composing = switch (reader.uint8()) {
+    0 => null,
+    1 => _readTextRange(reader, text),
+    final value => _fail(
+      ProtocolErrorCode.invalidProps,
+      'Invalid composing tag $value',
+    ),
+  };
+  final props = MaterialTextFieldProps(
+    sessionId: sessionId,
+    documentRevision: documentRevision,
+    value: TextEditingStateValue(
+      text: text,
+      selection: selection,
+      composing: composing,
+    ),
+    enabled: reader.boolean(),
+    readOnly: reader.boolean(),
+    obscureText: reader.boolean(),
+    keyboardType: _enumValue(
+      TextKeyboardType.values,
+      reader.uint8(),
+      'keyboard type',
+    ),
+    inputAction: _enumValue(
+      TextInputActionKind.values,
+      reader.uint8(),
+      'input action',
+    ),
+    acceptedLocalRevision: reader.uint64(),
+    updateMode: _enumValue(
+      TextUpdateMode.values,
+      reader.uint8(),
+      'update mode',
+    ),
+    maxUtf8Bytes: reader.optionalUint32(),
+    variant: reader.uint8(),
+    label: reader.optionalString(),
+    supportingText: reader.optionalString(),
+    errorText: reader.optionalString(),
+    hasLeading: reader.boolean(),
+    hasTrailing: reader.boolean(),
+    maxLines: reader.uint32(),
+    autofocus: reader.boolean(),
+  );
+  _validateMaterialTextField(props);
+  return props;
 }
 
 void _validateCanonicalIds(List<int> ids, Set<int> knownIds, String label) {
@@ -3340,32 +3375,6 @@ void _writeAdditionalMaterialProps(_Writer writer, UiProps props) {
         ..uint32(trailingCount)
         ..optionalString(hintText)
         ..uint8(hasOnTap ? 1 : 0);
-    case MaterialTooltipProps(
-      :final message,
-      :final enabled,
-      :final excludeFromSemantics,
-      :final preferBelow,
-      :final triggerMode,
-      :final waitDurationMs,
-      :final showDurationMs,
-      :final exitDurationMs,
-      :final enableTapToDismiss,
-      :final enableFeedback,
-      :final hasOnTriggered,
-    ):
-      _validateMaterialTooltip(props);
-      writer
-        ..string(message)
-        ..uint8(enabled ? 1 : 0)
-        ..uint8(excludeFromSemantics ? 1 : 0)
-        ..uint8(preferBelow ? 1 : 0)
-        ..uint8(triggerMode.index)
-        ..uint32(waitDurationMs)
-        ..uint32(showDurationMs)
-        ..uint32(exitDurationMs)
-        ..uint8(enableTapToDismiss ? 1 : 0)
-        ..uint8(enableFeedback ? 1 : 0)
-        ..uint8(hasOnTriggered ? 1 : 0);
     case MaterialDataTableProps(
       :final columns,
       :final rows,
@@ -3520,27 +3529,6 @@ UiProps _readAdditionalMaterialProps(_Reader reader, NodeKind kind) {
       hasOnTap: reader.boolean(),
     );
     _validateMaterialSearchBar(props);
-    return props;
-  }
-  if (kind == NodeKind.materialTooltip) {
-    final props = MaterialTooltipProps(
-      message: reader.string(),
-      enabled: reader.boolean(),
-      excludeFromSemantics: reader.boolean(),
-      preferBelow: reader.boolean(),
-      triggerMode: _enumValue(
-        MaterialTooltipTriggerMode.values,
-        reader.uint8(),
-        'tooltip trigger',
-      ),
-      waitDurationMs: reader.uint32(),
-      showDurationMs: reader.uint32(),
-      exitDurationMs: reader.uint32(),
-      enableTapToDismiss: reader.boolean(),
-      enableFeedback: reader.boolean(),
-      hasOnTriggered: reader.boolean(),
-    );
-    _validateMaterialTooltip(props);
     return props;
   }
   if (kind == NodeKind.materialDataTable) {
@@ -3792,6 +3780,90 @@ void _writeHostRequest(_Writer writer, int requestId, HostRequest request) {
         ..string(message)
         ..optionalString(actionLabel)
         ..uint32(durationMs);
+    case PickDateRequest(
+      :final initial,
+      :final first,
+      :final last,
+      :final current,
+      :final inputMode,
+    ):
+      writer.uint16(HostRequestId.pickDate);
+      _writeOptionalCivilDate(writer, initial);
+      _writeCivilDate(writer, first);
+      _writeCivilDate(writer, last);
+      _writeOptionalCivilDate(writer, current);
+      writer.uint8(inputMode ? 1 : 0);
+    case PickDateRangeRequest(
+      :final initial,
+      :final first,
+      :final last,
+      :final current,
+      :final inputMode,
+    ):
+      writer.uint16(HostRequestId.pickDateRange);
+      if (initial == null) {
+        writer.uint8(0);
+      } else {
+        writer.uint8(1);
+        _writeCivilDate(writer, initial.start);
+        _writeCivilDate(writer, initial.end);
+      }
+      _writeCivilDate(writer, first);
+      _writeCivilDate(writer, last);
+      _writeOptionalCivilDate(writer, current);
+      writer.uint8(inputMode ? 1 : 0);
+    case PickTimeRequest(:final initial, :final inputMode, :final use24Hour):
+      writer
+        ..uint16(HostRequestId.pickTime)
+        ..uint8(initial.hour)
+        ..uint8(initial.minute)
+        ..uint8(inputMode ? 1 : 0)
+        ..uint8(use24Hour ? 1 : 0);
+  }
+}
+
+void _writeCivilDate(_Writer writer, CivilDateValue date) {
+  _validateCivilDate(date);
+  writer
+    ..uint16(date.year)
+    ..uint8(date.month)
+    ..uint8(date.day);
+}
+
+void _writeOptionalCivilDate(_Writer writer, CivilDateValue? date) {
+  writer.uint8(date == null ? 0 : 1);
+  if (date != null) _writeCivilDate(writer, date);
+}
+
+CivilDateValue _readCivilDate(_Reader reader) {
+  final value = CivilDateValue(
+    year: reader.uint16(),
+    month: reader.uint8(),
+    day: reader.uint8(),
+  );
+  _validateCivilDate(value);
+  return value;
+}
+
+CivilDateValue? _readOptionalCivilDate(_Reader reader) {
+  final tag = reader.uint8();
+  if (tag == 0) return null;
+  if (tag == 1) return _readCivilDate(reader);
+  _fail(ProtocolErrorCode.invalidProps, 'Invalid optional civil date tag $tag');
+}
+
+void _validateCivilDate(CivilDateValue date) {
+  try {
+    final parsed = DateTime.utc(date.year, date.month, date.day);
+    if (date.year < 1 ||
+        date.year > 9999 ||
+        parsed.year != date.year ||
+        parsed.month != date.month ||
+        parsed.day != date.day) {
+      throw const FormatException();
+    }
+  } on FormatException {
+    _fail(ProtocolErrorCode.invalidProps, 'Invalid civil date');
   }
 }
 
@@ -3897,6 +3969,42 @@ HostRequest _readHostRequest(_Reader reader, int requestKind) {
       message: message,
       actionLabel: actionLabel,
       durationMs: durationMs,
+    );
+  }
+  if (requestKind == HostRequestId.pickDate) {
+    return PickDateRequest(
+      initial: _readOptionalCivilDate(reader),
+      first: _readCivilDate(reader),
+      last: _readCivilDate(reader),
+      current: _readOptionalCivilDate(reader),
+      inputMode: reader.boolean(),
+    );
+  }
+  if (requestKind == HostRequestId.pickDateRange) {
+    final hasInitial = reader.boolean();
+    return PickDateRangeRequest(
+      initial: hasInitial
+          ? CivilDateRangeValue(
+              start: _readCivilDate(reader),
+              end: _readCivilDate(reader),
+            )
+          : null,
+      first: _readCivilDate(reader),
+      last: _readCivilDate(reader),
+      current: _readOptionalCivilDate(reader),
+      inputMode: reader.boolean(),
+    );
+  }
+  if (requestKind == HostRequestId.pickTime) {
+    final hour = reader.uint8();
+    final minute = reader.uint8();
+    if (hour > 23 || minute > 59) {
+      _fail(ProtocolErrorCode.invalidProps, 'Invalid civil time');
+    }
+    return PickTimeRequest(
+      initial: CivilTimeValue(hour: hour, minute: minute),
+      inputMode: reader.boolean(),
+      use24Hour: reader.boolean(),
     );
   }
   _fail(
@@ -4035,7 +4143,8 @@ void _writePageProps(_Writer writer, PageProps props) {
   final transition = switch (props.presentation) {
     StandardPagePresentation(:final transition) => transition,
     ModalBottomSheetPresentation() ||
-    ModalDialogPresentation() => PageTransition.none,
+    ModalDialogPresentation() ||
+    ModalSideSheetPresentation() => PageTransition.none,
   };
   writer
     ..string(props.pageKey)
@@ -4121,37 +4230,86 @@ void _writePageProps(_Writer writer, PageProps props) {
       :final transitionDurationMilliseconds,
       :final reverseTransitionDurationMilliseconds,
     ):
-      _checkPageDuration('Dialog transition', transitionDurationMilliseconds);
-      _checkPageDuration(
-        'Dialog reverse transition',
-        reverseTransitionDurationMilliseconds,
+      _writeModalSurfacePresentation(
+        writer,
+        kind: 2,
+        name: 'Dialog',
+        barrierDismissible: barrierDismissible,
+        barrierColorArgb: barrierColorArgb,
+        barrierLabel: barrierLabel,
+        useSafeArea: useSafeArea,
+        requestFocus: requestFocus,
+        transitionDurationMilliseconds: transitionDurationMilliseconds,
+        reverseTransitionDurationMilliseconds:
+            reverseTransitionDurationMilliseconds,
       );
-      writer
-        ..uint8(2)
-        ..uint8(0);
-      _writeOptionalArgb32(writer, null);
-      writer
-        ..optionalString(null)
-        ..uint8(0)
-        ..uint8(0)
-        ..uint8(0)
-        ..uint32(0)
-        ..uint32(0)
-        ..uint8(0)
-        ..uint8(0)
-        ..uint8(0)
-        ..optionalString(null)
-        ..optionalString(null)
-        ..optionalString(null)
-        ..uint8(barrierDismissible ? 1 : 0);
-      _writeOptionalArgb32(writer, barrierColorArgb);
-      writer
-        ..optionalString(barrierLabel)
-        ..uint8(useSafeArea ? 1 : 0)
-        ..uint8(requestFocus ? 1 : 0)
-        ..uint32(transitionDurationMilliseconds)
-        ..uint32(reverseTransitionDurationMilliseconds);
+    case ModalSideSheetPresentation(
+      :final barrierDismissible,
+      :final barrierColorArgb,
+      :final barrierLabel,
+      :final useSafeArea,
+      :final requestFocus,
+      :final transitionDurationMilliseconds,
+      :final reverseTransitionDurationMilliseconds,
+    ):
+      _writeModalSurfacePresentation(
+        writer,
+        kind: 3,
+        name: 'Side sheet',
+        barrierDismissible: barrierDismissible,
+        barrierColorArgb: barrierColorArgb,
+        barrierLabel: barrierLabel,
+        useSafeArea: useSafeArea,
+        requestFocus: requestFocus,
+        transitionDurationMilliseconds: transitionDurationMilliseconds,
+        reverseTransitionDurationMilliseconds:
+            reverseTransitionDurationMilliseconds,
+      );
   }
+}
+
+void _writeModalSurfacePresentation(
+  _Writer writer, {
+  required int kind,
+  required String name,
+  required bool barrierDismissible,
+  required int? barrierColorArgb,
+  required String? barrierLabel,
+  required bool useSafeArea,
+  required bool requestFocus,
+  required int transitionDurationMilliseconds,
+  required int reverseTransitionDurationMilliseconds,
+}) {
+  _checkPageDuration('$name transition', transitionDurationMilliseconds);
+  _checkPageDuration(
+    '$name reverse transition',
+    reverseTransitionDurationMilliseconds,
+  );
+  writer
+    ..uint8(kind)
+    ..uint8(0);
+  _writeOptionalArgb32(writer, null);
+  writer
+    ..optionalString(null)
+    ..uint8(0)
+    ..uint8(0)
+    ..uint8(0)
+    ..uint32(0)
+    ..uint32(0)
+    ..uint8(0)
+    ..uint8(0)
+    ..uint8(0)
+    ..optionalString(null)
+    ..optionalString(null)
+    ..optionalString(null)
+    ..uint8(barrierDismissible ? 1 : 0);
+  _writeOptionalArgb32(writer, barrierColorArgb);
+  writer
+    ..optionalString(barrierLabel)
+    ..uint8(useSafeArea ? 1 : 0)
+    ..uint8(requestFocus ? 1 : 0)
+    ..uint32(transitionDurationMilliseconds)
+    ..uint32(reverseTransitionDurationMilliseconds);
 }
 
 (int, int, int, bool, ModalSheetHandleSemantics?) _modalSizingWireValues(
@@ -4268,49 +4426,40 @@ void _writeSliverVariedExtent(
 void _writeSliverAppBar(
   _Writer writer, {
   required bool pinned,
-  required double? expandedHeight,
-  required double? collapsedHeight,
   required bool floating,
   required bool snap,
-  required bool stretch,
-  required double toolbarHeight,
   required bool hasLeading,
-  required bool hasFlexibleSpace,
-  required bool hasBottom,
-  required bool hasActions,
-  required bool forceElevated,
-  required bool automaticallyImplyLeading,
-  required bool? centerTitle,
   required int? backgroundColor,
   required int? foregroundColor,
-  required double? elevation,
+  required int actionCount,
+  required bool centerTitle,
+  required int variant,
+  required int shape,
+  required int density,
+  required String? semanticLabel,
 }) {
   _validateSliverAppBarValues(
-    expandedHeight: expandedHeight,
-    collapsedHeight: collapsedHeight,
     floating: floating,
     snap: snap,
-    toolbarHeight: toolbarHeight,
-    elevation: elevation,
+    actionCount: actionCount,
+    variant: variant,
+    shape: shape,
+    density: density,
   );
   writer
     ..uint8(pinned ? 1 : 0)
-    ..optionalFloat64(expandedHeight)
-    ..optionalFloat64(collapsedHeight)
     ..uint8(floating ? 1 : 0)
     ..uint8(snap ? 1 : 0)
-    ..uint8(stretch ? 1 : 0)
-    ..float64(toolbarHeight)
-    ..uint8(hasLeading ? 1 : 0)
-    ..uint8(hasFlexibleSpace ? 1 : 0)
-    ..uint8(hasBottom ? 1 : 0)
-    ..uint8(hasActions ? 1 : 0)
-    ..uint8(forceElevated ? 1 : 0)
-    ..uint8(automaticallyImplyLeading ? 1 : 0);
-  writer.optionalBool(centerTitle);
+    ..uint8(hasLeading ? 1 : 0);
   _writeOptionalArgb32(writer, backgroundColor);
   _writeOptionalArgb32(writer, foregroundColor);
-  writer.optionalFloat64(elevation);
+  writer
+    ..uint32(actionCount)
+    ..uint8(centerTitle ? 1 : 0)
+    ..uint8(variant)
+    ..uint8(shape)
+    ..uint8(density)
+    ..optionalString(semanticLabel);
 }
 
 SliverFillProps _readSliverFillProps(_Reader reader) {
@@ -4431,48 +4580,38 @@ SliverPaddingProps _readSliverPaddingProps(_Reader reader) {
 
 SliverAppBarProps _readSliverAppBarProps(_Reader reader) {
   final pinned = reader.boolean();
-  final expandedHeight = reader.optionalFloat64();
-  final collapsedHeight = reader.optionalFloat64();
   final floating = reader.boolean();
   final snap = reader.boolean();
-  final stretch = reader.boolean();
-  final toolbarHeight = reader.finiteFloat64();
   final hasLeading = reader.boolean();
-  final hasFlexibleSpace = reader.boolean();
-  final hasBottom = reader.boolean();
-  final hasActions = reader.boolean();
-  final forceElevated = reader.boolean();
-  final automaticallyImplyLeading = reader.boolean();
-  final centerTitle = reader.optionalBool();
   final backgroundColor = _readOptionalArgb32(reader);
   final foregroundColor = _readOptionalArgb32(reader);
-  final elevation = reader.optionalFloat64();
+  final actionCount = reader.uint32();
+  final centerTitle = reader.boolean();
+  final variant = reader.uint8();
+  final shape = reader.uint8();
+  final density = reader.uint8();
+  final semanticLabel = reader.optionalString();
   _validateSliverAppBarValues(
-    expandedHeight: expandedHeight,
-    collapsedHeight: collapsedHeight,
     floating: floating,
     snap: snap,
-    toolbarHeight: toolbarHeight,
-    elevation: elevation,
+    actionCount: actionCount,
+    variant: variant,
+    shape: shape,
+    density: density,
   );
   return SliverAppBarProps(
     pinned: pinned,
-    expandedHeight: expandedHeight,
-    collapsedHeight: collapsedHeight,
     floating: floating,
     snap: snap,
-    stretch: stretch,
-    toolbarHeight: toolbarHeight,
     hasLeading: hasLeading,
-    hasFlexibleSpace: hasFlexibleSpace,
-    hasBottom: hasBottom,
-    hasActions: hasActions,
-    forceElevated: forceElevated,
-    automaticallyImplyLeading: automaticallyImplyLeading,
-    centerTitle: centerTitle,
     backgroundColor: backgroundColor,
     foregroundColor: foregroundColor,
-    elevation: elevation,
+    actionCount: actionCount,
+    centerTitle: centerTitle,
+    variant: variant,
+    shape: shape,
+    density: density,
+    semanticLabel: semanticLabel,
   );
 }
 
@@ -4506,47 +4645,29 @@ void _validateCacheExtent(double? cacheExtent) {
 }
 
 void _validateSliverAppBarValues({
-  required double? expandedHeight,
-  required double? collapsedHeight,
   required bool floating,
   required bool snap,
-  required double toolbarHeight,
-  required double? elevation,
+  required int actionCount,
+  required int variant,
+  required int shape,
+  required int density,
 }) {
-  void finiteNonNegative(String name, double? value) {
-    if (value != null && (!value.isFinite || value < 0)) {
-      _fail(
-        ProtocolErrorCode.invalidProps,
-        '$name must be non-negative and finite',
-      );
-    }
-  }
-
-  if (!toolbarHeight.isFinite || toolbarHeight <= 0) {
-    _fail(
-      ProtocolErrorCode.invalidProps,
-      'toolbar_height must be positive and finite',
-    );
-  }
-  finiteNonNegative('expanded_height', expandedHeight);
-  finiteNonNegative('collapsed_height', collapsedHeight);
-  finiteNonNegative('elevation', elevation);
-  if (expandedHeight != null &&
-      collapsedHeight != null &&
-      collapsedHeight > expandedHeight) {
-    _fail(
-      ProtocolErrorCode.invalidProps,
-      'collapsed_height must not exceed expanded_height',
-    );
-  }
-  if (collapsedHeight != null && collapsedHeight < toolbarHeight) {
-    _fail(
-      ProtocolErrorCode.invalidProps,
-      'collapsed_height must be at least toolbar_height',
-    );
-  }
   if (snap && !floating) {
     _fail(ProtocolErrorCode.invalidProps, 'sliver snap requires floating');
+  }
+  if (actionCount < 0 || actionCount > 0xffffffff) {
+    _fail(
+      ProtocolErrorCode.invalidProps,
+      'invalid sliver app bar action count',
+    );
+  }
+  if (variant < 0 ||
+      variant > 2 ||
+      shape < 0 ||
+      shape > 1 ||
+      density < 0 ||
+      density > 1) {
+    _fail(ProtocolErrorCode.invalidProps, 'invalid sliver app bar variant');
   }
 }
 
@@ -4719,10 +4840,11 @@ PageProps _readPageProps(_Reader reader) {
             reverseTransitionDurationMilliseconds,
       );
     case 2:
+    case 3:
       if (transition != PageTransition.none) {
         _fail(
           ProtocolErrorCode.invalidProps,
-          'Modal dialog cannot carry a standard transition',
+          'Modal surface cannot carry a standard transition',
         );
       }
       if (barrierDismissible ||
@@ -4741,19 +4863,32 @@ PageProps _readPageProps(_Reader reader) {
           largeSemanticsValue != null) {
         _fail(
           ProtocolErrorCode.invalidProps,
-          'Modal dialog has bottom-sheet properties',
+          'Modal surface has bottom-sheet properties',
         );
       }
-      presentation = ModalDialogPresentation(
-        barrierDismissible: dialogBarrierDismissible,
-        barrierColorArgb: dialogBarrierColorArgb,
-        barrierLabel: dialogBarrierLabel,
-        useSafeArea: dialogUseSafeArea,
-        requestFocus: dialogRequestFocus,
-        transitionDurationMilliseconds: dialogTransitionDurationMilliseconds,
-        reverseTransitionDurationMilliseconds:
-            dialogReverseTransitionDurationMilliseconds,
-      );
+      presentation = presentationKind == 2
+          ? ModalDialogPresentation(
+              barrierDismissible: dialogBarrierDismissible,
+              barrierColorArgb: dialogBarrierColorArgb,
+              barrierLabel: dialogBarrierLabel,
+              useSafeArea: dialogUseSafeArea,
+              requestFocus: dialogRequestFocus,
+              transitionDurationMilliseconds:
+                  dialogTransitionDurationMilliseconds,
+              reverseTransitionDurationMilliseconds:
+                  dialogReverseTransitionDurationMilliseconds,
+            )
+          : ModalSideSheetPresentation(
+              barrierDismissible: dialogBarrierDismissible,
+              barrierColorArgb: dialogBarrierColorArgb,
+              barrierLabel: dialogBarrierLabel,
+              useSafeArea: dialogUseSafeArea,
+              requestFocus: dialogRequestFocus,
+              transitionDurationMilliseconds:
+                  dialogTransitionDurationMilliseconds,
+              reverseTransitionDurationMilliseconds:
+                  dialogReverseTransitionDurationMilliseconds,
+            );
     default:
       _fail(
         ProtocolErrorCode.invalidProps,

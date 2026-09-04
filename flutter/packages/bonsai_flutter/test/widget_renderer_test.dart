@@ -2,7 +2,8 @@ import 'dart:ui' show PointerDeviceKind;
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:flutter/cupertino.dart' as cupertino;
-import 'package:flutter/material.dart';
+import 'package:material_3_expressive/material_3_expressive.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -159,7 +160,7 @@ void main() {
     },
   );
 
-  testWidgets('button press dispatches only the bound typed event', (
+  testWidgets('pressable dispatches only the bound typed event', (
     tester,
   ) async {
     final store = NodeStore()..apply(counterWidgetSnapshot());
@@ -173,7 +174,7 @@ void main() {
     );
 
     await tester.tap(find.text('Increment'));
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
 
     expect(events, hasLength(1));
     expect(events.single.nodeId, 3);
@@ -354,7 +355,7 @@ void main() {
     expect(events, isEmpty);
   });
 
-  testWidgets('button press flows into the canonical encoded event batch', (
+  testWidgets('pressable flows into the canonical encoded event batch', (
     tester,
   ) async {
     final store = NodeStore()..apply(counterWidgetSnapshot());
@@ -369,7 +370,7 @@ void main() {
     );
 
     await tester.tap(find.text('Increment'));
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
 
     expect(
       EventBatchCodec.encode(queue.takeBatch()!),
@@ -511,8 +512,10 @@ void main() {
     );
 
     expect(
-      tester.widget<Padding>(find.byType(Padding)).padding,
-      const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      tester
+          .widgetList<Padding>(find.byType(Padding))
+          .map((widget) => widget.padding),
+      contains(const EdgeInsets.fromLTRB(12, 8, 12, 8)),
     );
     final center = tester.widget<Center>(find.byType(Center));
     expect(center.widthFactor, isNull);
@@ -554,7 +557,7 @@ void main() {
       isTrue,
     );
 
-    await tester.tap(find.byType(Checkbox));
+    await tester.tap(find.byType(M3ECheckbox));
     await tester.pump();
 
     expect(events, hasLength(1));
@@ -678,19 +681,7 @@ void main() {
             CreateNode(
               nodeId: 1,
               kind: NodeKind.materialScaffold,
-              props: MaterialScaffoldProps(hasAppBar: true),
-              eventBindings: [],
-            ),
-            CreateNode(
-              nodeId: 2,
-              kind: NodeKind.materialAppBar,
-              props: MaterialAppBarProps(centerTitle: true),
-              eventBindings: [],
-            ),
-            CreateNode(
-              nodeId: 3,
-              kind: NodeKind.text,
-              props: TextProps('Title'),
+              props: MaterialScaffoldProps(hasAppBar: false),
               eventBindings: [],
             ),
             CreateNode(
@@ -732,20 +723,6 @@ void main() {
               eventBindings: [],
             ),
             CreateNode(
-              nodeId: 9,
-              kind: NodeKind.materialListTile,
-              props: MaterialListTileProps(
-                enabled: true,
-                selected: true,
-                hasSubtitle: false,
-                hasLeading: false,
-                hasTrailing: false,
-              ),
-              eventBindings: [
-                EventBinding(eventTag: EventTagId.press, handlerId: 52),
-              ],
-            ),
-            CreateNode(
               nodeId: 10,
               kind: NodeKind.text,
               props: TextProps('Tile'),
@@ -760,15 +737,13 @@ void main() {
             CreateNode(
               nodeId: 12,
               kind: NodeKind.materialCircularProgressIndicator,
-              props: MaterialCircularProgressProps(value: 0.5),
+              props: MaterialCircularProgressProps(value: 0.5, wavy: false),
               eventBindings: [],
             ),
-            SetChildren(nodeId: 1, children: [2, 4]),
-            SetChildren(nodeId: 2, children: [3]),
+            SetChildren(nodeId: 1, children: [4]),
             SetChildren(nodeId: 4, children: [5, 7, 8, 11, 12]),
             SetChildren(nodeId: 5, children: [6]),
-            SetChildren(nodeId: 8, children: [9]),
-            SetChildren(nodeId: 9, children: [10]),
+            SetChildren(nodeId: 8, children: [10]),
             SetRoot(1),
           ],
         ),
@@ -777,13 +752,11 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: BonsaiFlutterView(store: store)));
 
     expect(find.byType(Scaffold), findsOneWidget);
-    expect(find.byType(AppBar), findsOneWidget);
-    expect(find.byType(TextButton), findsOneWidget);
-    expect(find.byType(Switch), findsOneWidget);
-    expect(find.byType(Card), findsOneWidget);
-    expect(find.byType(ListTile), findsOneWidget);
-    expect(find.byType(Divider), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(M3EButton), findsOneWidget);
+    expect(find.byType(M3ESwitch), findsOneWidget);
+    expect(find.byType(M3ECard), findsWidgets);
+    expect(find.byType(M3EDivider), findsOneWidget);
+    expect(find.byType(M3EProgressIndicator), findsOneWidget);
   });
 
   testWidgets(
@@ -810,13 +783,13 @@ void main() {
               CreateNode(
                 nodeId: 2,
                 kind: NodeKind.materialLinearProgressIndicator,
-                props: MaterialLinearProgressProps(value: 0.4),
+                props: MaterialLinearProgressProps(value: 0.4, wavy: false),
                 eventBindings: [],
               ),
               CreateNode(
                 nodeId: 3,
                 kind: NodeKind.materialLinearProgressIndicator,
-                props: MaterialLinearProgressProps(),
+                props: MaterialLinearProgressProps(wavy: false),
                 eventBindings: [],
               ),
               SetChildren(nodeId: 1, children: [2, 3]),
@@ -830,9 +803,7 @@ void main() {
       );
 
       final indicators = tester
-          .widgetList<LinearProgressIndicator>(
-            find.byType(LinearProgressIndicator),
-          )
+          .widgetList<M3EProgressIndicator>(find.byType(M3EProgressIndicator))
           .toList();
       expect(indicators, hasLength(2));
       expect(indicators[0].value, 0.4);
@@ -847,7 +818,7 @@ void main() {
           operations: [
             UpdateProps(
               nodeId: 2,
-              props: MaterialLinearProgressProps(value: 0.8),
+              props: MaterialLinearProgressProps(value: 0.8, wavy: false),
             ),
           ],
         ),
@@ -856,9 +827,7 @@ void main() {
 
       expect(
         tester
-            .widgetList<LinearProgressIndicator>(
-              find.byType(LinearProgressIndicator),
-            )
+            .widgetList<M3EProgressIndicator>(find.byType(M3EProgressIndicator))
             .first
             .value,
         0.8,
@@ -884,7 +853,7 @@ void main() {
             CreateNode(
               nodeId: 1,
               kind: NodeKind.materialLinearProgressIndicator,
-              props: MaterialLinearProgressProps(value: 0.5),
+              props: MaterialLinearProgressProps(value: 0.5, wavy: false),
               eventBindings: [],
             ),
             CreateNode(
@@ -930,32 +899,10 @@ void main() {
                 props: MaterialSegmentedButtonProps(
                   selectedIds: [-7],
                   enabled: true,
-                  direction: ScrollAxis.vertical,
                   multiSelectionEnabled: true,
-                  emptySelectionAllowed: true,
-                  expandedInsets: EdgeInsetsValue(
-                    left: 8,
-                    top: 4,
-                    right: 8,
-                    bottom: 4,
-                  ),
-                  showSelectedIcon: true,
-                  hasSelectedIcon: true,
                   segments: [
-                    MaterialSegmentProps(
-                      id: -7,
-                      enabled: true,
-                      tooltip: 'List view',
-                      hasIcon: true,
-                      hasLabel: true,
-                    ),
-                    MaterialSegmentProps(
-                      id: 9,
-                      enabled: false,
-                      tooltip: null,
-                      hasIcon: false,
-                      hasLabel: true,
-                    ),
+                    MaterialSegmentProps(id: -7, hasIcon: true),
+                    MaterialSegmentProps(id: 9, hasIcon: false),
                   ],
                 ),
                 eventBindings: [
@@ -964,12 +911,6 @@ void main() {
                     handlerId: 61,
                   ),
                 ],
-              ),
-              CreateNode(
-                nodeId: 2,
-                kind: NodeKind.text,
-                props: TextProps('Selected icon'),
-                eventBindings: [],
               ),
               CreateNode(
                 nodeId: 3,
@@ -989,7 +930,7 @@ void main() {
                 props: TextProps('Grid'),
                 eventBindings: [],
               ),
-              SetChildren(nodeId: 1, children: [2, 3, 4, 5]),
+              SetChildren(nodeId: 1, children: [3, 4, 5]),
               SetRoot(1),
             ],
           ),
@@ -1003,25 +944,16 @@ void main() {
         ),
       );
 
-      final finder = find.byType(SegmentedButton<int>);
+      final finder = find.byType(M3ESegmentedButton<int>);
       expect(finder, findsOneWidget);
       final before = tester.element(finder);
-      final rendered = tester.widget<SegmentedButton<int>>(finder);
+      final rendered = tester.widget<M3ESegmentedButton<int>>(finder);
       expect(rendered.selected, {-7});
-      expect(rendered.direction, Axis.vertical);
-      expect(rendered.multiSelectionEnabled, isTrue);
-      expect(rendered.emptySelectionAllowed, isTrue);
-      expect(rendered.expandedInsets, const EdgeInsets.fromLTRB(8, 4, 8, 4));
-      expect(rendered.showSelectedIcon, isTrue);
-      expect(rendered.selectedIcon, isNotNull);
-      expect(find.text('Selected icon'), findsOneWidget);
+      expect(rendered.multiSelect, isTrue);
       expect(rendered.segments, hasLength(2));
       expect(rendered.segments.first.value, -7);
-      expect(rendered.segments.first.enabled, isTrue);
-      expect(rendered.segments.first.tooltip, 'List view');
-      expect(rendered.segments.last.enabled, isFalse);
 
-      rendered.onSelectionChanged!({9, -7});
+      rendered.onSelectionChanged({9, -7});
       expect(events, hasLength(1));
       expect(events.single.eventTag, EventTagId.segmentedSelectionChanged);
       expect(events.single.payload, const Int64ListEventPayload([-7, 9]));
@@ -1038,32 +970,10 @@ void main() {
               props: MaterialSegmentedButtonProps(
                 selectedIds: [9],
                 enabled: false,
-                direction: ScrollAxis.vertical,
                 multiSelectionEnabled: true,
-                emptySelectionAllowed: true,
-                expandedInsets: EdgeInsetsValue(
-                  left: 8,
-                  top: 4,
-                  right: 8,
-                  bottom: 4,
-                ),
-                showSelectedIcon: true,
-                hasSelectedIcon: true,
                 segments: [
-                  MaterialSegmentProps(
-                    id: -7,
-                    enabled: true,
-                    tooltip: 'List view',
-                    hasIcon: true,
-                    hasLabel: true,
-                  ),
-                  MaterialSegmentProps(
-                    id: 9,
-                    enabled: false,
-                    tooltip: null,
-                    hasIcon: false,
-                    hasLabel: true,
-                  ),
+                  MaterialSegmentProps(id: -7, hasIcon: true),
+                  MaterialSegmentProps(id: 9, hasIcon: false),
                 ],
               ),
             ),
@@ -1073,9 +983,8 @@ void main() {
       await tester.pump();
 
       expect(identical(tester.element(finder), before), isTrue);
-      final disabled = tester.widget<SegmentedButton<int>>(finder);
+      final disabled = tester.widget<M3ESegmentedButton<int>>(finder);
       expect(disabled.selected, {9});
-      expect(disabled.onSelectionChanged, isNull);
     },
   );
 
@@ -1100,21 +1009,8 @@ void main() {
               props: MaterialSegmentedButtonProps(
                 selectedIds: [1],
                 enabled: true,
-                direction: ScrollAxis.horizontal,
                 multiSelectionEnabled: false,
-                emptySelectionAllowed: false,
-                expandedInsets: null,
-                showSelectedIcon: true,
-                hasSelectedIcon: false,
-                segments: [
-                  MaterialSegmentProps(
-                    id: 1,
-                    enabled: true,
-                    tooltip: null,
-                    hasIcon: true,
-                    hasLabel: true,
-                  ),
-                ],
+                segments: [MaterialSegmentProps(id: 1, hasIcon: true)],
               ),
               eventBindings: [],
             ),
@@ -1337,8 +1233,8 @@ Frame counterWidgetSnapshot() => const Frame(
     ),
     CreateNode(
       nodeId: 3,
-      kind: NodeKind.button,
-      props: ButtonProps(enabled: true),
+      kind: NodeKind.pressable,
+      props: PressableProps(overlayColorArgb: 0x181c2026, releaseDelayMs: 80),
       eventBindings: [
         EventBinding(eventTag: EventTagId.press, handlerId: 9001),
       ],

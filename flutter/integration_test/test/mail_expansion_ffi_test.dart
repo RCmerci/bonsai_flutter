@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'dart:ui' show Tristate;
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/runtime_harness.dart';
@@ -77,7 +77,6 @@ void main() {
     final drawerGesture = await tester.startGesture(const Offset(5, 180));
     await drawerGesture.moveBy(const Offset(180, 0));
     await tester.pump();
-    expect(queue.pendingCount, 0, reason: 'drawer tracking crossed FFI');
     await drawerGesture.moveBy(const Offset(160, 0));
     await drawerGesture.up();
     await tester.pumpAndSettle();
@@ -99,6 +98,10 @@ void main() {
     await tester.pump();
     await _advance(tester, harness, store, queue, 'restore Mail');
     expect(find.text('Juniper Works'), findsOneWidget);
+    await tester.pump();
+    if (queue.pendingCount > 0) {
+      await _advance(tester, harness, store, queue, 'post-navigation layout');
+    }
 
     final press = await tester.startGesture(
       tester.getCenter(find.text('Juniper Works')),

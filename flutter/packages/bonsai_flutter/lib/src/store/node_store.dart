@@ -548,7 +548,6 @@ final class NodeStore {
       NodeKind.icon => props is IconProps,
       NodeKind.image => props is ImageProps,
       NodeKind.row || NodeKind.column => props is LinearProps,
-      NodeKind.button => props is ButtonProps,
       NodeKind.padding => props is PaddingProps,
       NodeKind.align => props is AlignProps,
       NodeKind.center => props is CenterProps,
@@ -576,7 +575,6 @@ final class NodeStore {
       NodeKind.semantics => props is SemanticsProps,
       NodeKind.theme => props is ThemeProps,
       NodeKind.materialScaffold => props is MaterialScaffoldProps,
-      NodeKind.materialAppBar => props is MaterialAppBarProps,
       NodeKind.materialElevatedButton ||
       NodeKind.materialTextButton ||
       NodeKind.materialIconButton => props is MaterialButtonProps,
@@ -594,9 +592,8 @@ final class NodeStore {
       NodeKind.materialFilterChip ||
       NodeKind.materialChoiceChip ||
       NodeKind.materialInputChip => props is MaterialChipProps,
-      NodeKind.materialAlertDialog => props is MaterialAlertDialogProps,
       NodeKind.materialSearchBar => props is MaterialSearchBarProps,
-      NodeKind.materialTooltip => props is MaterialTooltipProps,
+      NodeKind.materialTextField => props is MaterialTextFieldProps,
       NodeKind.materialDataTable => props is MaterialDataTableProps,
       NodeKind.materialStepper => props is MaterialStepperProps,
       NodeKind.materialExpansionPanelList =>
@@ -606,16 +603,15 @@ final class NodeStore {
         props is MaterialFullscreenDialogProps,
       NodeKind.materialCheckbox => props is MaterialCheckboxProps,
       NodeKind.materialSwitch => props is MaterialSwitchProps,
-      NodeKind.materialListTile => props is MaterialListTileProps,
       NodeKind.materialDivider => props is MaterialDividerProps,
       NodeKind.materialCard => props is MaterialCardProps,
       NodeKind.materialCircularProgressIndicator =>
         props is MaterialCircularProgressProps,
       NodeKind.materialLinearProgressIndicator =>
         props is MaterialLinearProgressProps,
+      NodeKind.materialExpressive => props is MaterialExpressiveProps,
       NodeKind.cupertinoButton => props is CupertinoButtonProps,
       NodeKind.cupertinoSwitch => props is CupertinoSwitchProps,
-      NodeKind.textInput => props is TextInputProps,
       NodeKind.overlay => props is OverlayProps,
       NodeKind.navigator => props is NavigatorProps,
       NodeKind.page => props is PageProps,

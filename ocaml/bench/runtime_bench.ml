@@ -178,7 +178,7 @@ let benchmark_keyed_edit name edit =
 
 let benchmark_handler_change () =
   let view () =
-    Ui.Widget.button
+    Ui.Widget.pressable
       ~on_press:(Ui.Event.Handler.create (fun _ -> ()))
       ~child:(Ui.Widget.text "Press")
       ()
@@ -210,7 +210,7 @@ let benchmark_handler_heavy count =
   let view handlers ~changed_label =
     Ui.Widget.column
       (List.init count (fun index ->
-         Ui.Widget.button
+         Ui.Widget.pressable
            ~key:(Ui.Key.int index)
            ~on_press:handlers.(index)
            ~child:

@@ -46,6 +46,30 @@ type snack_bar_close_reason =
   | Remove
   | Timeout
 
+type civil_date =
+  { year : int
+  ; month : int
+  ; day : int
+  }
+
+type civil_date_range =
+  { start : civil_date
+  ; end_ : civil_date
+  }
+
+type civil_time =
+  { hour : int
+  ; minute : int
+  }
+
+type picker_entry_mode =
+  | Calendar_or_dial
+  | Input
+
+val civil_date : year:int -> month:int -> day:int -> civil_date
+val civil_date_range : start:civil_date -> end_:civil_date -> civil_date_range
+val civil_time : hour:int -> minute:int -> civil_time
+
 module Application_platform : sig
   type t
 
@@ -214,6 +238,37 @@ val show_snack_bar
   -> message:string
   -> unit
   -> (snack_bar_close_reason, error) result Bonsai.Effect.t
+
+val pick_date
+  :  ?cancellation:Cancellation.t
+  -> ?initial:civil_date
+  -> ?current:civil_date
+  -> ?entry_mode:picker_entry_mode
+  -> first:civil_date
+  -> last:civil_date
+  -> t
+  -> unit
+  -> (civil_date option, error) result Bonsai.Effect.t
+
+val pick_date_range
+  :  ?cancellation:Cancellation.t
+  -> ?initial:civil_date_range
+  -> ?current:civil_date
+  -> ?entry_mode:picker_entry_mode
+  -> first:civil_date
+  -> last:civil_date
+  -> t
+  -> unit
+  -> (civil_date_range option, error) result Bonsai.Effect.t
+
+val pick_time
+  :  ?cancellation:Cancellation.t
+  -> ?entry_mode:picker_entry_mode
+  -> ?use_24_hour:bool
+  -> initial:civil_time
+  -> t
+  -> unit
+  -> (civil_time option, error) result Bonsai.Effect.t
 
 module Prepared_operations : sig
   type t

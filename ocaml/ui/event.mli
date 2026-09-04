@@ -41,6 +41,10 @@ module Tag : sig
     | Step_cancel
     | Expansion_changed
     | Dialog_option_selected
+    | Civil_date_changed
+    | Civil_time_changed
+    | Search_opened
+    | Search_closed
 
   val compare : t -> t -> int
   val equal : t -> t -> bool
@@ -147,6 +151,15 @@ module Payload : sig
     | Float_range of
         { start : float
         ; end_ : float
+        }
+    | Civil_date of
+        { year : int
+        ; month : int
+        ; day : int
+        }
+    | Civil_time of
+        { hour : int
+        ; minute : int
         }
     | Tap of tap
     | Pointer of pointer

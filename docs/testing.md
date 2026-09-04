@@ -113,7 +113,7 @@ temporary-file cleanup, progress, and checksum stability.
 Pure Dart tests validate binary decoding, atomic `NodeStore` transactions,
 native buffer ownership, and runtime-isolate serialization. Current Flutter
 widget tests validate `NodeHost`, stable keys, subtree-local invalidation, root
-replacement, typed Button and Checkbox event dispatch, finite typed layout
+replacement, typed Pressable and Checkbox event dispatch, finite typed layout
 values, dark Theme mapping, and the Flutter Semantics tree.
 
 Application-theme tests cover the public OCaml token constructors, validation,

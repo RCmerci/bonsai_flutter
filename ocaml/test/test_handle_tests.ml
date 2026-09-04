@@ -19,7 +19,7 @@ let component handlers graph =
     Ui.Widget.column
       ~key:(Ui.Key.string "main")
       [ Ui.Widget.text (Printf.sprintf "Count: %d" count)
-      ; Ui.Widget.button ~on_press:increment ~child:(Ui.Widget.text "Increment") ()
+      ; Ui.Widget.pressable ~on_press:increment ~child:(Ui.Widget.text "Increment") ()
         |> Ui.Widget.with_test_id (Ui.Test_id.string "increment")
       ])
 ;;
@@ -37,7 +37,7 @@ let () =
        (Test.Handle.show handle)
        "Column key=main\n\
        \  Text \"Count: 0\"\n\
-       \  Button test_id=increment events=[press]\n\
+       \  Pressable test_id=increment events=[press]\n\
        \    Text \"Increment\"")
     "initial pretty-printed tree changed";
   Test.Handle.present handle;

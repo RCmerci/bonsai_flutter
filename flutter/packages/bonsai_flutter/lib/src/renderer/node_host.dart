@@ -377,7 +377,6 @@ bool _isCoreSliverKind(NodeKind kind) => switch (kind) {
   NodeKind.row ||
   NodeKind.column ||
   NodeKind.stack ||
-  NodeKind.button ||
   NodeKind.padding ||
   NodeKind.align ||
   NodeKind.center ||
@@ -398,7 +397,6 @@ bool _isCoreSliverKind(NodeKind kind) => switch (kind) {
   NodeKind.semantics ||
   NodeKind.theme ||
   NodeKind.materialScaffold ||
-  NodeKind.materialAppBar ||
   NodeKind.materialElevatedButton ||
   NodeKind.materialTextButton ||
   NodeKind.materialIconButton ||
@@ -409,7 +407,7 @@ bool _isCoreSliverKind(NodeKind kind) => switch (kind) {
   NodeKind.materialNavigationBar ||
   NodeKind.materialRadioGroup ||
   NodeKind.materialSearchBar ||
-  NodeKind.materialTooltip ||
+  NodeKind.materialTextField ||
   NodeKind.materialDataTable ||
   NodeKind.materialStepper ||
   NodeKind.materialExpansionPanelList ||
@@ -422,17 +420,15 @@ bool _isCoreSliverKind(NodeKind kind) => switch (kind) {
   NodeKind.materialFilterChip ||
   NodeKind.materialChoiceChip ||
   NodeKind.materialInputChip ||
-  NodeKind.materialAlertDialog ||
   NodeKind.materialCheckbox ||
   NodeKind.materialSwitch ||
-  NodeKind.materialListTile ||
   NodeKind.materialDivider ||
   NodeKind.materialCard ||
   NodeKind.materialCircularProgressIndicator ||
   NodeKind.materialLinearProgressIndicator ||
+  NodeKind.materialExpressive ||
   NodeKind.cupertinoButton ||
   NodeKind.cupertinoSwitch ||
-  NodeKind.textInput ||
   NodeKind.overlay ||
   NodeKind.navigator ||
   NodeKind.page ||

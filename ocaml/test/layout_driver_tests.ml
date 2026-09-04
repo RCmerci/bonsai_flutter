@@ -31,7 +31,7 @@ let component handlers _graph =
          ; Ui.Widget.Stack.positioned
              ~left:8.
              ~top:12.
-             (Ui.Widget.button ~on_press:noop ~child:(Ui.Widget.text "Overlay") ())
+             (Ui.Widget.pressable ~on_press:noop ~child:(Ui.Widget.text "Overlay") ())
          ]))
 ;;
 

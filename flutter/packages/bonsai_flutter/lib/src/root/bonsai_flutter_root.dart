@@ -2,8 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' show FrameTiming;
 
-import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../application_platform/application_platform.dart';
 import '../application_platform/application_platform_dispatcher.dart';

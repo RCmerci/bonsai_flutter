@@ -1,49 +1,15 @@
 import 'fixture.dart';
 import 'package:bonsai_flutter/bonsai_flutter.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('sliver app bar renders a preferred-size bottom', (tester) async {
+  testWidgets('sliver app bar renders M3E variants and every action', (
+    tester,
+  ) async {
     final store = _sliverAppBarStore(
-      props: const SliverAppBarProps(pinned: true, hasBottom: true),
-      slotChildren: const [2, 3],
-      extraOperations: const [
-        CreateNode(
-          nodeId: 3,
-          kind: NodeKind.preferredSize,
-          props: PreferredSizeProps(height: 36),
-          eventBindings: [],
-        ),
-        CreateNode(
-          nodeId: 4,
-          kind: NodeKind.text,
-          props: TextProps('Bottom'),
-          eventBindings: [],
-        ),
-        SetChildren(nodeId: 3, children: [4]),
-      ],
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: SizedBox(height: 240, child: BonsaiFlutterView(store: store)),
-      ),
-    );
-    await tester.pump();
-
-    expect(tester.takeException(), isNull);
-    expect(find.text('Bottom'), findsOneWidget);
-    expect(
-      tester.widget<SliverAppBar>(find.byType(SliverAppBar)).bottom,
-      isNotNull,
-    );
-  });
-
-  testWidgets('sliver app bar maps every action child', (tester) async {
-    final store = _sliverAppBarStore(
-      props: const SliverAppBarProps(pinned: true, hasActions: true),
+      props: _props(actionCount: 2, variant: 2, shape: 1, density: 1),
       slotChildren: const [2, 5, 6],
       extraOperations: const [
         CreateNode(
@@ -69,6 +35,12 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget.runtimeType.toString() == 'M3EAppBar',
+      ),
+      findsOneWidget,
+    );
     final appBar = tester.widget<SliverAppBar>(find.byType(SliverAppBar));
     expect(appBar.actions, hasLength(2));
     expect(find.text('Search'), findsOneWidget);
@@ -79,21 +51,11 @@ void main() {
     tester,
   ) async {
     final invalidProps = <SliverAppBarProps>[
-      const SliverAppBarProps(pinned: false, snap: true),
-      const SliverAppBarProps(pinned: false, toolbarHeight: 0),
-      const SliverAppBarProps(pinned: false, toolbarHeight: -1),
-      const SliverAppBarProps(pinned: false, toolbarHeight: double.nan),
-      const SliverAppBarProps(pinned: false, toolbarHeight: double.infinity),
-      const SliverAppBarProps(pinned: false, expandedHeight: -1),
-      const SliverAppBarProps(
-        pinned: false,
-        expandedHeight: 100,
-        collapsedHeight: 120,
-      ),
-      const SliverAppBarProps(pinned: false, collapsedHeight: 40),
-      const SliverAppBarProps(pinned: false, elevation: -1),
-      const SliverAppBarProps(pinned: false, elevation: double.nan),
-      const SliverAppBarProps(pinned: false, elevation: double.infinity),
+      _props(snap: true),
+      _props(actionCount: -1),
+      _props(variant: 3),
+      _props(shape: 2),
+      _props(density: 2),
     ];
     final registry = WidgetRegistry.standard();
     late BuildContext context;
@@ -135,7 +97,7 @@ void main() {
     tester,
   ) async {
     final store = _sliverAppBarStore(
-      props: const SliverAppBarProps(pinned: false, snap: true),
+      props: _props(snap: true),
       slotChildren: const [2],
       extraOperations: const [],
     );
@@ -159,14 +121,12 @@ void main() {
     expect(tester.takeException(), isNull);
 
     store.apply(
-      const Frame(
+      Frame(
         runtimeEpoch: 1,
         baseRevision: 1,
         targetRevision: 2,
         kind: FrameKind.incremental,
-        operations: [
-          UpdateProps(nodeId: 10, props: SliverAppBarProps(pinned: true)),
-        ],
+        operations: [UpdateProps(nodeId: 10, props: _props())],
       ),
     );
     await tester.pump();
@@ -176,6 +136,29 @@ void main() {
     expect(find.byType(SliverAppBar), findsOneWidget);
   });
 }
+
+SliverAppBarProps _props({
+  bool pinned = true,
+  bool floating = false,
+  bool snap = false,
+  int actionCount = 0,
+  int variant = 1,
+  int shape = 0,
+  int density = 0,
+}) => SliverAppBarProps(
+  pinned: pinned,
+  floating: floating,
+  snap: snap,
+  hasLeading: false,
+  backgroundColor: null,
+  foregroundColor: null,
+  actionCount: actionCount,
+  centerTitle: false,
+  variant: variant,
+  shape: shape,
+  density: density,
+  semanticLabel: 'Expressive app bar',
+);
 
 NodeStore _sliverAppBarStore({
   required SliverAppBarProps props,

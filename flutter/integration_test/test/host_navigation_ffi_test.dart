@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
-import 'package:flutter/material.dart';
+import 'package:material_3_expressive/material_3_expressive.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/runtime_harness.dart';
@@ -104,7 +105,7 @@ void registerHostNavigationFfiTests({
     expect(find.text('Settings'), findsOneWidget);
     expect(find.text('Overlay owned by OCaml'), findsOneWidget);
     expect(find.text('Dialog owned by OCaml'), findsOneWidget);
-    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.byType(M3EDialog), findsOneWidget);
 
     await tester.state<NavigatorState>(find.byType(Navigator).last).maybePop();
     await tester.pumpAndSettle();

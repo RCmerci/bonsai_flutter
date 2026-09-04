@@ -685,7 +685,8 @@ let component client handlers graph =
         |> List.filter_map (fun value -> value)
       in
       Ui.Material.scaffold
-        ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "SQLite Worker Todo") ())
+        ~app_bar:
+          (Ui.Material.App_bar.top ~title:(Ui.Widget.text "SQLite Worker Todo") ())
         ~body:
           (Ui.Widget.Body.static
              (Ui.Widget.column

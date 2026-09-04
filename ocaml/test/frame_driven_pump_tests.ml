@@ -41,16 +41,16 @@ let text_values frame =
     | _ -> None)
 ;;
 
-let find_button_binding frame =
+let find_pressable_binding frame =
   semantic_operations (decode_frame frame)
   |> List.find_map (function
     | Protocol.Wire_frame.Create_node
-        { node_id; kind = Button; event_bindings = [ { event_tag; handler_id } ]; _ } ->
-      Some (node_id, event_tag, handler_id)
+        { node_id; kind = Pressable; event_bindings = [ { event_tag; handler_id } ]; _ }
+      -> Some (node_id, event_tag, handler_id)
     | _ -> None)
   |> function
   | Some binding -> binding
-  | None -> fail "wire frame did not contain one Button event binding"
+  | None -> fail "wire frame did not contain one Pressable event binding"
 ;;
 
 let require_text result expected =
@@ -477,7 +477,7 @@ let atomic_input_component ~handled ~timer_fired ~time_source handlers graph =
   in
   Bonsai.Cont.Edge.lifecycle ~on_activate graph;
   Bonsai.Cont.map callback ~f:(fun callback ->
-    Ui.Widget.button ~on_press:callback ~child:(Ui.Widget.text "atomic") ())
+    Ui.Widget.pressable ~on_press:callback ~child:(Ui.Widget.text "atomic") ())
 ;;
 
 let test_invalid_input_is_atomic_and_does_not_starve_due_timer () =
@@ -493,7 +493,7 @@ let test_invalid_input_is_atomic_and_does_not_starve_due_timer () =
   in
   let initial = pump driver 0L in
   let initial_frame = Option.get initial.frame in
-  let node_id, event_tag, handler_id = find_button_binding initial_frame in
+  let node_id, event_tag, handler_id = find_pressable_binding initial_frame in
   present driver initial 0L;
   let events =
     Protocol.Inbound_event.
@@ -537,7 +537,7 @@ let handler_identity_component handlers graph =
       ~f:(fun (_, toggle) _ -> toggle)
   in
   Bonsai.Cont.map callback ~f:(fun callback ->
-    Ui.Widget.button ~on_press:callback ~child:(Ui.Widget.text "identity") ())
+    Ui.Widget.pressable ~on_press:callback ~child:(Ui.Widget.text "identity") ())
 ;;
 
 let test_changed_handler_identity_emits_binding_update () =
@@ -545,7 +545,7 @@ let test_changed_handler_identity_emits_binding_update () =
   let _, driver = create ~runtime_epoch handler_identity_component in
   let initial = pump driver 0L in
   let frame = Option.get initial.frame in
-  let node_id, event_tag, handler_id = find_button_binding frame in
+  let node_id, event_tag, handler_id = find_pressable_binding frame in
   present driver initial 0L;
   let events =
     Protocol.Inbound_event.
@@ -627,7 +627,7 @@ let host_effect_component handlers _graph =
         Bonsai.Effect.map (Host_effect.Clipboard.read host_effects ()) ~f:(fun _ -> ()))
   in
   Bonsai.Cont.map callback ~f:(fun callback ->
-    Ui.Widget.button ~on_press:callback ~child:(Ui.Widget.text "host") ())
+    Ui.Widget.pressable ~on_press:callback ~child:(Ui.Widget.text "host") ())
 ;;
 
 let host_request_ids result =
@@ -644,7 +644,9 @@ let test_host_operation_replays_after_rejection_and_commits_once () =
   let runtime_epoch = 52L in
   let _, driver = create ~runtime_epoch host_effect_component in
   let initial = pump driver 0L in
-  let node_id, event_tag, handler_id = find_button_binding (Option.get initial.frame) in
+  let node_id, event_tag, handler_id =
+    find_pressable_binding (Option.get initial.frame)
+  in
   present driver initial 0L;
   let events =
     Protocol.Inbound_event.
@@ -695,7 +697,7 @@ let before_display_fixed_point_component ~observed handlers _graph =
       ~f:(fun () _ -> wait_twice)
   in
   Bonsai.Cont.map callback ~f:(fun callback ->
-    Ui.Widget.button ~on_press:callback ~child:(Ui.Widget.text "before-display") ())
+    Ui.Widget.pressable ~on_press:callback ~child:(Ui.Widget.text "before-display") ())
 ;;
 
 let test_lifecycle_before_display_reaches_fixed_point () =
@@ -704,7 +706,9 @@ let test_lifecycle_before_display_reaches_fixed_point () =
     create ~runtime_epoch:53L (before_display_fixed_point_component ~observed)
   in
   let initial = pump driver 0L in
-  let node_id, event_tag, handler_id = find_button_binding (Option.get initial.frame) in
+  let node_id, event_tag, handler_id =
+    find_pressable_binding (Option.get initial.frame)
+  in
   present driver initial 0L;
   let events =
     Protocol.Inbound_event.

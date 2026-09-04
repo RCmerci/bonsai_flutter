@@ -24,9 +24,9 @@ let kind_name node =
 
 let node_role node =
   match node.Runtime.Mounted_tree.Snapshot.node_tag with
-  | Ui.Widget.Private.K_button -> Some "button"
+  | Ui.Widget.Private.K_pressable -> Some "button"
   | K_material_checkbox -> Some "checkbox"
-  | K_text_input -> Some "text_field"
+  | K_material_text_field -> Some "text_field"
   | K_semantics ->
     let (Av view) = Ui.Widget.Private.view node.Runtime.Mounted_tree.Snapshot.widget in
     (match view.node with

@@ -82,6 +82,21 @@ final class HostSnackBarCloseReasonValue extends HostEffectValue {
   int get hashCode => Object.hash(HostSnackBarCloseReasonValue, reason);
 }
 
+final class HostCivilDateValue extends HostEffectValue {
+  const HostCivilDateValue(this.value);
+  final CivilDateValue? value;
+}
+
+final class HostCivilDateRangeValue extends HostEffectValue {
+  const HostCivilDateRangeValue(this.value);
+  final CivilDateRangeValue? value;
+}
+
+final class HostCivilTimeValue extends HostEffectValue {
+  const HostCivilTimeValue(this.value);
+  final CivilTimeValue? value;
+}
+
 final class HostEffectException implements Exception {
   const HostEffectException(this.message);
   final String message;
@@ -147,6 +162,18 @@ final class FlutterHostEffectImplementation
           durationMs: durationMs,
         );
         return HostSnackBarCloseReasonValue(reason);
+      case PickDateRequest():
+        return HostCivilDateValue(
+          await _requireResources(request).pickDate(request),
+        );
+      case PickDateRangeRequest():
+        return HostCivilDateRangeValue(
+          await _requireResources(request).pickDateRange(request),
+        );
+      case PickTimeRequest():
+        return HostCivilTimeValue(
+          await _requireResources(request).pickTime(request),
+        );
       default:
         throw HostEffectException(
           '${request.runtimeType} requires an injected platform implementation',
@@ -313,12 +340,55 @@ List<int> _encodeValue(HostEffectValue value) => switch (value) {
   }(),
   HostCancelledValue() => const [],
   HostSnackBarCloseReasonValue(:final reason) => [reason.index],
+  HostCivilDateValue(:final value) => _encodeCivilDate(value),
+  HostCivilDateRangeValue(:final value) => _encodeCivilDateRange(value),
+  HostCivilTimeValue(:final value) => _encodeCivilTime(value),
 };
+
+List<int> _encodeCivilDate(CivilDateValue? value) {
+  final writer = _HostValueWriter()..uint8(value == null ? 0 : 1);
+  if (value != null) {
+    writer
+      ..uint16(value.year)
+      ..uint8(value.month)
+      ..uint8(value.day);
+  }
+  return writer.takeBytes();
+}
+
+List<int> _encodeCivilDateRange(CivilDateRangeValue? value) {
+  final writer = _HostValueWriter()..uint8(value == null ? 0 : 1);
+  if (value != null) {
+    writer
+      ..uint16(value.start.year)
+      ..uint8(value.start.month)
+      ..uint8(value.start.day)
+      ..uint16(value.end.year)
+      ..uint8(value.end.month)
+      ..uint8(value.end.day);
+  }
+  return writer.takeBytes();
+}
+
+List<int> _encodeCivilTime(CivilTimeValue? value) {
+  final writer = _HostValueWriter()..uint8(value == null ? 0 : 1);
+  if (value != null) {
+    writer
+      ..uint8(value.hour)
+      ..uint8(value.minute);
+  }
+  return writer.takeBytes();
+}
 
 final class _HostValueWriter {
   final BytesBuilder _builder = BytesBuilder(copy: false);
 
   void uint8(int value) => _builder.add([value & 0xff]);
+
+  void uint16(int value) {
+    final data = ByteData(2)..setUint16(0, value, Endian.little);
+    _builder.add(data.buffer.asUint8List());
+  }
 
   void uint32(int value) {
     final data = ByteData(4)..setUint32(0, value, Endian.little);

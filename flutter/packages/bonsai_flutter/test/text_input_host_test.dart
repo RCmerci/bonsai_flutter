@@ -1,7 +1,8 @@
 import 'fixture.dart';
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:bonsai_flutter/src/navigation/modal_sheet_keyboard_coordinator.dart';
-import 'package:flutter/material.dart';
+import 'package:material_3_expressive/material_3_expressive.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -604,7 +605,7 @@ void main() {
         ),
       ),
     );
-    expect(find.byType(SearchBar), findsOneWidget);
+    expect(find.byType(M3ESearchBar), findsOneWidget);
     final controller = tester
         .widget<EditableText>(find.byType(EditableText))
         .controller;
@@ -731,7 +732,7 @@ void main() {
             ),
             CreateNode(
               nodeId: 2,
-              kind: NodeKind.textInput,
+              kind: NodeKind.materialTextField,
               props: textInputProps(),
               eventBindings: const [
                 EventBinding(eventTag: EventTagId.textEdit, handlerId: 101),
@@ -826,7 +827,7 @@ void main() {
             for (final nodeId in [2, 3])
               CreateNode(
                 nodeId: nodeId,
-                kind: NodeKind.textInput,
+                kind: NodeKind.materialTextField,
                 props: textInputProps(sessionId: nodeId),
                 eventBindings: [
                   EventBinding(
@@ -876,9 +877,9 @@ void main() {
     expect(edits.map((edit) => edit.localRevision), [1, 2]);
     expect(edits.map((edit) => edit.text), ['拼 paste', '拼']);
 
-    await tester.tap(find.byType(TextField).at(0));
+    await tester.tap(find.byType(EditableText).at(0));
     await tester.pump();
-    await tester.tap(find.byType(TextField).at(1));
+    await tester.tap(find.byType(EditableText).at(1));
     await tester.pump();
     final focusEvents = events
         .where((event) => event.eventTag == EventTagId.focusChanged)
@@ -912,7 +913,7 @@ void main() {
 
     expect(editable.focusNode.hasFocus, isFalse);
 
-    await tester.tap(find.byType(TextField));
+    await tester.tap(find.byType(EditableText));
     await tester.pump();
 
     expect(editable.focusNode.hasFocus, isTrue);
@@ -981,7 +982,7 @@ Frame textInputSnapshot({
     const SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
     CreateNode(
       nodeId: 1,
-      kind: NodeKind.textInput,
+      kind: NodeKind.materialTextField,
       props: textInputProps(
         maxUtf8Bytes: maxUtf8Bytes,
         text: text,
@@ -1002,7 +1003,7 @@ Frame textInputSnapshot({
 Frame textInputUpdate({
   int baseRevision = 1,
   required int targetRevision,
-  required TextInputProps props,
+  required MaterialTextFieldProps props,
 }) => Frame(
   runtimeEpoch: 91,
   baseRevision: baseRevision,
@@ -1011,7 +1012,7 @@ Frame textInputUpdate({
   operations: [UpdateProps(nodeId: 1, props: props)],
 );
 
-TextInputProps textInputProps({
+MaterialTextFieldProps textInputProps({
   int sessionId = 10,
   int documentRevision = 4,
   int acceptedLocalRevision = 0,
@@ -1020,7 +1021,7 @@ TextInputProps textInputProps({
   int selectionOffset = 1,
   int? maxUtf8Bytes,
   bool autofocus = false,
-}) => TextInputProps(
+}) => MaterialTextFieldProps(
   sessionId: sessionId,
   documentRevision: documentRevision,
   acceptedLocalRevision: acceptedLocalRevision,
@@ -1040,4 +1041,11 @@ TextInputProps textInputProps({
   inputAction: TextInputActionKind.done,
   autofocus: autofocus,
   maxUtf8Bytes: maxUtf8Bytes,
+  variant: 0,
+  label: null,
+  supportingText: null,
+  errorText: null,
+  hasLeading: false,
+  hasTrailing: false,
+  maxLines: 1,
 );

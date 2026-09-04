@@ -341,10 +341,14 @@ let test_navigation_constructors () =
     (String.equal (Ui.Widget.For_testing.kind_name overlay) "Overlay")
     "overlay kind is not typed";
   let dialog =
-    Ui.Material.Dialog.alert ~content:(Ui.Widget.text "Confirm") ~actions:[] ()
+    Ui.Material.Dialog.alert
+      ~title:"Confirm"
+      ~content:(Ui.Widget.text "Confirm")
+      ~actions:[]
+      ()
   in
   check
-    (String.equal (Ui.Widget.For_testing.kind_name dialog) "Material_alert_dialog")
+    (String.equal (Ui.Widget.For_testing.kind_name dialog) "Material_expressive")
     "dialog kind is not typed"
 ;;
 
@@ -353,7 +357,7 @@ let test_debug_tree () =
     Ui.Widget.column
       ~key:(Ui.Key.string "main")
       [ Ui.Widget.text "Count: 0"
-      ; Ui.Widget.button
+      ; Ui.Widget.pressable
           ~on_press:(Ui.Event.Handler.create (fun _ -> ()))
           ~child:(Ui.Widget.text "Increment")
           ()
@@ -364,7 +368,7 @@ let test_debug_tree () =
        (Ui.Debug.dump_tree tree)
        "Column key=\"main\"\n\
        \  Text \"Count: 0\"\n\
-       \  Button events=[press]\n\
+       \  Pressable events=[press]\n\
        \    Text \"Increment\"")
     "debug tree is not deterministic"
 ;;

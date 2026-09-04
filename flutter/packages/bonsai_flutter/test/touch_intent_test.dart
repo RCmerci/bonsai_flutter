@@ -1,7 +1,7 @@
 import 'package:bonsai_flutter/src/gesture/bonsai_gesture_detector.dart';
 import 'package:bonsai_flutter/src/gesture/touch_intent.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

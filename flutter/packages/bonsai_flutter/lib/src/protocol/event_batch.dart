@@ -180,6 +180,44 @@ final class FloatRangeEventPayload extends EventPayload {
   int get hashCode => Object.hash(FloatRangeEventPayload, start, end);
 }
 
+final class CivilDateEventPayload extends EventPayload {
+  const CivilDateEventPayload({
+    required this.year,
+    required this.month,
+    required this.day,
+  });
+
+  final int year;
+  final int month;
+  final int day;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CivilDateEventPayload &&
+      other.year == year &&
+      other.month == month &&
+      other.day == day;
+
+  @override
+  int get hashCode => Object.hash(CivilDateEventPayload, year, month, day);
+}
+
+final class CivilTimeEventPayload extends EventPayload {
+  const CivilTimeEventPayload({required this.hour, required this.minute});
+
+  final int hour;
+  final int minute;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CivilTimeEventPayload &&
+      other.hour == hour &&
+      other.minute == minute;
+
+  @override
+  int get hashCode => Object.hash(CivilTimeEventPayload, hour, minute);
+}
+
 enum PointerKindValue {
   mouse,
   touch,
@@ -799,7 +837,9 @@ abstract final class EventBatchCodec {
             eventTag == EventTagId.delete ||
             eventTag == EventTagId.tooltipTriggered ||
             eventTag == EventTagId.stepContinue ||
-            eventTag == EventTagId.stepCancel) &&
+            eventTag == EventTagId.stepCancel ||
+            eventTag == EventTagId.searchOpened ||
+            eventTag == EventTagId.searchClosed) &&
         payload is UnitEventPayload) {
       return;
     }
@@ -966,6 +1006,30 @@ abstract final class EventBatchCodec {
         ..float64(payload.end);
       return;
     }
+    if (eventTag == EventTagId.civilDateChanged &&
+        payload is CivilDateEventPayload) {
+      if (!_validCivilDate(payload.year, payload.month, payload.day)) {
+        _eventFail(ProtocolErrorCode.invalidProps, 'Invalid civil date');
+      }
+      writer
+        ..uint16(payload.year)
+        ..uint8(payload.month)
+        ..uint8(payload.day);
+      return;
+    }
+    if (eventTag == EventTagId.civilTimeChanged &&
+        payload is CivilTimeEventPayload) {
+      if (payload.hour < 0 ||
+          payload.hour > 23 ||
+          payload.minute < 0 ||
+          payload.minute > 59) {
+        _eventFail(ProtocolErrorCode.invalidProps, 'Invalid civil time');
+      }
+      writer
+        ..uint8(payload.hour)
+        ..uint8(payload.minute);
+      return;
+    }
     if (eventTag == EventTagId.scrollNotification &&
         payload is ScrollEventPayload) {
       if (!payload.pixels.isFinite || !payload.delta.isFinite) {
@@ -1116,7 +1180,9 @@ abstract final class EventBatchCodec {
         eventTag == EventTagId.delete ||
         eventTag == EventTagId.tooltipTriggered ||
         eventTag == EventTagId.stepContinue ||
-        eventTag == EventTagId.stepCancel) {
+        eventTag == EventTagId.stepCancel ||
+        eventTag == EventTagId.searchOpened ||
+        eventTag == EventTagId.searchClosed) {
       return const UnitEventPayload();
     }
     if (eventTag == EventTagId.tap || eventTag == EventTagId.doubleTap) {
@@ -1249,6 +1315,23 @@ abstract final class EventBatchCodec {
         _eventFail(ProtocolErrorCode.invalidProps, 'Range slider is reversed');
       }
       return FloatRangeEventPayload(start: start, end: end);
+    }
+    if (eventTag == EventTagId.civilDateChanged) {
+      final year = reader.uint16();
+      final month = reader.uint8();
+      final day = reader.uint8();
+      if (!_validCivilDate(year, month, day)) {
+        _eventFail(ProtocolErrorCode.invalidProps, 'Invalid civil date');
+      }
+      return CivilDateEventPayload(year: year, month: month, day: day);
+    }
+    if (eventTag == EventTagId.civilTimeChanged) {
+      final hour = reader.uint8();
+      final minute = reader.uint8();
+      if (hour > 23 || minute > 59) {
+        _eventFail(ProtocolErrorCode.invalidProps, 'Invalid civil time');
+      }
+      return CivilTimeEventPayload(hour: hour, minute: minute);
     }
     if (eventTag == EventTagId.scrollNotification) {
       final pixels = reader.float64();
@@ -1691,6 +1774,28 @@ void _validateCanonicalInt64List(List<int> values, String label) {
       );
     }
   }
+}
+
+bool _validCivilDate(int year, int month, int day) {
+  if (year < 1 || year > 9999 || month < 1 || month > 12 || day < 1) {
+    return false;
+  }
+  final leap = year % 400 == 0 || (year % 4 == 0 && year % 100 != 0);
+  final days = [
+    31,
+    if (leap) 29 else 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ];
+  return day <= days[month - 1];
 }
 
 void _checkEventUint32(String label, int value) {

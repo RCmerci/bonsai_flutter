@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../test/fixture.dart' show testApplicationTheme;
+
 void main() {
   test('bonsai_flutter Dart renderer benchmark', () {
     final full = _fullFrame(1000);
@@ -132,11 +134,11 @@ void _benchmark(
 void _benchmarkControllerRetention() {
   final store = NodeStore()..apply(_textInputFrame());
   final resources = RendererResourceStore()..synchronize(store);
-  final props = store.node(1).props as TextInputProps;
-  final original = resources.acquireTextInput(1, props);
+  final props = store.node(1).props as MaterialTextFieldProps;
+  final original = resources.acquireTextInput(1, props.textInputProps);
   var revision = 1;
   _benchmark('text controller retention', 5000, (iteration) {
-    final next = TextInputProps(
+    final next = MaterialTextFieldProps(
       sessionId: 1,
       documentRevision: iteration + 2,
       value: TextEditingStateValue(
@@ -152,6 +154,14 @@ void _benchmarkControllerRetention() {
       acceptedLocalRevision: 0,
       updateMode: TextUpdateMode.correction,
       autofocus: false,
+      maxUtf8Bytes: null,
+      variant: 0,
+      label: null,
+      supportingText: null,
+      errorText: null,
+      hasLeading: false,
+      hasTrailing: false,
+      maxLines: 1,
     );
     store.apply(
       Frame(
@@ -163,7 +173,7 @@ void _benchmarkControllerRetention() {
       ),
     );
     resources.synchronize(store);
-    final retained = resources.acquireTextInput(1, next);
+    final retained = resources.acquireTextInput(1, next.textInputProps);
     if (!identical(original, retained)) {
       throw StateError('Text input controller identity changed');
     }
@@ -182,6 +192,10 @@ void _benchmarkResourceDisposal() {
         targetRevision: iteration + 2,
         kind: FrameKind.fullSnapshot,
         operations: [
+          const SetApplicationTheme(
+            title: 'Benchmark',
+            theme: testApplicationTheme,
+          ),
           CreateNode(
             nodeId: 1,
             kind: NodeKind.nativeWidget,
@@ -238,6 +252,7 @@ Frame _fullFrame(int childCount) => Frame(
   targetRevision: 1,
   kind: FrameKind.fullSnapshot,
   operations: [
+    const SetApplicationTheme(title: 'Benchmark', theme: testApplicationTheme),
     const CreateNode(
       nodeId: 1,
       kind: NodeKind.column,
@@ -265,10 +280,11 @@ Frame _textInputFrame() => const Frame(
   targetRevision: 1,
   kind: FrameKind.fullSnapshot,
   operations: [
+    SetApplicationTheme(title: 'Benchmark', theme: testApplicationTheme),
     CreateNode(
       nodeId: 1,
-      kind: NodeKind.textInput,
-      props: TextInputProps(
+      kind: NodeKind.materialTextField,
+      props: MaterialTextFieldProps(
         sessionId: 1,
         documentRevision: 1,
         value: TextEditingStateValue(
@@ -284,6 +300,14 @@ Frame _textInputFrame() => const Frame(
         acceptedLocalRevision: 0,
         updateMode: TextUpdateMode.ack,
         autofocus: false,
+        maxUtf8Bytes: null,
+        variant: 0,
+        label: null,
+        supportingText: null,
+        errorText: null,
+        hasLeading: false,
+        hasTrailing: false,
+        maxLines: 1,
       ),
       eventBindings: [],
     ),

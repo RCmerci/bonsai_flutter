@@ -289,7 +289,7 @@ let core_section handlers =
         ~minimum:(Ui.Layout.Edge_insets.only ~top:4. ())
         (Ui.Widget.environment_boundary
            (Ui.Widget.text "SafeArea and Environment boundary"))
-    ; Ui.Widget.button
+    ; Ui.Material.elevated_button
         ~on_press:handlers.press
         ~child:(Ui.Widget.text "Core typed button")
         ()
@@ -316,19 +316,16 @@ let material_section model handlers =
     [ Ui.Material.Segmented_button.segment
         ~id:1L
         ~icon:(icon 0xe8ef)
-        ~label:(Ui.Widget.text "List")
-        ~tooltip:"List view"
+        ~label:"List"
         ()
     ; Ui.Material.Segmented_button.segment
         ~id:2L
         ~icon:(icon 0xe3ec)
-        ~label:(Ui.Widget.text "Grid")
-        ~tooltip:"Grid view"
+        ~label:"Grid"
         ()
     ; Ui.Material.Segmented_button.segment
         ~id:3L
-        ~enabled:false
-        ~label:(Ui.Widget.text "Disabled")
+        ~label:"Third"
         ()
     ]
   in
@@ -358,26 +355,30 @@ let material_section model handlers =
         ~on_press:handlers.press
         ~icon:(Ui.Widget.icon ~font_family:"MaterialIcons" ~code_point:0xe87d ())
         ()
-    ; Ui.Widget.row
-        [ Ui.Material.Floating_action_button.icon
-            ~size:Ui.Material.Floating_action_button.Small
-            ~on_press:handlers.press
-            ~icon:(icon 0xe145)
-            ()
-        ; Ui.Material.Floating_action_button.icon
-            ~on_press:handlers.press
-            ~icon:(icon 0xe145)
-            ()
-        ; Ui.Material.Floating_action_button.icon
-            ~size:Ui.Material.Floating_action_button.Large
-            ~on_press:handlers.press
-            ~icon:(icon 0xe145)
-            ()
-        ; Ui.Material.Floating_action_button.extended
-            ~on_press:handlers.press
-            ~icon:(icon 0xe145)
-            ~label:(Ui.Widget.text "Create")
-            ()
+    ; Ui.Widget.column
+        [ Ui.Widget.row
+            [ Ui.Material.Floating_action_button.icon
+                ~size:Ui.Material.Floating_action_button.Small
+                ~on_press:handlers.press
+                ~icon:(icon 0xe145)
+                ()
+            ; Ui.Material.Floating_action_button.icon
+                ~on_press:handlers.press
+                ~icon:(icon 0xe145)
+                ()
+            ]
+        ; Ui.Widget.row
+            [ Ui.Material.Floating_action_button.icon
+                ~size:Ui.Material.Floating_action_button.Large
+                ~on_press:handlers.press
+                ~icon:(icon 0xe145)
+                ()
+            ; Ui.Material.Floating_action_button.extended
+                ~on_press:handlers.press
+                ~icon:(icon 0xe145)
+                ~label:"Create"
+                ()
+            ]
         ]
     ; Ui.Material.navigation_bar
         ~selected_index:0
@@ -395,11 +396,7 @@ let material_section model handlers =
         segmented_options
         ()
     ; Ui.Material.Segmented_button.create
-        ~direction:Ui.Layout.Axis.Vertical
         ~multi_selection_enabled:true
-        ~empty_selection_allowed:true
-        ~expanded_insets:(Ui.Layout.Edge_insets.symmetric ~horizontal:12. ())
-        ~selected_icon:(icon 0xe876)
         ~selected_ids:model.segmented_multi_ids
         ~on_selection_changed:handlers.segmented_multi
         segmented_options
@@ -425,32 +422,35 @@ let material_section model handlers =
         ~on_change:handlers.press
         ~on_change_end:handlers.press
         ()
-    ; Ui.Widget.row
-        [ Ui.Material.action_chip
-            ~on_press:handlers.press
-            ~label:(Ui.Widget.text "Action")
-            ()
-        ; Ui.Material.filter_chip
-            ~selected:model.checked
-            ~on_selected:handlers.toggle
-            ~label:(Ui.Widget.text "Filter")
-            ()
-        ; Ui.Material.choice_chip
-            ~selected:(not model.checked)
-            ~on_selected:handlers.toggle
-            ~label:(Ui.Widget.text "Choice")
-            ()
-        ; Ui.Material.input_chip
-            ~selected:model.checked
-            ~on_press:handlers.press
-            ~on_selected:handlers.toggle
-            ~on_delete:handlers.press
-            ~label:(Ui.Widget.text "Input")
-            ()
+    ; Ui.Widget.column
+        [ Ui.Widget.row
+            [ Ui.Material.Chip.assist
+                ~on_press:handlers.press
+                ~label:"Action"
+                ()
+            ; Ui.Material.Chip.filter
+                ~selected:model.checked
+                ~on_press:handlers.press
+                ~label:"Filter"
+                ()
+            ]
+        ; Ui.Widget.row
+            [ Ui.Material.Chip.suggestion
+                ~selected:(not model.checked)
+                ~on_press:handlers.press
+                ~label:"Choice"
+                ()
+            ; Ui.Material.Chip.input
+                ~selected:model.checked
+                ~on_press:handlers.press
+                ~on_delete:handlers.press
+                ~label:"Input"
+                ()
+            ]
         ]
-    ; Ui.Material.alert_dialog
+    ; Ui.Material.Dialog.alert
         ~icon:(icon 0xe002)
-        ~title:(Ui.Widget.text "AlertDialog")
+        ~title:"AlertDialog"
         ~content:(Ui.Widget.text "Declarative dialog content")
         ~actions:
           [ Ui.Material.text_button
@@ -470,16 +470,16 @@ let material_section model handlers =
         ]
     ; Ui.Material.list_tile
         ~selected:model.checked
-        ~subtitle:(Ui.Widget.text "Selection truth lives in Bonsai")
+        ~supporting_text:"Selection truth lives in Bonsai"
         ~leading:(Ui.Widget.icon ~font_family:"MaterialIcons" ~code_point:0xe88a ())
         ~trailing:(Ui.Widget.text "OCaml")
-        ~on_press:handlers.toggle
-        ~title:(Ui.Widget.text "Typed ListTile")
+        ~on_press:handlers.press
+        ~headline:"Typed ListTile"
         ()
     ; Ui.Material.divider ~thickness:1. ()
     ; Ui.Widget.row
         [ Ui.Material.circular_progress_indicator ~value:0.68 ()
-        ; Ui.Cupertino.button handlers.press ~child:(Ui.Widget.text "Cupertino button") ()
+        ; Ui.Cupertino.button handlers.press ~child:(Ui.Widget.text "Cupertino") ()
         ]
     ; Ui.Widget.column
         [ Ui.Widget.text "Determinate linear progress"
@@ -586,11 +586,13 @@ let view model handlers =
   in
   let body = Ui.Widget.Body.Vertical.create [ Ui.Widget.Body.Vertical.fill viewport ] in
   Ui.Material.scaffold
-    ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Bonsai Flutter Gallery") ())
+    ~app_bar:
+      (Ui.Material.App_bar.top ~title:(Ui.Widget.text "Bonsai Flutter Gallery") ())
     ~floating_action_button:
       (Ui.Material.Floating_action_button.extended
+         ~icon:(Ui.Widget.icon ~font_family:"MaterialIcons" ~code_point:0xe145 ())
          ~on_press:handlers.press
-         ~label:(Ui.Widget.text "New")
+         ~label:"New"
          ())
     ~floating_action_button_location:Ui.Material.End_docked
     ~bottom_navigation_bar:

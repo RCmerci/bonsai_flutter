@@ -97,7 +97,7 @@ let counter handlers graph =
   Bonsai.Cont.map2 count increment_handler ~f:(fun count increment_handler ->
     Ui.Widget.column
       [ Ui.Widget.text (Printf.sprintf "Count: %d" count)
-      ; Ui.Widget.button
+      ; Ui.Widget.pressable
           ~on_press:increment_handler
           ~child:(Ui.Widget.text "Increment")
           ()

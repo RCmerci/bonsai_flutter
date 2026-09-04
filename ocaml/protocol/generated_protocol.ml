@@ -2,8 +2,8 @@
 
 module ID = Bonsai_flutter_spec.Id
 
-let protocol_major = 1
-let protocol_minor = 24
+let protocol_major = 2
+let protocol_minor = 26
 
 module Limits = struct
   let header_bytes = 48
@@ -94,8 +94,6 @@ module Node_kind = struct
   let sliver_app_bar = ID.Protocol.Node_kind.of_int 38
   let preferred_size = ID.Protocol.Node_kind.of_int 39
   let gesture = ID.Protocol.Node_kind.of_int 48
-  let button = ID.Protocol.Node_kind.of_int 49
-  let text_input = ID.Protocol.Node_kind.of_int 50
   let focus_scope = ID.Protocol.Node_kind.of_int 51
   let mouse_region = ID.Protocol.Node_kind.of_int 52
   let keyboard_listener = ID.Protocol.Node_kind.of_int 53
@@ -109,14 +107,12 @@ module Node_kind = struct
   let environment_boundary = ID.Protocol.Node_kind.of_int 70
   let animated_opacity = ID.Protocol.Node_kind.of_int 71
   let material_scaffold = ID.Protocol.Node_kind.of_int 96
-  let material_app_bar = ID.Protocol.Node_kind.of_int 97
   let material_elevated_button = ID.Protocol.Node_kind.of_int 98
   let material_text_button = ID.Protocol.Node_kind.of_int 99
   let material_icon_button = ID.Protocol.Node_kind.of_int 100
   let material_checkbox = ID.Protocol.Node_kind.of_int 101
   let material_switch = ID.Protocol.Node_kind.of_int 102
   let material_text_field = ID.Protocol.Node_kind.of_int 103
-  let material_list_tile = ID.Protocol.Node_kind.of_int 104
   let material_divider = ID.Protocol.Node_kind.of_int 105
   let material_card = ID.Protocol.Node_kind.of_int 106
   let reserved_node_kind_107 = ID.Protocol.Node_kind.of_int 107
@@ -135,17 +131,16 @@ module Node_kind = struct
   let material_filter_chip = ID.Protocol.Node_kind.of_int 120
   let material_choice_chip = ID.Protocol.Node_kind.of_int 121
   let material_input_chip = ID.Protocol.Node_kind.of_int 122
-  let material_alert_dialog = ID.Protocol.Node_kind.of_int 123
   let material_linear_progress_indicator = ID.Protocol.Node_kind.of_int 124
   let material_segmented_button = ID.Protocol.Node_kind.of_int 125
   let native_widget = ID.Protocol.Node_kind.of_int 128
   let material_search_bar = ID.Protocol.Node_kind.of_int 129
-  let material_tooltip = ID.Protocol.Node_kind.of_int 130
   let material_data_table = ID.Protocol.Node_kind.of_int 131
   let material_stepper = ID.Protocol.Node_kind.of_int 132
   let material_expansion_panel_list = ID.Protocol.Node_kind.of_int 133
   let material_simple_dialog = ID.Protocol.Node_kind.of_int 134
   let material_fullscreen_dialog = ID.Protocol.Node_kind.of_int 135
+  let material_expressive = ID.Protocol.Node_kind.of_int 136
 
   let debug_name id =
     match ID.Protocol.Node_kind.to_int id with
@@ -178,8 +173,6 @@ module Node_kind = struct
     | 38 -> Some "sliver_app_bar"
     | 39 -> Some "preferred_size"
     | 48 -> Some "gesture"
-    | 49 -> Some "button"
-    | 50 -> Some "text_input"
     | 51 -> Some "focus_scope"
     | 52 -> Some "mouse_region"
     | 53 -> Some "keyboard_listener"
@@ -193,14 +186,12 @@ module Node_kind = struct
     | 70 -> Some "environment_boundary"
     | 71 -> Some "animated_opacity"
     | 96 -> Some "material_scaffold"
-    | 97 -> Some "material_app_bar"
     | 98 -> Some "material_elevated_button"
     | 99 -> Some "material_text_button"
     | 100 -> Some "material_icon_button"
     | 101 -> Some "material_checkbox"
     | 102 -> Some "material_switch"
     | 103 -> Some "material_text_field"
-    | 104 -> Some "material_list_tile"
     | 105 -> Some "material_divider"
     | 106 -> Some "material_card"
     | 107 -> Some "reserved_node_kind_107"
@@ -219,17 +210,16 @@ module Node_kind = struct
     | 120 -> Some "material_filter_chip"
     | 121 -> Some "material_choice_chip"
     | 122 -> Some "material_input_chip"
-    | 123 -> Some "material_alert_dialog"
     | 124 -> Some "material_linear_progress_indicator"
     | 125 -> Some "material_segmented_button"
     | 128 -> Some "native_widget"
     | 129 -> Some "material_search_bar"
-    | 130 -> Some "material_tooltip"
     | 131 -> Some "material_data_table"
     | 132 -> Some "material_stepper"
     | 133 -> Some "material_expansion_panel_list"
     | 134 -> Some "material_simple_dialog"
     | 135 -> Some "material_fullscreen_dialog"
+    | 136 -> Some "material_expressive"
     | _ -> None
   ;;
 end
@@ -280,6 +270,10 @@ module Event_tag = struct
   let step_cancel = ID.Protocol.Event_tag.of_int 43
   let expansion_changed = ID.Protocol.Event_tag.of_int 44
   let dialog_option_selected = ID.Protocol.Event_tag.of_int 45
+  let civil_date_changed = ID.Protocol.Event_tag.of_int 46
+  let civil_time_changed = ID.Protocol.Event_tag.of_int 47
+  let search_opened = ID.Protocol.Event_tag.of_int 48
+  let search_closed = ID.Protocol.Event_tag.of_int 49
 
   let debug_name id =
     match ID.Protocol.Event_tag.to_int id with
@@ -328,6 +322,10 @@ module Event_tag = struct
     | 43 -> Some "step_cancel"
     | 44 -> Some "expansion_changed"
     | 45 -> Some "dialog_option_selected"
+    | 46 -> Some "civil_date_changed"
+    | 47 -> Some "civil_time_changed"
+    | 48 -> Some "search_opened"
+    | 49 -> Some "search_closed"
     | _ -> None
   ;;
 end
@@ -348,6 +346,9 @@ module Host_request = struct
   let platform_information = ID.Protocol.Host_request_kind.of_int 13
   let measure_layout = ID.Protocol.Host_request_kind.of_int 14
   let show_snack_bar = ID.Protocol.Host_request_kind.of_int 15
+  let pick_date = ID.Protocol.Host_request_kind.of_int 16
+  let pick_date_range = ID.Protocol.Host_request_kind.of_int 17
+  let pick_time = ID.Protocol.Host_request_kind.of_int 18
 
   let debug_name id =
     match ID.Protocol.Host_request_kind.to_int id with
@@ -366,6 +367,9 @@ module Host_request = struct
     | 13 -> Some "platform_information"
     | 14 -> Some "measure_layout"
     | 15 -> Some "show_snack_bar"
+    | 16 -> Some "pick_date"
+    | 17 -> Some "pick_date_range"
+    | 18 -> Some "pick_time"
     | _ -> None
   ;;
 end
@@ -705,42 +709,32 @@ end
 
 module Sliver_app_bar_prop = struct
   let pinned = ID.Protocol.Property.of_int 1
-  let expanded_height = ID.Protocol.Property.of_int 2
-  let collapsed_height = ID.Protocol.Property.of_int 3
   let floating = ID.Protocol.Property.of_int 4
   let snap = ID.Protocol.Property.of_int 5
-  let stretch = ID.Protocol.Property.of_int 6
-  let toolbar_height = ID.Protocol.Property.of_int 7
   let has_leading = ID.Protocol.Property.of_int 8
-  let has_flexible_space = ID.Protocol.Property.of_int 9
-  let has_bottom = ID.Protocol.Property.of_int 10
-  let has_actions = ID.Protocol.Property.of_int 11
-  let force_elevated = ID.Protocol.Property.of_int 12
-  let automatically_imply_leading = ID.Protocol.Property.of_int 13
-  let center_title = ID.Protocol.Property.of_int 14
   let background_color = ID.Protocol.Property.of_int 15
   let foreground_color = ID.Protocol.Property.of_int 16
-  let elevation = ID.Protocol.Property.of_int 17
+  let action_count = ID.Protocol.Property.of_int 18
+  let center_title_value = ID.Protocol.Property.of_int 19
+  let variant = ID.Protocol.Property.of_int 20
+  let shape = ID.Protocol.Property.of_int 21
+  let density = ID.Protocol.Property.of_int 22
+  let semantic_label = ID.Protocol.Property.of_int 23
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "pinned"
-    | 2 -> Some "expanded_height"
-    | 3 -> Some "collapsed_height"
     | 4 -> Some "floating"
     | 5 -> Some "snap"
-    | 6 -> Some "stretch"
-    | 7 -> Some "toolbar_height"
     | 8 -> Some "has_leading"
-    | 9 -> Some "has_flexible_space"
-    | 10 -> Some "has_bottom"
-    | 11 -> Some "has_actions"
-    | 12 -> Some "force_elevated"
-    | 13 -> Some "automatically_imply_leading"
-    | 14 -> Some "center_title"
     | 15 -> Some "background_color"
     | 16 -> Some "foreground_color"
-    | 17 -> Some "elevation"
+    | 18 -> Some "action_count"
+    | 19 -> Some "center_title_value"
+    | 20 -> Some "variant"
+    | 21 -> Some "shape"
+    | 22 -> Some "density"
+    | 23 -> Some "semantic_label"
     | _ -> None
   ;;
 end
@@ -783,16 +777,6 @@ module Keyboard_listener_prop = struct
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "autofocus"
     | 2 -> Some "key_policy"
-    | _ -> None
-  ;;
-end
-
-module Button_prop = struct
-  let enabled = ID.Protocol.Property.of_int 1
-
-  let debug_name id =
-    match ID.Protocol.Property.to_int id with
-    | 1 -> Some "enabled"
     | _ -> None
   ;;
 end
@@ -859,16 +843,6 @@ module Material_scaffold_prop = struct
   ;;
 end
 
-module Material_app_bar_prop = struct
-  let center_title = ID.Protocol.Property.of_int 1
-
-  let debug_name id =
-    match ID.Protocol.Property.to_int id with
-    | 1 -> Some "center_title"
-    | _ -> None
-  ;;
-end
-
 module Material_elevated_button_prop = struct
   let enabled = ID.Protocol.Property.of_int 1
   let autofocus = ID.Protocol.Property.of_int 2
@@ -895,12 +869,10 @@ end
 
 module Material_icon_button_prop = struct
   let enabled = ID.Protocol.Property.of_int 1
-  let autofocus = ID.Protocol.Property.of_int 2
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "enabled"
-    | 2 -> Some "autofocus"
     | _ -> None
   ;;
 end
@@ -945,14 +917,12 @@ module Material_floating_action_button_prop = struct
   let variant = ID.Protocol.Property.of_int 1
   let enabled = ID.Protocol.Property.of_int 2
   let autofocus = ID.Protocol.Property.of_int 3
-  let has_icon = ID.Protocol.Property.of_int 4
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "variant"
     | 2 -> Some "enabled"
     | 3 -> Some "autofocus"
-    | 4 -> Some "has_icon"
     | _ -> None
   ;;
 end
@@ -960,11 +930,31 @@ end
 module Material_navigation_bar_prop = struct
   let selected_index = ID.Protocol.Property.of_int 1
   let destinations = ID.Protocol.Property.of_int 2
+  let auto_layout = ID.Protocol.Property.of_int 3
+  let layout = ID.Protocol.Property.of_int 4
+  let alignment = ID.Protocol.Property.of_int 5
+  let label_behavior = ID.Protocol.Property.of_int 6
+  let icon_behavior = ID.Protocol.Property.of_int 7
+  let size = ID.Protocol.Property.of_int 8
+  let shape = ID.Protocol.Property.of_int 9
+  let density = ID.Protocol.Property.of_int 10
+  let safe_area = ID.Protocol.Property.of_int 11
+  let semantic_label = ID.Protocol.Property.of_int 12
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "selected_index"
     | 2 -> Some "destinations"
+    | 3 -> Some "auto_layout"
+    | 4 -> Some "layout"
+    | 5 -> Some "alignment"
+    | 6 -> Some "label_behavior"
+    | 7 -> Some "icon_behavior"
+    | 8 -> Some "size"
+    | 9 -> Some "shape"
+    | 10 -> Some "density"
+    | 11 -> Some "safe_area"
+    | 12 -> Some "semantic_label"
     | _ -> None
   ;;
 end
@@ -989,6 +979,7 @@ module Material_slider_prop = struct
   let label = ID.Protocol.Property.of_int 5
   let enabled = ID.Protocol.Property.of_int 6
   let has_on_change = ID.Protocol.Property.of_int 7
+  let kind = ID.Protocol.Property.of_int 8
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
@@ -999,6 +990,7 @@ module Material_slider_prop = struct
     | 5 -> Some "label"
     | 6 -> Some "enabled"
     | 7 -> Some "has_on_change"
+    | 8 -> Some "kind"
     | _ -> None
   ;;
 end
@@ -1013,6 +1005,7 @@ module Material_range_slider_prop = struct
   let label_end = ID.Protocol.Property.of_int 7
   let enabled = ID.Protocol.Property.of_int 8
   let has_on_change = ID.Protocol.Property.of_int 9
+  let kind = ID.Protocol.Property.of_int 10
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
@@ -1025,6 +1018,7 @@ module Material_range_slider_prop = struct
     | 7 -> Some "label_end"
     | 8 -> Some "enabled"
     | 9 -> Some "has_on_change"
+    | 10 -> Some "kind"
     | _ -> None
   ;;
 end
@@ -1032,10 +1026,7 @@ end
 module Material_action_chip_prop = struct
   let enabled = ID.Protocol.Property.of_int 1
   let selected = ID.Protocol.Property.of_int 2
-  let has_avatar = ID.Protocol.Property.of_int 3
-  let has_delete_icon = ID.Protocol.Property.of_int 4
-  let has_on_press = ID.Protocol.Property.of_int 5
-  let has_on_selected = ID.Protocol.Property.of_int 6
+  let has_leading = ID.Protocol.Property.of_int 3
   let has_on_delete = ID.Protocol.Property.of_int 7
   let presentation = ID.Protocol.Property.of_int 8
 
@@ -1043,10 +1034,7 @@ module Material_action_chip_prop = struct
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "enabled"
     | 2 -> Some "selected"
-    | 3 -> Some "has_avatar"
-    | 4 -> Some "has_delete_icon"
-    | 5 -> Some "has_on_press"
-    | 6 -> Some "has_on_selected"
+    | 3 -> Some "has_leading"
     | 7 -> Some "has_on_delete"
     | 8 -> Some "presentation"
     | _ -> None
@@ -1056,10 +1044,7 @@ end
 module Material_filter_chip_prop = struct
   let enabled = ID.Protocol.Property.of_int 1
   let selected = ID.Protocol.Property.of_int 2
-  let has_avatar = ID.Protocol.Property.of_int 3
-  let has_delete_icon = ID.Protocol.Property.of_int 4
-  let has_on_press = ID.Protocol.Property.of_int 5
-  let has_on_selected = ID.Protocol.Property.of_int 6
+  let has_leading = ID.Protocol.Property.of_int 3
   let has_on_delete = ID.Protocol.Property.of_int 7
   let presentation = ID.Protocol.Property.of_int 8
 
@@ -1067,10 +1052,7 @@ module Material_filter_chip_prop = struct
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "enabled"
     | 2 -> Some "selected"
-    | 3 -> Some "has_avatar"
-    | 4 -> Some "has_delete_icon"
-    | 5 -> Some "has_on_press"
-    | 6 -> Some "has_on_selected"
+    | 3 -> Some "has_leading"
     | 7 -> Some "has_on_delete"
     | 8 -> Some "presentation"
     | _ -> None
@@ -1080,10 +1062,7 @@ end
 module Material_choice_chip_prop = struct
   let enabled = ID.Protocol.Property.of_int 1
   let selected = ID.Protocol.Property.of_int 2
-  let has_avatar = ID.Protocol.Property.of_int 3
-  let has_delete_icon = ID.Protocol.Property.of_int 4
-  let has_on_press = ID.Protocol.Property.of_int 5
-  let has_on_selected = ID.Protocol.Property.of_int 6
+  let has_leading = ID.Protocol.Property.of_int 3
   let has_on_delete = ID.Protocol.Property.of_int 7
   let presentation = ID.Protocol.Property.of_int 8
 
@@ -1091,10 +1070,7 @@ module Material_choice_chip_prop = struct
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "enabled"
     | 2 -> Some "selected"
-    | 3 -> Some "has_avatar"
-    | 4 -> Some "has_delete_icon"
-    | 5 -> Some "has_on_press"
-    | 6 -> Some "has_on_selected"
+    | 3 -> Some "has_leading"
     | 7 -> Some "has_on_delete"
     | 8 -> Some "presentation"
     | _ -> None
@@ -1104,10 +1080,7 @@ end
 module Material_input_chip_prop = struct
   let enabled = ID.Protocol.Property.of_int 1
   let selected = ID.Protocol.Property.of_int 2
-  let has_avatar = ID.Protocol.Property.of_int 3
-  let has_delete_icon = ID.Protocol.Property.of_int 4
-  let has_on_press = ID.Protocol.Property.of_int 5
-  let has_on_selected = ID.Protocol.Property.of_int 6
+  let has_leading = ID.Protocol.Property.of_int 3
   let has_on_delete = ID.Protocol.Property.of_int 7
   let presentation = ID.Protocol.Property.of_int 8
 
@@ -1115,28 +1088,9 @@ module Material_input_chip_prop = struct
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "enabled"
     | 2 -> Some "selected"
-    | 3 -> Some "has_avatar"
-    | 4 -> Some "has_delete_icon"
-    | 5 -> Some "has_on_press"
-    | 6 -> Some "has_on_selected"
+    | 3 -> Some "has_leading"
     | 7 -> Some "has_on_delete"
     | 8 -> Some "presentation"
-    | _ -> None
-  ;;
-end
-
-module Material_alert_dialog_prop = struct
-  let has_icon = ID.Protocol.Property.of_int 1
-  let has_title = ID.Protocol.Property.of_int 2
-  let has_content = ID.Protocol.Property.of_int 3
-  let action_count = ID.Protocol.Property.of_int 4
-
-  let debug_name id =
-    match ID.Protocol.Property.to_int id with
-    | 1 -> Some "has_icon"
-    | 2 -> Some "has_title"
-    | 3 -> Some "has_content"
-    | 4 -> Some "action_count"
     | _ -> None
   ;;
 end
@@ -1161,24 +1115,6 @@ module Material_switch_prop = struct
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "value"
     | 2 -> Some "enabled"
-    | _ -> None
-  ;;
-end
-
-module Material_list_tile_prop = struct
-  let enabled = ID.Protocol.Property.of_int 1
-  let selected = ID.Protocol.Property.of_int 2
-  let has_subtitle = ID.Protocol.Property.of_int 3
-  let has_leading = ID.Protocol.Property.of_int 4
-  let has_trailing = ID.Protocol.Property.of_int 5
-
-  let debug_name id =
-    match ID.Protocol.Property.to_int id with
-    | 1 -> Some "enabled"
-    | 2 -> Some "selected"
-    | 3 -> Some "has_subtitle"
-    | 4 -> Some "has_leading"
-    | 5 -> Some "has_trailing"
     | _ -> None
   ;;
 end
@@ -1215,20 +1151,24 @@ end
 
 module Material_circular_progress_indicator_prop = struct
   let value = ID.Protocol.Property.of_int 1
+  let wavy = ID.Protocol.Property.of_int 2
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "value"
+    | 2 -> Some "wavy"
     | _ -> None
   ;;
 end
 
 module Material_linear_progress_indicator_prop = struct
   let value = ID.Protocol.Property.of_int 1
+  let wavy = ID.Protocol.Property.of_int 2
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "value"
+    | 2 -> Some "wavy"
     | _ -> None
   ;;
 end
@@ -1236,24 +1176,14 @@ end
 module Material_segmented_button_prop = struct
   let selected_ids = ID.Protocol.Property.of_int 1
   let enabled = ID.Protocol.Property.of_int 2
-  let direction = ID.Protocol.Property.of_int 3
   let multi_selection_enabled = ID.Protocol.Property.of_int 4
-  let empty_selection_allowed = ID.Protocol.Property.of_int 5
-  let expanded_insets = ID.Protocol.Property.of_int 6
-  let show_selected_icon = ID.Protocol.Property.of_int 7
-  let has_selected_icon = ID.Protocol.Property.of_int 8
   let segments = ID.Protocol.Property.of_int 9
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "selected_ids"
     | 2 -> Some "enabled"
-    | 3 -> Some "direction"
     | 4 -> Some "multi_selection_enabled"
-    | 5 -> Some "empty_selection_allowed"
-    | 6 -> Some "expanded_insets"
-    | 7 -> Some "show_selected_icon"
-    | 8 -> Some "has_selected_icon"
     | 9 -> Some "segments"
     | _ -> None
   ;;
@@ -1297,32 +1227,48 @@ module Material_search_bar_prop = struct
   ;;
 end
 
-module Material_tooltip_prop = struct
-  let message = ID.Protocol.Property.of_int 1
-  let enabled = ID.Protocol.Property.of_int 2
-  let exclude_from_semantics = ID.Protocol.Property.of_int 3
-  let prefer_below = ID.Protocol.Property.of_int 4
-  let trigger_mode = ID.Protocol.Property.of_int 5
-  let wait_duration_ms = ID.Protocol.Property.of_int 6
-  let show_duration_ms = ID.Protocol.Property.of_int 7
-  let exit_duration_ms = ID.Protocol.Property.of_int 8
-  let enable_tap_to_dismiss = ID.Protocol.Property.of_int 9
-  let enable_feedback = ID.Protocol.Property.of_int 10
-  let has_on_triggered = ID.Protocol.Property.of_int 11
+module Material_text_field_prop = struct
+  let session_id = ID.Protocol.Property.of_int 1
+  let document_revision = ID.Protocol.Property.of_int 2
+  let value = ID.Protocol.Property.of_int 3
+  let enabled = ID.Protocol.Property.of_int 4
+  let read_only = ID.Protocol.Property.of_int 18
+  let obscure_text = ID.Protocol.Property.of_int 5
+  let keyboard_type = ID.Protocol.Property.of_int 6
+  let input_action = ID.Protocol.Property.of_int 7
+  let accepted_local_revision = ID.Protocol.Property.of_int 8
+  let update_mode = ID.Protocol.Property.of_int 9
+  let max_utf8_bytes = ID.Protocol.Property.of_int 10
+  let variant = ID.Protocol.Property.of_int 11
+  let label = ID.Protocol.Property.of_int 12
+  let supporting_text = ID.Protocol.Property.of_int 13
+  let error_text = ID.Protocol.Property.of_int 14
+  let has_leading = ID.Protocol.Property.of_int 15
+  let has_trailing = ID.Protocol.Property.of_int 16
+  let max_lines = ID.Protocol.Property.of_int 17
+  let autofocus = ID.Protocol.Property.of_int 19
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
-    | 1 -> Some "message"
-    | 2 -> Some "enabled"
-    | 3 -> Some "exclude_from_semantics"
-    | 4 -> Some "prefer_below"
-    | 5 -> Some "trigger_mode"
-    | 6 -> Some "wait_duration_ms"
-    | 7 -> Some "show_duration_ms"
-    | 8 -> Some "exit_duration_ms"
-    | 9 -> Some "enable_tap_to_dismiss"
-    | 10 -> Some "enable_feedback"
-    | 11 -> Some "has_on_triggered"
+    | 1 -> Some "session_id"
+    | 2 -> Some "document_revision"
+    | 3 -> Some "value"
+    | 4 -> Some "enabled"
+    | 18 -> Some "read_only"
+    | 5 -> Some "obscure_text"
+    | 6 -> Some "keyboard_type"
+    | 7 -> Some "input_action"
+    | 8 -> Some "accepted_local_revision"
+    | 9 -> Some "update_mode"
+    | 10 -> Some "max_utf8_bytes"
+    | 11 -> Some "variant"
+    | 12 -> Some "label"
+    | 13 -> Some "supporting_text"
+    | 14 -> Some "error_text"
+    | 15 -> Some "has_leading"
+    | 16 -> Some "has_trailing"
+    | 17 -> Some "max_lines"
+    | 19 -> Some "autofocus"
     | _ -> None
   ;;
 end
@@ -1400,6 +1346,34 @@ module Material_fullscreen_dialog_prop = struct
   ;;
 end
 
+module Material_expressive_prop = struct
+  let component = ID.Protocol.Property.of_int 1
+  let variant = ID.Protocol.Property.of_int 2
+  let flags = ID.Protocol.Property.of_int 3
+  let primary_text = ID.Protocol.Property.of_int 4
+  let secondary_text = ID.Protocol.Property.of_int 5
+  let value = ID.Protocol.Property.of_int 6
+  let end_value = ID.Protocol.Property.of_int 7
+  let selected_ids = ID.Protocol.Property.of_int 8
+  let items = ID.Protocol.Property.of_int 9
+  let text_input = ID.Protocol.Property.of_int 10
+
+  let debug_name id =
+    match ID.Protocol.Property.to_int id with
+    | 1 -> Some "component"
+    | 2 -> Some "variant"
+    | 3 -> Some "flags"
+    | 4 -> Some "primary_text"
+    | 5 -> Some "secondary_text"
+    | 6 -> Some "value"
+    | 7 -> Some "end_value"
+    | 8 -> Some "selected_ids"
+    | 9 -> Some "items"
+    | 10 -> Some "text_input"
+    | _ -> None
+  ;;
+end
+
 module Cupertino_button_prop = struct
   let enabled = ID.Protocol.Property.of_int 1
 
@@ -1418,38 +1392,6 @@ module Cupertino_switch_prop = struct
     match ID.Protocol.Property.to_int id with
     | 1 -> Some "value"
     | 2 -> Some "enabled"
-    | _ -> None
-  ;;
-end
-
-module Text_input_prop = struct
-  let session_id = ID.Protocol.Property.of_int 1
-  let document_revision = ID.Protocol.Property.of_int 2
-  let value = ID.Protocol.Property.of_int 3
-  let enabled = ID.Protocol.Property.of_int 4
-  let read_only = ID.Protocol.Property.of_int 5
-  let obscure_text = ID.Protocol.Property.of_int 6
-  let keyboard_type = ID.Protocol.Property.of_int 7
-  let input_action = ID.Protocol.Property.of_int 8
-  let accepted_local_revision = ID.Protocol.Property.of_int 9
-  let update_mode = ID.Protocol.Property.of_int 10
-  let autofocus = ID.Protocol.Property.of_int 11
-  let max_utf8_bytes = ID.Protocol.Property.of_int 12
-
-  let debug_name id =
-    match ID.Protocol.Property.to_int id with
-    | 1 -> Some "session_id"
-    | 2 -> Some "document_revision"
-    | 3 -> Some "value"
-    | 4 -> Some "enabled"
-    | 5 -> Some "read_only"
-    | 6 -> Some "obscure_text"
-    | 7 -> Some "keyboard_type"
-    | 8 -> Some "input_action"
-    | 9 -> Some "accepted_local_revision"
-    | 10 -> Some "update_mode"
-    | 11 -> Some "autofocus"
-    | 12 -> Some "max_utf8_bytes"
     | _ -> None
   ;;
 end

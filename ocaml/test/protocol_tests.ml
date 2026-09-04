@@ -378,21 +378,6 @@ let test_styled_text_props_round_trip () =
          "styled text round trip changed style, alignment, line limit, or overflow")
 ;;
 
-let test_legacy_text_props_layout () =
-  match Binary_codec.decode (fixture_named "legacy_1_12_counter_full.hex") with
-  | Error error -> fail "legacy text frame decode failed: %s" error.message
-  | Ok decoded ->
-    let expected =
-      { counter_frame with
-        operations =
-          (match counter_frame.operations with
-           | Set_application_theme _ :: operations -> operations
-           | _ -> fail "current Counter frame is missing its application theme")
-      }
-    in
-    expect (decoded = expected) "legacy text frame changed on decode"
-;;
-
 let test_animation_props_round_trip () =
   let frame =
     Wire_frame.
@@ -589,35 +574,6 @@ let test_modal_bottom_sheet_rejects_unknown_wire_enums () =
     [ 88; 96; 107; 108 ]
 ;;
 
-let test_legacy_opacity_layout () =
-  let frame =
-    Wire_frame.
-      { runtime_epoch = epoch 8L
-      ; base_revision = revision 0L
-      ; target_revision = revision 1L
-      ; kind = Full_snapshot
-      ; operations =
-          [ Create_node
-              { node_id = node 4L
-              ; kind = Opacity
-              ; props = Opacity_props { opacity = 0.5 }
-              ; event_bindings = []
-              ; parent_data = No_parent_data
-              }
-          ; Set_root (node 4L)
-          ]
-      }
-  in
-  match Binary_codec.encode frame with
-  | Error error -> fail "legacy opacity encode failed: %s" error.message
-  | Ok encoded ->
-    Bytes.set encoded 6 '\x0b';
-    Bytes.set encoded 7 '\x00';
-    (match Binary_codec.decode encoded with
-     | Error error -> fail "legacy opacity decode failed: %s" error.message
-     | Ok decoded -> expect (decoded = frame) "legacy opacity layout changed")
-;;
-
 let test_layout_material_and_semantics_props_round_trip () =
   let frame =
     Wire_frame.
@@ -710,7 +666,7 @@ let test_layout_material_and_semantics_props_round_trip () =
      | Ok decoded -> expect (decoded = frame) "widget props changed during round trip")
 ;;
 
-let test_text_input_props_round_trip () =
+let test_material_text_field_props_round_trip () =
   let frame =
     Wire_frame.
       { runtime_epoch = epoch 10L
@@ -721,7 +677,7 @@ let test_text_input_props_round_trip () =
           [ Update_props
               { node_id = node 12L
               ; props =
-                  Text_input_props
+                  Material_text_field_props
                     { session_id = session 7L
                     ; document_revision = document_revision 9L
                     ; value =
@@ -738,6 +694,13 @@ let test_text_input_props_round_trip () =
                     ; update_mode = Correction
                     ; autofocus = true
                     ; max_utf8_bytes = Some 64
+                    ; variant = 0
+                    ; label = None
+                    ; supporting_text = None
+                    ; error_text = None
+                    ; has_leading = false
+                    ; has_trailing = false
+                    ; max_lines = 1
                     }
               }
           ]
@@ -762,7 +725,7 @@ let test_text_input_rejects_split_surrogate_range () =
           [ Update_props
               { node_id = node 12L
               ; props =
-                  Text_input_props
+                  Material_text_field_props
                     { session_id = session 1L
                     ; document_revision = document_revision 1L
                     ; value =
@@ -779,6 +742,13 @@ let test_text_input_rejects_split_surrogate_range () =
                     ; update_mode = Ack
                     ; autofocus = false
                     ; max_utf8_bytes = None
+                    ; variant = 0
+                    ; label = None
+                    ; supporting_text = None
+                    ; error_text = None
+                    ; has_leading = false
+                    ; has_trailing = false
+                    ; max_lines = 1
                     }
               }
           ]
@@ -867,7 +837,7 @@ let test_text_input_rejects_invalid_utf8_byte_limits () =
             [ Update_props
                 { node_id = node 12L
                 ; props =
-                    Text_input_props
+                    Material_text_field_props
                       { session_id = session 7L
                       ; document_revision = document_revision 9L
                       ; value =
@@ -884,6 +854,13 @@ let test_text_input_rejects_invalid_utf8_byte_limits () =
                       ; update_mode = Ack
                       ; autofocus = false
                       ; max_utf8_bytes
+                      ; variant = 0
+                      ; label = None
+                      ; supporting_text = None
+                      ; error_text = None
+                      ; has_leading = false
+                      ; has_trailing = false
+                      ; max_lines = 1
                       }
                 }
             ]
@@ -1706,76 +1683,35 @@ let test_scroll_view_cache_extent_validation () =
 
 let test_sliver_app_bar_codec_validation () =
   let props
-        ?(pinned = true)
-        ?(expanded_height = Some 200.)
-        ?(collapsed_height = Some 100.)
         ?(floating = true)
         ?(snap = true)
-        ?(toolbar_height = 56.)
-        ?(elevation = Some 4.)
+        ?(variant = 1)
+        ?(shape = 0)
+        ?(density = 0)
         ()
     =
     Wire_frame.Sliver_app_bar_props
-      { pinned
-      ; expanded_height
-      ; collapsed_height
+      { pinned = true
       ; floating
       ; snap
-      ; stretch = false
-      ; toolbar_height
       ; has_leading = false
-      ; has_flexible_space = false
-      ; has_bottom = false
-      ; has_actions = false
-      ; force_elevated = false
-      ; automatically_imply_leading = true
-      ; center_title = None
       ; background_color = None
       ; foreground_color = None
-      ; elevation
+      ; action_count = 2
+      ; center_title = false
+      ; variant
+      ; shape
+      ; density
+      ; semantic_label = Some "Expressive app bar"
       }
   in
   expect_frame_round_trip "valid sliver app bar" (props_frame (props ()));
   List.iter
     (fun (label, invalid) -> expect_invalid_props_encode label (props_frame invalid))
-    [ "zero toolbar height", props ~toolbar_height:0. ()
-    ; "negative toolbar height", props ~toolbar_height:(-1.) ()
-    ; "NaN toolbar height", props ~toolbar_height:Float.nan ()
-    ; "infinite toolbar height", props ~toolbar_height:Float.infinity ()
-    ; "negative expanded height", props ~expanded_height:(Some (-1.)) ()
-    ; "negative collapsed height", props ~collapsed_height:(Some (-1.)) ()
-    ; ( "collapsed height above expanded height"
-      , props ~expanded_height:(Some 100.) ~collapsed_height:(Some 120.) () )
-    ; "collapsed height below toolbar", props ~collapsed_height:(Some 40.) ()
-    ; "snap without floating", props ~floating:false ~snap:true ()
-    ; "negative elevation", props ~elevation:(Some (-1.)) ()
-    ; "NaN elevation", props ~elevation:(Some Float.nan) ()
-    ; "infinite elevation", props ~elevation:(Some Float.infinity) ()
-    ];
-  let encoded =
-    match Binary_codec.encode (props_frame (props ())) with
-    | Ok bytes -> bytes
-    | Error error -> fail "valid sliver app bar failed to encode: %s" error.message
-  in
-  let expanded_offset = find_float64 encoded 200. in
-  List.iter
-    (fun (label, invalid) -> expect_invalid_props_decode label invalid)
-    [ "decoded negative expanded height", replace_float64_at encoded expanded_offset (-1.)
-    ; "decoded NaN expanded height", replace_float64_at encoded expanded_offset Float.nan
-    ; ( "decoded infinite expanded height"
-      , replace_float64_at encoded expanded_offset Float.infinity )
-    ; "decoded negative collapsed height", replace_float64 encoded 100. (-1.)
-    ; ( "decoded collapsed height above expanded height"
-      , replace_float64_at encoded expanded_offset 50. )
-    ; "decoded collapsed height below toolbar", replace_float64 encoded 100. 40.
-    ; "decoded zero toolbar height", replace_float64 encoded 56. 0.
-    ; "decoded negative elevation", replace_float64 encoded 4. (-1.)
-    ; "decoded NaN elevation", replace_float64 encoded 4. Float.nan
-    ; "decoded infinite elevation", replace_float64 encoded 4. Float.infinity
-    ; ( "decoded snap without floating"
-      , let value = Bytes.copy encoded in
-        Bytes.set value (expanded_offset + 17) '\000';
-        value )
+    [ "snap without floating", props ~floating:false ~snap:true ()
+    ; "invalid variant", props ~variant:3 ()
+    ; "invalid shape", props ~shape:2 ()
+    ; "invalid density", props ~density:2 ()
     ]
 ;;
 
@@ -1808,16 +1744,34 @@ let test_complete_material_protocol_round_trip () =
         }
     ; Material_button_props { variant = Filled_tonal; enabled = true; autofocus = false }
     ; Material_floating_action_button_props
-        { variant = Extended; enabled = true; autofocus = false; has_icon = true }
+        { variant = Extended; enabled = true; autofocus = false }
     ; Material_navigation_bar_props
         { selected_index = 0
         ; destinations =
-            [ { label = "Home"; enabled = true; has_selected_icon = true }
-            ; { label = "Settings"; enabled = false; has_selected_icon = false }
+            [ { label = "Home"
+              ; has_selected_icon = true
+              ; badge_count = Some 7
+              ; badge_dot = false
+              ; semantic_label = Some "Home destination"
+              }
+            ; { label = "Settings"
+              ; has_selected_icon = false
+              ; badge_count = None
+              ; badge_dot = true
+              ; semantic_label = None
+              }
             ]
+        ; auto_layout = false
+        ; layout = 1
+        ; alignment = 2
+        ; label_behavior = 1
+        ; icon_behavior = 2
+        ; size = 0
+        ; shape = 0
+        ; density = 1
+        ; safe_area = false
+        ; semantic_label = Some "Primary navigation"
         }
-    ; Material_alert_dialog_props
-        { has_icon = true; has_title = true; has_content = true; action_count = 2 }
     ; Material_search_bar_props
         { session_id = session 3L
         ; document_revision = document_revision 8L
@@ -1839,18 +1793,30 @@ let test_complete_material_protocol_round_trip () =
         ; hint_text = Some "Search"
         ; has_on_tap = true
         }
-    ; Material_tooltip_props
-        { message = "Details"
+    ; Material_text_field_props
+        { session_id = session 4L
+        ; document_revision = document_revision 9L
+        ; value =
+            { text = "readonly"
+            ; selection = { start_utf16 = 0; end_utf16 = 8 }
+            ; composing = None
+            }
         ; enabled = true
-        ; exclude_from_semantics = false
-        ; prefer_below = false
-        ; trigger_mode = Tooltip_tap
-        ; wait_duration_ms = 20
-        ; show_duration_ms = 1500
-        ; exit_duration_ms = 100
-        ; enable_tap_to_dismiss = true
-        ; enable_feedback = false
-        ; has_on_triggered = true
+        ; read_only = true
+        ; obscure_text = false
+        ; keyboard_type = Keyboard_text
+        ; input_action = Done
+        ; accepted_local_revision = local_revision 6L
+        ; update_mode = Ack
+        ; autofocus = true
+        ; max_utf8_bytes = Some 128
+        ; variant = 1
+        ; label = Some "Reference"
+        ; supporting_text = Some "Copy this value"
+        ; error_text = None
+        ; has_leading = false
+        ; has_trailing = false
+        ; max_lines = 1
         }
     ; Material_data_table_props
         { columns =
@@ -1905,25 +1871,10 @@ let test_complete_material_protocol_round_trip () =
     ; Material_segmented_button_props
         { selected_ids = [ -7L; 9L ]
         ; enabled = true
-        ; direction = Vertical
         ; multi_selection_enabled = true
-        ; empty_selection_allowed = true
-        ; expanded_insets = Some (8., 4., 8., 4.)
-        ; show_selected_icon = true
-        ; has_selected_icon = true
         ; segments =
-            [ { segment_id = -7L
-              ; enabled = true
-              ; tooltip = Some "List view"
-              ; has_icon = true
-              ; has_label = true
-              }
-            ; { segment_id = 9L
-              ; enabled = false
-              ; tooltip = None
-              ; has_icon = false
-              ; has_label = true
-              }
+            [ { segment_id = -7L; has_icon = true }
+            ; { segment_id = 9L; has_icon = false }
             ]
         }
     ; Material_slider_props
@@ -1934,6 +1885,7 @@ let test_complete_material_protocol_round_trip () =
         ; label = Some "Quarter"
         ; enabled = true
         ; has_on_change = true
+        ; kind = 0
         }
     ; Material_range_slider_props
         { start = 0.2
@@ -1945,16 +1897,14 @@ let test_complete_material_protocol_round_trip () =
         ; label_end = None
         ; enabled = true
         ; has_on_change = false
+        ; kind = 0
         }
     ; Material_chip_props
         { variant = Input_chip
         ; presentation = Flat_chip
         ; enabled = true
         ; selected = true
-        ; has_avatar = true
-        ; has_delete_icon = true
-        ; has_on_press = true
-        ; has_on_selected = true
+        ; has_leading = true
         ; has_on_delete = true
         }
     ; Material_chip_props
@@ -1962,10 +1912,7 @@ let test_complete_material_protocol_round_trip () =
         ; presentation = Elevated_chip
         ; enabled = true
         ; selected = false
-        ; has_avatar = true
-        ; has_delete_icon = false
-        ; has_on_press = true
-        ; has_on_selected = false
+        ; has_leading = true
         ; has_on_delete = false
         }
     ; Material_card_props { variant = Filled_card; elevation = 2. }
@@ -1976,7 +1923,7 @@ let test_complete_material_protocol_round_trip () =
         ; indent = 4.
         ; end_indent = 8.
         }
-    ; Material_linear_progress_props { value = Some 0.5 }
+    ; Material_linear_progress_props { value = Some 0.5; wavy = false }
     ; modal_dialog
     ]
   in
@@ -2022,7 +1969,7 @@ let test_complete_material_protocol_round_trip () =
 ;;
 
 let test_linear_progress_protocol_boundaries () =
-  let props value = Wire_frame.Material_linear_progress_props { value } in
+  let props value = Wire_frame.Material_linear_progress_props { value; wavy = false } in
   List.iter
     (fun value ->
        expect_frame_round_trip
@@ -2050,39 +1997,19 @@ let test_linear_progress_protocol_boundaries () =
 
 let test_segmented_button_protocol_validation () =
   let open Wire_frame in
-  let segment id =
-    { segment_id = id
-    ; enabled = true
-    ; tooltip = None
-    ; has_icon = false
-    ; has_label = true
-    }
-  in
+  let segment id = { segment_id = id; has_icon = false } in
   let props
         ?(selected_ids = [ 1L ])
         ?(segments = [ segment 1L ])
         ?(multi_selection_enabled = false)
-        ?(empty_selection_allowed = false)
-        ?(show_selected_icon = true)
-        ?(has_selected_icon = false)
         ()
     =
     Material_segmented_button_props
-      { selected_ids
-      ; enabled = true
-      ; direction = Horizontal
-      ; multi_selection_enabled
-      ; empty_selection_allowed
-      ; expanded_insets = None
-      ; show_selected_icon
-      ; has_selected_icon
-      ; segments
-      }
+      { selected_ids; enabled = true; multi_selection_enabled; segments }
   in
   expect_frame_round_trip "segmented button props" (props_frame (props ()));
   [ props ~segments:[] ()
   ; props ~segments:[ segment 1L; segment 1L ] ()
-  ; props ~segments:[ { (segment 1L) with has_label = false } ] ()
   ; props ~selected_ids:[ 1L; 1L ] ()
   ; props ~selected_ids:[ 2L ] ()
   ; props
@@ -2092,7 +2019,6 @@ let test_segmented_button_protocol_validation () =
       ()
   ; props ~selected_ids:[ 1L; 2L ] ~segments:[ segment 1L; segment 2L ] ()
   ; props ~selected_ids:[] ()
-  ; props ~show_selected_icon:false ~has_selected_icon:true ()
   ]
   |> List.iter (fun invalid ->
     expect_invalid_props_encode "invalid segmented button" (props_frame invalid))
@@ -2109,24 +2035,8 @@ let test_additional_material_protocol_validation () =
         ; presentation = Elevated_chip
         ; enabled = true
         ; selected = false
-        ; has_avatar = false
-        ; has_delete_icon = false
-        ; has_on_press = false
-        ; has_on_selected = false
+        ; has_leading = false
         ; has_on_delete = false
-        }
-    ; Material_tooltip_props
-        { message = " "
-        ; enabled = true
-        ; exclude_from_semantics = false
-        ; prefer_below = true
-        ; trigger_mode = Tooltip_long_press
-        ; wait_duration_ms = 0
-        ; show_duration_ms = 1
-        ; exit_duration_ms = 0
-        ; enable_tap_to_dismiss = true
-        ; enable_feedback = true
-        ; has_on_triggered = false
         }
     ; Material_data_table_props
         { columns = [ column 1L ]
@@ -2189,6 +2099,12 @@ let test_material_typed_event_payload_round_trip () =
     ; Generated_protocol.Event_tag.step_cancel, Unit
     ; Generated_protocol.Event_tag.expansion_changed, Int64_list [ 41L ]
     ; Generated_protocol.Event_tag.dialog_option_selected, Int64 51L
+    ; ( Generated_protocol.Event_tag.civil_date_changed
+      , Civil_date { year = 2026; month = 9; day = 4 } )
+    ; ( Generated_protocol.Event_tag.civil_time_changed
+      , Civil_time { hour = 14; minute = 30 } )
+    ; Generated_protocol.Event_tag.search_opened, Unit
+    ; Generated_protocol.Event_tag.search_closed, Unit
     ]
   in
   let batch =
@@ -2219,13 +2135,11 @@ let () =
   test_application_theme_round_trip ();
   test_round_trip ();
   test_styled_text_props_round_trip ();
-  test_legacy_text_props_layout ();
   test_animation_props_round_trip ();
   test_page_presentations_round_trip_and_incremental_updates ();
   test_modal_bottom_sheet_rejects_unknown_wire_enums ();
-  test_legacy_opacity_layout ();
   test_layout_material_and_semantics_props_round_trip ();
-  test_text_input_props_round_trip ();
+  test_material_text_field_props_round_trip ();
   test_text_input_rejects_split_surrogate_range ();
   test_malformed_frames ();
   test_event_batch_fixture ();

@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../gesture/bonsai_gesture_detector.dart';
 import '../protocol/frame.dart';
@@ -82,29 +82,31 @@ final class _PressableHostState extends State<PressableHost> {
   }
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    onTap: _handleSemanticTap,
-    child: BonsaiGestureDetector(
-      behavior: HitTestBehavior.opaque,
-      excludeFromSemantics: true,
-      onTapDown: _handleTapDown,
-      onTapUp: _handleTapUp,
-      onTapCancel: _handleTapCancel,
-      child: ClipRect(
-        child: Stack(
-          fit: StackFit.passthrough,
-          children: [
-            widget.child,
-            if (_pressed)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: ColoredBox(
-                    color: Color(widget.props.overlayColorArgb),
+  Widget build(BuildContext context) => MergeSemantics(
+    child: Semantics(
+      button: true,
+      onTap: _handleSemanticTap,
+      child: BonsaiGestureDetector(
+        behavior: HitTestBehavior.opaque,
+        excludeFromSemantics: true,
+        onTapDown: _handleTapDown,
+        onTapUp: _handleTapUp,
+        onTapCancel: _handleTapCancel,
+        child: ClipRect(
+          child: Stack(
+            fit: StackFit.passthrough,
+            children: [
+              widget.child,
+              if (_pressed)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: ColoredBox(
+                      color: Color(widget.props.overlayColorArgb),
+                    ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     ),

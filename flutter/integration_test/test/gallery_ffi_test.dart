@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
+import 'package:bonsai_flutter/src/gesture/bonsai_gesture_detector.dart';
 import 'package:flutter/cupertino.dart' show CupertinoSwitch;
-import 'package:flutter/material.dart';
+import 'package:material_3_expressive/material_3_expressive.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/runtime_harness.dart';
@@ -90,10 +92,10 @@ void main() {
       findsOneWidget,
     );
     expect(find.byType(Padding), findsWidgets);
-    expect(find.byType(SingleChildScrollView), findsOneWidget);
+    expect(find.byType(CustomScrollView), findsOneWidget);
     expect(find.byType(ElevatedButton), findsWidgets);
-    expect(find.byType(Checkbox), findsOneWidget);
-    expect(find.byType(TextField), findsOneWidget);
+    expect(find.byType(M3ECheckbox), findsOneWidget);
+    expect(find.byType(M3ETextField), findsOneWidget);
     expect(find.byType(CupertinoSwitch), findsOneWidget);
     expect(find.text('Native card: 0'), findsOneWidget);
     final scrollable = tester.state<ScrollableState>(
@@ -101,18 +103,13 @@ void main() {
     );
     expect(scrollable.position.pixels, 0);
     await tester.drag(
-      find.byType(SingleChildScrollView),
+      find.byType(CustomScrollView),
       const Offset(0, -120),
     );
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
     expect(scrollable.position.pixels, greaterThan(0));
     expect(resources.liveResourceCount, 3);
-    expect(
-      tester
-          .widgetList<Theme>(find.byType(Theme))
-          .any((theme) => theme.data.brightness == Brightness.dark),
-      isTrue,
-    );
+    expect(find.byType(M3EButton), findsWidgets);
     expect(
       tester
           .widgetList<Semantics>(find.byType(Semantics))
@@ -123,7 +120,20 @@ void main() {
       isTrue,
     );
 
-    await tester.tap(find.byType(Checkbox));
+    await tester.ensureVisible(find.byType(M3ECheckbox));
+    await tester.pump(const Duration(milliseconds: 500));
+    if (queue.pendingCount > 0) {
+      final scrollResponse = await tester.runAsync(
+        () => _bounded(
+          harness.advance(events: EventBatchCodec.encode(queue.takeBatch()!)),
+          'gallery scroll pump',
+        ),
+      );
+      expect(scrollResponse, isNotNull);
+      store.apply(FrameCodec.decode(scrollResponse!.bytes));
+      await tester.pump();
+    }
+    await tester.tap(find.byType(M3ECheckbox));
     await tester.pump();
     final batch = queue.takeBatch();
     expect(batch, isNotNull);
@@ -154,9 +164,9 @@ void main() {
 
     store.apply(incremental);
     await tester.pump();
-    expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isTrue);
+    expect(tester.widget<M3ECheckbox>(find.byType(M3ECheckbox)).value, isTrue);
 
-    Future<void> tapListTileAndExpect(bool expectedValue) async {
+    Future<void> tapListTileAndExpect(int expectedPressCount) async {
       await tester.tap(find.text('Typed ListTile'));
       await tester.pump();
       final listTileBatch = queue.takeBatch();
@@ -176,23 +186,22 @@ void main() {
       final listTileFrame = FrameCodec.decode(listTileResponse.bytes);
       store.apply(listTileFrame);
       await tester.pump();
-      expect(
-        tester.widget<Checkbox>(find.byType(Checkbox)).value,
-        expectedValue,
-      );
+      expect(tester.widget<M3ECheckbox>(find.byType(M3ECheckbox)).value, isTrue);
+      expect(find.text('Pressed $expectedPressCount times'), findsOneWidget);
     }
 
     await tester.ensureVisible(find.text('Typed ListTile'));
-    await tester.pumpAndSettle();
-    await tapListTileAndExpect(false);
-    await tapListTileAndExpect(true);
+    await tester.pump(const Duration(milliseconds: 500));
+    await tapListTileAndExpect(1);
+    await tapListTileAndExpect(2);
 
     final longPressTarget = find.byWidgetPredicate(
-      (widget) => widget is GestureDetector && widget.onLongPress != null,
+      (widget) =>
+          widget is BonsaiGestureDetector && widget.onLongPress != null,
     );
     expect(longPressTarget, findsOneWidget);
     await tester.ensureVisible(longPressTarget);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.longPress(longPressTarget);
     await tester.pump();
     final longPressBatch = queue.takeBatch();
@@ -214,9 +223,9 @@ void main() {
     expect(find.text('Pointer event received in OCaml'), findsOneWidget);
 
     const editedUnicodeText = 'Type 中文 or 😀 edited';
-    await tester.ensureVisible(find.byType(TextField));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byType(TextField));
+    await tester.ensureVisible(find.byType(M3ETextField));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.byType(M3ETextField));
     await tester.pump();
     final textFocusBatch = queue.takeBatch();
     expect(textFocusBatch, isNotNull);
@@ -231,7 +240,7 @@ void main() {
     store.apply(textFocusFrame);
     await tester.pump();
 
-    await tester.enterText(find.byType(TextField), editedUnicodeText);
+    await tester.enterText(find.byType(M3ETextField), editedUnicodeText);
     await tester.pump();
     final textEditBatch = queue.takeBatch();
     expect(textEditBatch, isNotNull);
@@ -251,7 +260,7 @@ void main() {
     );
 
     await tester.ensureVisible(find.text('Native card: 0'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.tap(find.text('Native card: 0'));
     await tester.pump();
     final nativeBatch = queue.takeBatch();

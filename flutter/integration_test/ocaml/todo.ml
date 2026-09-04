@@ -240,7 +240,7 @@ let component handlers graph =
             |> fun row ->
             Ui.Material.card ~elevation:1. row
             |> fun card ->
-            Ui.Material.list_tile ~key ~on_press:select ~title:card ~selected:false ()))
+            Ui.Widget.pressable ~key ~on_press:select ~child:card ()))
       graph
   in
   let static_handlers =
@@ -262,7 +262,7 @@ let component handlers graph =
       Ui.Widget.Scroll_view.vertical ~on_scroll:scroll [ Ui.Widget.Sliver.box content ] ()
     in
     Ui.Material.scaffold
-      ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Todo") ())
+      ~app_bar:(Ui.Material.App_bar.top ~title:(Ui.Widget.text "Todo") ())
       ~body:
         (Ui.Widget.Body.Vertical.create
            [ Ui.Widget.Body.Vertical.fixed

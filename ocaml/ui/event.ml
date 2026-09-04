@@ -41,6 +41,10 @@ module Tag = struct
     | Step_cancel
     | Expansion_changed
     | Dialog_option_selected
+    | Civil_date_changed
+    | Civil_time_changed
+    | Search_opened
+    | Search_closed
 
   let compare left right = Stdlib.compare left right
   let equal left right = compare left right = 0
@@ -85,6 +89,10 @@ module Tag = struct
     | Step_cancel -> "step_cancel"
     | Expansion_changed -> "expansion_changed"
     | Dialog_option_selected -> "dialog_option_selected"
+    | Civil_date_changed -> "civil_date_changed"
+    | Civil_time_changed -> "civil_time_changed"
+    | Search_opened -> "search_opened"
+    | Search_closed -> "search_closed"
   ;;
 end
 
@@ -188,6 +196,15 @@ module Payload = struct
     | Float_range of
         { start : float
         ; end_ : float
+        }
+    | Civil_date of
+        { year : int
+        ; month : int
+        ; day : int
+        }
+    | Civil_time of
+        { hour : int
+        ; minute : int
         }
     | Tap of tap
     | Pointer of pointer

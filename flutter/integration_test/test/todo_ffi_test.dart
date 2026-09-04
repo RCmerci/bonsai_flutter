@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:bonsai_flutter/bonsai_flutter.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/runtime_harness.dart';
@@ -39,8 +39,8 @@ void main() {
     );
     final editorNode = store.nodes.values.singleWhere(
       (node) =>
-          node.kind == NodeKind.textInput &&
-          (node.props as TextInputProps).sessionId == 2,
+          node.kind == NodeKind.materialTextField &&
+          (node.props as MaterialTextFieldProps).sessionId == 2,
     );
     await tester.tap(find.text('Preserve focus'));
     await tester.pump();
@@ -54,6 +54,8 @@ void main() {
 
     await tester.tap(find.text('Reverse'));
     await tester.pump();
+    editorBefore.focusNode.requestFocus();
+    await tester.pump();
     final batch = queue.takeBatch();
     expect(batch, isNotNull);
     final response = await tester.runAsync(
@@ -66,8 +68,8 @@ void main() {
 
     final editorAfterNode = store.nodes.values.singleWhere(
       (node) =>
-          node.kind == NodeKind.textInput &&
-          (node.props as TextInputProps).sessionId == 2,
+          node.kind == NodeKind.materialTextField &&
+          (node.props as MaterialTextFieldProps).sessionId == 2,
     );
     expect(editorAfterNode.id, editorNode.id);
     final editorAfter = tester.widget<EditableText>(

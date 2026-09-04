@@ -40,7 +40,7 @@ let component handlers graph =
           ~page_key:home_page_key
           ~can_pop:false
           (Ui.Material.scaffold
-             ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Navigation") ())
+             ~app_bar:(Ui.Material.App_bar.top ~title:(Ui.Widget.text "Navigation") ())
              ~body:
                (Ui.Widget.Body.static
                   (Ui.Widget.center
@@ -58,7 +58,7 @@ let component handlers graph =
               ~page_key:details_page_key
               ~presentation:(Ui.Navigation.Standard Ui.Navigation.Slide)
               (Ui.Material.scaffold
-                 ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Details") ())
+                 ~app_bar:(Ui.Material.App_bar.top ~title:(Ui.Widget.text "Details") ())
                  ~body:
                    (Ui.Widget.Body.static
                       (Ui.Widget.center

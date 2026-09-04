@@ -108,7 +108,7 @@ let component handlers graph =
     state
     text_input_handlers
     ~f:(fun state (edit_handler, submit_handler, focus_handler) ->
-      Ui.Widget.text_input
+      Ui.Material.text_field
         ~key:(Ui.Key.string "editor")
         ~session_id:state.session_id
         ~document_revision:state.document_revision

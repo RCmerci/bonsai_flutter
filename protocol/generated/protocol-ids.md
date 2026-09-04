@@ -2,7 +2,7 @@
 
 # Protocol IDs
 
-Protocol version: `1.24`
+Protocol version: `2.26`
 
 ## Frame kind
 
@@ -64,8 +64,6 @@ Protocol version: `1.24`
 | `sliver_app_bar` | 38 |
 | `preferred_size` | 39 |
 | `gesture` | 48 |
-| `button` | 49 |
-| `text_input` | 50 |
 | `focus_scope` | 51 |
 | `mouse_region` | 52 |
 | `keyboard_listener` | 53 |
@@ -79,14 +77,12 @@ Protocol version: `1.24`
 | `environment_boundary` | 70 |
 | `animated_opacity` | 71 |
 | `material_scaffold` | 96 |
-| `material_app_bar` | 97 |
 | `material_elevated_button` | 98 |
 | `material_text_button` | 99 |
 | `material_icon_button` | 100 |
 | `material_checkbox` | 101 |
 | `material_switch` | 102 |
 | `material_text_field` | 103 |
-| `material_list_tile` | 104 |
 | `material_divider` | 105 |
 | `material_card` | 106 |
 | `reserved_node_kind_107` | 107 |
@@ -105,17 +101,16 @@ Protocol version: `1.24`
 | `material_filter_chip` | 120 |
 | `material_choice_chip` | 121 |
 | `material_input_chip` | 122 |
-| `material_alert_dialog` | 123 |
 | `material_linear_progress_indicator` | 124 |
 | `material_segmented_button` | 125 |
 | `native_widget` | 128 |
 | `material_search_bar` | 129 |
-| `material_tooltip` | 130 |
 | `material_data_table` | 131 |
 | `material_stepper` | 132 |
 | `material_expansion_panel_list` | 133 |
 | `material_simple_dialog` | 134 |
 | `material_fullscreen_dialog` | 135 |
+| `material_expressive` | 136 |
 
 ## Event tag
 
@@ -166,6 +161,10 @@ Protocol version: `1.24`
 | `step_cancel` | 43 |
 | `expansion_changed` | 44 |
 | `dialog_option_selected` | 45 |
+| `civil_date_changed` | 46 |
+| `civil_time_changed` | 47 |
+| `search_opened` | 48 |
+| `search_closed` | 49 |
 
 ## Host request
 
@@ -186,6 +185,9 @@ Protocol version: `1.24`
 | `platform_information` | 13 |
 | `measure_layout` | 14 |
 | `show_snack_bar` | 15 |
+| `pick_date` | 16 |
+| `pick_date_range` | 17 |
+| `pick_time` | 18 |
 
 ## Runtime error
 
@@ -382,22 +384,17 @@ Protocol version: `1.24`
 | Name | ID | Encoding |
 |---|---:|---|
 | `pinned` | 1 | `bool` |
-| `expanded_height` | 2 | `optional_f64` |
-| `collapsed_height` | 3 | `optional_f64` |
 | `floating` | 4 | `bool` |
 | `snap` | 5 | `bool` |
-| `stretch` | 6 | `bool` |
-| `toolbar_height` | 7 | `f64` |
 | `has_leading` | 8 | `bool` |
-| `has_flexible_space` | 9 | `bool` |
-| `has_bottom` | 10 | `bool` |
-| `has_actions` | 11 | `bool` |
-| `force_elevated` | 12 | `bool` |
-| `automatically_imply_leading` | 13 | `bool` |
-| `center_title` | 14 | `optional_bool` |
 | `background_color` | 15 | `optional_argb32` |
 | `foreground_color` | 16 | `optional_argb32` |
-| `elevation` | 17 | `optional_f64` |
+| `action_count` | 18 | `u32` |
+| `center_title_value` | 19 | `bool` |
+| `variant` | 20 | `u8` |
+| `shape` | 21 | `u8` |
+| `density` | 22 | `u8` |
+| `semantic_label` | 23 | `optional_string` |
 
 ## Preferred size properties
 
@@ -423,12 +420,6 @@ Protocol version: `1.24`
 |---|---:|---|
 | `autofocus` | 1 | `bool` |
 | `key_policy` | 2 | `key_policy` |
-
-## Button properties
-
-| Name | ID | Encoding |
-|---|---:|---|
-| `enabled` | 1 | `bool` |
 
 ## Semantics properties
 
@@ -464,12 +455,6 @@ Protocol version: `1.24`
 | `has_bottom_navigation_bar` | 4 | `bool` |
 | `has_bottom_sheet` | 5 | `bool` |
 
-## Material app bar properties
-
-| Name | ID | Encoding |
-|---|---:|---|
-| `center_title` | 1 | `bool` |
-
 ## Material elevated button properties
 
 | Name | ID | Encoding |
@@ -489,7 +474,6 @@ Protocol version: `1.24`
 | Name | ID | Encoding |
 |---|---:|---|
 | `enabled` | 1 | `bool` |
-| `autofocus` | 2 | `bool` |
 
 ## Material filled button properties
 
@@ -519,7 +503,6 @@ Protocol version: `1.24`
 | `variant` | 1 | `material_floating_action_button_variant` |
 | `enabled` | 2 | `bool` |
 | `autofocus` | 3 | `bool` |
-| `has_icon` | 4 | `bool` |
 
 ## Material navigation bar properties
 
@@ -527,6 +510,16 @@ Protocol version: `1.24`
 |---|---:|---|
 | `selected_index` | 1 | `u32` |
 | `destinations` | 2 | `material_navigation_destinations` |
+| `auto_layout` | 3 | `bool` |
+| `layout` | 4 | `u8` |
+| `alignment` | 5 | `u8` |
+| `label_behavior` | 6 | `u8` |
+| `icon_behavior` | 7 | `u8` |
+| `size` | 8 | `u8` |
+| `shape` | 9 | `u8` |
+| `density` | 10 | `u8` |
+| `safe_area` | 11 | `bool` |
+| `semantic_label` | 12 | `optional_string` |
 
 ## Material radio group properties
 
@@ -546,6 +539,7 @@ Protocol version: `1.24`
 | `label` | 5 | `optional_string` |
 | `enabled` | 6 | `bool` |
 | `has_on_change` | 7 | `bool` |
+| `kind` | 8 | `u8` |
 
 ## Material range slider properties
 
@@ -560,6 +554,7 @@ Protocol version: `1.24`
 | `label_end` | 7 | `optional_string` |
 | `enabled` | 8 | `bool` |
 | `has_on_change` | 9 | `bool` |
+| `kind` | 10 | `u8` |
 
 ## Material action chip properties
 
@@ -567,10 +562,7 @@ Protocol version: `1.24`
 |---|---:|---|
 | `enabled` | 1 | `bool` |
 | `selected` | 2 | `bool` |
-| `has_avatar` | 3 | `bool` |
-| `has_delete_icon` | 4 | `bool` |
-| `has_on_press` | 5 | `bool` |
-| `has_on_selected` | 6 | `bool` |
+| `has_leading` | 3 | `bool` |
 | `has_on_delete` | 7 | `bool` |
 | `presentation` | 8 | `material_chip_presentation` |
 
@@ -580,10 +572,7 @@ Protocol version: `1.24`
 |---|---:|---|
 | `enabled` | 1 | `bool` |
 | `selected` | 2 | `bool` |
-| `has_avatar` | 3 | `bool` |
-| `has_delete_icon` | 4 | `bool` |
-| `has_on_press` | 5 | `bool` |
-| `has_on_selected` | 6 | `bool` |
+| `has_leading` | 3 | `bool` |
 | `has_on_delete` | 7 | `bool` |
 | `presentation` | 8 | `material_chip_presentation` |
 
@@ -593,10 +582,7 @@ Protocol version: `1.24`
 |---|---:|---|
 | `enabled` | 1 | `bool` |
 | `selected` | 2 | `bool` |
-| `has_avatar` | 3 | `bool` |
-| `has_delete_icon` | 4 | `bool` |
-| `has_on_press` | 5 | `bool` |
-| `has_on_selected` | 6 | `bool` |
+| `has_leading` | 3 | `bool` |
 | `has_on_delete` | 7 | `bool` |
 | `presentation` | 8 | `material_chip_presentation` |
 
@@ -606,21 +592,9 @@ Protocol version: `1.24`
 |---|---:|---|
 | `enabled` | 1 | `bool` |
 | `selected` | 2 | `bool` |
-| `has_avatar` | 3 | `bool` |
-| `has_delete_icon` | 4 | `bool` |
-| `has_on_press` | 5 | `bool` |
-| `has_on_selected` | 6 | `bool` |
+| `has_leading` | 3 | `bool` |
 | `has_on_delete` | 7 | `bool` |
 | `presentation` | 8 | `material_chip_presentation` |
-
-## Material alert dialog properties
-
-| Name | ID | Encoding |
-|---|---:|---|
-| `has_icon` | 1 | `bool` |
-| `has_title` | 2 | `bool` |
-| `has_content` | 3 | `bool` |
-| `action_count` | 4 | `u32` |
 
 ## Material checkbox properties
 
@@ -635,16 +609,6 @@ Protocol version: `1.24`
 |---|---:|---|
 | `value` | 1 | `bool` |
 | `enabled` | 2 | `bool` |
-
-## Material list tile properties
-
-| Name | ID | Encoding |
-|---|---:|---|
-| `enabled` | 1 | `bool` |
-| `selected` | 2 | `bool` |
-| `has_subtitle` | 3 | `bool` |
-| `has_leading` | 4 | `bool` |
-| `has_trailing` | 5 | `bool` |
 
 ## Material divider properties
 
@@ -668,12 +632,14 @@ Protocol version: `1.24`
 | Name | ID | Encoding |
 |---|---:|---|
 | `value` | 1 | `optional_f64` |
+| `wavy` | 2 | `bool` |
 
 ## Material linear progress indicator properties
 
 | Name | ID | Encoding |
 |---|---:|---|
 | `value` | 1 | `optional_f64` |
+| `wavy` | 2 | `bool` |
 
 ## Material segmented button properties
 
@@ -681,12 +647,7 @@ Protocol version: `1.24`
 |---|---:|---|
 | `selected_ids` | 1 | `i64_list` |
 | `enabled` | 2 | `bool` |
-| `direction` | 3 | `axis` |
 | `multi_selection_enabled` | 4 | `bool` |
-| `empty_selection_allowed` | 5 | `bool` |
-| `expanded_insets` | 6 | `optional_edge_insets` |
-| `show_selected_icon` | 7 | `bool` |
-| `has_selected_icon` | 8 | `bool` |
 | `segments` | 9 | `material_segments` |
 
 ## Material search bar properties
@@ -709,21 +670,29 @@ Protocol version: `1.24`
 | `hint_text` | 14 | `optional_string` |
 | `has_on_tap` | 15 | `bool` |
 
-## Material tooltip properties
+## Material text field properties
 
 | Name | ID | Encoding |
 |---|---:|---|
-| `message` | 1 | `string` |
-| `enabled` | 2 | `bool` |
-| `exclude_from_semantics` | 3 | `bool` |
-| `prefer_below` | 4 | `bool` |
-| `trigger_mode` | 5 | `material_tooltip_trigger_mode` |
-| `wait_duration_ms` | 6 | `u32` |
-| `show_duration_ms` | 7 | `u32` |
-| `exit_duration_ms` | 8 | `u32` |
-| `enable_tap_to_dismiss` | 9 | `bool` |
-| `enable_feedback` | 10 | `bool` |
-| `has_on_triggered` | 11 | `bool` |
+| `session_id` | 1 | `u64` |
+| `document_revision` | 2 | `u64` |
+| `value` | 3 | `text_editing_value` |
+| `enabled` | 4 | `bool` |
+| `read_only` | 18 | `bool` |
+| `obscure_text` | 5 | `bool` |
+| `keyboard_type` | 6 | `keyboard_type` |
+| `input_action` | 7 | `input_action` |
+| `accepted_local_revision` | 8 | `u64` |
+| `update_mode` | 9 | `text_update_mode` |
+| `max_utf8_bytes` | 10 | `optional_u32` |
+| `variant` | 11 | `u8` |
+| `label` | 12 | `optional_string` |
+| `supporting_text` | 13 | `optional_string` |
+| `error_text` | 14 | `optional_string` |
+| `has_leading` | 15 | `bool` |
+| `has_trailing` | 16 | `bool` |
+| `max_lines` | 17 | `u32` |
+| `autofocus` | 19 | `bool` |
 
 ## Material data table properties
 
@@ -767,6 +736,21 @@ Protocol version: `1.24`
 | Name | ID | Encoding |
 |---|---:|---|
 
+## Material expressive properties
+
+| Name | ID | Encoding |
+|---|---:|---|
+| `component` | 1 | `u8` |
+| `variant` | 2 | `u8` |
+| `flags` | 3 | `u64` |
+| `primary_text` | 4 | `optional_string` |
+| `secondary_text` | 5 | `optional_string` |
+| `value` | 6 | `optional_f64` |
+| `end_value` | 7 | `optional_f64` |
+| `selected_ids` | 8 | `i64_list` |
+| `items` | 9 | `material_expressive_items` |
+| `text_input` | 10 | `optional_text_input` |
+
 ## Cupertino button properties
 
 | Name | ID | Encoding |
@@ -779,23 +763,6 @@ Protocol version: `1.24`
 |---|---:|---|
 | `value` | 1 | `bool` |
 | `enabled` | 2 | `bool` |
-
-## Text input properties
-
-| Name | ID | Encoding |
-|---|---:|---|
-| `session_id` | 1 | `u64` |
-| `document_revision` | 2 | `u64` |
-| `value` | 3 | `text_editing_value` |
-| `enabled` | 4 | `bool` |
-| `read_only` | 5 | `bool` |
-| `obscure_text` | 6 | `bool` |
-| `keyboard_type` | 7 | `keyboard_type` |
-| `input_action` | 8 | `input_action` |
-| `accepted_local_revision` | 9 | `u64` |
-| `update_mode` | 10 | `text_update_mode` |
-| `autofocus` | 11 | `bool` |
-| `max_utf8_bytes` | 12 | `optional_u32` |
 
 ## Overlay properties
 

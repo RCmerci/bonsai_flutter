@@ -1,8 +1,8 @@
 // Generated from protocol/schema.sexp. Do not edit.
 
 abstract final class ProtocolVersion {
-  static const int protocolMajor = 1;
-  static const int protocolMinor = 24;
+  static const int protocolMajor = 2;
+  static const int protocolMinor = 26;
 }
 
 abstract final class ProtocolLimits {
@@ -92,8 +92,6 @@ abstract final class NodeKindId {
   static const int sliverAppBar = 38;
   static const int preferredSize = 39;
   static const int gesture = 48;
-  static const int button = 49;
-  static const int textInput = 50;
   static const int focusScope = 51;
   static const int mouseRegion = 52;
   static const int keyboardListener = 53;
@@ -107,14 +105,12 @@ abstract final class NodeKindId {
   static const int environmentBoundary = 70;
   static const int animatedOpacity = 71;
   static const int materialScaffold = 96;
-  static const int materialAppBar = 97;
   static const int materialElevatedButton = 98;
   static const int materialTextButton = 99;
   static const int materialIconButton = 100;
   static const int materialCheckbox = 101;
   static const int materialSwitch = 102;
   static const int materialTextField = 103;
-  static const int materialListTile = 104;
   static const int materialDivider = 105;
   static const int materialCard = 106;
   static const int reservedNodeKind107 = 107;
@@ -133,17 +129,16 @@ abstract final class NodeKindId {
   static const int materialFilterChip = 120;
   static const int materialChoiceChip = 121;
   static const int materialInputChip = 122;
-  static const int materialAlertDialog = 123;
   static const int materialLinearProgressIndicator = 124;
   static const int materialSegmentedButton = 125;
   static const int nativeWidget = 128;
   static const int materialSearchBar = 129;
-  static const int materialTooltip = 130;
   static const int materialDataTable = 131;
   static const int materialStepper = 132;
   static const int materialExpansionPanelList = 133;
   static const int materialSimpleDialog = 134;
   static const int materialFullscreenDialog = 135;
+  static const int materialExpressive = 136;
 
   static String? debugName(int id) => switch (id) {
     1 => 'empty',
@@ -175,8 +170,6 @@ abstract final class NodeKindId {
     38 => 'sliver_app_bar',
     39 => 'preferred_size',
     48 => 'gesture',
-    49 => 'button',
-    50 => 'text_input',
     51 => 'focus_scope',
     52 => 'mouse_region',
     53 => 'keyboard_listener',
@@ -190,14 +183,12 @@ abstract final class NodeKindId {
     70 => 'environment_boundary',
     71 => 'animated_opacity',
     96 => 'material_scaffold',
-    97 => 'material_app_bar',
     98 => 'material_elevated_button',
     99 => 'material_text_button',
     100 => 'material_icon_button',
     101 => 'material_checkbox',
     102 => 'material_switch',
     103 => 'material_text_field',
-    104 => 'material_list_tile',
     105 => 'material_divider',
     106 => 'material_card',
     107 => 'reserved_node_kind_107',
@@ -216,17 +207,16 @@ abstract final class NodeKindId {
     120 => 'material_filter_chip',
     121 => 'material_choice_chip',
     122 => 'material_input_chip',
-    123 => 'material_alert_dialog',
     124 => 'material_linear_progress_indicator',
     125 => 'material_segmented_button',
     128 => 'native_widget',
     129 => 'material_search_bar',
-    130 => 'material_tooltip',
     131 => 'material_data_table',
     132 => 'material_stepper',
     133 => 'material_expansion_panel_list',
     134 => 'material_simple_dialog',
     135 => 'material_fullscreen_dialog',
+    136 => 'material_expressive',
     _ => null,
   };
 }
@@ -277,6 +267,10 @@ abstract final class EventTagId {
   static const int stepCancel = 43;
   static const int expansionChanged = 44;
   static const int dialogOptionSelected = 45;
+  static const int civilDateChanged = 46;
+  static const int civilTimeChanged = 47;
+  static const int searchOpened = 48;
+  static const int searchClosed = 49;
 
   static String? debugName(int id) => switch (id) {
     1 => 'press',
@@ -324,6 +318,10 @@ abstract final class EventTagId {
     43 => 'step_cancel',
     44 => 'expansion_changed',
     45 => 'dialog_option_selected',
+    46 => 'civil_date_changed',
+    47 => 'civil_time_changed',
+    48 => 'search_opened',
+    49 => 'search_closed',
     _ => null,
   };
 }
@@ -344,6 +342,9 @@ abstract final class HostRequestId {
   static const int platformInformation = 13;
   static const int measureLayout = 14;
   static const int showSnackBar = 15;
+  static const int pickDate = 16;
+  static const int pickDateRange = 17;
+  static const int pickTime = 18;
 
   static String? debugName(int id) => switch (id) {
     1 => 'clipboard_read',
@@ -361,6 +362,9 @@ abstract final class HostRequestId {
     13 => 'platform_information',
     14 => 'measure_layout',
     15 => 'show_snack_bar',
+    16 => 'pick_date',
+    17 => 'pick_date_range',
+    18 => 'pick_time',
     _ => null,
   };
 }
@@ -677,41 +681,31 @@ abstract final class SliverPaddingPropId {
 
 abstract final class SliverAppBarPropId {
   static const int pinned = 1;
-  static const int expandedHeight = 2;
-  static const int collapsedHeight = 3;
   static const int floating = 4;
   static const int snap = 5;
-  static const int stretch = 6;
-  static const int toolbarHeight = 7;
   static const int hasLeading = 8;
-  static const int hasFlexibleSpace = 9;
-  static const int hasBottom = 10;
-  static const int hasActions = 11;
-  static const int forceElevated = 12;
-  static const int automaticallyImplyLeading = 13;
-  static const int centerTitle = 14;
   static const int backgroundColor = 15;
   static const int foregroundColor = 16;
-  static const int elevation = 17;
+  static const int actionCount = 18;
+  static const int centerTitleValue = 19;
+  static const int variant = 20;
+  static const int shape = 21;
+  static const int density = 22;
+  static const int semanticLabel = 23;
 
   static String? debugName(int id) => switch (id) {
     1 => 'pinned',
-    2 => 'expanded_height',
-    3 => 'collapsed_height',
     4 => 'floating',
     5 => 'snap',
-    6 => 'stretch',
-    7 => 'toolbar_height',
     8 => 'has_leading',
-    9 => 'has_flexible_space',
-    10 => 'has_bottom',
-    11 => 'has_actions',
-    12 => 'force_elevated',
-    13 => 'automatically_imply_leading',
-    14 => 'center_title',
     15 => 'background_color',
     16 => 'foreground_color',
-    17 => 'elevation',
+    18 => 'action_count',
+    19 => 'center_title_value',
+    20 => 'variant',
+    21 => 'shape',
+    22 => 'density',
+    23 => 'semantic_label',
     _ => null,
   };
 }
@@ -750,15 +744,6 @@ abstract final class KeyboardListenerPropId {
   static String? debugName(int id) => switch (id) {
     1 => 'autofocus',
     2 => 'key_policy',
-    _ => null,
-  };
-}
-
-abstract final class ButtonPropId {
-  static const int enabled = 1;
-
-  static String? debugName(int id) => switch (id) {
-    1 => 'enabled',
     _ => null,
   };
 }
@@ -822,15 +807,6 @@ abstract final class MaterialScaffoldPropId {
   };
 }
 
-abstract final class MaterialAppBarPropId {
-  static const int centerTitle = 1;
-
-  static String? debugName(int id) => switch (id) {
-    1 => 'center_title',
-    _ => null,
-  };
-}
-
 abstract final class MaterialElevatedButtonPropId {
   static const int enabled = 1;
   static const int autofocus = 2;
@@ -855,11 +831,9 @@ abstract final class MaterialTextButtonPropId {
 
 abstract final class MaterialIconButtonPropId {
   static const int enabled = 1;
-  static const int autofocus = 2;
 
   static String? debugName(int id) => switch (id) {
     1 => 'enabled',
-    2 => 'autofocus',
     _ => null,
   };
 }
@@ -901,13 +875,11 @@ abstract final class MaterialFloatingActionButtonPropId {
   static const int variant = 1;
   static const int enabled = 2;
   static const int autofocus = 3;
-  static const int hasIcon = 4;
 
   static String? debugName(int id) => switch (id) {
     1 => 'variant',
     2 => 'enabled',
     3 => 'autofocus',
-    4 => 'has_icon',
     _ => null,
   };
 }
@@ -915,10 +887,30 @@ abstract final class MaterialFloatingActionButtonPropId {
 abstract final class MaterialNavigationBarPropId {
   static const int selectedIndex = 1;
   static const int destinations = 2;
+  static const int autoLayout = 3;
+  static const int layout = 4;
+  static const int alignment = 5;
+  static const int labelBehavior = 6;
+  static const int iconBehavior = 7;
+  static const int size = 8;
+  static const int shape = 9;
+  static const int density = 10;
+  static const int safeArea = 11;
+  static const int semanticLabel = 12;
 
   static String? debugName(int id) => switch (id) {
     1 => 'selected_index',
     2 => 'destinations',
+    3 => 'auto_layout',
+    4 => 'layout',
+    5 => 'alignment',
+    6 => 'label_behavior',
+    7 => 'icon_behavior',
+    8 => 'size',
+    9 => 'shape',
+    10 => 'density',
+    11 => 'safe_area',
+    12 => 'semantic_label',
     _ => null,
   };
 }
@@ -942,6 +934,7 @@ abstract final class MaterialSliderPropId {
   static const int label = 5;
   static const int enabled = 6;
   static const int hasOnChange = 7;
+  static const int kind = 8;
 
   static String? debugName(int id) => switch (id) {
     1 => 'value',
@@ -951,6 +944,7 @@ abstract final class MaterialSliderPropId {
     5 => 'label',
     6 => 'enabled',
     7 => 'has_on_change',
+    8 => 'kind',
     _ => null,
   };
 }
@@ -965,6 +959,7 @@ abstract final class MaterialRangeSliderPropId {
   static const int labelEnd = 7;
   static const int enabled = 8;
   static const int hasOnChange = 9;
+  static const int kind = 10;
 
   static String? debugName(int id) => switch (id) {
     1 => 'start',
@@ -976,6 +971,7 @@ abstract final class MaterialRangeSliderPropId {
     7 => 'label_end',
     8 => 'enabled',
     9 => 'has_on_change',
+    10 => 'kind',
     _ => null,
   };
 }
@@ -983,20 +979,14 @@ abstract final class MaterialRangeSliderPropId {
 abstract final class MaterialActionChipPropId {
   static const int enabled = 1;
   static const int selected = 2;
-  static const int hasAvatar = 3;
-  static const int hasDeleteIcon = 4;
-  static const int hasOnPress = 5;
-  static const int hasOnSelected = 6;
+  static const int hasLeading = 3;
   static const int hasOnDelete = 7;
   static const int presentation = 8;
 
   static String? debugName(int id) => switch (id) {
     1 => 'enabled',
     2 => 'selected',
-    3 => 'has_avatar',
-    4 => 'has_delete_icon',
-    5 => 'has_on_press',
-    6 => 'has_on_selected',
+    3 => 'has_leading',
     7 => 'has_on_delete',
     8 => 'presentation',
     _ => null,
@@ -1006,20 +996,14 @@ abstract final class MaterialActionChipPropId {
 abstract final class MaterialFilterChipPropId {
   static const int enabled = 1;
   static const int selected = 2;
-  static const int hasAvatar = 3;
-  static const int hasDeleteIcon = 4;
-  static const int hasOnPress = 5;
-  static const int hasOnSelected = 6;
+  static const int hasLeading = 3;
   static const int hasOnDelete = 7;
   static const int presentation = 8;
 
   static String? debugName(int id) => switch (id) {
     1 => 'enabled',
     2 => 'selected',
-    3 => 'has_avatar',
-    4 => 'has_delete_icon',
-    5 => 'has_on_press',
-    6 => 'has_on_selected',
+    3 => 'has_leading',
     7 => 'has_on_delete',
     8 => 'presentation',
     _ => null,
@@ -1029,20 +1013,14 @@ abstract final class MaterialFilterChipPropId {
 abstract final class MaterialChoiceChipPropId {
   static const int enabled = 1;
   static const int selected = 2;
-  static const int hasAvatar = 3;
-  static const int hasDeleteIcon = 4;
-  static const int hasOnPress = 5;
-  static const int hasOnSelected = 6;
+  static const int hasLeading = 3;
   static const int hasOnDelete = 7;
   static const int presentation = 8;
 
   static String? debugName(int id) => switch (id) {
     1 => 'enabled',
     2 => 'selected',
-    3 => 'has_avatar',
-    4 => 'has_delete_icon',
-    5 => 'has_on_press',
-    6 => 'has_on_selected',
+    3 => 'has_leading',
     7 => 'has_on_delete',
     8 => 'presentation',
     _ => null,
@@ -1052,37 +1030,16 @@ abstract final class MaterialChoiceChipPropId {
 abstract final class MaterialInputChipPropId {
   static const int enabled = 1;
   static const int selected = 2;
-  static const int hasAvatar = 3;
-  static const int hasDeleteIcon = 4;
-  static const int hasOnPress = 5;
-  static const int hasOnSelected = 6;
+  static const int hasLeading = 3;
   static const int hasOnDelete = 7;
   static const int presentation = 8;
 
   static String? debugName(int id) => switch (id) {
     1 => 'enabled',
     2 => 'selected',
-    3 => 'has_avatar',
-    4 => 'has_delete_icon',
-    5 => 'has_on_press',
-    6 => 'has_on_selected',
+    3 => 'has_leading',
     7 => 'has_on_delete',
     8 => 'presentation',
-    _ => null,
-  };
-}
-
-abstract final class MaterialAlertDialogPropId {
-  static const int hasIcon = 1;
-  static const int hasTitle = 2;
-  static const int hasContent = 3;
-  static const int actionCount = 4;
-
-  static String? debugName(int id) => switch (id) {
-    1 => 'has_icon',
-    2 => 'has_title',
-    3 => 'has_content',
-    4 => 'action_count',
     _ => null,
   };
 }
@@ -1105,23 +1062,6 @@ abstract final class MaterialSwitchPropId {
   static String? debugName(int id) => switch (id) {
     1 => 'value',
     2 => 'enabled',
-    _ => null,
-  };
-}
-
-abstract final class MaterialListTilePropId {
-  static const int enabled = 1;
-  static const int selected = 2;
-  static const int hasSubtitle = 3;
-  static const int hasLeading = 4;
-  static const int hasTrailing = 5;
-
-  static String? debugName(int id) => switch (id) {
-    1 => 'enabled',
-    2 => 'selected',
-    3 => 'has_subtitle',
-    4 => 'has_leading',
-    5 => 'has_trailing',
     _ => null,
   };
 }
@@ -1156,18 +1096,22 @@ abstract final class MaterialCardPropId {
 
 abstract final class MaterialCircularProgressIndicatorPropId {
   static const int value = 1;
+  static const int wavy = 2;
 
   static String? debugName(int id) => switch (id) {
     1 => 'value',
+    2 => 'wavy',
     _ => null,
   };
 }
 
 abstract final class MaterialLinearProgressIndicatorPropId {
   static const int value = 1;
+  static const int wavy = 2;
 
   static String? debugName(int id) => switch (id) {
     1 => 'value',
+    2 => 'wavy',
     _ => null,
   };
 }
@@ -1175,23 +1119,13 @@ abstract final class MaterialLinearProgressIndicatorPropId {
 abstract final class MaterialSegmentedButtonPropId {
   static const int selectedIds = 1;
   static const int enabled = 2;
-  static const int direction = 3;
   static const int multiSelectionEnabled = 4;
-  static const int emptySelectionAllowed = 5;
-  static const int expandedInsets = 6;
-  static const int showSelectedIcon = 7;
-  static const int hasSelectedIcon = 8;
   static const int segments = 9;
 
   static String? debugName(int id) => switch (id) {
     1 => 'selected_ids',
     2 => 'enabled',
-    3 => 'direction',
     4 => 'multi_selection_enabled',
-    5 => 'empty_selection_allowed',
-    6 => 'expanded_insets',
-    7 => 'show_selected_icon',
-    8 => 'has_selected_icon',
     9 => 'segments',
     _ => null,
   };
@@ -1234,31 +1168,47 @@ abstract final class MaterialSearchBarPropId {
   };
 }
 
-abstract final class MaterialTooltipPropId {
-  static const int message = 1;
-  static const int enabled = 2;
-  static const int excludeFromSemantics = 3;
-  static const int preferBelow = 4;
-  static const int triggerMode = 5;
-  static const int waitDurationMs = 6;
-  static const int showDurationMs = 7;
-  static const int exitDurationMs = 8;
-  static const int enableTapToDismiss = 9;
-  static const int enableFeedback = 10;
-  static const int hasOnTriggered = 11;
+abstract final class MaterialTextFieldPropId {
+  static const int sessionId = 1;
+  static const int documentRevision = 2;
+  static const int value = 3;
+  static const int enabled = 4;
+  static const int readOnly = 18;
+  static const int obscureText = 5;
+  static const int keyboardType = 6;
+  static const int inputAction = 7;
+  static const int acceptedLocalRevision = 8;
+  static const int updateMode = 9;
+  static const int maxUtf8Bytes = 10;
+  static const int variant = 11;
+  static const int label = 12;
+  static const int supportingText = 13;
+  static const int errorText = 14;
+  static const int hasLeading = 15;
+  static const int hasTrailing = 16;
+  static const int maxLines = 17;
+  static const int autofocus = 19;
 
   static String? debugName(int id) => switch (id) {
-    1 => 'message',
-    2 => 'enabled',
-    3 => 'exclude_from_semantics',
-    4 => 'prefer_below',
-    5 => 'trigger_mode',
-    6 => 'wait_duration_ms',
-    7 => 'show_duration_ms',
-    8 => 'exit_duration_ms',
-    9 => 'enable_tap_to_dismiss',
-    10 => 'enable_feedback',
-    11 => 'has_on_triggered',
+    1 => 'session_id',
+    2 => 'document_revision',
+    3 => 'value',
+    4 => 'enabled',
+    18 => 'read_only',
+    5 => 'obscure_text',
+    6 => 'keyboard_type',
+    7 => 'input_action',
+    8 => 'accepted_local_revision',
+    9 => 'update_mode',
+    10 => 'max_utf8_bytes',
+    11 => 'variant',
+    12 => 'label',
+    13 => 'supporting_text',
+    14 => 'error_text',
+    15 => 'has_leading',
+    16 => 'has_trailing',
+    17 => 'max_lines',
+    19 => 'autofocus',
     _ => null,
   };
 }
@@ -1331,6 +1281,33 @@ abstract final class MaterialFullscreenDialogPropId {
   };
 }
 
+abstract final class MaterialExpressivePropId {
+  static const int component = 1;
+  static const int variant = 2;
+  static const int flags = 3;
+  static const int primaryText = 4;
+  static const int secondaryText = 5;
+  static const int value = 6;
+  static const int endValue = 7;
+  static const int selectedIds = 8;
+  static const int items = 9;
+  static const int textInput = 10;
+
+  static String? debugName(int id) => switch (id) {
+    1 => 'component',
+    2 => 'variant',
+    3 => 'flags',
+    4 => 'primary_text',
+    5 => 'secondary_text',
+    6 => 'value',
+    7 => 'end_value',
+    8 => 'selected_ids',
+    9 => 'items',
+    10 => 'text_input',
+    _ => null,
+  };
+}
+
 abstract final class CupertinoButtonPropId {
   static const int enabled = 1;
 
@@ -1347,37 +1324,6 @@ abstract final class CupertinoSwitchPropId {
   static String? debugName(int id) => switch (id) {
     1 => 'value',
     2 => 'enabled',
-    _ => null,
-  };
-}
-
-abstract final class TextInputPropId {
-  static const int sessionId = 1;
-  static const int documentRevision = 2;
-  static const int value = 3;
-  static const int enabled = 4;
-  static const int readOnly = 5;
-  static const int obscureText = 6;
-  static const int keyboardType = 7;
-  static const int inputAction = 8;
-  static const int acceptedLocalRevision = 9;
-  static const int updateMode = 10;
-  static const int autofocus = 11;
-  static const int maxUtf8Bytes = 12;
-
-  static String? debugName(int id) => switch (id) {
-    1 => 'session_id',
-    2 => 'document_revision',
-    3 => 'value',
-    4 => 'enabled',
-    5 => 'read_only',
-    6 => 'obscure_text',
-    7 => 'keyboard_type',
-    8 => 'input_action',
-    9 => 'accepted_local_revision',
-    10 => 'update_mode',
-    11 => 'autofocus',
-    12 => 'max_utf8_bytes',
     _ => null,
   };
 }

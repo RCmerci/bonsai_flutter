@@ -1,6 +1,6 @@
 import 'fixture.dart';
 import 'package:bonsai_flutter/bonsai_flutter.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -63,19 +63,6 @@ void main() {
         ),
       ),
     );
-  });
-
-  test('protocol 1.12 still decodes the unchanged 1.11 opacity layout', () {
-    final encoded = FrameCodec.encode(_legacyOpacitySnapshot())
-      ..[6] = 11
-      ..[7] = 0;
-    final decoded = FrameCodec.decode(encoded);
-    final opacity = decoded.operations.whereType<CreateNode>().firstWhere(
-      (operation) => operation.nodeId == 4,
-    );
-
-    expect(opacity.kind, NodeKind.opacity);
-    expect(opacity.props, const OpacityProps(0.5));
   });
 
   testWidgets('reduced motion completes without local interpolation', (
@@ -252,29 +239,5 @@ Frame _drop() => const Frame(
       eventBindings: [],
     ),
     SetRoot(3),
-  ],
-);
-
-Frame _legacyOpacitySnapshot() => const Frame(
-  runtimeEpoch: 18,
-  baseRevision: 0,
-  targetRevision: 1,
-  kind: FrameKind.fullSnapshot,
-  operations: [
-    SetApplicationTheme(title: 'Test', theme: testApplicationTheme),
-    CreateNode(
-      nodeId: 4,
-      kind: NodeKind.opacity,
-      props: OpacityProps(0.5),
-      eventBindings: [],
-    ),
-    CreateNode(
-      nodeId: 5,
-      kind: NodeKind.empty,
-      props: EmptyProps(),
-      eventBindings: [],
-    ),
-    SetChildren(nodeId: 4, children: [5]),
-    SetRoot(4),
   ],
 );

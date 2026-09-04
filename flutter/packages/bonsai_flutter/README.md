@@ -16,7 +16,7 @@ The current development release contains:
 - OCaml-produced frame fixtures decoded by Dart and Dart-produced event
   fixtures decoded by OCaml, with byte-for-byte clean checks;
 - keyed per-node widget hosts and a typed application extension registry;
-- subtree-local rebuilds and typed Button event dispatch;
+- subtree-local rebuilds and typed press event dispatch;
 - bounded event batching, ordered-event backpressure, and state coalescing;
 - a foreground-vsync pump with background suspension, resume catch-up, and
   exact presentation-token backpressure;

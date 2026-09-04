@@ -34,7 +34,7 @@ let component handlers graph =
   in
   Bonsai.Cont.map2 status handlers ~f:(fun status (read_clipboard, write_clipboard) ->
     Ui.Material.scaffold
-      ~app_bar:(Ui.Material.app_bar ~title:(Ui.Widget.text "Host effects") ())
+      ~app_bar:(Ui.Material.App_bar.top ~title:(Ui.Widget.text "Host effects") ())
       ~body:
         (Ui.Widget.Body.static
            (Ui.Widget.padding

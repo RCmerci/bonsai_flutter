@@ -57,19 +57,19 @@ let text_values result =
       | _ -> None)
 ;;
 
-let find_button_binding result =
+let find_pressable_binding result =
   match result.Driver.frame with
   | None -> fail "initial worker Driver frame was absent"
   | Some frame ->
     semantic_operations (decode_frame frame)
     |> List.find_map (function
       | Protocol.Wire_frame.Create_node
-          { node_id; kind = Button; event_bindings = [ { event_tag; handler_id } ]; _ } ->
-        Some (node_id, event_tag, handler_id)
+          { node_id; kind = Pressable; event_bindings = [ { event_tag; handler_id } ]; _ }
+        -> Some (node_id, event_tag, handler_id)
       | _ -> None)
     |> (function
      | Some binding -> binding
-     | None -> fail "worker Driver frame had no Button binding")
+     | None -> fail "worker Driver frame had no Pressable binding")
 ;;
 
 let make_component client log =
@@ -106,7 +106,10 @@ let make_component client log =
       log := "reconcile" :: !log;
       Ui.Widget.column
         [ Ui.Widget.text (Printf.sprintf "Count: %d" count)
-        ; Ui.Widget.button ~on_press:input_handler ~child:(Ui.Widget.text "Increment") ()
+        ; Ui.Widget.pressable
+            ~on_press:input_handler
+            ~child:(Ui.Widget.text "Increment")
+            ()
         ])
 ;;
 
@@ -154,7 +157,7 @@ let test_pump_order_barrier_and_stale_rejection () =
   let log = ref [] in
   let driver = create_driver ~runtime_epoch client log in
   let initial = ok (Driver.pump driver ~monotonic_now_ns:0L ()) in
-  let binding = find_button_binding initial in
+  let binding = find_pressable_binding initial in
   ignore (Worker.send client "behind-barrier");
   Worker.For_testing.await_output client;
   let pending_before = Worker.For_testing.pending_output_count client in

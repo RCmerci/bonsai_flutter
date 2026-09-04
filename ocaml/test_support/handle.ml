@@ -233,6 +233,10 @@ let protocol_tag =
   | Step_cancel -> Tag.step_cancel
   | Expansion_changed -> Tag.expansion_changed
   | Dialog_option_selected -> Tag.dialog_option_selected
+  | Civil_date_changed -> Tag.civil_date_changed
+  | Civil_time_changed -> Tag.civil_time_changed
+  | Search_opened -> Tag.search_opened
+  | Search_closed -> Tag.search_closed
 ;;
 
 let dispatch t query tag payload =
@@ -337,8 +341,8 @@ let apply_text_edit
   let session_id =
     let (Av view) = Ui.Widget.Private.view node.widget in
     match view.node with
-    | Ui.Widget.Private.Text_input { session_id; _ } -> session_id
-    | _ -> fail "text edit query did not match a Text_input node"
+    | Ui.Widget.Private.Material_text_field { session_id; _ } -> session_id
+    | _ -> fail "text edit query did not match a Material_text_field node"
   in
   let selection =
     Protocol.Inbound_event.{ start_utf16 = selection_start; end_utf16 = selection_end }
@@ -364,9 +368,10 @@ let input_text t query text =
   let document_revision, accepted_local_revision =
     let (Av view) = Ui.Widget.Private.view node.widget in
     match view.node with
-    | Ui.Widget.Private.Text_input { document_revision; accepted_local_revision; _ } ->
+    | Ui.Widget.Private.Material_text_field
+        { document_revision; accepted_local_revision; _ } ->
       document_revision, accepted_local_revision
-    | _ -> fail "input_text query did not match a Text_input node"
+    | _ -> fail "input_text query did not match a Material_text_field node"
   in
   let cursor = Ui.Text_editing.Utf16.length text in
   apply_text_edit

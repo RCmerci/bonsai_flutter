@@ -241,7 +241,6 @@ let wire_node_kind = function
   | K_flex_row -> Ok Row
   | K_flex_column -> Ok Column
   | K_stack -> Ok Stack
-  | K_button -> Ok Button
   | K_padding -> Ok Padding
   | K_align -> Ok Align
   | K_center -> Ok Center
@@ -269,7 +268,6 @@ let wire_node_kind = function
   | K_semantics -> Ok Semantics
   | K_theme -> Ok Theme
   | K_material_scaffold -> Ok Material_scaffold
-  | K_material_app_bar -> Ok Material_app_bar
   | K_material_elevated_button -> Ok Material_elevated_button
   | K_material_text_button -> Ok Material_text_button
   | K_material_icon_button -> Ok Material_icon_button
@@ -286,9 +284,8 @@ let wire_node_kind = function
   | K_material_filter_chip -> Ok Material_filter_chip
   | K_material_choice_chip -> Ok Material_choice_chip
   | K_material_input_chip -> Ok Material_input_chip
-  | K_material_alert_dialog -> Ok Material_alert_dialog
   | K_material_search_bar -> Ok Material_search_bar
-  | K_material_tooltip -> Ok Material_tooltip
+  | K_material_text_field -> Ok Material_text_field
   | K_material_data_table -> Ok Material_data_table
   | K_material_stepper -> Ok Material_stepper
   | K_material_expansion_panel_list -> Ok Material_expansion_panel_list
@@ -296,14 +293,13 @@ let wire_node_kind = function
   | K_material_fullscreen_dialog -> Ok Material_fullscreen_dialog
   | K_material_checkbox -> Ok Material_checkbox
   | K_material_switch -> Ok Material_switch
-  | K_material_list_tile -> Ok Material_list_tile
   | K_material_divider -> Ok Material_divider
   | K_material_card -> Ok Material_card
   | K_material_circular_progress_indicator -> Ok Material_circular_progress_indicator
   | K_material_linear_progress_indicator -> Ok Material_linear_progress_indicator
+  | K_material_expressive -> Ok Material_expressive
   | K_cupertino_button -> Ok Cupertino_button
   | K_cupertino_switch -> Ok Cupertino_switch
-  | K_text_input -> Ok Text_input
   | K_overlay -> Ok Overlay
   | K_navigator -> Ok Navigator
   | K_page -> Ok Page
@@ -404,6 +400,62 @@ let wire_application_theme theme : Protocol.Wire_frame.application_theme =
   }
 ;;
 
+let wire_expressive_text_input (input : Ui.Widget.Private.material_expressive_text_input)
+  : Protocol.Wire_frame.material_expressive_text_input
+  =
+  let wire_range range =
+    Protocol.Wire_frame.
+      { start_utf16 = Ui.Text_editing.Range.start_utf16 range
+      ; end_utf16 = Ui.Text_editing.Range.end_utf16 range
+      }
+  in
+  let value =
+    Protocol.Wire_frame.
+      { text = Ui.Text_editing.Value.text input.value
+      ; selection = wire_range (Ui.Text_editing.Value.selection input.value)
+      ; composing = Option.map wire_range (Ui.Text_editing.Value.composing input.value)
+      }
+  in
+  let keyboard_type =
+    match input.keyboard_type with
+    | Ui.Text_editing.Text -> Protocol.Wire_frame.Keyboard_text
+    | Multiline -> Keyboard_multiline
+    | Number -> Keyboard_number
+    | Email -> Keyboard_email
+    | Phone -> Keyboard_phone
+    | Url -> Keyboard_url
+  in
+  let input_action =
+    match input.input_action with
+    | Ui.Text_editing.Done -> Protocol.Wire_frame.Done
+    | Newline -> Newline
+    | Next -> Next
+    | Previous -> Previous
+    | Search -> Search
+    | Send -> Send
+    | Go -> Go
+  in
+  let update_mode =
+    match input.update_mode with
+    | Ui.Text_editing.Ack -> Protocol.Wire_frame.Ack
+    | Correction -> Correction
+    | Force_replace -> Force_replace
+  in
+  { session_id = input.session_id
+  ; document_revision = input.document_revision
+  ; value
+  ; enabled = input.enabled
+  ; read_only = input.read_only
+  ; obscure_text = input.obscure_text
+  ; keyboard_type
+  ; input_action
+  ; accepted_local_revision = input.accepted_local_revision
+  ; update_mode
+  ; autofocus = input.autofocus
+  ; max_utf8_bytes = input.max_utf8_bytes
+  }
+;;
+
 let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
   match node with
   | Ui.Widget.Private.Empty -> Ok Protocol.Wire_frame.Empty_props
@@ -462,7 +514,6 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
   | Column -> Ok Linear_props
   | Flex_row -> Ok Linear_props
   | Flex_column -> Ok Linear_props
-  | Button { enabled } -> Ok (Button_props { enabled })
   | Pressable { overlay_color; release_delay_ms } ->
     Ok
       (Pressable_props
@@ -577,42 +628,32 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
     Ok (Sliver_padding_props { left; top; right; bottom })
   | Sliver_app_bar
       { pinned
-      ; expanded_height
-      ; collapsed_height
       ; floating
       ; snap
-      ; stretch
-      ; toolbar_height
       ; has_leading
-      ; has_flexible_space
-      ; has_bottom
-      ; has_actions
-      ; force_elevated
-      ; automatically_imply_leading
-      ; center_title
       ; background_color
       ; foreground_color
-      ; elevation
+      ; action_count
+      ; center_title
+      ; variant
+      ; shape
+      ; density
+      ; semantic_label
       } ->
     Ok
       (Sliver_app_bar_props
          { pinned
-         ; expanded_height
-         ; collapsed_height
          ; floating
          ; snap
-         ; stretch
-         ; toolbar_height
          ; has_leading
-         ; has_flexible_space
-         ; has_bottom
-         ; has_actions
-         ; force_elevated
-         ; automatically_imply_leading
-         ; center_title
          ; background_color
          ; foreground_color
-         ; elevation
+         ; action_count
+         ; center_title
+         ; variant
+         ; shape
+         ; density
+         ; semantic_label
          })
   | Preferred_size { height } -> Ok (Preferred_size_props { height })
   | Gesture -> Ok Gesture_props
@@ -693,10 +734,8 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
          ; has_bottom_navigation_bar
          ; has_bottom_sheet
          })
-  | Material_app_bar { center_title } -> Ok (Material_app_bar_props { center_title })
   | Material_elevated_button { variant; enabled; autofocus }
   | Material_text_button { variant; enabled; autofocus }
-  | Material_icon_button { variant; enabled; autofocus }
   | Material_filled_button { variant; enabled; autofocus }
   | Material_filled_tonal_button { variant; enabled; autofocus }
   | Material_outlined_button { variant; enabled; autofocus } ->
@@ -710,7 +749,9 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
       | Icon_button -> Icon_button
     in
     Ok (Material_button_props { variant; enabled; autofocus })
-  | Material_floating_action_button { variant; enabled; autofocus; has_icon } ->
+  | Material_icon_button { enabled; _ } ->
+    Ok (Material_button_props { variant = Icon_button; enabled; autofocus = false })
+  | Material_floating_action_button { variant; enabled; autofocus } ->
     let variant =
       match variant with
       | Ui.Widget.Private.Small -> Protocol.Wire_frame.Small
@@ -718,8 +759,20 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
       | Large -> Large
       | Extended -> Extended
     in
-    Ok (Material_floating_action_button_props { variant; enabled; autofocus; has_icon })
-  | Material_navigation_bar { selected_index; destinations } ->
+    Ok (Material_floating_action_button_props { variant; enabled; autofocus })
+  | Material_navigation_bar
+      { selected_index
+      ; destinations
+      ; layout
+      ; alignment
+      ; label_behavior
+      ; icon_behavior
+      ; size
+      ; shape
+      ; density
+      ; safe_area
+      ; semantic_label
+      } ->
     Ok
       (Material_navigation_bar_props
          { selected_index
@@ -728,10 +781,49 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
                (fun (destination : Ui.Widget.Private.material_navigation_destination) ->
                   Protocol.Wire_frame.
                     { label = destination.label
-                    ; enabled = destination.enabled
                     ; has_selected_icon = destination.has_selected_icon
+                    ; badge_count = destination.badge_count
+                    ; badge_dot = destination.badge_dot
+                    ; semantic_label = destination.semantic_label
                     })
                destinations
+         ; auto_layout =
+             (match layout with
+              | Auto -> true
+              | Compact | Wide -> false)
+         ; layout =
+             (match layout with
+              | Auto | Compact -> 0
+              | Wide -> 1)
+         ; alignment =
+             (match alignment with
+              | Start -> 0
+              | Center -> 1
+              | End -> 2)
+         ; label_behavior =
+             (match label_behavior with
+              | Always -> 0
+              | Selected -> 1
+              | Never -> 2)
+         ; icon_behavior =
+             (match icon_behavior with
+              | Always -> 0
+              | Selected -> 1
+              | Never -> 2)
+         ; size =
+             (match size with
+              | Small_bar -> 0
+              | Medium_bar -> 1)
+         ; shape =
+             (match shape with
+              | Round_bar -> 0
+              | Square_bar -> 1)
+         ; density =
+             (match density with
+              | Regular_bar -> 0
+              | Compact_bar -> 1)
+         ; safe_area
+         ; semantic_label
          })
   | Material_radio_group { selected_id; options } ->
     Ok
@@ -747,50 +839,36 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
                     })
                options
          })
-  | Material_segmented_button
-      { selected_ids
-      ; enabled
-      ; direction
-      ; multi_selection_enabled
-      ; empty_selection_allowed
-      ; expanded_insets
-      ; show_selected_icon
-      ; has_selected_icon
-      ; segments
-      } ->
-    let direction =
-      match direction with
-      | Ui.Layout.Axis.Horizontal -> Protocol.Wire_frame.Horizontal
-      | Vertical -> Vertical
-    in
+  | Material_segmented_button { selected_ids; enabled; multi_selection_enabled; segments }
+    ->
     Ok
       (Material_segmented_button_props
          { selected_ids
          ; enabled
-         ; direction
          ; multi_selection_enabled
-         ; empty_selection_allowed
-         ; expanded_insets
-         ; show_selected_icon
-         ; has_selected_icon
          ; segments =
              List.map
                (fun (segment : Ui.Widget.Private.material_segment) ->
                   Protocol.Wire_frame.
-                    { segment_id = segment.segment_id
-                    ; enabled = segment.enabled
-                    ; tooltip = segment.tooltip
-                    ; has_icon = segment.has_icon
-                    ; has_label = segment.has_label
-                    })
+                    { segment_id = segment.segment_id; has_icon = segment.has_icon })
                segments
          })
-  | Material_slider { value; min; max; divisions; label; enabled; has_on_change } ->
+  | Material_slider { value; min; max; divisions; label; enabled; has_on_change; kind } ->
     Ok
-      (Material_slider_props { value; min; max; divisions; label; enabled; has_on_change })
+      (Material_slider_props
+         { value; min; max; divisions; label; enabled; has_on_change; kind })
   | Material_range_slider
-      { start; end_; min; max; divisions; label_start; label_end; enabled; has_on_change }
-    ->
+      { start
+      ; end_
+      ; min
+      ; max
+      ; divisions
+      ; label_start
+      ; label_end
+      ; enabled
+      ; has_on_change
+      ; kind
+      } ->
     Ok
       (Material_range_slider_props
          { start
@@ -802,6 +880,7 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
          ; label_end
          ; enabled
          ; has_on_change
+         ; kind
          })
   | Material_action_chip fields ->
     Ok
@@ -813,10 +892,7 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
               | Elevated_chip -> Elevated_chip)
          ; enabled = fields.enabled
          ; selected = fields.selected
-         ; has_avatar = fields.has_avatar
-         ; has_delete_icon = fields.has_delete_icon
-         ; has_on_press = fields.has_on_press
-         ; has_on_selected = fields.has_on_selected
+         ; has_leading = fields.has_leading
          ; has_on_delete = fields.has_on_delete
          })
   | Material_filter_chip fields ->
@@ -829,10 +905,7 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
               | Elevated_chip -> Elevated_chip)
          ; enabled = fields.enabled
          ; selected = fields.selected
-         ; has_avatar = fields.has_avatar
-         ; has_delete_icon = fields.has_delete_icon
-         ; has_on_press = fields.has_on_press
-         ; has_on_selected = fields.has_on_selected
+         ; has_leading = fields.has_leading
          ; has_on_delete = fields.has_on_delete
          })
   | Material_choice_chip fields ->
@@ -845,10 +918,7 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
               | Elevated_chip -> Elevated_chip)
          ; enabled = fields.enabled
          ; selected = fields.selected
-         ; has_avatar = fields.has_avatar
-         ; has_delete_icon = fields.has_delete_icon
-         ; has_on_press = fields.has_on_press
-         ; has_on_selected = fields.has_on_selected
+         ; has_leading = fields.has_leading
          ; has_on_delete = fields.has_on_delete
          })
   | Material_input_chip fields ->
@@ -858,14 +928,9 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
          ; presentation = Flat_chip
          ; enabled = fields.enabled
          ; selected = fields.selected
-         ; has_avatar = fields.has_avatar
-         ; has_delete_icon = fields.has_delete_icon
-         ; has_on_press = fields.has_on_press
-         ; has_on_selected = fields.has_on_selected
+         ; has_leading = fields.has_leading
          ; has_on_delete = fields.has_on_delete
          })
-  | Material_alert_dialog { has_icon; has_title; has_content; action_count } ->
-    Ok (Material_alert_dialog_props { has_icon; has_title; has_content; action_count })
   | Material_search_bar fields ->
     let wire_range range =
       Protocol.Wire_frame.
@@ -923,23 +988,66 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
          ; hint_text = fields.hint_text
          ; has_on_tap = fields.has_on_tap
          })
-  | Material_tooltip fields ->
+  | Material_text_field fields ->
+    let wire_range range =
+      Protocol.Wire_frame.
+        { start_utf16 = Ui.Text_editing.Range.start_utf16 range
+        ; end_utf16 = Ui.Text_editing.Range.end_utf16 range
+        }
+    in
+    let value =
+      Protocol.Wire_frame.
+        { text = Ui.Text_editing.Value.text fields.value
+        ; selection = wire_range (Ui.Text_editing.Value.selection fields.value)
+        ; composing = Option.map wire_range (Ui.Text_editing.Value.composing fields.value)
+        }
+    in
+    let keyboard_type =
+      match fields.keyboard_type with
+      | Ui.Text_editing.Text -> Protocol.Wire_frame.Keyboard_text
+      | Multiline -> Keyboard_multiline
+      | Number -> Keyboard_number
+      | Email -> Keyboard_email
+      | Phone -> Keyboard_phone
+      | Url -> Keyboard_url
+    in
+    let input_action =
+      match fields.input_action with
+      | Ui.Text_editing.Done -> Protocol.Wire_frame.Done
+      | Newline -> Newline
+      | Next -> Next
+      | Previous -> Previous
+      | Search -> Search
+      | Send -> Send
+      | Go -> Go
+    in
+    let update_mode =
+      match fields.update_mode with
+      | Ui.Text_editing.Ack -> Protocol.Wire_frame.Ack
+      | Correction -> Correction
+      | Force_replace -> Force_replace
+    in
     Ok
-      (Material_tooltip_props
-         { message = fields.message
+      (Material_text_field_props
+         { session_id = fields.session_id
+         ; document_revision = fields.document_revision
+         ; value
          ; enabled = fields.enabled
-         ; exclude_from_semantics = fields.exclude_from_semantics
-         ; prefer_below = fields.prefer_below
-         ; trigger_mode =
-             (match fields.trigger_mode with
-              | Ui.Widget.Private.Tooltip_long_press -> Tooltip_long_press
-              | Tooltip_tap -> Tooltip_tap)
-         ; wait_duration_ms = fields.wait_duration_ms
-         ; show_duration_ms = fields.show_duration_ms
-         ; exit_duration_ms = fields.exit_duration_ms
-         ; enable_tap_to_dismiss = fields.enable_tap_to_dismiss
-         ; enable_feedback = fields.enable_feedback
-         ; has_on_triggered = fields.has_on_triggered
+         ; read_only = fields.read_only
+         ; obscure_text = fields.obscure_text
+         ; keyboard_type
+         ; input_action
+         ; accepted_local_revision = fields.accepted_local_revision
+         ; update_mode
+         ; max_utf8_bytes = fields.max_utf8_bytes
+         ; variant = fields.variant
+         ; label = fields.label
+         ; supporting_text = fields.supporting_text
+         ; error_text = fields.error_text
+         ; has_leading = fields.has_leading
+         ; has_trailing = fields.has_trailing
+         ; max_lines = fields.max_lines
+         ; autofocus = fields.autofocus
          })
   | Material_data_table fields ->
     let cell (value : Ui.Widget.Private.material_data_table_cell) =
@@ -1039,10 +1147,6 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
   | Material_checkbox { value; enabled } ->
     Ok (Material_checkbox_props { value; enabled })
   | Material_switch { value; enabled } -> Ok (Material_switch_props { value; enabled })
-  | Material_list_tile { enabled; selected; has_subtitle; has_leading; has_trailing } ->
-    Ok
-      (Material_list_tile_props
-         { enabled; selected; has_subtitle; has_leading; has_trailing })
   | Material_divider { orientation; thickness; spacing; indent; end_indent } ->
     Ok
       (Material_divider_props
@@ -1065,79 +1169,48 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
               | Outlined_card -> Outlined_card)
          ; elevation
          })
-  | Material_circular_progress_indicator { value } ->
-    Ok (Material_circular_progress_props { value })
-  | Material_linear_progress_indicator { value } ->
-    Ok (Material_linear_progress_props { value })
+  | Material_circular_progress_indicator { value; wavy } ->
+    Ok (Material_circular_progress_props { value; wavy })
+  | Material_linear_progress_indicator { value; wavy } ->
+    Ok (Material_linear_progress_props { value; wavy })
+  | Material_expressive
+      { component
+      ; variant
+      ; flags
+      ; primary_text
+      ; secondary_text
+      ; value
+      ; end_value
+      ; selected_ids
+      ; items
+      ; text_input
+      } ->
+    Ok
+      (Material_expressive_props
+         { component
+         ; variant
+         ; flags
+         ; primary_text
+         ; secondary_text
+         ; value
+         ; end_value
+         ; selected_ids
+         ; items =
+             List.map
+               (fun (item : Ui.Widget.Private.material_expressive_item) ->
+                  Protocol.Wire_frame.
+                    { item_id = item.item_id
+                    ; kind = item.kind
+                    ; label = item.label
+                    ; enabled = item.enabled
+                    ; selected = item.selected
+                    ; child_count = item.child_count
+                    })
+               items
+         ; text_input = Option.map wire_expressive_text_input text_input
+         })
   | Cupertino_button { enabled } -> Ok (Cupertino_button_props { enabled })
   | Cupertino_switch { value; enabled } -> Ok (Cupertino_switch_props { value; enabled })
-  | Text_input
-      { session_id
-      ; document_revision
-      ; value
-      ; enabled
-      ; read_only
-      ; obscure_text
-      ; keyboard_type
-      ; input_action
-      ; accepted_local_revision
-      ; update_mode
-      ; autofocus
-      ; max_utf8_bytes
-      } ->
-    let wire_range range =
-      Protocol.Wire_frame.
-        { start_utf16 = Ui.Text_editing.Range.start_utf16 range
-        ; end_utf16 = Ui.Text_editing.Range.end_utf16 range
-        }
-    in
-    let value =
-      Protocol.Wire_frame.
-        { text = Ui.Text_editing.Value.text value
-        ; selection = wire_range (Ui.Text_editing.Value.selection value)
-        ; composing = Option.map wire_range (Ui.Text_editing.Value.composing value)
-        }
-    in
-    let keyboard_type =
-      match keyboard_type with
-      | Ui.Text_editing.Text -> Protocol.Wire_frame.Keyboard_text
-      | Multiline -> Keyboard_multiline
-      | Number -> Keyboard_number
-      | Email -> Keyboard_email
-      | Phone -> Keyboard_phone
-      | Url -> Keyboard_url
-    in
-    let input_action =
-      match input_action with
-      | Ui.Text_editing.Done -> Protocol.Wire_frame.Done
-      | Newline -> Newline
-      | Next -> Next
-      | Previous -> Previous
-      | Search -> Search
-      | Send -> Send
-      | Go -> Go
-    in
-    let update_mode =
-      match update_mode with
-      | Ui.Text_editing.Ack -> Protocol.Wire_frame.Ack
-      | Correction -> Correction
-      | Force_replace -> Force_replace
-    in
-    Ok
-      (Text_input_props
-         { session_id
-         ; document_revision
-         ; value
-         ; enabled
-         ; read_only
-         ; obscure_text
-         ; keyboard_type
-         ; input_action
-         ; accepted_local_revision
-         ; update_mode
-         ; autofocus
-         ; max_utf8_bytes
-         })
   | Overlay { alignment; dismissible } ->
     let alignment =
       match alignment with
@@ -1213,6 +1286,18 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
       | Modal_dialog modal ->
         let modal = Ui.Navigation.Modal_dialog.Private.view modal in
         Protocol.Wire_frame.Modal_dialog
+          { barrier_dismissible = modal.barrier_dismissible
+          ; barrier_color_argb =
+              Option.map Ui.Style.Color.Private.to_argb32 modal.barrier_color
+          ; barrier_label = modal.barrier_label
+          ; use_safe_area = modal.use_safe_area
+          ; request_focus = modal.request_focus
+          ; transition_duration_ms = modal.transition_duration_ms
+          ; reverse_transition_duration_ms = modal.reverse_transition_duration_ms
+          }
+      | Modal_side_sheet modal ->
+        let modal = Ui.Navigation.Modal_side_sheet.Private.view modal in
+        Protocol.Wire_frame.Modal_side_sheet
           { barrier_dismissible = modal.barrier_dismissible
           ; barrier_color_argb =
               Option.map Ui.Style.Color.Private.to_argb32 modal.barrier_color
@@ -1305,6 +1390,10 @@ let wire_event_tag =
   | Step_cancel -> Tag.step_cancel
   | Expansion_changed -> Tag.expansion_changed
   | Dialog_option_selected -> Tag.dialog_option_selected
+  | Civil_date_changed -> Tag.civil_date_changed
+  | Civil_time_changed -> Tag.civil_time_changed
+  | Search_opened -> Tag.search_opened
+  | Search_closed -> Tag.search_closed
 ;;
 
 let wire_bindings bindings =
@@ -1718,6 +1807,9 @@ let payload_summary = function
     Printf.sprintf "int64_list(%s)" (String.concat "," (List.map Int64.to_string values))
   | Int64_bool { id; value } -> Printf.sprintf "int64_bool(%Ld,%b)" id value
   | Int64_pair { first; second } -> Printf.sprintf "int64_pair(%Ld,%Ld)" first second
+  | Civil_date { year; month; day } ->
+    Printf.sprintf "civil_date(%04d-%02d-%02d)" year month day
+  | Civil_time { hour; minute } -> Printf.sprintf "civil_time(%02d:%02d)" hour minute
   | Tap tap ->
     Printf.sprintf
       "tap(local=%g,%g global=%g,%g pointer=%s)"

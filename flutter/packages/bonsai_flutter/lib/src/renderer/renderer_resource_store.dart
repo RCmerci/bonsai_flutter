@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:material_3_expressive/material_3_expressive.dart';
 
 import '../protocol/frame.dart';
 import '../store/node_store.dart';
@@ -20,17 +21,27 @@ abstract interface class RendererHostResources {
   });
 
   Future<void> cancelSnackBar(int requestId);
+
+  Future<CivilDateValue?> pickDate(PickDateRequest request);
+
+  Future<CivilDateRangeValue?> pickDateRange(PickDateRangeRequest request);
+
+  Future<CivilTimeValue?> pickTime(PickTimeRequest request);
 }
 
 enum SnackBarCloseReason { action, dismiss, swipe, hide, remove, timeout }
 
 final class TextInputResourceHandle {
-  TextInputResourceHandle(TextInputProps props)
-    : controller = TextEditingController.fromValue(_editingValue(props.value)),
-      focusNode = FocusNode(),
-      sessionId = props.sessionId,
-      localRevision = props.acceptedLocalRevision,
-      documentRevision = props.documentRevision;
+  TextInputResourceHandle(
+    TextInputProps props, {
+    TextEditingController Function(TextEditingValue)? controllerFactory,
+  }) : controller =
+           controllerFactory?.call(_editingValue(props.value)) ??
+           TextEditingController.fromValue(_editingValue(props.value)),
+       focusNode = FocusNode(),
+       sessionId = props.sessionId,
+       localRevision = props.acceptedLocalRevision,
+       documentRevision = props.documentRevision;
 
   final TextEditingController controller;
   final FocusNode focusNode;
@@ -170,7 +181,11 @@ final class RendererResourceStore implements RendererHostResources {
     }
   }
 
-  TextInputResourceHandle acquireTextInput(int nodeId, TextInputProps props) {
+  TextInputResourceHandle acquireTextInput(
+    int nodeId,
+    TextInputProps props, {
+    TextEditingController Function(TextEditingValue)? controllerFactory,
+  }) {
     if (_disposed) {
       throw StateError('RendererResourceStore has been disposed');
     }
@@ -179,7 +194,10 @@ final class RendererResourceStore implements RendererHostResources {
     }
     return _textInputs.putIfAbsent(nodeId, () {
       _createdResourceCount += 1;
-      return TextInputResourceHandle(props);
+      return TextInputResourceHandle(
+        props,
+        controllerFactory: controllerFactory,
+      );
     });
   }
 
@@ -345,18 +363,31 @@ final class RendererResourceStore implements RendererHostResources {
     if (messenger == null || !messenger.mounted) {
       throw StateError('No ScaffoldMessenger is attached');
     }
-    final controller = messenger.showSnackBar(
+    late final ScaffoldFeatureController<SnackBar, SnackBarClosedReason>
+    controller;
+    var actionPressed = false;
+    controller = messenger.showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: M3ESnackbar(
+          message: message,
+          actionLabel: actionLabel,
+          onAction: actionLabel == null
+              ? null
+              : () {
+                  actionPressed = true;
+                  controller.close();
+                },
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        padding: EdgeInsets.zero,
         duration: Duration(milliseconds: durationMs),
-        action: actionLabel == null
-            ? null
-            : SnackBarAction(label: actionLabel, onPressed: () {}),
       ),
     );
     _snackBars[requestId] = controller;
     final reason = await controller.closed;
     _snackBars.remove(requestId);
+    if (actionPressed) return SnackBarCloseReason.action;
     return switch (reason) {
       SnackBarClosedReason.action => SnackBarCloseReason.action,
       SnackBarClosedReason.dismiss => SnackBarCloseReason.dismiss,
@@ -370,6 +401,79 @@ final class RendererResourceStore implements RendererHostResources {
   @override
   Future<void> cancelSnackBar(int requestId) async {
     _snackBars.remove(requestId)?.close();
+  }
+
+  BuildContext get _hostContext {
+    final messenger = _scaffoldMessenger;
+    if (_disposed || messenger == null || !messenger.mounted) {
+      throw StateError('No host presentation context is attached');
+    }
+    return messenger.context;
+  }
+
+  DateTime _dateTime(CivilDateValue value) =>
+      DateTime(value.year, value.month, value.day);
+
+  CivilDateValue _civilDate(DateTime value) =>
+      CivilDateValue(year: value.year, month: value.month, day: value.day);
+
+  @override
+  Future<CivilDateValue?> pickDate(PickDateRequest request) async {
+    final result = await M3EDatePicker.show(
+      _hostContext,
+      initialDate: request.initial == null ? null : _dateTime(request.initial!),
+      firstDate: _dateTime(request.first),
+      lastDate: _dateTime(request.last),
+      currentDate: request.current == null ? null : _dateTime(request.current!),
+      initialEntryMode: request.inputMode
+          ? M3EDatePickerEntryMode.input
+          : M3EDatePickerEntryMode.calendar,
+    );
+    return result == null ? null : _civilDate(result);
+  }
+
+  @override
+  Future<CivilDateRangeValue?> pickDateRange(
+    PickDateRangeRequest request,
+  ) async {
+    final result = await M3EDatePicker.showRange(
+      _hostContext,
+      initialStartDate: request.initial == null
+          ? null
+          : _dateTime(request.initial!.start),
+      initialEndDate: request.initial == null
+          ? null
+          : _dateTime(request.initial!.end),
+      firstDate: _dateTime(request.first),
+      lastDate: _dateTime(request.last),
+      currentDate: request.current == null ? null : _dateTime(request.current!),
+      initialEntryMode: request.inputMode
+          ? M3EDatePickerEntryMode.input
+          : M3EDatePickerEntryMode.calendar,
+    );
+    if (result == null || result.end == null) return null;
+    return CivilDateRangeValue(
+      start: _civilDate(result.start),
+      end: _civilDate(result.end!),
+    );
+  }
+
+  @override
+  Future<CivilTimeValue?> pickTime(PickTimeRequest request) async {
+    final result = await M3ETimePicker.show(
+      _hostContext,
+      initialTime: M3ETime(
+        hour: request.initial.hour,
+        minute: request.initial.minute,
+      ),
+      initialEntryMode: request.inputMode
+          ? M3ETimePickerEntryMode.input
+          : M3ETimePickerEntryMode.dial,
+      alwaysUse24HourFormat: request.use24Hour,
+    );
+    return result == null
+        ? null
+        : CivilTimeValue(hour: result.hour, minute: result.minute);
   }
 
   Resource acquireNativeResource<Resource extends Object>({
@@ -417,7 +521,12 @@ final class RendererResourceStore implements RendererHostResources {
     _resourceGeneration = generation;
     _currentNodeIds = store.nodes.keys.toSet();
     final retained = store.nodes.entries
-        .where((entry) => entry.value.kind == NodeKind.textInput)
+        .where(
+          (entry) =>
+              entry.value.kind == NodeKind.materialSearchBar ||
+              entry.value.kind == NodeKind.materialTextField ||
+              entry.value.kind == NodeKind.materialExpressive,
+        )
         .map((entry) => entry.key)
         .toSet();
     for (final nodeId in _textInputs.keys.toList(growable: false)) {

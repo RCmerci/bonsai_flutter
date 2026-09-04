@@ -121,7 +121,7 @@ void main() {
       expect(encoded, orderedEquals(expected));
       expect(encoded.length, expected.length);
       expect(encoded.sublist(0, 4), [0x42, 0x46, 0x46, 0x52]);
-      expect(readUint16(encoded, 4), 1);
+      expect(readUint16(encoded, 4), ProtocolVersion.protocolMajor);
       expect(readUint16(encoded, 6), ProtocolVersion.protocolMinor);
       expect(readUint16(encoded, 8), 48);
       expect(encoded[10], 2);
@@ -171,28 +171,31 @@ void main() {
           variant: MaterialFloatingActionButtonVariant.extended,
           enabled: true,
           autofocus: false,
-          hasIcon: true,
         ),
         MaterialNavigationBarProps(
           selectedIndex: 0,
           destinations: [
             MaterialNavigationDestinationProps(
               label: 'Home',
-              enabled: true,
               hasSelectedIcon: true,
+              badgeCount: 7,
             ),
             MaterialNavigationDestinationProps(
               label: 'Settings',
-              enabled: false,
               hasSelectedIcon: false,
+              badgeDot: true,
             ),
           ],
-        ),
-        MaterialAlertDialogProps(
-          hasIcon: true,
-          hasTitle: true,
-          hasContent: true,
-          actionCount: 2,
+          autoLayout: false,
+          layout: 1,
+          alignment: 2,
+          labelBehavior: 1,
+          iconBehavior: 2,
+          size: 0,
+          shape: 0,
+          density: 1,
+          safeArea: false,
+          semanticLabel: 'Primary navigation',
         ),
         MaterialRadioGroupProps(
           selectedId: -7,
@@ -204,27 +207,10 @@ void main() {
         MaterialSegmentedButtonProps(
           selectedIds: [-7, 9],
           enabled: true,
-          direction: ScrollAxis.vertical,
           multiSelectionEnabled: true,
-          emptySelectionAllowed: true,
-          expandedInsets: EdgeInsetsValue(left: 8, top: 4, right: 8, bottom: 4),
-          showSelectedIcon: true,
-          hasSelectedIcon: true,
           segments: [
-            MaterialSegmentProps(
-              id: -7,
-              enabled: true,
-              tooltip: 'List view',
-              hasIcon: true,
-              hasLabel: true,
-            ),
-            MaterialSegmentProps(
-              id: 9,
-              enabled: false,
-              tooltip: null,
-              hasIcon: false,
-              hasLabel: true,
-            ),
+            MaterialSegmentProps(id: -7, hasIcon: true),
+            MaterialSegmentProps(id: 9, hasIcon: false),
           ],
         ),
         MaterialSliderProps(
@@ -235,6 +221,7 @@ void main() {
           label: 'Quarter',
           enabled: true,
           hasOnChange: true,
+          kind: 0,
         ),
         MaterialRangeSliderProps(
           start: 0.2,
@@ -246,18 +233,16 @@ void main() {
           labelEnd: null,
           enabled: true,
           hasOnChange: false,
+          kind: 1,
         ),
         MaterialChipProps(
           variant: MaterialChipVariant.input,
           enabled: true,
           selected: true,
-          hasAvatar: true,
-          hasDeleteIcon: true,
-          hasOnPress: true,
-          hasOnSelected: true,
+          hasLeading: true,
           hasOnDelete: true,
         ),
-        MaterialLinearProgressProps(value: 0.5),
+        MaterialLinearProgressProps(value: 0.5, wavy: true),
       ];
       final operations = <FrameOperation>[
         for (var index = 0; index < props.length; index += 1)
@@ -277,6 +262,23 @@ void main() {
             ),
             canPop: true,
             restorationId: 'confirm-dialog',
+          ),
+        ),
+        const UpdateProps(
+          nodeId: 31,
+          props: PageProps(
+            pageKey: 'details',
+            presentation: ModalSideSheetPresentation(
+              barrierDismissible: true,
+              barrierColorArgb: 0x7f000000,
+              barrierLabel: 'Close details',
+              useSafeArea: true,
+              requestFocus: true,
+              transitionDurationMilliseconds: 180,
+              reverseTransitionDurationMilliseconds: 120,
+            ),
+            canPop: true,
+            restorationId: 'details-side-sheet',
           ),
         ),
         const HostRequestOperation(
@@ -317,13 +319,13 @@ void main() {
       expect((decoded.operations[3] as UpdateProps).props, props[3]);
       expect((decoded.operations[8] as UpdateProps).props, props[8]);
       expect(
-        ((decoded.operations[10] as UpdateProps).props
+        ((decoded.operations[9] as UpdateProps).props
                 as MaterialLinearProgressProps)
             .value,
         0.5,
       );
       expect(
-        (decoded.operations[11] as UpdateProps).props,
+        (decoded.operations[10] as UpdateProps).props,
         const PageProps(
           pageKey: 'confirm',
           presentation: ModalDialogPresentation(
@@ -337,6 +339,23 @@ void main() {
           ),
           canPop: true,
           restorationId: 'confirm-dialog',
+        ),
+      );
+      expect(
+        (decoded.operations[11] as UpdateProps).props,
+        const PageProps(
+          pageKey: 'details',
+          presentation: ModalSideSheetPresentation(
+            barrierDismissible: true,
+            barrierColorArgb: 0x7f000000,
+            barrierLabel: 'Close details',
+            useSafeArea: true,
+            requestFocus: true,
+            transitionDurationMilliseconds: 180,
+            reverseTransitionDurationMilliseconds: 120,
+          ),
+          canPop: true,
+          restorationId: 'details-side-sheet',
         ),
       );
     });
@@ -363,19 +382,6 @@ void main() {
           trailingCount: 2,
           hintText: 'Search',
           hasOnTap: true,
-        ),
-        MaterialTooltipProps(
-          message: 'Details',
-          enabled: true,
-          excludeFromSemantics: false,
-          preferBelow: false,
-          triggerMode: MaterialTooltipTriggerMode.tap,
-          waitDurationMs: 20,
-          showDurationMs: 1500,
-          exitDurationMs: 100,
-          enableTapToDismiss: true,
-          enableFeedback: false,
-          hasOnTriggered: true,
         ),
         MaterialDataTableProps(
           columns: [
@@ -453,10 +459,7 @@ void main() {
           presentation: MaterialChipPresentation.elevated,
           enabled: true,
           selected: false,
-          hasAvatar: true,
-          hasDeleteIcon: false,
-          hasOnPress: true,
-          hasOnSelected: false,
+          hasLeading: true,
           hasOnDelete: false,
         ),
         MaterialCardProps(variant: MaterialCardVariant.filled, elevation: 2),
@@ -503,12 +506,10 @@ void main() {
           destinations: [
             MaterialNavigationDestinationProps(
               label: 'Home',
-              enabled: true,
               hasSelectedIcon: false,
             ),
             MaterialNavigationDestinationProps(
               label: 'Settings',
-              enabled: true,
               hasSelectedIcon: false,
             ),
           ],
@@ -523,27 +524,10 @@ void main() {
         const MaterialSegmentedButtonProps(
           selectedIds: [2, 1],
           enabled: true,
-          direction: ScrollAxis.horizontal,
           multiSelectionEnabled: true,
-          emptySelectionAllowed: false,
-          expandedInsets: null,
-          showSelectedIcon: true,
-          hasSelectedIcon: false,
           segments: [
-            MaterialSegmentProps(
-              id: 1,
-              enabled: true,
-              tooltip: null,
-              hasIcon: false,
-              hasLabel: true,
-            ),
-            MaterialSegmentProps(
-              id: 2,
-              enabled: true,
-              tooltip: null,
-              hasIcon: false,
-              hasLabel: true,
-            ),
+            MaterialSegmentProps(id: 1, hasIcon: false),
+            MaterialSegmentProps(id: 2, hasIcon: false),
           ],
         ),
         const MaterialSliderProps(
@@ -554,6 +538,7 @@ void main() {
           label: null,
           enabled: true,
           hasOnChange: true,
+          kind: 0,
         ),
         const MaterialRangeSliderProps(
           start: 0.8,
@@ -565,16 +550,14 @@ void main() {
           labelEnd: null,
           enabled: true,
           hasOnChange: true,
+          kind: 0,
         ),
         const MaterialChipProps(
           variant: MaterialChipVariant.input,
           presentation: MaterialChipPresentation.elevated,
           enabled: true,
           selected: false,
-          hasAvatar: false,
-          hasDeleteIcon: false,
-          hasOnPress: false,
-          hasOnSelected: false,
+          hasLeading: false,
           hasOnDelete: false,
         ),
         const MaterialDataTableProps(
@@ -654,7 +637,7 @@ void main() {
             CreateNode(
               nodeId: 1,
               kind: NodeKind.materialLinearProgressIndicator,
-              props: MaterialLinearProgressProps(value: value),
+              props: MaterialLinearProgressProps(value: value, wavy: false),
               eventBindings: const [],
             ),
             const SetRoot(1),
@@ -721,26 +704,6 @@ void main() {
       final decoded = FrameCodec.decode(FrameCodec.encode(frame));
 
       expect((decoded.operations.single as UpdateProps).props, props);
-    });
-
-    test('decodes the protocol 1.12 text property layout', () {
-      final decoded = FrameCodec.decode(
-        readHexFixture('legacy_1_12_counter_full.hex'),
-      );
-
-      expect(decoded.runtimeEpoch, 7);
-      expect(decoded.baseRevision, 0);
-      expect(decoded.targetRevision, 1);
-      expect(decoded.kind, FrameKind.fullSnapshot);
-      expect(decoded.operations, hasLength(4));
-      expect(
-        decoded.operations
-            .whereType<CreateNode>()
-            .map((operation) => operation.props)
-            .whereType<TextProps>()
-            .single,
-        const TextProps('Count: 0'),
-      );
     });
 
     test('round trips host requests and declarative navigation props', () {
@@ -1775,15 +1738,28 @@ void main() {
           ],
         );
 
-        const validProps = SliverAppBarProps(
+        SliverAppBarProps props({
+          bool floating = true,
+          bool snap = true,
+          int actionCount = 2,
+          int variant = 1,
+          int shape = 0,
+          int density = 0,
+        }) => SliverAppBarProps(
           pinned: true,
-          expandedHeight: 200,
-          collapsedHeight: 100,
-          floating: true,
-          snap: true,
-          toolbarHeight: 56,
-          elevation: 4,
+          floating: floating,
+          snap: snap,
+          hasLeading: false,
+          backgroundColor: null,
+          foregroundColor: null,
+          actionCount: actionCount,
+          centerTitle: false,
+          variant: variant,
+          shape: shape,
+          density: density,
+          semanticLabel: 'Expressive app bar',
         );
+        final validProps = props();
         expect(
           (FrameCodec.decode(
                     FrameCodec.encode(frame(validProps)),
@@ -1793,56 +1769,24 @@ void main() {
           validProps,
         );
 
-        for (final props in const [
-          SliverAppBarProps(pinned: false, toolbarHeight: 0),
-          SliverAppBarProps(pinned: false, toolbarHeight: -1),
-          SliverAppBarProps(pinned: false, toolbarHeight: double.nan),
-          SliverAppBarProps(pinned: false, toolbarHeight: double.infinity),
-          SliverAppBarProps(pinned: false, expandedHeight: -1),
-          SliverAppBarProps(pinned: false, collapsedHeight: -1),
-          SliverAppBarProps(
-            pinned: false,
-            expandedHeight: 100,
-            collapsedHeight: 120,
-          ),
-          SliverAppBarProps(pinned: false, collapsedHeight: 40),
-          SliverAppBarProps(pinned: false, snap: true),
-          SliverAppBarProps(pinned: false, elevation: -1),
-          SliverAppBarProps(pinned: false, elevation: double.nan),
-          SliverAppBarProps(pinned: false, elevation: double.infinity),
+        for (final invalid in [
+          props(floating: false, snap: true),
+          props(actionCount: -1),
+          props(variant: 3),
+          props(shape: 2),
+          props(density: 2),
         ]) {
           expect(
-            () => FrameCodec.encode(frame(props)),
+            () => FrameCodec.encode(frame(invalid)),
             throwsProtocolCode(ProtocolErrorCode.invalidProps),
-            reason: 'invalid props were encoded: $props',
+            reason: 'invalid props were encoded: $invalid',
           );
         }
-
-        final valid = FrameCodec.encode(frame(validProps));
-        final expandedOffset = findFloat64(valid, 200);
-        for (final malformed in [
-          replaceFloat64At(valid, expandedOffset, -1),
-          replaceFloat64At(valid, expandedOffset, double.nan),
-          replaceFloat64At(valid, expandedOffset, double.infinity),
-          replaceFloat64(valid, 100, -1),
-          replaceFloat64At(valid, expandedOffset, 50),
-          replaceFloat64(valid, 100, 40),
-          replaceFloat64(valid, 56, 0),
-          replaceFloat64(valid, 4, -1),
-          replaceFloat64(valid, 4, double.nan),
-          replaceFloat64(valid, 4, double.infinity),
-        ]) {
-          expectDecodeError(malformed, ProtocolErrorCode.invalidProps);
-        }
-        expectDecodeError(
-          mutate(valid, expandedOffset + 17, 0),
-          ProtocolErrorCode.invalidProps,
-        );
       },
     );
 
-    test('round trips revisioned UTF-16 text input properties', () {
-      const props = TextInputProps(
+    test('round trips revisioned UTF-16 Material text field properties', () {
+      const props = MaterialTextFieldProps(
         sessionId: 7,
         documentRevision: 9,
         value: TextEditingStateValue(
@@ -1859,6 +1803,13 @@ void main() {
         updateMode: TextUpdateMode.correction,
         autofocus: true,
         maxUtf8Bytes: 12,
+        variant: 0,
+        label: null,
+        supportingText: null,
+        errorText: null,
+        hasLeading: false,
+        hasTrailing: false,
+        maxLines: 1,
       );
       const frame = Frame(
         runtimeEpoch: 10,
@@ -1876,26 +1827,34 @@ void main() {
     test(
       'rejects invalid UTF-8 byte limits while preserving unlimited input',
       () {
-        TextInputProps propsWithLimit(int? maxUtf8Bytes) => TextInputProps(
-          sessionId: 7,
-          documentRevision: 9,
-          value: const TextEditingStateValue(
-            text: '',
-            selection: TextRangeValue(startUtf16: 0, endUtf16: 0),
-            composing: null,
-          ),
-          enabled: true,
-          readOnly: false,
-          obscureText: false,
-          keyboardType: TextKeyboardType.text,
-          inputAction: TextInputActionKind.done,
-          acceptedLocalRevision: 0,
-          updateMode: TextUpdateMode.ack,
-          autofocus: false,
-          maxUtf8Bytes: maxUtf8Bytes,
-        );
+        MaterialTextFieldProps propsWithLimit(int? maxUtf8Bytes) =>
+            MaterialTextFieldProps(
+              sessionId: 7,
+              documentRevision: 9,
+              value: const TextEditingStateValue(
+                text: '',
+                selection: TextRangeValue(startUtf16: 0, endUtf16: 0),
+                composing: null,
+              ),
+              enabled: true,
+              readOnly: false,
+              obscureText: false,
+              keyboardType: TextKeyboardType.text,
+              inputAction: TextInputActionKind.done,
+              acceptedLocalRevision: 0,
+              updateMode: TextUpdateMode.ack,
+              autofocus: false,
+              maxUtf8Bytes: maxUtf8Bytes,
+              variant: 0,
+              label: null,
+              supportingText: null,
+              errorText: null,
+              hasLeading: false,
+              hasTrailing: false,
+              maxLines: 1,
+            );
 
-        Frame frame(TextInputProps props) => Frame(
+        Frame frame(MaterialTextFieldProps props) => Frame(
           runtimeEpoch: 10,
           baseRevision: 4,
           targetRevision: 5,
@@ -2086,7 +2045,7 @@ void main() {
         ProtocolErrorCode.truncatedInput,
       );
       expectDecodeError(
-        mutate(valid, 4, 2),
+        mutate(valid, 4, ProtocolVersion.protocolMajor + 1),
         ProtocolErrorCode.unsupportedVersion,
       );
       expectDecodeError(mutate(valid, 8, 47), ProtocolErrorCode.invalidHeader);

@@ -6,7 +6,7 @@ import 'dart:typed_data';
 import 'package:bonsai_flutter/bonsai_flutter.dart';
 import 'package:bonsai_flutter_sqlite_worker_example/application_support_bootstrap.dart';
 import 'package:bonsai_flutter_sqlite_worker_example/main.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 final class _NeverRuntimeStarter {

@@ -46,6 +46,58 @@ type snack_bar_close_reason =
   | Remove
   | Timeout
 
+type civil_date =
+  { year : int
+  ; month : int
+  ; day : int
+  }
+
+type civil_date_range =
+  { start : civil_date
+  ; end_ : civil_date
+  }
+
+type civil_time =
+  { hour : int
+  ; minute : int
+  }
+
+type picker_entry_mode =
+  | Calendar_or_dial
+  | Input
+
+let civil_date ~year ~month ~day =
+  if year < 1 || year > 9999
+  then invalid_arg "Host_effect.civil_date: year must be in 1..9999";
+  if month < 1 || month > 12
+  then invalid_arg "Host_effect.civil_date: month must be in 1..12";
+  let leap = year mod 400 = 0 || (year mod 4 = 0 && year mod 100 <> 0) in
+  let days =
+    [| 31; (if leap then 29 else 28); 31; 30; 31; 30; 31; 31; 30; 31; 30; 31 |]
+  in
+  if day < 1 || day > days.(month - 1)
+  then invalid_arg "Host_effect.civil_date: day is outside the month";
+  { year; month; day }
+;;
+
+let compare_civil_date left right =
+  Stdlib.compare (left.year, left.month, left.day) (right.year, right.month, right.day)
+;;
+
+let civil_date_range ~start ~end_ =
+  if compare_civil_date start end_ > 0
+  then invalid_arg "Host_effect.civil_date_range: range is reversed";
+  { start; end_ }
+;;
+
+let civil_time ~hour ~minute =
+  if hour < 0 || hour > 23
+  then invalid_arg "Host_effect.civil_time: hour must be in 0..23";
+  if minute < 0 || minute > 59
+  then invalid_arg "Host_effect.civil_time: minute must be in 0..59";
+  { hour; minute }
+;;
+
 module Cancellation = struct
   type t =
     { mutable cancelled : bool
@@ -405,6 +457,12 @@ module Bytes_reader = struct
     value
   ;;
 
+  let u16 t =
+    let b0 = u8 t in
+    let b1 = u8 t in
+    b0 lor (b1 lsl 8)
+  ;;
+
   let u32 t =
     let b0 = u8 t in
     let b1 = u8 t in
@@ -527,6 +585,55 @@ let decode_snack_bar_close_reason bytes =
     | 4 -> Ok Remove
     | 5 -> Ok Timeout
     | value -> invalid_response (Printf.sprintf "unknown snack bar close reason %d" value))
+;;
+
+let read_civil_date reader =
+  civil_date
+    ~year:(Bytes_reader.u16 reader)
+    ~month:(Bytes_reader.u8 reader)
+    ~day:(Bytes_reader.u8 reader)
+;;
+
+let decode_optional_civil_date bytes =
+  protect_decode
+    (fun bytes ->
+       let reader = Bytes_reader.create bytes in
+       let value = Bytes_reader.optional read_civil_date reader in
+       Bytes_reader.require_empty reader;
+       Ok value)
+    bytes
+;;
+
+let decode_optional_civil_date_range bytes =
+  protect_decode
+    (fun bytes ->
+       let reader = Bytes_reader.create bytes in
+       let value =
+         Bytes_reader.optional
+           (fun reader ->
+              civil_date_range
+                ~start:(read_civil_date reader)
+                ~end_:(read_civil_date reader))
+           reader
+       in
+       Bytes_reader.require_empty reader;
+       Ok value)
+    bytes
+;;
+
+let decode_optional_civil_time bytes =
+  protect_decode
+    (fun bytes ->
+       let reader = Bytes_reader.create bytes in
+       let value =
+         Bytes_reader.optional
+           (fun reader ->
+              civil_time ~hour:(Bytes_reader.u8 reader) ~minute:(Bytes_reader.u8 reader))
+           reader
+       in
+       Bytes_reader.require_empty reader;
+       Ok value)
+    bytes
 ;;
 
 let respond t callback response =
@@ -681,6 +788,107 @@ let show_snack_bar ?cancellation ?action_label ?(duration_ms = 4000) t ~message 
     t
     (Protocol.Wire_frame.Show_snack_bar { message; action_label; duration_ms })
     decode_snack_bar_close_reason
+;;
+
+let wire_date (date : civil_date) =
+  Protocol.Wire_frame.{ year = date.year; month = date.month; day = date.day }
+;;
+
+let wire_range (range : civil_date_range) =
+  Protocol.Wire_frame.{ start = wire_date range.start; end_ = wire_date range.end_ }
+;;
+
+let wire_time (time : civil_time) =
+  Protocol.Wire_frame.{ hour = time.hour; minute = time.minute }
+;;
+
+let validate_date_bounds context ~first ~last ?initial ?current () =
+  if compare_civil_date first last > 0 then invalid_arg (context ^ ": bounds are reversed");
+  let validate label value =
+    if compare_civil_date value first < 0 || compare_civil_date value last > 0
+    then invalid_arg (context ^ ": " ^ label ^ " is outside bounds")
+  in
+  Option.iter (validate "initial date") initial;
+  Option.iter (validate "current date") current
+;;
+
+let pick_date
+      ?cancellation
+      ?initial
+      ?current
+      ?(entry_mode = Calendar_or_dial)
+      ~first
+      ~last
+      t
+      ()
+  =
+  validate_date_bounds "Host_effect.pick_date" ~first ~last ?initial ?current ();
+  request
+    ?cancellation
+    t
+    (Protocol.Wire_frame.Pick_date
+       { initial = Option.map wire_date initial
+       ; first = wire_date first
+       ; last = wire_date last
+       ; current = Option.map wire_date current
+       ; input_mode = entry_mode = Input
+       })
+    decode_optional_civil_date
+;;
+
+let pick_date_range
+      ?cancellation
+      ?initial
+      ?current
+      ?(entry_mode = Calendar_or_dial)
+      ~first
+      ~last
+      t
+      ()
+  =
+  validate_date_bounds "Host_effect.pick_date_range" ~first ~last ?current ();
+  Option.iter
+    (fun range ->
+       validate_date_bounds
+         "Host_effect.pick_date_range"
+         ~first
+         ~last
+         ~initial:range.start
+         ();
+       validate_date_bounds
+         "Host_effect.pick_date_range"
+         ~first
+         ~last
+         ~initial:range.end_
+         ())
+    initial;
+  request
+    ?cancellation
+    t
+    (Protocol.Wire_frame.Pick_date_range
+       { initial = Option.map wire_range initial
+       ; first = wire_date first
+       ; last = wire_date last
+       ; current = Option.map wire_date current
+       ; input_mode = entry_mode = Input
+       })
+    decode_optional_civil_date_range
+;;
+
+let pick_time
+      ?cancellation
+      ?(entry_mode = Calendar_or_dial)
+      ?(use_24_hour = true)
+      ~initial
+      t
+      ()
+  =
+  request
+    ?cancellation
+    t
+    (Protocol.Wire_frame.Pick_time
+       { initial = wire_time initial; input_mode = entry_mode = Input; use_24_hour })
+    decode_optional_civil_time
 ;;
 
 module Prepared_operations = struct

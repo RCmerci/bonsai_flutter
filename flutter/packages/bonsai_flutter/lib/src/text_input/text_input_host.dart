@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../navigation/modal_sheet_keyboard_coordinator.dart';
 import '../protocol/event_batch.dart';
@@ -25,6 +25,7 @@ final class TextInputHost extends StatefulWidget {
     required this.resources,
     this.onEvent,
     this.builder,
+    this.controllerFactory,
     super.key,
   });
 
@@ -33,6 +34,7 @@ final class TextInputHost extends StatefulWidget {
   final RendererResourceStore resources;
   final RendererEventCallback? onEvent;
   final TextInputWidgetBuilder? builder;
+  final TextEditingController Function(TextEditingValue)? controllerFactory;
 
   @override
   State<TextInputHost> createState() => _TextInputHostState();
@@ -77,7 +79,7 @@ final class _TextInputHostState extends State<TextInputHost> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final automaticFocusReady = ModalSheetAutomaticFocusScope.isReady(context);
-    if (_automaticFocusReady == false &&
+    if (_automaticFocusReady != true &&
         automaticFocusReady &&
         widget.props.autofocus) {
       _scheduleAutomaticFocus();
@@ -92,7 +94,11 @@ final class _TextInputHostState extends State<TextInputHost> {
   }
 
   void _acquire() {
-    _resource = widget.resources.acquireTextInput(widget.node.id, widget.props);
+    _resource = widget.resources.acquireTextInput(
+      widget.node.id,
+      widget.props,
+      controllerFactory: widget.controllerFactory,
+    );
     _lastValidValue = _resource.controller.value;
     _resource.controller.addListener(_onControllerChanged);
     _resource.focusNode.addListener(_onFocusChanged);
