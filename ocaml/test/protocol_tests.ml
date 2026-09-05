@@ -1756,9 +1756,16 @@ let test_sliver_app_bar_codec_validation () =
   let props
         ?(floating = true)
         ?(snap = true)
-        ?(variant = 1)
-        ?(shape = 0)
-        ?(density = 0)
+        ?(expanded_height = None)
+        ?(collapsed_height = None)
+        ?(toolbar_height = 56.)
+        ?(has_flexible_space = false)
+        ?(has_bottom = false)
+        ?(bottom_height = None)
+        ?(stretch = false)
+        ?(force_elevated = false)
+        ?(elevation = None)
+        ?(automatically_imply_leading = true)
         ()
     =
     Wire_frame.Sliver_app_bar_props
@@ -1770,20 +1777,61 @@ let test_sliver_app_bar_codec_validation () =
       ; foreground_color = None
       ; action_count = 2
       ; center_title = false
-      ; variant
-      ; shape
-      ; density
-      ; semantic_label = Some "Expressive app bar"
+      ; expanded_height
+      ; collapsed_height
+      ; toolbar_height
+      ; has_flexible_space
+      ; has_bottom
+      ; bottom_height
+      ; stretch
+      ; force_elevated
+      ; elevation
+      ; automatically_imply_leading
+      ; semantic_label = Some "Native app bar"
       }
   in
-  expect_frame_round_trip "valid sliver app bar" (props_frame (props ()));
+  expect_frame_round_trip "native defaults" (props_frame (props ()));
+  expect_frame_round_trip
+    "all native properties"
+    (props_frame
+       (props
+          ~expanded_height:(Some 200.)
+          ~collapsed_height:(Some 80.)
+          ~toolbar_height:64.
+          ~has_flexible_space:true
+          ~has_bottom:true
+          ~bottom_height:(Some 48.)
+          ~stretch:true
+          ~force_elevated:true
+          ~elevation:(Some 4.)
+          ~automatically_imply_leading:false
+          ()));
   List.iter
-    (fun (label, invalid) -> expect_invalid_props_encode label (props_frame invalid))
-    [ "snap without floating", props ~floating:false ~snap:true ()
-    ; "invalid variant", props ~variant:3 ()
-    ; "invalid shape", props ~shape:2 ()
-    ; "invalid density", props ~density:2 ()
-    ]
+    (fun invalid ->
+       expect_invalid_props_encode "invalid native geometry" (props_frame invalid))
+    [ props ~floating:false ()
+    ; props ~toolbar_height:0. ()
+    ; props ~toolbar_height:Float.nan ()
+    ; props ~expanded_height:(Some 40.) ()
+    ; props ~collapsed_height:(Some 40.) ()
+    ; props ~expanded_height:(Some 60.) ~collapsed_height:(Some 80.) ()
+    ; props ~elevation:(Some (-1.)) ()
+    ; props ~elevation:(Some Float.infinity) ()
+    ; props ~has_bottom:true ()
+    ; props ~bottom_height:(Some 48.) ()
+    ; props ~has_bottom:true ~bottom_height:(Some 0.) ()
+    ];
+  let encoded =
+    match Binary_codec.encode (props_frame (props ~toolbar_height:63.5 ())) with
+    | Ok bytes -> bytes
+    | Error error -> fail "valid toolbar height failed to encode: %s" error.message
+  in
+  List.iter
+    (fun invalid ->
+       expect_invalid_props_decode
+         "invalid decoded toolbar height"
+         (replace_float64 encoded 63.5 invalid))
+    [ 0.; -1.; Float.nan; Float.infinity ]
 ;;
 
 let test_complete_material_protocol_round_trip () =

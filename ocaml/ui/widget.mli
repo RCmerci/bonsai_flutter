@@ -771,9 +771,16 @@ module Private : sig
         ; foreground_color : int32 option
         ; action_count : int
         ; center_title : bool
-        ; variant : int
-        ; shape : int
-        ; density : int
+        ; expanded_height : float option
+        ; collapsed_height : float option
+        ; toolbar_height : float
+        ; has_flexible_space : bool
+        ; has_bottom : bool
+        ; bottom_height : float option
+        ; stretch : bool
+        ; force_elevated : bool
+        ; elevation : float option
+        ; automatically_imply_leading : bool
         ; semantic_label : string option
         }
         -> [ `Sliver_app_bar ] node
@@ -1308,9 +1315,15 @@ module Private : sig
     -> ?foreground_color:int32
     -> ?leading:t
     -> actions:t list
-    -> variant:int
-    -> shape:int
-    -> density:int
+    -> ?expanded_height:float
+    -> ?collapsed_height:float
+    -> toolbar_height:float
+    -> ?flexible_space:t
+    -> ?bottom:t * float
+    -> stretch:bool
+    -> force_elevated:bool
+    -> ?elevation:float
+    -> automatically_imply_leading:bool
     -> ?semantic_label:string
     -> title:t
     -> unit

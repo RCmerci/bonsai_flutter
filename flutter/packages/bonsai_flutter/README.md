@@ -21,7 +21,7 @@ The current development release contains:
 - a foreground-vsync pump with background suspension, resume catch-up, and
   exact presentation-token backpressure;
 - a dedicated ordered runtime isolate and ABI 2.0 native owned-buffer
-  transport boundary for renderer protocol 2.27;
+  transport boundary for renderer protocol 3.0;
 - node-scoped text-input, focus, scroll, animation, and native resource
   disposal;
 - Flutter-local semantic opacity interpolation with typed completion events
@@ -102,3 +102,30 @@ NO_PROXY=127.0.0.1,localhost flutter test
 dart format --output=none --set-exit-if-changed lib test tool
 dart run tool/generate_input_fixtures.dart --check
 ```
+
+### Scrolling app bar
+
+`Material.App_bar.sliver` renders Flutter's native `SliverAppBar`. Its optional
+`~bottom:(content, height)` slot accepts any widget with an explicit finite,
+positive height in logical pixels. Bottom pins below a pinned toolbar, or at
+the usable viewport top after an unpinned toolbar scrolls away. Floating/snap
+re-entry moves bottom with the toolbar's visible edge. The renderer retains
+both headers inside one logical sliver, including through sliver padding.
+
+```ocaml
+Ui.Material.App_bar.sliver
+  ~pinned:false
+  ~expanded_height:200.
+  ~flexible_space:(Ui.Widget.text "Expanded header")
+  ~bottom:(Ui.Widget.text "Filters", 48.)
+  ~title:(Ui.Widget.text "Browse")
+  ()
+```
+
+Expanded/collapsed heights describe the native region only; bottom height and
+top system padding are accounted for separately. Native defaults replace the
+former Expressive medium geometry. Toolbar height, stretch, forced elevation,
+elevation, and automatic leading are also supported. This constructor returns
+`Widget.Sliver.t` for a scroll view; use `Material.App_bar.top` for a fixed
+scaffold header. The top, bottom, and search constructors retain their existing
+Expressive implementation.

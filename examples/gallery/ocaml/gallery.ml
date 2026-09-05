@@ -834,8 +834,7 @@ let expressive_catalog_section handlers =
         ~on_action:handlers.interaction
         ~on_expanded_changed:handlers.interaction
         ~on_active_action_changed:handlers.interaction
-        ~fab:
-          (Ui.Material.Toolbar.fab ~id:123L ~icon:(icon 0xe145) ~label:"Create" ())
+        ~fab:(Ui.Material.Toolbar.fab ~id:123L ~icon:(icon 0xe145) ~label:"Create" ())
         [ Ui.Material.Toolbar.action
             ~id:122L
             ~icon:Ui.Material.Toolbar.Edit
@@ -957,10 +956,9 @@ let view model handlers =
       ~key:(Ui.Key.string "gallery-scroll")
       ~on_scroll:handlers.scroll
       [ Ui.Material.App_bar.sliver
-          ~variant:Ui.Material.App_bar.Large
-          ~shape:Ui.Material.App_bar.Round
-          ~density:Ui.Material.App_bar.Compact
-          ~semantic_label:"Expressive gallery app bar"
+          ~expanded_height:200.
+          ~bottom:(Ui.Widget.text "Browse components", 48.)
+          ~semantic_label:"Gallery scrolling app bar"
           ~title:(Ui.Widget.text "Material 3 Expressive")
           ()
       ; Ui.Widget.Sliver.box body

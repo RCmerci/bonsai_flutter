@@ -422,9 +422,8 @@ let material_widgets () =
 
 let expressive_slivers () =
   [ Ui.Material.App_bar.sliver
-      ~variant:Ui.Material.App_bar.Large
-      ~shape:Ui.Material.App_bar.Round
-      ~density:Ui.Material.App_bar.Compact
+      ~expanded_height:200.
+      ~bottom:(Ui.Widget.text "Browse components", 48.)
       ~semantic_label:"Catalog app bar"
       ~title:(Ui.Widget.text "Expressive catalog")
       ()

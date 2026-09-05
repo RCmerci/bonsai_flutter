@@ -2072,19 +2072,6 @@ module App_bar = struct
     { id; label; enabled }
   ;;
 
-  type sliver_variant =
-    | Small
-    | Medium
-    | Large
-
-  type sliver_shape =
-    | Round
-    | Square
-
-  type sliver_density =
-    | Regular
-    | Compact
-
   let top
         ?key
         ?(center_title = false)
@@ -2118,9 +2105,15 @@ module App_bar = struct
         ?foreground_color
         ?leading
         ?(actions = [])
-        ?(variant = Medium)
-        ?(shape = Round)
-        ?(density = Regular)
+        ?expanded_height
+        ?collapsed_height
+        ?(toolbar_height = 56.)
+        ?flexible_space
+        ?bottom
+        ?(stretch = false)
+        ?(force_elevated = false)
+        ?elevation
+        ?(automatically_imply_leading = true)
         ?semantic_label
         ~title
         ()
@@ -2135,19 +2128,15 @@ module App_bar = struct
       ?foreground_color
       ?leading
       ~actions
-      ~variant:
-        (match variant with
-         | Small -> 0
-         | Medium -> 1
-         | Large -> 2)
-      ~shape:
-        (match shape with
-         | Round -> 0
-         | Square -> 1)
-      ~density:
-        (match density with
-         | Regular -> 0
-         | Compact -> 1)
+      ?expanded_height
+      ?collapsed_height
+      ~toolbar_height
+      ?flexible_space
+      ?bottom
+      ~stretch
+      ~force_elevated
+      ?elevation
+      ~automatically_imply_leading
       ?semantic_label
       ~title
       ()

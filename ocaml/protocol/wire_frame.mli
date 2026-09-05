@@ -623,9 +623,16 @@ type props =
       ; foreground_color : int32 option
       ; action_count : int
       ; center_title : bool
-      ; variant : int
-      ; shape : int
-      ; density : int
+      ; expanded_height : float option
+      ; collapsed_height : float option
+      ; toolbar_height : float
+      ; has_flexible_space : bool
+      ; has_bottom : bool
+      ; bottom_height : float option
+      ; stretch : bool
+      ; force_elevated : bool
+      ; elevation : float option
+      ; automatically_imply_leading : bool
       ; semantic_label : string option
       }
   | Preferred_size_props of { height : float }

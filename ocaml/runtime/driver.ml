@@ -635,9 +635,16 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
       ; foreground_color
       ; action_count
       ; center_title
-      ; variant
-      ; shape
-      ; density
+      ; expanded_height
+      ; collapsed_height
+      ; toolbar_height
+      ; has_flexible_space
+      ; has_bottom
+      ; bottom_height
+      ; stretch
+      ; force_elevated
+      ; elevation
+      ; automatically_imply_leading
       ; semantic_label
       } ->
     Ok
@@ -650,9 +657,16 @@ let wire_node_props (type k) (node : k Ui.Widget.Private.node) =
          ; foreground_color
          ; action_count
          ; center_title
-         ; variant
-         ; shape
-         ; density
+         ; expanded_height
+         ; collapsed_height
+         ; toolbar_height
+         ; has_flexible_space
+         ; has_bottom
+         ; bottom_height
+         ; stretch
+         ; force_elevated
+         ; elevation
+         ; automatically_imply_leading
          ; semantic_label
          })
   | Preferred_size { height } -> Ok (Preferred_size_props { height })

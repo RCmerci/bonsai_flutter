@@ -368,10 +368,17 @@ module Sliver_app_bar_prop : sig
   val foreground_color : Bonsai_flutter_spec.Id.Protocol.property
   val action_count : Bonsai_flutter_spec.Id.Protocol.property
   val center_title_value : Bonsai_flutter_spec.Id.Protocol.property
-  val variant : Bonsai_flutter_spec.Id.Protocol.property
-  val shape : Bonsai_flutter_spec.Id.Protocol.property
-  val density : Bonsai_flutter_spec.Id.Protocol.property
   val semantic_label : Bonsai_flutter_spec.Id.Protocol.property
+  val expanded_height : Bonsai_flutter_spec.Id.Protocol.property
+  val collapsed_height : Bonsai_flutter_spec.Id.Protocol.property
+  val toolbar_height : Bonsai_flutter_spec.Id.Protocol.property
+  val has_flexible_space : Bonsai_flutter_spec.Id.Protocol.property
+  val has_bottom : Bonsai_flutter_spec.Id.Protocol.property
+  val bottom_height : Bonsai_flutter_spec.Id.Protocol.property
+  val stretch : Bonsai_flutter_spec.Id.Protocol.property
+  val force_elevated : Bonsai_flutter_spec.Id.Protocol.property
+  val elevation : Bonsai_flutter_spec.Id.Protocol.property
+  val automatically_imply_leading : Bonsai_flutter_spec.Id.Protocol.property
   val debug_name : Bonsai_flutter_spec.Id.Protocol.property -> string option
 end
 

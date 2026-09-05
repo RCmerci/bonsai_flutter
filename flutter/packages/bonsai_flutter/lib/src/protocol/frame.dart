@@ -1053,10 +1053,17 @@ final class SliverAppBarProps extends UiProps {
     required this.foregroundColor,
     required this.actionCount,
     required this.centerTitle,
-    required this.variant,
-    required this.shape,
-    required this.density,
     required this.semanticLabel,
+    required this.expandedHeight,
+    required this.collapsedHeight,
+    required this.toolbarHeight,
+    required this.hasFlexibleSpace,
+    required this.hasBottom,
+    required this.bottomHeight,
+    required this.stretch,
+    required this.forceElevated,
+    required this.elevation,
+    required this.automaticallyImplyLeading,
   });
 
   final bool pinned;
@@ -1067,10 +1074,17 @@ final class SliverAppBarProps extends UiProps {
   final int? foregroundColor;
   final int actionCount;
   final bool centerTitle;
-  final int variant;
-  final int shape;
-  final int density;
   final String? semanticLabel;
+  final double? expandedHeight;
+  final double? collapsedHeight;
+  final double toolbarHeight;
+  final bool hasFlexibleSpace;
+  final bool hasBottom;
+  final double? bottomHeight;
+  final bool stretch;
+  final bool forceElevated;
+  final double? elevation;
+  final bool automaticallyImplyLeading;
 
   @override
   bool operator ==(Object other) =>
@@ -1083,13 +1097,20 @@ final class SliverAppBarProps extends UiProps {
       other.foregroundColor == foregroundColor &&
       other.actionCount == actionCount &&
       other.centerTitle == centerTitle &&
-      other.variant == variant &&
-      other.shape == shape &&
-      other.density == density &&
-      other.semanticLabel == semanticLabel;
+      other.semanticLabel == semanticLabel &&
+      other.expandedHeight == expandedHeight &&
+      other.collapsedHeight == collapsedHeight &&
+      other.toolbarHeight == toolbarHeight &&
+      other.hasFlexibleSpace == hasFlexibleSpace &&
+      other.hasBottom == hasBottom &&
+      other.bottomHeight == bottomHeight &&
+      other.stretch == stretch &&
+      other.forceElevated == forceElevated &&
+      other.elevation == elevation &&
+      other.automaticallyImplyLeading == automaticallyImplyLeading;
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     SliverAppBarProps,
     pinned,
     floating,
@@ -1099,11 +1120,51 @@ final class SliverAppBarProps extends UiProps {
     foregroundColor,
     actionCount,
     centerTitle,
-    variant,
-    shape,
-    density,
     semanticLabel,
-  );
+    expandedHeight,
+    collapsedHeight,
+    toolbarHeight,
+    hasFlexibleSpace,
+    hasBottom,
+    bottomHeight,
+    stretch,
+    forceElevated,
+    elevation,
+    automaticallyImplyLeading,
+  ]);
+}
+
+/// Shared validation at the binary and direct renderer boundaries.
+String? sliverAppBarPropsError(SliverAppBarProps props) {
+  if (props.snap && !props.floating) return 'sliver snap requires floating';
+  if (props.actionCount < 0 || props.actionCount > 0xffffffff) {
+    return 'invalid sliver app bar action count';
+  }
+  if (!props.toolbarHeight.isFinite || props.toolbarHeight <= 0) {
+    return 'toolbar_height must be finite and positive';
+  }
+  for (final height in [
+    props.expandedHeight,
+    props.collapsedHeight,
+    props.elevation,
+  ]) {
+    if (height != null && (!height.isFinite || height < 0)) {
+      return 'app bar heights and elevation must be finite and non-negative';
+    }
+  }
+  final collapsed = props.collapsedHeight ?? props.toolbarHeight;
+  if (collapsed < props.toolbarHeight ||
+      (props.expandedHeight != null && props.expandedHeight! < collapsed)) {
+    return 'invalid effective app bar height ordering';
+  }
+  if (props.hasBottom != (props.bottomHeight != null)) {
+    return 'bottom presence and height must agree';
+  }
+  if (props.bottomHeight != null &&
+      (!props.bottomHeight!.isFinite || props.bottomHeight! <= 0)) {
+    return 'bottom_height must be finite and positive';
+  }
+  return null;
 }
 
 final class PreferredSizeProps extends UiProps {

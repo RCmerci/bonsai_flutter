@@ -439,7 +439,7 @@ one incremental text-property operation for `Count: 1`. A rejected mixed-valid
 event batch cannot leak a queued effect into a later pump.
 
 The native-assets package exposes exact ABI 2.0 independently from renderer
-protocol 2.27, generated FFI bindings, presentation identity, explicit native
+protocol 3.0, generated FFI bindings, presentation identity, explicit native
 output ownership, and an idempotent Dart wrapper. A dedicated Dart isolate
 serializes pump, presentation-success, presentation-rejection, and destroy
 calls and transfers byte payloads without exposing native pointers to the UI

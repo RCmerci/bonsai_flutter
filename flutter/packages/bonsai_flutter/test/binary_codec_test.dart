@@ -1742,9 +1742,16 @@ void main() {
           bool floating = true,
           bool snap = true,
           int actionCount = 2,
-          int variant = 1,
-          int shape = 0,
-          int density = 0,
+          double? expandedHeight,
+          double? collapsedHeight,
+          double toolbarHeight = 56,
+          bool hasFlexibleSpace = false,
+          bool hasBottom = false,
+          double? bottomHeight,
+          bool stretch = false,
+          bool forceElevated = false,
+          double? elevation,
+          bool automaticallyImplyLeading = true,
         }) => SliverAppBarProps(
           pinned: true,
           floating: floating,
@@ -1754,10 +1761,17 @@ void main() {
           foregroundColor: null,
           actionCount: actionCount,
           centerTitle: false,
-          variant: variant,
-          shape: shape,
-          density: density,
-          semanticLabel: 'Expressive app bar',
+          expandedHeight: expandedHeight,
+          collapsedHeight: collapsedHeight,
+          toolbarHeight: toolbarHeight,
+          hasFlexibleSpace: hasFlexibleSpace,
+          hasBottom: hasBottom,
+          bottomHeight: bottomHeight,
+          stretch: stretch,
+          forceElevated: forceElevated,
+          elevation: elevation,
+          automaticallyImplyLeading: automaticallyImplyLeading,
+          semanticLabel: 'Native app bar',
         );
         final validProps = props();
         expect(
@@ -1769,12 +1783,60 @@ void main() {
           validProps,
         );
 
+        final allProps = props(
+          expandedHeight: 201.25,
+          collapsedHeight: 81.25,
+          toolbarHeight: 63.5,
+          hasFlexibleSpace: true,
+          hasBottom: true,
+          bottomHeight: 47.25,
+          stretch: true,
+          forceElevated: true,
+          elevation: 4.25,
+          automaticallyImplyLeading: false,
+        );
+        final encoded = FrameCodec.encode(frame(allProps));
+        expect(
+          (FrameCodec.decode(encoded).operations.first as CreateNode).props,
+          allProps,
+        );
+        final incremental = Frame(
+          runtimeEpoch: 9,
+          baseRevision: 1,
+          targetRevision: 2,
+          kind: FrameKind.incremental,
+          operations: [UpdateProps(nodeId: 1, props: allProps)],
+        );
+        expect(
+          (FrameCodec.decode(FrameCodec.encode(incremental)).operations.single
+                  as UpdateProps)
+              .props,
+          allProps,
+        );
+        for (final original in [201.25, 81.25, 63.5, 47.25, 4.25]) {
+          for (final invalid in [-1.0, double.nan, double.infinity]) {
+            expectDecodeError(
+              replaceFloat64(encoded, original, invalid),
+              ProtocolErrorCode.invalidProps,
+            );
+          }
+        }
+
         for (final invalid in [
           props(floating: false, snap: true),
           props(actionCount: -1),
-          props(variant: 3),
-          props(shape: 2),
-          props(density: 2),
+          props(toolbarHeight: 0),
+          props(toolbarHeight: double.nan),
+          props(expandedHeight: -1),
+          props(expandedHeight: 40),
+          props(collapsedHeight: 20),
+          props(expandedHeight: 60, collapsedHeight: 80),
+          props(elevation: -1),
+          props(elevation: double.infinity),
+          props(hasBottom: true),
+          props(bottomHeight: 48),
+          props(hasBottom: true, bottomHeight: 0),
+          props(hasBottom: true, bottomHeight: double.nan),
         ]) {
           expect(
             () => FrameCodec.encode(frame(invalid)),
@@ -1784,6 +1846,36 @@ void main() {
         }
       },
     );
+
+    test('decodes the OCaml native app bar and re-encodes identical bytes', () {
+      final bytes = readHexFixture('ocaml_sliver_app_bar.hex');
+      final frame = FrameCodec.decode(bytes);
+      expect(
+        (frame.operations.single as UpdateProps).props,
+        const SliverAppBarProps(
+          pinned: false,
+          floating: true,
+          snap: true,
+          hasLeading: true,
+          backgroundColor: 0xff123456,
+          foregroundColor: 0xffabcdef,
+          actionCount: 2,
+          centerTitle: true,
+          semanticLabel: 'Native header',
+          expandedHeight: 201.25,
+          collapsedHeight: 81.25,
+          toolbarHeight: 63.5,
+          hasFlexibleSpace: true,
+          hasBottom: true,
+          bottomHeight: 47.25,
+          stretch: true,
+          forceElevated: true,
+          elevation: 4.25,
+          automaticallyImplyLeading: false,
+        ),
+      );
+      expect(FrameCodec.encode(frame), orderedEquals(bytes));
+    });
 
     test('round trips revisioned UTF-16 Material text field properties', () {
       const props = MaterialTextFieldProps(

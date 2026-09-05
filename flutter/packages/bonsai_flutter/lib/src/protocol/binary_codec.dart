@@ -191,7 +191,7 @@ abstract final class FrameCodec {
           'Operation is outside BeginFrame/EndFrame',
         );
       }
-      operations.add(_readOperation(opcode, body, protocolMinor: minor));
+      operations.add(_readOperation(opcode, body));
       body.requireDone();
     }
     if (!sawBegin || !sawEnd) {
@@ -314,15 +314,11 @@ abstract final class FrameCodec {
     }
   }
 
-  static FrameOperation _readOperation(
-    int opcode,
-    _Reader body, {
-    required int protocolMinor,
-  }) {
+  static FrameOperation _readOperation(int opcode, _Reader body) {
     if (opcode == OperationId.createNode) {
       final nodeId = body.uint64();
       final kind = _readNodeKind(body);
-      final props = _readProps(body, kind, protocolMinor: protocolMinor);
+      final props = _readProps(body, kind);
       final bindings = _readBindings(body);
       final parentData = _readParentData(body);
       return CreateNode(
@@ -334,10 +330,7 @@ abstract final class FrameCodec {
       );
     }
     if (opcode == OperationId.updateProps) {
-      return UpdateProps(
-        nodeId: body.uint64(),
-        props: _readUpdateProps(body, protocolMinor: protocolMinor),
-      );
+      return UpdateProps(nodeId: body.uint64(), props: _readUpdateProps(body));
     }
     if (opcode == OperationId.updateEventBindings) {
       return UpdateEventBindings(
@@ -567,38 +560,8 @@ abstract final class FrameCodec {
           ..float64(insets.top)
           ..float64(insets.right)
           ..float64(insets.bottom);
-      case (
-        NodeKind.sliverAppBar,
-        SliverAppBarProps(
-          :final pinned,
-          :final floating,
-          :final snap,
-          :final hasLeading,
-          :final backgroundColor,
-          :final foregroundColor,
-          :final actionCount,
-          :final centerTitle,
-          :final variant,
-          :final shape,
-          :final density,
-          :final semanticLabel,
-        ),
-      ):
-        _writeSliverAppBar(
-          writer,
-          pinned: pinned,
-          floating: floating,
-          snap: snap,
-          hasLeading: hasLeading,
-          backgroundColor: backgroundColor,
-          foregroundColor: foregroundColor,
-          actionCount: actionCount,
-          centerTitle: centerTitle,
-          variant: variant,
-          shape: shape,
-          density: density,
-          semanticLabel: semanticLabel,
-        );
+      case (NodeKind.sliverAppBar, final SliverAppBarProps props):
+        _writeSliverAppBar(writer, props);
       case (NodeKind.preferredSize, PreferredSizeProps(:final height)):
         writer.float64(height);
       case (NodeKind.focusScope, FocusScopeProps(:final autofocus)):
@@ -1050,38 +1013,11 @@ abstract final class FrameCodec {
           ..float64(insets.top)
           ..float64(insets.right)
           ..float64(insets.bottom);
-      case SliverAppBarProps(
-        :final pinned,
-        :final floating,
-        :final snap,
-        :final hasLeading,
-        :final backgroundColor,
-        :final foregroundColor,
-        :final actionCount,
-        :final centerTitle,
-        :final variant,
-        :final shape,
-        :final density,
-        :final semanticLabel,
-      ):
+      case final SliverAppBarProps props:
         writer
           ..uint16(NodeKindId.sliverAppBar)
           ..uint64(_changedFields(props));
-        _writeSliverAppBar(
-          writer,
-          pinned: pinned,
-          floating: floating,
-          snap: snap,
-          hasLeading: hasLeading,
-          backgroundColor: backgroundColor,
-          foregroundColor: foregroundColor,
-          actionCount: actionCount,
-          centerTitle: centerTitle,
-          variant: variant,
-          shape: shape,
-          density: density,
-          semanticLabel: semanticLabel,
-        );
+        _writeSliverAppBar(writer, props);
       case PreferredSizeProps(:final height):
         writer
           ..uint16(NodeKindId.preferredSize)
@@ -1343,19 +1279,11 @@ abstract final class FrameCodec {
     }
   }
 
-  static UiProps _readUpdateProps(
-    _Reader reader, {
-    required int protocolMinor,
-  }) {
+  static UiProps _readUpdateProps(_Reader reader) {
     final kind = _readNodeKind(reader);
     final changedFields = reader.uint64();
-    final props = _readProps(reader, kind, protocolMinor: protocolMinor);
-    final expectedChangedFields = switch (kind) {
-      NodeKind.text when protocolMinor < _styledTextProtocolMinor => _fieldMask(
-        TextPropId.value,
-      ),
-      _ => _changedFields(props),
-    };
+    final props = _readProps(reader, kind);
+    final expectedChangedFields = _changedFields(props);
     if (changedFields != expectedChangedFields) {
       _fail(
         ProtocolErrorCode.invalidProps,
@@ -1365,14 +1293,10 @@ abstract final class FrameCodec {
     return props;
   }
 
-  static UiProps _readProps(
-    _Reader reader,
-    NodeKind kind, {
-    required int protocolMinor,
-  }) => switch (kind) {
+  static UiProps _readProps(_Reader reader, NodeKind kind) => switch (kind) {
     NodeKind.empty || NodeKind.stack => const EmptyProps(),
     NodeKind.environmentBoundary => const EnvironmentBoundaryProps(),
-    NodeKind.text => _readTextProps(reader, protocolMinor: protocolMinor),
+    NodeKind.text => _readTextProps(reader),
     NodeKind.richText => RichTextProps(_readStringList(reader)),
     NodeKind.icon => IconProps(
       codePoint: reader.uint32(),
@@ -2031,13 +1955,8 @@ void _writeApplicationTheme(_Writer writer, ApplicationThemeValue theme) {
   }
 }
 
-const _styledTextProtocolMinor = 13;
-
-TextProps _readTextProps(_Reader reader, {required int protocolMinor}) {
+TextProps _readTextProps(_Reader reader) {
   final value = reader.string();
-  if (protocolMinor < _styledTextProtocolMinor) {
-    return TextProps(value);
-  }
   final style = switch (reader.uint8()) {
     0 => null,
     1 => TextStyleValue(
@@ -2317,10 +2236,17 @@ int _changedFields(UiProps props) => switch (props) {
         _fieldMask(SliverAppBarPropId.foregroundColor) |
         _fieldMask(SliverAppBarPropId.actionCount) |
         _fieldMask(SliverAppBarPropId.centerTitleValue) |
-        _fieldMask(SliverAppBarPropId.variant) |
-        _fieldMask(SliverAppBarPropId.shape) |
-        _fieldMask(SliverAppBarPropId.density) |
-        _fieldMask(SliverAppBarPropId.semanticLabel),
+        _fieldMask(SliverAppBarPropId.semanticLabel) |
+        _fieldMask(SliverAppBarPropId.expandedHeight) |
+        _fieldMask(SliverAppBarPropId.collapsedHeight) |
+        _fieldMask(SliverAppBarPropId.toolbarHeight) |
+        _fieldMask(SliverAppBarPropId.hasFlexibleSpace) |
+        _fieldMask(SliverAppBarPropId.hasBottom) |
+        _fieldMask(SliverAppBarPropId.bottomHeight) |
+        _fieldMask(SliverAppBarPropId.stretch) |
+        _fieldMask(SliverAppBarPropId.forceElevated) |
+        _fieldMask(SliverAppBarPropId.elevation) |
+        _fieldMask(SliverAppBarPropId.automaticallyImplyLeading),
   PreferredSizeProps() => _fieldMask(PreferredSizePropId.height),
   FocusScopeProps() => _fieldMask(FocusScopePropId.autofocus),
   MouseRegionProps() => _fieldMask(MouseRegionPropId.opaque),
@@ -4407,43 +4333,27 @@ void _writeSliverVariedExtent(
   }
 }
 
-void _writeSliverAppBar(
-  _Writer writer, {
-  required bool pinned,
-  required bool floating,
-  required bool snap,
-  required bool hasLeading,
-  required int? backgroundColor,
-  required int? foregroundColor,
-  required int actionCount,
-  required bool centerTitle,
-  required int variant,
-  required int shape,
-  required int density,
-  required String? semanticLabel,
-}) {
-  _validateSliverAppBarValues(
-    floating: floating,
-    snap: snap,
-    actionCount: actionCount,
-    variant: variant,
-    shape: shape,
-    density: density,
-  );
-  writer
-    ..uint8(pinned ? 1 : 0)
-    ..uint8(floating ? 1 : 0)
-    ..uint8(snap ? 1 : 0)
-    ..uint8(hasLeading ? 1 : 0);
-  _writeOptionalArgb32(writer, backgroundColor);
-  _writeOptionalArgb32(writer, foregroundColor);
-  writer
-    ..uint32(actionCount)
-    ..uint8(centerTitle ? 1 : 0)
-    ..uint8(variant)
-    ..uint8(shape)
-    ..uint8(density)
-    ..optionalString(semanticLabel);
+void _writeSliverAppBar(_Writer writer, SliverAppBarProps props) {
+  _validateSliverAppBarValues(props);
+  writer.uint8(props.pinned ? 1 : 0);
+  writer.uint8(props.floating ? 1 : 0);
+  writer.uint8(props.snap ? 1 : 0);
+  writer.uint8(props.hasLeading ? 1 : 0);
+  _writeOptionalArgb32(writer, props.backgroundColor);
+  _writeOptionalArgb32(writer, props.foregroundColor);
+  writer.uint32(props.actionCount);
+  writer.uint8(props.centerTitle ? 1 : 0);
+  writer.optionalString(props.semanticLabel);
+  writer.optionalFloat64(props.expandedHeight);
+  writer.optionalFloat64(props.collapsedHeight);
+  writer.float64(props.toolbarHeight);
+  writer.uint8(props.hasFlexibleSpace ? 1 : 0);
+  writer.uint8(props.hasBottom ? 1 : 0);
+  writer.optionalFloat64(props.bottomHeight);
+  writer.uint8(props.stretch ? 1 : 0);
+  writer.uint8(props.forceElevated ? 1 : 0);
+  writer.optionalFloat64(props.elevation);
+  writer.uint8(props.automaticallyImplyLeading ? 1 : 0);
 }
 
 SliverFillProps _readSliverFillProps(_Reader reader) {
@@ -4563,40 +4473,29 @@ SliverPaddingProps _readSliverPaddingProps(_Reader reader) {
 }
 
 SliverAppBarProps _readSliverAppBarProps(_Reader reader) {
-  final pinned = reader.boolean();
-  final floating = reader.boolean();
-  final snap = reader.boolean();
-  final hasLeading = reader.boolean();
-  final backgroundColor = _readOptionalArgb32(reader);
-  final foregroundColor = _readOptionalArgb32(reader);
-  final actionCount = reader.uint32();
-  final centerTitle = reader.boolean();
-  final variant = reader.uint8();
-  final shape = reader.uint8();
-  final density = reader.uint8();
-  final semanticLabel = reader.optionalString();
-  _validateSliverAppBarValues(
-    floating: floating,
-    snap: snap,
-    actionCount: actionCount,
-    variant: variant,
-    shape: shape,
-    density: density,
+  final props = SliverAppBarProps(
+    pinned: reader.boolean(),
+    floating: reader.boolean(),
+    snap: reader.boolean(),
+    hasLeading: reader.boolean(),
+    backgroundColor: _readOptionalArgb32(reader),
+    foregroundColor: _readOptionalArgb32(reader),
+    actionCount: reader.uint32(),
+    centerTitle: reader.boolean(),
+    semanticLabel: reader.optionalString(),
+    expandedHeight: reader.optionalFloat64(),
+    collapsedHeight: reader.optionalFloat64(),
+    toolbarHeight: reader.finiteFloat64(),
+    hasFlexibleSpace: reader.boolean(),
+    hasBottom: reader.boolean(),
+    bottomHeight: reader.optionalFloat64(),
+    stretch: reader.boolean(),
+    forceElevated: reader.boolean(),
+    elevation: reader.optionalFloat64(),
+    automaticallyImplyLeading: reader.boolean(),
   );
-  return SliverAppBarProps(
-    pinned: pinned,
-    floating: floating,
-    snap: snap,
-    hasLeading: hasLeading,
-    backgroundColor: backgroundColor,
-    foregroundColor: foregroundColor,
-    actionCount: actionCount,
-    centerTitle: centerTitle,
-    variant: variant,
-    shape: shape,
-    density: density,
-    semanticLabel: semanticLabel,
-  );
+  _validateSliverAppBarValues(props);
+  return props;
 }
 
 ScrollViewProps _readScrollViewProps(_Reader reader) {
@@ -4669,31 +4568,9 @@ void _validateCacheExtent(double? cacheExtent) {
   }
 }
 
-void _validateSliverAppBarValues({
-  required bool floating,
-  required bool snap,
-  required int actionCount,
-  required int variant,
-  required int shape,
-  required int density,
-}) {
-  if (snap && !floating) {
-    _fail(ProtocolErrorCode.invalidProps, 'sliver snap requires floating');
-  }
-  if (actionCount < 0 || actionCount > 0xffffffff) {
-    _fail(
-      ProtocolErrorCode.invalidProps,
-      'invalid sliver app bar action count',
-    );
-  }
-  if (variant < 0 ||
-      variant > 2 ||
-      shape < 0 ||
-      shape > 1 ||
-      density < 0 ||
-      density > 1) {
-    _fail(ProtocolErrorCode.invalidProps, 'invalid sliver app bar variant');
-  }
+void _validateSliverAppBarValues(SliverAppBarProps props) {
+  final error = sliverAppBarPropsError(props);
+  if (error != null) _fail(ProtocolErrorCode.invalidProps, error);
 }
 
 PreferredSizeProps _readPreferredSizeProps(_Reader reader) {

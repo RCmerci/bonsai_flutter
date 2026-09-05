@@ -505,9 +505,16 @@ module Private_types = struct
         ; foreground_color : int32 option
         ; action_count : int
         ; center_title : bool
-        ; variant : int
-        ; shape : int
-        ; density : int
+        ; expanded_height : float option
+        ; collapsed_height : float option
+        ; toolbar_height : float
+        ; has_flexible_space : bool
+        ; has_bottom : bool
+        ; bottom_height : float option
+        ; stretch : bool
+        ; force_elevated : bool
+        ; elevation : float option
+        ; automatically_imply_leading : bool
         ; semantic_label : string option
         }
         -> [ `Sliver_app_bar ] node
@@ -1047,9 +1054,16 @@ let node_equal (type k1 k2) (a : k1 node) (b : k2 node) : bool =
     && Option.equal Int32.equal x.foreground_color y.foreground_color
     && Int.equal x.action_count y.action_count
     && Bool.equal x.center_title y.center_title
-    && Int.equal x.variant y.variant
-    && Int.equal x.shape y.shape
-    && Int.equal x.density y.density
+    && Option.equal Float.equal x.expanded_height y.expanded_height
+    && Option.equal Float.equal x.collapsed_height y.collapsed_height
+    && Float.equal x.toolbar_height y.toolbar_height
+    && Bool.equal x.has_flexible_space y.has_flexible_space
+    && Bool.equal x.has_bottom y.has_bottom
+    && Option.equal Float.equal x.bottom_height y.bottom_height
+    && Bool.equal x.stretch y.stretch
+    && Bool.equal x.force_elevated y.force_elevated
+    && Option.equal Float.equal x.elevation y.elevation
+    && Bool.equal x.automatically_imply_leading y.automatically_imply_leading
     && Option.equal String.equal x.semantic_label y.semantic_label
   | Preferred_size x, Preferred_size y -> Float.equal x.height y.height
   | Focus_scope x, Focus_scope y -> Bool.equal x.autofocus y.autofocus
@@ -1709,15 +1723,48 @@ let sliver_app_bar_widget
       ?foreground_color
       ?leading
       ~actions
-      ~variant
-      ~shape
-      ~density
+      ?expanded_height
+      ?collapsed_height
+      ~toolbar_height
+      ?flexible_space
+      ?bottom
+      ~stretch
+      ~force_elevated
+      ?elevation
+      ~automatically_imply_leading
       ?semantic_label
       ~title
       ()
   =
   if snap && not floating
   then invalid_arg "Material.App_bar.sliver: snap requires floating";
+  let positive label value =
+    if (not (Float.is_finite value)) || value <= 0.
+    then invalid_arg ("Material.App_bar.sliver: " ^ label ^ " must be finite and positive")
+  in
+  let nonnegative label =
+    Option.iter (fun value ->
+      if (not (Float.is_finite value)) || value < 0.
+      then
+        invalid_arg
+          ("Material.App_bar.sliver: " ^ label ^ " must be finite and non-negative"))
+  in
+  positive "toolbar_height" toolbar_height;
+  nonnegative "expanded_height" expanded_height;
+  nonnegative "collapsed_height" collapsed_height;
+  nonnegative "elevation" elevation;
+  let collapsed = Option.value collapsed_height ~default:toolbar_height in
+  if
+    collapsed < toolbar_height
+    || Option.fold
+         ~none:false
+         ~some:(fun expanded -> expanded < collapsed)
+         expanded_height
+  then invalid_arg "Material.App_bar.sliver: invalid effective height ordering";
+  let bottom_height = Option.map snd bottom in
+  Option.iter (positive "bottom height") bottom_height;
+  let has_bottom = Option.is_some bottom in
+  let has_flexible_space = Option.is_some flexible_space in
   create_typed
     ~key
     ~node:
@@ -1730,13 +1777,26 @@ let sliver_app_bar_widget
          ; background_color
          ; foreground_color
          ; action_count = List.length actions
-         ; variant
-         ; shape
-         ; density
+         ; expanded_height
+         ; collapsed_height
+         ; toolbar_height
+         ; has_flexible_space
+         ; has_bottom
+         ; bottom_height
+         ; stretch
+         ; force_elevated
+         ; elevation
+         ; automatically_imply_leading
          ; semantic_label
          })
     ~event_bindings:[||]
-    ~children:(plain_children (Option.to_list leading @ [ title ] @ actions))
+    ~children:
+      (plain_children
+         (Option.to_list leading
+          @ [ title ]
+          @ actions
+          @ Option.to_list flexible_space
+          @ Option.to_list (Option.map fst bottom)))
 ;;
 
 let validate_sliver_extent label extent =
@@ -3411,9 +3471,15 @@ module Private = struct
         ?foreground_color
         ?leading
         ~actions
-        ~variant
-        ~shape
-        ~density
+        ?expanded_height
+        ?collapsed_height
+        ~toolbar_height
+        ?flexible_space
+        ?bottom
+        ~stretch
+        ~force_elevated
+        ?elevation
+        ~automatically_imply_leading
         ?semantic_label
         ~title
         ()
@@ -3429,9 +3495,15 @@ module Private = struct
          ?foreground_color
          ?leading
          ~actions
-         ~variant
-         ~shape
-         ~density
+         ?expanded_height
+         ?collapsed_height
+         ~toolbar_height
+         ?flexible_space
+         ?bottom
+         ~stretch
+         ~force_elevated
+         ?elevation
+         ~automatically_imply_leading
          ?semantic_label
          ~title
          ())

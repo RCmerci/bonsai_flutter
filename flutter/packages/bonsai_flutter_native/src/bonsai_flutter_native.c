@@ -8,8 +8,8 @@
 #include "bonsai_flutter_ocaml_bridge.h"
 #endif
 
-#define BF_PROTOCOL_MAJOR 2
-#define BF_PROTOCOL_MINOR 27
+#define BF_PROTOCOL_MAJOR 3
+#define BF_PROTOCOL_MINOR 0
 #define BF_ABI_MAJOR 2
 #define BF_ABI_MINOR 0
 

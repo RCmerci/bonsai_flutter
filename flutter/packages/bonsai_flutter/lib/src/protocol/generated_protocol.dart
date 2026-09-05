@@ -1,8 +1,8 @@
 // Generated from protocol/schema.sexp. Do not edit.
 
 abstract final class ProtocolVersion {
-  static const int protocolMajor = 2;
-  static const int protocolMinor = 27;
+  static const int protocolMajor = 3;
+  static const int protocolMinor = 0;
 }
 
 abstract final class ProtocolLimits {
@@ -688,10 +688,17 @@ abstract final class SliverAppBarPropId {
   static const int foregroundColor = 16;
   static const int actionCount = 18;
   static const int centerTitleValue = 19;
-  static const int variant = 20;
-  static const int shape = 21;
-  static const int density = 22;
   static const int semanticLabel = 23;
+  static const int expandedHeight = 24;
+  static const int collapsedHeight = 25;
+  static const int toolbarHeight = 26;
+  static const int hasFlexibleSpace = 27;
+  static const int hasBottom = 28;
+  static const int bottomHeight = 29;
+  static const int stretch = 30;
+  static const int forceElevated = 31;
+  static const int elevation = 32;
+  static const int automaticallyImplyLeading = 33;
 
   static String? debugName(int id) => switch (id) {
     1 => 'pinned',
@@ -702,10 +709,17 @@ abstract final class SliverAppBarPropId {
     16 => 'foreground_color',
     18 => 'action_count',
     19 => 'center_title_value',
-    20 => 'variant',
-    21 => 'shape',
-    22 => 'density',
     23 => 'semantic_label',
+    24 => 'expanded_height',
+    25 => 'collapsed_height',
+    26 => 'toolbar_height',
+    27 => 'has_flexible_space',
+    28 => 'has_bottom',
+    29 => 'bottom_height',
+    30 => 'stretch',
+    31 => 'force_elevated',
+    32 => 'elevation',
+    33 => 'automatically_imply_leading',
     _ => null,
   };
 }

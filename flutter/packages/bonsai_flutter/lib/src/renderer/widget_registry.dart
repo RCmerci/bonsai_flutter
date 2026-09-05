@@ -15,6 +15,7 @@ import '../gesture/bonsai_gesture_detector.dart';
 import '../native_widget/native_widget_registry.dart';
 import '../native_widget/expandable_message_composer.dart';
 import 'sliver_virtual_host.dart';
+import 'sliver_app_bar_host.dart';
 import '../native_widget/morphing_surface.dart';
 import '../native_widget/message_composer.dart';
 import '../native_widget/navigation_shell.dart';
@@ -769,13 +770,20 @@ Widget _buildSliverAppBar(
   _expectChildCount(
     node,
     children,
-    1 + (props.hasLeading ? 1 : 0) + props.actionCount,
+    1 +
+        (props.hasLeading ? 1 : 0) +
+        props.actionCount +
+        (props.hasFlexibleSpace ? 1 : 0) +
+        (props.hasBottom ? 1 : 0),
   );
   var index = 0;
   final leading = props.hasLeading ? children[index++] : null;
   final title = children[index++];
-  final actions = children.sublist(index);
-  return M3EAppBar.sliver(
+  final actions = children.sublist(index, index + props.actionCount);
+  index += props.actionCount;
+  final flexibleSpace = props.hasFlexibleSpace ? children[index++] : null;
+  final bottom = props.hasBottom ? children[index++] : null;
+  final toolbar = SliverAppBar(
     pinned: props.pinned,
     floating: props.floating,
     snap: props.snap,
@@ -796,42 +804,54 @@ Widget _buildSliverAppBar(
             child: title,
           ),
     actions: actions,
-    variant: switch (props.variant) {
-      0 => M3EAppBarVariant.small,
-      1 => M3EAppBarVariant.medium,
-      _ => M3EAppBarVariant.large,
-    },
-    shapeFamily: props.shape == 0
-        ? M3EAppBarShapeFamily.round
-        : M3EAppBarShapeFamily.square,
-    density: props.density == 0
-        ? M3EAppBarDensity.regular
-        : M3EAppBarDensity.compact,
+    expandedHeight: props.expandedHeight,
+    collapsedHeight: props.collapsedHeight,
+    toolbarHeight: props.toolbarHeight,
+    flexibleSpace: flexibleSpace,
+    stretch: props.stretch,
+    forceElevated: props.forceElevated,
+    elevation: props.elevation,
+    automaticallyImplyLeading: props.automaticallyImplyLeading,
+  );
+  // Keep the same composition when adding/removing bottom so the native
+  // toolbar and its floating/snap state retain their element identity.
+  return SliverAppBarHost(
+    toolbar: toolbar,
+    bottom: bottom == null
+        ? null
+        : SliverPersistentHeader(
+            pinned: true,
+            delegate: _AppBarBottomDelegate(props.bottomHeight!, bottom),
+          ),
+    topInset: bottom == null ? 0 : MediaQuery.paddingOf(context).top,
   );
 }
 
+class _AppBarBottomDelegate extends SliverPersistentHeaderDelegate {
+  _AppBarBottomDelegate(this.height, this.child);
+  final double height;
+  final Widget child;
+
+  @override
+  double get minExtent => height;
+  @override
+  double get maxExtent => height;
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) => SizedBox.expand(child: child);
+  @override
+  bool shouldRebuild(_AppBarBottomDelegate oldDelegate) =>
+      height != oldDelegate.height || child != oldDelegate.child;
+}
+
 void _validateSliverAppBarProps(UiNode node, SliverAppBarProps props) {
-  if (props.actionCount < 0 || props.actionCount > 0xffffffff) {
+  final error = sliverAppBarPropsError(props);
+  if (error != null) {
     throw RendererBuildException(
-      'Node ${node.id} of kind ${node.kind} has an invalid action count',
-    );
-  }
-  if (props.snap && !props.floating) {
-    throw RendererBuildException(
-      'Node ${node.id} of kind ${node.kind} requires floating when snap is true',
-    );
-  }
-  if (props.variant < 0 || props.variant > 2) {
-    throw RendererBuildException(
-      'Node ${node.id} of kind ${node.kind} has an invalid app bar variant',
-    );
-  }
-  if (props.shape < 0 ||
-      props.shape > 1 ||
-      props.density < 0 ||
-      props.density > 1) {
-    throw RendererBuildException(
-      'Node ${node.id} of kind ${node.kind} has invalid shape or density',
+      'Node ${node.id} of kind ${node.kind}: $error',
     );
   }
 }

@@ -2,8 +2,8 @@
 
 module ID = Bonsai_flutter_spec.Id
 
-let protocol_major = 2
-let protocol_minor = 27
+let protocol_major = 3
+let protocol_minor = 0
 
 module Limits = struct
   let header_bytes = 48
@@ -716,10 +716,17 @@ module Sliver_app_bar_prop = struct
   let foreground_color = ID.Protocol.Property.of_int 16
   let action_count = ID.Protocol.Property.of_int 18
   let center_title_value = ID.Protocol.Property.of_int 19
-  let variant = ID.Protocol.Property.of_int 20
-  let shape = ID.Protocol.Property.of_int 21
-  let density = ID.Protocol.Property.of_int 22
   let semantic_label = ID.Protocol.Property.of_int 23
+  let expanded_height = ID.Protocol.Property.of_int 24
+  let collapsed_height = ID.Protocol.Property.of_int 25
+  let toolbar_height = ID.Protocol.Property.of_int 26
+  let has_flexible_space = ID.Protocol.Property.of_int 27
+  let has_bottom = ID.Protocol.Property.of_int 28
+  let bottom_height = ID.Protocol.Property.of_int 29
+  let stretch = ID.Protocol.Property.of_int 30
+  let force_elevated = ID.Protocol.Property.of_int 31
+  let elevation = ID.Protocol.Property.of_int 32
+  let automatically_imply_leading = ID.Protocol.Property.of_int 33
 
   let debug_name id =
     match ID.Protocol.Property.to_int id with
@@ -731,10 +738,17 @@ module Sliver_app_bar_prop = struct
     | 16 -> Some "foreground_color"
     | 18 -> Some "action_count"
     | 19 -> Some "center_title_value"
-    | 20 -> Some "variant"
-    | 21 -> Some "shape"
-    | 22 -> Some "density"
     | 23 -> Some "semantic_label"
+    | 24 -> Some "expanded_height"
+    | 25 -> Some "collapsed_height"
+    | 26 -> Some "toolbar_height"
+    | 27 -> Some "has_flexible_space"
+    | 28 -> Some "has_bottom"
+    | 29 -> Some "bottom_height"
+    | 30 -> Some "stretch"
+    | 31 -> Some "force_elevated"
+    | 32 -> Some "elevation"
+    | 33 -> Some "automatically_imply_leading"
     | _ -> None
   ;;
 end

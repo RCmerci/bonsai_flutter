@@ -124,6 +124,23 @@ implemented kind-specific property layouts are:
 typed property value. Empty and linear values use mask zero; multi-property
 values set each implemented field bit. Future fields extend the
 kind-specific generated layout rather than inserting a dynamic property map.
+Protocol 3.0 replaces the sliver-app-bar contract with native geometry and an
+independent bottom slot. Node kind 38 is retained. Removed Expressive field IDs
+20–22 remain reserved; restored fields occupy IDs 24–33. Encoded property order
+follows ascending field IDs: pinned, floating, snap, leading presence, background
+and foreground colors, action count, center title, semantic label, expanded and
+collapsed heights, toolbar height, flexible-space presence, bottom presence,
+bottom height, stretch, forced elevation, elevation, and automatic leading.
+Optional heights use `optional_f64`; toolbar height uses `f64` and flags use `bool`.
+Bottom presence must agree with its optional finite positive height. Child order
+is optional leading, title, exactly `action_count` actions, optional flexible
+space, then optional bottom. Geometry excludes bottom height and the top inset.
+The effective collapsed height defaults to toolbar height, must be at least that
+height, and may not exceed an explicit expanded height. Elevation and optional
+native heights must be finite and non-negative; toolbar height must be finite
+and positive. Snap requires floating. Create and update decoding validate the
+same contract. Hosts and producers must rebuild together; 2.x frames are rejected.
+
 Protocol 2.27 changes both ConstrainedBox maxima from required `f64` values to
 optional finite `f64` values. An absent maximum is unbounded and maps to
 Flutter `double.infinity`; a present maximum must be finite, non-negative, and
@@ -173,10 +190,8 @@ selection offsets, and an optional ordered pair of `u32` composing offsets.
 Every offset is a UTF-16 code-unit boundary. Keyboard type, input action, and
 update mode are bounded `u8` enums.
 
-Version 1.18 decoders continue to accept earlier 1.x frames whose operations
-use layouts defined by that earlier minor version. In particular, the protocol
-test suite decodes the value-only Text layout from 1.12 and the unchanged
-`Opacity` layout from 1.11.
+Current decoders accept protocol 3.0 only. Text always carries its full styled
+layout; the earlier value-only Text decoder has been removed.
 
 ## Event batches
 

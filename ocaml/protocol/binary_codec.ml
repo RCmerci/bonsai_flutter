@@ -503,14 +503,43 @@ let validate_cache_extent = function
   | None | Some _ -> ()
 ;;
 
-let validate_sliver_app_bar ~floating ~snap ~action_count ~variant ~shape ~density =
+let validate_sliver_app_bar
+      ~floating
+      ~snap
+      ~action_count
+      ~expanded_height
+      ~collapsed_height
+      ~toolbar_height
+      ~has_bottom
+      ~bottom_height
+      ~elevation
+  =
   if snap && not floating then fail Invalid_props "sliver snap requires floating";
   check_u32 "sliver app bar action count" action_count;
-  if variant < 0 || variant > 2
-  then fail Invalid_props "invalid app bar variant %d" variant;
-  if shape < 0 || shape > 1 then fail Invalid_props "invalid app bar shape %d" shape;
-  if density < 0 || density > 1
-  then fail Invalid_props "invalid app bar density %d" density
+  let positive label value =
+    if (not (Float.is_finite value)) || value <= 0.
+    then fail Invalid_props "%s must be finite and positive" label
+  in
+  let nonnegative label =
+    Option.iter (fun value ->
+      if (not (Float.is_finite value)) || value < 0.
+      then fail Invalid_props "%s must be finite and non-negative" label)
+  in
+  positive "toolbar_height" toolbar_height;
+  nonnegative "expanded_height" expanded_height;
+  nonnegative "collapsed_height" collapsed_height;
+  nonnegative "elevation" elevation;
+  let collapsed = Option.value collapsed_height ~default:toolbar_height in
+  if
+    collapsed < toolbar_height
+    || Option.fold
+         ~none:false
+         ~some:(fun expanded -> expanded < collapsed)
+         expanded_height
+  then fail Invalid_props "invalid effective app bar height ordering";
+  if has_bottom <> Option.is_some bottom_height
+  then fail Invalid_props "bottom presence and height must agree";
+  Option.iter (positive "bottom_height") bottom_height
 ;;
 
 let semantics_role_id = function
@@ -1445,12 +1474,28 @@ let write_props writer kind props =
         ; foreground_color
         ; action_count
         ; center_title
-        ; variant
-        ; shape
-        ; density
+        ; expanded_height
+        ; collapsed_height
+        ; toolbar_height
+        ; has_flexible_space
+        ; has_bottom
+        ; bottom_height
+        ; stretch
+        ; force_elevated
+        ; elevation
+        ; automatically_imply_leading
         ; semantic_label
         } ) ->
-    validate_sliver_app_bar ~floating ~snap ~action_count ~variant ~shape ~density;
+    validate_sliver_app_bar
+      ~floating
+      ~snap
+      ~action_count
+      ~expanded_height
+      ~collapsed_height
+      ~toolbar_height
+      ~has_bottom
+      ~bottom_height
+      ~elevation;
     write_bool writer pinned;
     write_bool writer floating;
     write_bool writer snap;
@@ -1459,10 +1504,17 @@ let write_props writer kind props =
     write_optional_argb32 writer foreground_color;
     Writer.u32 writer action_count;
     write_bool writer center_title;
-    Writer.u8 writer variant;
-    Writer.u8 writer shape;
-    Writer.u8 writer density;
-    write_optional_string writer semantic_label
+    write_optional_string writer semantic_label;
+    write_optional_f64 writer expanded_height;
+    write_optional_f64 writer collapsed_height;
+    Writer.f64 writer toolbar_height;
+    write_bool writer has_flexible_space;
+    write_bool writer has_bottom;
+    write_optional_f64 writer bottom_height;
+    write_bool writer stretch;
+    write_bool writer force_elevated;
+    write_optional_f64 writer elevation;
+    write_bool writer automatically_imply_leading
   | Preferred_size, Preferred_size_props { height } -> Writer.f64 writer height
   | Gesture, Gesture_props -> ()
   | Focus_scope, Focus_scope_props { autofocus } -> write_bool writer autofocus
@@ -1963,9 +2015,16 @@ let changed_fields = function
       ; field_mask Generated_protocol.Sliver_app_bar_prop.foreground_color
       ; field_mask Generated_protocol.Sliver_app_bar_prop.action_count
       ; field_mask Generated_protocol.Sliver_app_bar_prop.center_title_value
-      ; field_mask Generated_protocol.Sliver_app_bar_prop.variant
-      ; field_mask Generated_protocol.Sliver_app_bar_prop.shape
-      ; field_mask Generated_protocol.Sliver_app_bar_prop.density
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.expanded_height
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.collapsed_height
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.toolbar_height
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.has_flexible_space
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.has_bottom
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.bottom_height
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.stretch
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.force_elevated
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.elevation
+      ; field_mask Generated_protocol.Sliver_app_bar_prop.automatically_imply_leading
       ; field_mask Generated_protocol.Sliver_app_bar_prop.semantic_label
       ]
   | Preferred_size_props _ -> field_mask Generated_protocol.Preferred_size_prop.height
@@ -2320,12 +2379,28 @@ let write_update_props writer props =
       ; foreground_color
       ; action_count
       ; center_title
-      ; variant
-      ; shape
-      ; density
+      ; expanded_height
+      ; collapsed_height
+      ; toolbar_height
+      ; has_flexible_space
+      ; has_bottom
+      ; bottom_height
+      ; stretch
+      ; force_elevated
+      ; elevation
+      ; automatically_imply_leading
       ; semantic_label
       } ->
-    validate_sliver_app_bar ~floating ~snap ~action_count ~variant ~shape ~density;
+    validate_sliver_app_bar
+      ~floating
+      ~snap
+      ~action_count
+      ~expanded_height
+      ~collapsed_height
+      ~toolbar_height
+      ~has_bottom
+      ~bottom_height
+      ~elevation;
     write_bool writer pinned;
     write_bool writer floating;
     write_bool writer snap;
@@ -2334,10 +2409,17 @@ let write_update_props writer props =
     write_optional_argb32 writer foreground_color;
     Writer.u32 writer action_count;
     write_bool writer center_title;
-    Writer.u8 writer variant;
-    Writer.u8 writer shape;
-    Writer.u8 writer density;
-    write_optional_string writer semantic_label
+    write_optional_string writer semantic_label;
+    write_optional_f64 writer expanded_height;
+    write_optional_f64 writer collapsed_height;
+    Writer.f64 writer toolbar_height;
+    write_bool writer has_flexible_space;
+    write_bool writer has_bottom;
+    write_optional_f64 writer bottom_height;
+    write_bool writer stretch;
+    write_bool writer force_elevated;
+    write_optional_f64 writer elevation;
+    write_bool writer automatically_imply_leading
   | Preferred_size_props { height } -> Writer.f64 writer height
   | Focus_scope_props { autofocus } -> write_bool writer autofocus
   | Mouse_region_props { opaque } -> write_bool writer opaque
@@ -3447,20 +3529,13 @@ let read_text_overflow reader =
   | value -> fail Invalid_props "invalid text overflow %d" value
 ;;
 
-let styled_text_protocol_minor = 13
-
-let read_text_props reader ~protocol_minor =
+let read_text_props reader =
   let value = read_string reader in
-  if protocol_minor < styled_text_protocol_minor
-  then
-    Wire_frame.
-      { value; style = None; text_align = Start; max_lines = None; overflow = Clip_text }
-  else (
-    let style = read_text_style reader in
-    let text_align = read_text_align reader in
-    let max_lines = read_optional_positive_u32 reader "text max lines" in
-    let overflow = read_text_overflow reader in
-    Wire_frame.{ value; style; text_align; max_lines; overflow })
+  let style = read_text_style reader in
+  let text_align = read_text_align reader in
+  let max_lines = read_optional_positive_u32 reader "text max lines" in
+  let overflow = read_text_overflow reader in
+  Wire_frame.{ value; style; text_align; max_lines; overflow }
 ;;
 
 let read_animation reader =
@@ -3673,13 +3748,13 @@ let read_node_kind reader =
     fail Unknown_node_kind "unknown node kind %d" (ID.Protocol.Node_kind.to_int value)
 ;;
 
-let read_props reader kind ~protocol_minor =
+let read_props reader kind =
   match kind with
   | Wire_frame.Empty | Stack -> Empty_props
   | Environment_boundary -> Environment_boundary_props
   | Sliver_box -> Sliver_box_props
   | Sliver_list -> Sliver_list_props
-  | Text -> Text_props (read_text_props reader ~protocol_minor)
+  | Text -> Text_props (read_text_props reader)
   | Rich_text ->
     Rich_text_props
       { spans = List.init (Reader.u16 reader) (fun _ -> read_string reader) }
@@ -3847,11 +3922,27 @@ let read_props reader kind ~protocol_minor =
     let foreground_color = read_optional_argb32 reader in
     let action_count = Reader.u32 reader in
     let center_title = read_bool reader in
-    let variant = Reader.u8 reader in
-    let shape = Reader.u8 reader in
-    let density = Reader.u8 reader in
     let semantic_label = read_optional_string reader in
-    validate_sliver_app_bar ~floating ~snap ~action_count ~variant ~shape ~density;
+    let expanded_height = read_optional_f64 reader in
+    let collapsed_height = read_optional_f64 reader in
+    let toolbar_height = read_finite_f64 reader in
+    let has_flexible_space = read_bool reader in
+    let has_bottom = read_bool reader in
+    let bottom_height = read_optional_f64 reader in
+    let stretch = read_bool reader in
+    let force_elevated = read_bool reader in
+    let elevation = read_optional_f64 reader in
+    let automatically_imply_leading = read_bool reader in
+    validate_sliver_app_bar
+      ~floating
+      ~snap
+      ~action_count
+      ~expanded_height
+      ~collapsed_height
+      ~toolbar_height
+      ~has_bottom
+      ~bottom_height
+      ~elevation;
     Sliver_app_bar_props
       { pinned
       ; floating
@@ -3861,9 +3952,16 @@ let read_props reader kind ~protocol_minor =
       ; foreground_color
       ; action_count
       ; center_title
-      ; variant
-      ; shape
-      ; density
+      ; expanded_height
+      ; collapsed_height
+      ; toolbar_height
+      ; has_flexible_space
+      ; has_bottom
+      ; bottom_height
+      ; stretch
+      ; force_elevated
+      ; elevation
+      ; automatically_imply_leading
       ; semantic_label
       }
   | Preferred_size ->
@@ -4761,16 +4859,11 @@ let read_props reader kind ~protocol_minor =
     Native_widget_props { kind_id; version; capabilities; payload }
 ;;
 
-let read_update_props reader ~protocol_minor =
+let read_update_props reader =
   let kind = read_node_kind reader in
   let changed = Reader.u64 reader in
-  let props = read_props reader kind ~protocol_minor in
-  let expected =
-    match props with
-    | Wire_frame.Text_props _ when protocol_minor < styled_text_protocol_minor ->
-      field_mask Generated_protocol.Text_prop.value
-    | _ -> changed_fields props
-  in
+  let props = read_props reader kind in
+  let expected = changed_fields props in
   if changed <> expected then fail Invalid_props "unsupported changed-field bitset";
   props
 ;;
@@ -4955,7 +5048,7 @@ let read_parent_data reader =
   | value -> fail Invalid_props "invalid parent-data tag %d" value
 ;;
 
-let read_operation opcode body ~protocol_minor =
+let read_operation opcode body =
   let open Wire_frame in
   let operation =
     if opcode = Generated_protocol.Operation.create_node
@@ -4963,7 +5056,7 @@ let read_operation opcode body ~protocol_minor =
       let node_id = Reader.u64 body |> ID.Ui.Node_id.of_int64 in
       let kind = read_node_kind body in
       let props =
-        try read_props body kind ~protocol_minor with
+        try read_props body kind with
         | Codec_error error ->
           fail
             error.code
@@ -4978,7 +5071,7 @@ let read_operation opcode body ~protocol_minor =
     else if opcode = Generated_protocol.Operation.update_props
     then (
       let node_id = Reader.u64 body |> ID.Ui.Node_id.of_int64 in
-      let props = read_update_props body ~protocol_minor in
+      let props = read_update_props body in
       Update_props { node_id; props })
     else if opcode = Generated_protocol.Operation.update_event_bindings
     then (
@@ -5131,7 +5224,7 @@ let decode bytes =
       else (
         if (not !saw_begin) || !saw_end
         then fail Invalid_operation_order "operation is outside BeginFrame/EndFrame";
-        operations := read_operation opcode body ~protocol_minor:minor :: !operations)
+        operations := read_operation opcode body :: !operations)
     done;
     if (not !saw_begin) || not !saw_end
     then fail Invalid_operation_order "frame is missing BeginFrame or EndFrame";

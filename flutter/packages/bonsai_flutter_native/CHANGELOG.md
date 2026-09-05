@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Require renderer protocol 3.0 for native sliver app bars with independent
+  bottom headers. Native ABI remains 2.0.
 - Aligned the native protocol query and Dart version contract with generated
   renderer protocol 2.27, whose constrained-box maxima use explicit optional
   values for unbounded layout.

@@ -930,19 +930,6 @@ module App_bar : sig
     -> unit
     -> search_suggestion
 
-  type sliver_variant =
-    | Small
-    | Medium
-    | Large
-
-  type sliver_shape =
-    | Round
-    | Square
-
-  type sliver_density =
-    | Regular
-    | Compact
-
   val top
     :  ?key:Key.t
     -> ?center_title:bool
@@ -954,6 +941,14 @@ module App_bar : sig
     -> unit
     -> Widget.t
 
+  (** Native scrolling app bar. [bottom=(content, height)] pins independently:
+      below the retained toolbar when pinned, or at the usable viewport top
+      otherwise. Height must be finite and positive and excludes the system inset.
+      Expanded/collapsed heights describe only the native app bar region. The
+      effective collapsed height must be at least [toolbar_height] (default 56),
+      and explicit expanded height must be at least the effective collapsed height.
+      [snap] requires [floating]. Defaults: pinned, non-floating, non-snapping.
+      Child order is leading, title, actions, flexible space, then bottom. *)
   val sliver
     :  ?key:Key.t
     -> ?pinned:bool
@@ -964,9 +959,15 @@ module App_bar : sig
     -> ?foreground_color:int32
     -> ?leading:Widget.t
     -> ?actions:Widget.t list
-    -> ?variant:sliver_variant
-    -> ?shape:sliver_shape
-    -> ?density:sliver_density
+    -> ?expanded_height:float
+    -> ?collapsed_height:float
+    -> ?toolbar_height:float
+    -> ?flexible_space:Widget.t
+    -> ?bottom:Widget.t * float
+    -> ?stretch:bool
+    -> ?force_elevated:bool
+    -> ?elevation:float
+    -> ?automatically_imply_leading:bool
     -> ?semantic_label:string
     -> title:Widget.t
     -> unit

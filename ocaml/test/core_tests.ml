@@ -1709,6 +1709,115 @@ let test_constrained_box_reconciles_optional_maximum_transitions () =
     unbounded_again
 ;;
 
+let test_sliver_app_bar_retained_updates () =
+  let reconciler = Reconciler.create ~runtime_epoch:592L in
+  let on_scroll = Ui.Event.Handler.create (fun _ -> ()) in
+  let title = Widget.text ~key:(Key.string "title") "Title" in
+  let content = Widget.text ~key:(Key.string "bottom") "Bottom" in
+  let tree
+        ?expanded_height
+        ?collapsed_height
+        ?(toolbar_height = 56.)
+        ?flexible_space
+        ?bottom
+        ?(stretch = false)
+        ?(force_elevated = false)
+        ?elevation
+        ?(automatically_imply_leading = true)
+        ()
+    =
+    Widget.Scroll_view.vertical
+      ~on_scroll
+      [ Ui.Material.App_bar.sliver
+          ~title
+          ?expanded_height
+          ?collapsed_height
+          ~toolbar_height
+          ?flexible_space
+          ?bottom
+          ~stretch
+          ~force_elevated
+          ?elevation
+          ~automatically_imply_leading
+          ()
+      ]
+      ()
+    |> Widget.Viewport.Vertical.with_height ~height:240.
+  in
+  let initial =
+    reconcile_exn reconciler ~base_revision:0L ~target_revision:1L ~old:None (tree ())
+  in
+  List.iter
+    (fun (label, widget) ->
+       let changed =
+         reconcile_exn
+           reconciler
+           ~base_revision:1L
+           ~target_revision:2L
+           ~old:(Some initial.mounted_tree)
+           widget
+       in
+       check_int
+         ~expected:1
+         ~actual:(count_operations changed.frame_patch is_update_props)
+         label;
+       apply_and_compare
+         ~old_snapshot:(Some (Mounted_tree.snapshot initial.mounted_tree))
+         changed)
+    [ "expanded height update", tree ~expanded_height:200. ()
+    ; "collapsed height update", tree ~collapsed_height:80. ()
+    ; "toolbar height update", tree ~toolbar_height:64. ()
+    ; "flexible space addition", tree ~flexible_space:(Widget.text "Flexible") ()
+    ; "bottom addition", tree ~bottom:(content, 48.) ()
+    ; "stretch update", tree ~stretch:true ()
+    ; "force elevation update", tree ~force_elevated:true ()
+    ; "elevation update", tree ~elevation:4. ()
+    ; "automatic leading update", tree ~automatically_imply_leading:false ()
+    ];
+  let added =
+    reconcile_exn
+      reconciler
+      ~base_revision:1L
+      ~target_revision:2L
+      ~old:(Some initial.mounted_tree)
+      (tree ~bottom:(content, 48.) ())
+  in
+  let resized =
+    reconcile_exn
+      reconciler
+      ~base_revision:2L
+      ~target_revision:3L
+      ~old:(Some added.mounted_tree)
+      (tree ~bottom:(content, 72.) ())
+  in
+  check_int
+    ~expected:0
+    ~actual:(count_operations resized.frame_patch is_create)
+    "resize creates";
+  check_int
+    ~expected:1
+    ~actual:(count_operations resized.frame_patch is_update_props)
+    "resize props";
+  apply_and_compare
+    ~old_snapshot:(Some (Mounted_tree.snapshot added.mounted_tree))
+    resized;
+  let removed =
+    reconcile_exn
+      reconciler
+      ~base_revision:3L
+      ~target_revision:4L
+      ~old:(Some resized.mounted_tree)
+      (tree ())
+  in
+  check_int
+    ~expected:1
+    ~actual:(count_operations removed.frame_patch is_drop)
+    "bottom removal";
+  apply_and_compare
+    ~old_snapshot:(Some (Mounted_tree.snapshot resized.mounted_tree))
+    removed
+;;
+
 let test_linear_progress_indicator_reconciles_value_and_kind () =
   let reconciler = Reconciler.create ~runtime_epoch:591L in
   let key = Key.string "progress" in
@@ -2012,6 +2121,7 @@ let tests =
   ; "randomized patch invariant", test_randomized_patch_invariant
   ; ( "layout, Material, and semantics widgets update incrementally"
     , test_layout_material_and_semantics_widgets_are_incremental )
+  ; "sliver app bar retains native updates", test_sliver_app_bar_retained_updates
   ; ( "constrained box reconciles optional maximum transitions"
     , test_constrained_box_reconciles_optional_maximum_transitions )
   ; ( "linear progress indicator reconciles value and kind"

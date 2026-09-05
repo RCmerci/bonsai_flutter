@@ -484,9 +484,10 @@ let test_sliver_app_bar_contract () =
       ~on_scroll:(Ui.Event.Handler.create (fun _ -> ()))
       [ Ui.Material.App_bar.sliver
           ~pinned:true
-          ~variant:Ui.Material.App_bar.Large
-          ~shape:Ui.Material.App_bar.Square
-          ~density:Ui.Material.App_bar.Compact
+          ~expanded_height:200.
+          ~toolbar_height:64.
+          ~flexible_space:(Ui.Widget.text "Flexible")
+          ~bottom:(Ui.Widget.text "Bottom", 48.)
           ~actions:[ Ui.Widget.text "Search"; Ui.Widget.text "Settings" ]
           ~title:(Ui.Widget.text "Title")
           ()
@@ -494,11 +495,22 @@ let test_sliver_app_bar_contract () =
       ()
   in
   let (Av app_bar) = Ui.Widget.Private.view (scroll_view_child viewport) in
-  check (Array.length app_bar.children = 3) "app bar exposes every action";
+  check (Array.length app_bar.children = 5) "app bar exposes every action";
   (match app_bar.node with
-   | Ui.Widget.Private.Sliver_app_bar { action_count; variant; shape; density; _ } ->
+   | Ui.Widget.Private.Sliver_app_bar
+       { action_count
+       ; expanded_height
+       ; toolbar_height
+       ; has_flexible_space
+       ; has_bottom
+       ; bottom_height
+       ; _
+       } ->
      check (action_count = 2) "app bar action count";
-     check (variant = 2 && shape = 1 && density = 1) "app bar expressive variants"
+     check (expanded_height = Some 200. && toolbar_height = 64.) "native geometry";
+     check
+       (has_flexible_space && has_bottom && bottom_height = Some 48.)
+       "independent slots"
    | _ -> failwith "sliver app bar node");
   let child_text index =
     let (Av child) = Ui.Widget.Private.view app_bar.children.(index).widget in
@@ -509,6 +521,8 @@ let test_sliver_app_bar_contract () =
   check (child_text 0 = Some "Title") "app bar title order";
   check (child_text 1 = Some "Search") "app bar first action order";
   check (child_text 2 = Some "Settings") "app bar second action order";
+  check (child_text 3 = Some "Flexible") "flexible space order";
+  check (child_text 4 = Some "Bottom") "bottom order";
   let empty_actions =
     Ui.Widget.Scroll_view.vertical
       ~on_scroll:(Ui.Event.Handler.create (fun _ -> ()))
@@ -523,12 +537,48 @@ let test_sliver_app_bar_contract () =
 ;;
 
 let test_sliver_app_bar_validation () =
-  let create ?(floating = false) ?(snap = false) () =
-    ignore (Ui.Material.App_bar.sliver ~floating ~snap ~title:(Ui.Widget.text "Title") ())
+  let create
+        ?(floating = false)
+        ?(snap = false)
+        ?expanded_height
+        ?collapsed_height
+        ?(toolbar_height = 56.)
+        ?elevation
+        ?bottom
+        ()
+    =
+    ignore
+      (Ui.Material.App_bar.sliver
+         ~floating
+         ~snap
+         ?expanded_height
+         ?collapsed_height
+         ~toolbar_height
+         ?elevation
+         ?bottom
+         ~title:(Ui.Widget.text "Title")
+         ())
   in
-  expect_invalid_argument
-    (fun () -> create ~snap:true ())
-    "sliver app bar accepted snap without floating"
+  List.iter
+    (fun invalid -> expect_invalid_argument invalid "invalid native app bar")
+    [ (fun () -> create ~snap:true ())
+    ; (fun () -> create ~toolbar_height:0. ())
+    ; (fun () -> create ~toolbar_height:Float.nan ())
+    ; (fun () -> create ~expanded_height:40. ())
+    ; (fun () -> create ~collapsed_height:40. ())
+    ; (fun () -> create ~expanded_height:80. ~collapsed_height:90. ())
+    ; (fun () -> create ~elevation:(-1.) ())
+    ; (fun () -> create ~elevation:Float.infinity ())
+    ; (fun () -> create ~bottom:(Ui.Widget.text "Bottom", 0.) ())
+    ; (fun () -> create ~bottom:(Ui.Widget.text "Bottom", Float.nan) ())
+    ];
+  create
+    ~floating:true
+    ~snap:true
+    ~expanded_height:200.
+    ~collapsed_height:80.
+    ~bottom:(Ui.Widget.text "Bottom", 48.)
+    ()
 ;;
 
 (* ------------------------------------------------------------------ *)

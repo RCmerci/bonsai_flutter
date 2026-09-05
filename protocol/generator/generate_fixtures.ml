@@ -355,6 +355,39 @@ let fixtures : (string * Protocol.Wire_frame.t) list =
       ; kind = Incremental_frame
       ; operations = []
       } )
+  ; ( "ocaml_sliver_app_bar.hex"
+    , { runtime_epoch = epoch 7L
+      ; base_revision = revision 1L
+      ; target_revision = revision 2L
+      ; kind = Incremental_frame
+      ; operations =
+          [ Update_props
+              { node_id = node 38L
+              ; props =
+                  Sliver_app_bar_props
+                    { pinned = false
+                    ; floating = true
+                    ; snap = true
+                    ; has_leading = true
+                    ; background_color = Some 0xff123456l
+                    ; foreground_color = Some 0xffabcdefl
+                    ; action_count = 2
+                    ; center_title = true
+                    ; semantic_label = Some "Native header"
+                    ; expanded_height = Some 201.25
+                    ; collapsed_height = Some 81.25
+                    ; toolbar_height = 63.5
+                    ; has_flexible_space = true
+                    ; has_bottom = true
+                    ; bottom_height = Some 47.25
+                    ; stretch = true
+                    ; force_elevated = true
+                    ; elevation = Some 4.25
+                    ; automatically_imply_leading = false
+                    }
+              }
+          ]
+      } )
   ; "ocaml_counter_full.hex", counter_frame
   ; ( "ocaml_unicode_update.hex"
     , { runtime_epoch = epoch 7L
