@@ -31,7 +31,7 @@
   (bigstringaf 0.10.0 default 521cd9e351d675c7855517d1f55a91e1eee5f790454f0ec0305bca3e195f627b)
   (bin_prot v0.17.0-1 default 4971cce76844afa4a57df973000b9ec43c8d64f53a1c2acef8a00f6f75a31d78)
   (bonsai v0.17.0 default 457f4af1888e99c697fa0c7fa61654950e7dbff1ca7ede9ef3ceff489f5b8a50)
-  (bonsai_flutter 0.1.0~dev local a02294d4e4e1e573a39379ac57302df3c05ab3ea49e051ddbe5d4925f712b85f)
+  (bonsai_flutter 0.1.0~dev local cacb93416d1ced0a2e0fb5c1f979da04aa1e30b2a7ad91b04649891557fa8a67)
   (bos 0.3.0 default 86ac319364eaec99128e5f9738c164d24902d1daffce904966211be8aebc519d)
   (ca-certs-nss 3.126 default 040cd8cd12ec75975b0b676c2081c8ec55e7b39595a81ad26badf0ebdfc802cf)
   (camlp-streams 5.0.1 default 0b211283e33dcc692f5250a1c2c748044da0396e22316e3eb09b5dff947348c5)
